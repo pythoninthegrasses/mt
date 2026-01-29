@@ -846,16 +846,17 @@
           <div class="flex-1 flex items-center justify-center p-8">
             <template x-if="$store.player.currentTrack">
               <div class="flex flex-col items-center gap-6 max-w-md">
-                <div class="w-72 h-72 bg-muted rounded-lg flex items-center justify-center shadow-xl shrink-0 overflow-hidden">
+                <div class="w-72 h-72 bg-muted rounded-lg flex items-center justify-center shadow-xl shrink-0 overflow-hidden" data-testid="album-art-container">
                   <template x-if="$store.player.artwork">
                     <img
                       :src="'data:' + $store.player.artwork.mime_type + ';base64,' + $store.player.artwork.data"
                       alt="Album artwork"
                       class="w-full h-full object-cover"
+                      data-testid="album-art-image"
                     >
                   </template>
                   <template x-if="!$store.player.artwork">
-                    <svg class="w-24 h-24 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-24 h-24 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24" data-testid="album-art-placeholder">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
                     </svg>
                   </template>
