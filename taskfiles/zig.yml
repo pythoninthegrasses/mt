@@ -84,6 +84,12 @@ tasks:
     cmds:
       - cd {{.ZIG_CORE_DIR}} && zig fmt --check src/
 
+  lint:
+    desc: "Run Zig linting (format check + syntax validation)"
+    cmds:
+      - cd {{.ZIG_CORE_DIR}} && zig fmt --check src/
+      - cd {{.ZIG_CORE_DIR}} && zig build --summary none
+
   clean:
     desc: "Clean Zig build artifacts"
     cmds:
