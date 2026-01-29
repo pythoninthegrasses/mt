@@ -186,11 +186,13 @@ jobs:
     env:
       CARGO_INCREMENTAL: 1  # Enable incremental compilation on self-hosted (reuses artifacts)
       CARGO_TERM_COLOR: always
-      PATH: /opt/homebrew/bin:/opt/homebrew/sbin:${{ env.PATH }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Add Homebrew to PATH
+        run: echo "/opt/homebrew/bin:/opt/homebrew/sbin" >> $GITHUB_PATH
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -240,11 +242,13 @@ jobs:
     env:
       CARGO_INCREMENTAL: 1  # Enable incremental compilation on self-hosted (reuses artifacts)
       CARGO_TERM_COLOR: always
-      PATH: /opt/homebrew/bin:/opt/homebrew/sbin:${{ env.PATH }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Add Homebrew to PATH
+        run: echo "/opt/homebrew/bin:/opt/homebrew/sbin" >> $GITHUB_PATH
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
