@@ -1,10 +1,10 @@
 ---
 id: task-248
 title: Debug and stabilize Zig CI workflow for self-hosted macOS runner
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-01-29 08:31'
-updated_date: '2026-01-29 08:31'
+updated_date: '2026-01-29 21:02'
 labels:
   - ci
   - zig
@@ -29,6 +29,7 @@ The CI workflow for the zig-migration branch is experiencing issues on the self-
 3. **TagLib not installed**: Added `brew install taglib` step
 4. **pkg-config not found**: PATH didn't include `/opt/homebrew/bin` → Added to workflow env
 5. **pkg-config not installed**: Had to manually install via `brew install pkg-config`
+6. **Artifact upload timeout**: Self-hosted runner intermittent `ETIMEDOUT` errors → Added `continue-on-error: true` to all upload-artifact steps
 
 ## Current State
 - Workflow file: `.github/workflows/test.yml`
@@ -36,9 +37,21 @@ The CI workflow for the zig-migration branch is experiencing issues on the self-
 - PR: https://github.com/pythoninthegrass/mt/pull/18
 
 ## Tasks
-- [ ] Verify CI passes after PATH fix
-- [ ] Consider pre-installing dependencies on runner vs installing in workflow
-- [ ] Add Playwright tests job PATH fix if needed
-- [ ] Document runner requirements (Zig, TagLib, pkg-config)
-- [ ] Consider caching Homebrew packages for faster CI
+- [x] Verify CI passes after PATH fix
+- [x] Consider pre-installing dependencies on runner vs installing in workflow
+- [x] Add Playwright tests job PATH fix if needed
+- [x] Document runner requirements (Zig, TagLib, pkg-config)
+- [x] Consider caching Homebrew packages for faster CI
+- [x] Fix artifact upload timeouts with continue-on-error
+
+## Resolution
+All CI issues resolved. The self-hosted runner now has proper PATH configuration, dependencies are conditionally installed only when missing, and artifact uploads gracefully handle network timeouts.
 <!-- SECTION:DESCRIPTION:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [x] #1 CI workflow passes on self-hosted macOS ARM64 runner
+- [x] #2 Zig build dependencies (TagLib, pkg-config) available
+- [x] #3 Homebrew PATH correctly configured
+- [x] #4 Artifact upload failures don't fail the entire job
+<!-- AC:END -->
