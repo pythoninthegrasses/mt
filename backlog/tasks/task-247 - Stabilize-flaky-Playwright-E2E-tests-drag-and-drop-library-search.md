@@ -1,9 +1,10 @@
 ---
 id: task-247
 title: Stabilize flaky Playwright E2E tests (drag-and-drop + library search)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-01-29 04:07'
+updated_date: '2026-01-29 08:31'
 labels:
   - testing
   - playwright
