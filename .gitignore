@@ -11,6 +11,9 @@ repomix-output.md
 static/music
 test-results/
 
+# Visual regression snapshots
+*-snapshots/
+
 # General
 .DS_Store
 .AppleDouble
