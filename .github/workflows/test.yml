@@ -186,6 +186,7 @@ jobs:
     env:
       CARGO_INCREMENTAL: 1  # Enable incremental compilation on self-hosted (reuses artifacts)
       CARGO_TERM_COLOR: always
+      PATH: /opt/homebrew/bin:/opt/homebrew/sbin:${{ env.PATH }}
 
     steps:
       - name: Checkout code
@@ -239,6 +240,7 @@ jobs:
     env:
       CARGO_INCREMENTAL: 1  # Enable incremental compilation on self-hosted (reuses artifacts)
       CARGO_TERM_COLOR: always
+      PATH: /opt/homebrew/bin:/opt/homebrew/sbin:${{ env.PATH }}
 
     steps:
       - name: Checkout code
