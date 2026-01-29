@@ -1,0 +1,372 @@
+<!-- Metadata Edit Modal -->
+<div
+  x-data="metadataModal"
+  x-show="isOpen"
+  x-cloak
+  data-testid="metadata-modal"
+  class="fixed inset-0 z-50 flex items-center justify-center"
+  @keydown.window="if (isOpen) handleKeydown($event)"
+>
+  <div class="absolute inset-0 bg-black/50" @click="close()"></div>
+  <div
+    class="relative bg-card border border-border rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-hidden flex flex-col"
+    @click.stop
+  >
+    <div class="flex items-center justify-between px-4 py-3 border-b border-border">
+      <div class="flex items-center gap-3">
+        <h2 class="text-lg font-semibold" x-text="modalTitle"></h2>
+        <div x-show="navigationEnabled" class="flex items-center gap-1">
+          <button
+            class="p-1 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            :disabled="!canNavigatePrev || isSaving || isLoading"
+            @click="navigatePrev()"
+            title="Previous track (<-)"
+            data-testid="metadata-nav-prev"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m15 18-6-6 6-6"></path>
+            </svg>
+          </button>
+          <span
+            class="text-xs text-muted-foreground min-w-[4rem] text-center tabular-nums"
+            x-text="navIndicator"
+            data-testid="metadata-nav-indicator"
+          ></span>
+          <button
+            class="p-1 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            :disabled="!canNavigateNext || isSaving || isLoading"
+            @click="navigateNext()"
+            title="Next track (->)"
+            data-testid="metadata-nav-next"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 18 6-6-6-6"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <button
+        class="p-1 text-muted-foreground hover:text-foreground transition-colors"
+        @click="close()"
+        title="Close (Esc)"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-4 space-y-4" x-show="!isLoading">
+      <div class="grid grid-cols-2 gap-4">
+        <div class="col-span-2" x-show="!isBatchEdit">
+          <label class="block text-xs font-medium text-muted-foreground mb-1">Title</label>
+          <input
+            type="text"
+            x-model="metadata.title"
+            :placeholder="getPlaceholder('title')"
+            :class="{ 'italic placeholder:text-muted-foreground/70': isMixedField('title') }"
+            class="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+            data-testid="metadata-title"
+          >
+        </div>
+
+        <div class="col-span-2">
+          <label class="block text-xs font-medium text-muted-foreground mb-1">Artist</label>
+          <input
+            type="text"
+            x-model="metadata.artist"
+            :placeholder="getPlaceholder('artist')"
+            :class="{ 'italic placeholder:text-muted-foreground/70': isMixedField('artist') }"
+            class="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+            data-testid="metadata-artist"
+          >
+        </div>
+
+        <div class="col-span-2">
+          <label class="block text-xs font-medium text-muted-foreground mb-1">Album</label>
+          <input
+            type="text"
+            x-model="metadata.album"
+            :placeholder="getPlaceholder('album')"
+            :class="{ 'italic placeholder:text-muted-foreground/70': isMixedField('album') }"
+            class="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+            data-testid="metadata-album"
+          >
+        </div>
+
+        <div class="col-span-2">
+          <label class="block text-xs font-medium text-muted-foreground mb-1">Album Artist</label>
+          <input
+            type="text"
+            x-model="metadata.album_artist"
+            :placeholder="getPlaceholder('album_artist')"
+            :class="{ 'italic placeholder:text-muted-foreground/70': isMixedField('album_artist') }"
+            class="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+            data-testid="metadata-album-artist"
+          >
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-muted-foreground mb-1">Track #</label>
+          <div class="flex items-center gap-2">
+            <input
+              type="text"
+              x-model="metadata.track_number"
+              class="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="#"
+              data-testid="metadata-track-number"
+            >
+            <span class="text-muted-foreground">/</span>
+            <input
+              type="text"
+              x-model="metadata.track_total"
+              class="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="Total"
+              data-testid="metadata-track-total"
+            >
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-muted-foreground mb-1">Disc #</label>
+          <div class="flex items-center gap-2">
+            <input
+              type="text"
+              x-model="metadata.disc_number"
+              class="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="#"
+              data-testid="metadata-disc-number"
+            >
+            <span class="text-muted-foreground">/</span>
+            <input
+              type="text"
+              x-model="metadata.disc_total"
+              class="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="Total"
+              data-testid="metadata-disc-total"
+            >
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-muted-foreground mb-1">Year</label>
+          <input
+            type="text"
+            x-model="metadata.year"
+            class="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+            :placeholder="isMixedField('year') ? 'Multiple values' : 'YYYY'"
+            :class="{ 'italic placeholder:text-muted-foreground/70': isMixedField('year') }"
+            data-testid="metadata-year"
+          >
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-muted-foreground mb-1">Genre</label>
+          <input
+            type="text"
+            x-model="metadata.genre"
+            :placeholder="getPlaceholder('genre')"
+            :class="{ 'italic placeholder:text-muted-foreground/70': isMixedField('genre') }"
+            class="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+            data-testid="metadata-genre"
+          >
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-border">
+        <h3 class="text-xs font-medium text-muted-foreground mb-2">File Information</h3>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+          <div class="text-muted-foreground">Format</div>
+          <div x-text="fileInfo.format"></div>
+          <div class="text-muted-foreground">Duration</div>
+          <div x-text="fileInfo.duration"></div>
+          <div class="text-muted-foreground">Bitrate</div>
+          <div x-text="fileInfo.bitrate"></div>
+          <div class="text-muted-foreground">Sample Rate</div>
+          <div x-text="fileInfo.sample_rate"></div>
+          <div class="text-muted-foreground">Channels</div>
+          <div x-text="fileInfo.channels"></div>
+          <div class="text-muted-foreground col-span-2 mt-2">Path</div>
+          <div class="col-span-2 text-foreground/70 break-all" x-text="fileInfo.path"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex-1 flex items-center justify-center p-8" x-show="isLoading">
+      <svg class="animate-spin w-8 h-8 text-primary" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+    </div>
+
+    <div class="flex items-center justify-end gap-2 px-4 py-3 border-t border-border bg-muted/30">
+      <button
+        class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        @click="close()"
+        :disabled="isSaving"
+      >
+        Cancel
+      </button>
+      <button
+        class="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
+        @click="save()"
+        :disabled="isSaving || isLoading"
+        data-testid="metadata-save"
+      >
+        <span x-show="!isSaving">Save</span>
+        <span x-show="isSaving">Saving...</span>
+      </button>
+         </div>
+       </div>
+</div>
+
+<!-- Toast Notifications -->
+<div x-data class="fixed bottom-20 right-4 space-y-2 z-50" data-testid="toast-container">
+  <template x-for="toast in $store.ui.toasts" :key="toast.id">
+    <div
+      class="px-4 py-2 rounded shadow-lg cursor-pointer transition-opacity"
+      :class="{
+        'bg-primary text-primary-foreground': toast.type === 'info',
+        'bg-green-500 text-white': toast.type === 'success',
+        'bg-yellow-500 text-black': toast.type === 'warning',
+        'bg-destructive text-destructive-foreground': toast.type === 'error'
+      }"
+      @click="$store.ui.dismissToast(toast.id)"
+    >
+      <span x-text="toast.message"></span>
+    </div>
+  </template>
+</div>
+
+<!-- Missing Track Popover -->
+<div
+  x-data
+  x-show="$store.ui.missingTrackPopover"
+  x-cloak
+  class="fixed z-50"
+  :style="`left: ${$store.ui.missingTrackPopover?.x || 0}px; top: ${$store.ui.missingTrackPopover?.y || 0}px`"
+  @click.outside="$store.ui.closeMissingTrackPopover()"
+  @keydown.escape.window="$store.ui.closeMissingTrackPopover()"
+  data-testid="missing-track-popover"
+>
+  <div
+    x-show="$store.ui.missingTrackPopover"
+    x-transition:enter="transition ease-out duration-150"
+    x-transition:enter-start="opacity-0 scale-95"
+    x-transition:enter-end="opacity-100 scale-100"
+    x-transition:leave="transition ease-in duration-100"
+    x-transition:leave-start="opacity-100 scale-100"
+    x-transition:leave-end="opacity-0 scale-95"
+    class="bg-card border border-border rounded-lg shadow-xl w-80 p-4"
+  >
+    <div class="flex items-start gap-3 mb-3">
+      <div class="text-warning text-xl shrink-0">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="16" x2="12" y2="12"/>
+          <line x1="12" y1="8" x2="12.01" y2="8"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <h4 class="text-sm font-semibold text-foreground">File Not Found</h4>
+        <p class="text-xs text-muted-foreground mt-0.5">This track's file could not be located</p>
+      </div>
+    </div>
+
+    <div class="space-y-2 mb-4">
+      <div>
+        <span class="text-xs text-muted-foreground block mb-1">Original path:</span>
+        <div class="bg-muted/50 rounded px-2 py-1.5 text-xs font-mono break-all text-muted-foreground max-h-16 overflow-auto">
+          <span x-text="$store.ui.missingTrackPopover?.filepath || 'Unknown path'"></span>
+        </div>
+      </div>
+      <div x-show="$store.ui.missingTrackPopover?.lastSeenAt">
+        <span class="text-xs text-muted-foreground">Last seen: </span>
+        <span class="text-xs text-foreground" x-text="$store.ui.missingTrackPopover?.lastSeenAt ? new Date($store.ui.missingTrackPopover.lastSeenAt).toLocaleString() : ''"></span>
+      </div>
+    </div>
+
+    <div class="flex gap-2 justify-end">
+      <button
+        class="px-3 py-1.5 rounded bg-muted hover:bg-muted/80 text-foreground text-xs transition-colors"
+        @click="$store.ui.handlePopoverIgnore()"
+        data-testid="popover-ignore-btn"
+      >
+        Ignore
+      </button>
+      <button
+        class="px-3 py-1.5 rounded bg-primary hover:bg-primary/90 text-primary-foreground text-xs transition-colors"
+        @click="$store.ui.handlePopoverLocate()"
+        data-testid="popover-locate-btn"
+      >
+        Locate...
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Missing Track Modal -->
+<div
+  x-data
+  x-show="$store.ui.missingTrackModal"
+  x-cloak
+  class="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50"
+  @keydown.escape.window="$store.ui.closeMissingTrackModal('cancelled')"
+>
+  <div
+    x-show="$store.ui.missingTrackModal"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0 scale-95"
+    x-transition:enter-end="opacity-100 scale-100"
+    x-transition:leave="transition ease-in duration-150"
+    x-transition:leave-start="opacity-100 scale-100"
+    x-transition:leave-end="opacity-0 scale-95"
+    class="bg-card border border-border rounded-lg shadow-xl max-w-md w-full mx-4 p-6"
+    @click.outside="$store.ui.closeMissingTrackModal('cancelled')"
+    data-testid="missing-track-modal"
+  >
+    <div class="flex items-start gap-4">
+      <div class="text-warning text-3xl shrink-0">!</div>
+      <div class="flex-1 min-w-0">
+        <h3 class="text-lg font-semibold mb-2">File Not Found</h3>
+        <p class="text-muted-foreground text-sm mb-4">
+          The file for this track could not be found. Would you like to locate it?
+        </p>
+        <div class="bg-muted/50 rounded p-3 mb-4 text-xs font-mono break-all text-muted-foreground">
+          <span x-text="$store.ui.missingTrackModal?.filepath || 'Unknown path'"></span>
+        </div>
+        <div class="flex gap-3 justify-end">
+          <button
+            class="px-4 py-2 rounded bg-muted hover:bg-muted/80 text-foreground text-sm transition-colors"
+            @click="$store.ui.closeMissingTrackModal('cancelled')"
+            data-testid="missing-track-cancel"
+          >
+            Leave as-is
+          </button>
+          <button
+            class="px-4 py-2 rounded bg-primary hover:bg-primary/90 text-primary-foreground text-sm transition-colors"
+            @click="$store.ui.handleLocateFile()"
+            data-testid="missing-track-locate"
+          >
+            Locate file...
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div
+  x-show="$store.ui.globalLoading"
+  x-cloak
+  class="fixed inset-0 bg-background/80 flex items-center justify-center z-50"
+>
+  <div class="text-center">
+    <svg class="animate-spin w-12 h-12 mx-auto mb-4 text-primary" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    <p x-text="$store.ui.loadingMessage"></p>
+  </div>
+</div>

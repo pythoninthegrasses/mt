@@ -1,0 +1,628 @@
+<!-- Settings View -->
+<div
+  x-show="$store.ui.view === 'settings'"
+  x-cloak
+  class="h-full flex"
+  x-data="settingsView"
+  data-testid="settings-view"
+>
+  <!-- Left: Section Navigation -->
+  <nav class="w-48 border-r border-border bg-muted/30 p-4 shrink-0">
+    <h2 class="text-lg font-semibold mb-4">Settings</h2>
+    <ul class="space-y-1">
+      <li>
+        <button
+          class="w-full text-left px-3 py-2 rounded-md text-sm transition-colors"
+          :class="$store.ui.settingsSection === 'general' ? 'bg-primary/15 text-primary' : 'hover:bg-muted/70 text-foreground/80'"
+          @click="$store.ui.setSettingsSection('general')"
+          data-testid="settings-nav-general"
+        >
+          General
+        </button>
+      </li>
+      <li>
+        <button
+        class="w-full text-left px-3 py-2 rounded-md text-sm transition-colors"
+        :class="$store.ui.settingsSection === 'appearance' ? 'bg-primary/15 text-primary' : 'hover:bg-muted/70 text-foreground/80'"
+        @click="$store.ui.setSettingsSection('appearance')"
+        data-testid="settings-nav-appearance"
+        >
+        Appearance
+      </button>
+      <li>
+        <button
+          class="w-full text-left px-3 py-2 rounded-md text-sm transition-colors"
+          :class="$store.ui.settingsSection === 'library' ? 'bg-primary/15 text-primary' : 'hover:bg-muted/70 text-foreground/80'"
+          @click="$store.ui.setSettingsSection('library')"
+          data-testid="settings-nav-library"
+        >
+          Library
+        </button>
+      </li>
+      </li>
+      <li>
+        <button
+          class="w-full text-left px-3 py-2 rounded-md text-sm transition-colors"
+          :class="$store.ui.settingsSection === 'shortcuts' ? 'bg-primary/15 text-primary' : 'hover:bg-muted/70 text-foreground/80'"
+          @click="$store.ui.setSettingsSection('shortcuts')"
+          data-testid="settings-nav-shortcuts"
+        >
+          Shortcuts
+        </button>
+      </li>
+      <li>
+        <button
+          class="w-full text-left px-3 py-2 rounded-md text-sm transition-colors"
+          :class="$store.ui.settingsSection === 'sorting' ? 'bg-primary/15 text-primary' : 'hover:bg-muted/70 text-foreground/80'"
+          @click="$store.ui.setSettingsSection('sorting')"
+          data-testid="settings-nav-sorting"
+        >
+          Sorting
+        </button>
+      </li>
+      <li>
+        <button
+          class="w-full text-left px-3 py-2 rounded-md text-sm transition-colors"
+          :class="$store.ui.settingsSection === 'advanced' ? 'bg-primary/15 text-primary' : 'hover:bg-muted/70 text-foreground/80'"
+          @click="$store.ui.setSettingsSection('advanced')"
+          data-testid="settings-nav-advanced"
+        >
+          Advanced
+        </button>
+      </li>
+      <li>
+        <button
+          class="w-full text-left px-3 py-2 rounded-md text-sm transition-colors"
+          :class="$store.ui.settingsSection === 'lastfm' ? 'bg-primary/15 text-primary' : 'hover:bg-muted/70 text-foreground/80'"
+          @click="$store.ui.setSettingsSection('lastfm')"
+          data-testid="settings-nav-lastfm"
+        >
+          Last.fm
+        </button>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- Right: Section Content -->
+  <div class="flex-1 overflow-y-auto p-6">
+    <!-- General Section -->
+    <div x-show="$store.ui.settingsSection === 'general'" data-testid="settings-section-general">
+      <h3 class="text-xl font-semibold mb-4">General</h3>
+
+      <!-- Watched Folders -->
+      <div class="space-y-4">
+        <div>
+          <h4 class="text-sm font-medium mb-1">Watched Folders</h4>
+          <p class="text-xs text-muted-foreground mb-3">Automatically scan these folders for new music</p>
+        </div>
+
+        <!-- Browser fallback -->
+        <template x-if="!window.__TAURI__">
+          <div class="px-4 py-3 rounded-md bg-muted/50 text-sm text-muted-foreground">
+            Watched folders are only available in the desktop app.
+          </div>
+        </template>
+
+        <!-- Watched folders list -->
+        <template x-if="window.__TAURI__">
+          <div>
+            <!-- Loading state -->
+            <template x-if="watchedFoldersLoading">
+              <div class="text-sm text-muted-foreground py-4 text-center">Loading...</div>
+            </template>
+
+            <!-- Empty state -->
+            <template x-if="!watchedFoldersLoading && watchedFolders.length === 0">
+              <div class="px-4 py-6 rounded-md border border-dashed border-border text-center">
+                <p class="text-sm text-muted-foreground mb-2">No watched folders configured</p>
+                <button
+                  @click="addWatchedFolder()"
+                  class="text-sm text-primary hover:underline"
+                  data-testid="watched-folder-add-empty-btn"
+                >
+                  Add your first folder
+                </button>
+              </div>
+            </template>
+
+            <!-- Folders list -->
+            <template x-if="!watchedFoldersLoading && watchedFolders.length > 0">
+              <div class="space-y-2" data-testid="watched-folders-list">
+                <template x-for="folder in watchedFolders" :key="folder.id">
+                  <div
+                    class="flex items-center gap-3 px-3 py-2 rounded-md border border-border bg-background"
+                    :data-testid="'watched-folder-item-' + folder.id"
+                  >
+                    <!-- Folder path -->
+                    <div class="flex-1 min-w-0">
+                      <span
+                        class="text-sm font-mono truncate block"
+                        :title="folder.path"
+                        x-text="truncatePath(folder.path)"
+                      ></span>
+                    </div>
+
+                    <!-- Mode select -->
+                    <select
+                      class="text-xs px-2 py-1 rounded border border-border bg-background focus:ring-1 focus:ring-primary"
+                      :value="folder.mode"
+                      @change="updateWatchedFolder(folder.id, { mode: $event.target.value })"
+                    >
+                      <option value="startup">On startup</option>
+                      <option value="continuous">Continuous</option>
+                    </select>
+
+                    <!-- Cadence (only for continuous) -->
+                    <template x-if="folder.mode === 'continuous'">
+                      <div class="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="1"
+                          max="1440"
+                          class="w-14 text-xs px-2 py-1 rounded border border-border bg-background text-center focus:ring-1 focus:ring-primary"
+                          :value="folder.cadence_minutes || 10"
+                          @change="updateWatchedFolder(folder.id, { cadence_minutes: parseInt($event.target.value) || 10 })"
+                        />
+                        <span class="text-xs text-muted-foreground">min</span>
+                      </div>
+                    </template>
+
+                    <!-- Rescan button -->
+                    <button
+                      @click="rescanWatchedFolder(folder.id)"
+                      :disabled="isFolderScanning(folder.id)"
+                      class="p-1.5 rounded hover:bg-muted/70 transition-colors disabled:opacity-50"
+                      title="Rescan now"
+                      :data-testid="'watched-folder-rescan-btn-' + folder.id"
+                    >
+                      <svg
+                        class="w-4 h-4"
+                        :class="isFolderScanning(folder.id) ? 'animate-spin' : ''"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                      </svg>
+                    </button>
+
+                    <!-- Remove button -->
+                    <button
+                      @click="removeWatchedFolder(folder.id)"
+                      class="p-1.5 rounded hover:bg-destructive/10 hover:text-destructive transition-colors"
+                      title="Remove folder"
+                      :data-testid="'watched-folder-remove-btn-' + folder.id"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </template>
+              </div>
+            </template>
+
+            <!-- Add folder button -->
+            <button
+              @click="addWatchedFolder()"
+              class="mt-3 px-4 py-2 rounded-md border text-sm transition-colors border-border hover:bg-muted/50"
+              data-testid="watched-folder-add-btn"
+            >
+              Add Folder
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Library Section -->
+    <div x-show="$store.ui.settingsSection === 'library'" data-testid="settings-section-library">
+      <h3 class="text-xl font-semibold mb-4">Library</h3>
+
+      <!-- Scanning -->
+      <div class="mb-8">
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Scanning</h4>
+        <div class="space-y-4">
+          <div class="bg-muted/30 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <div class="font-medium text-sm">Manual Scan</div>
+                <div class="text-xs text-muted-foreground mt-0.5">
+                  Update file fingerprints and merge duplicate entries
+                </div>
+              </div>
+              <button
+                class="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
+                :disabled="reconcileScan.isRunning"
+                @click="runReconcileScan()"
+                data-testid="settings-reconcile-scan"
+              >
+                <span x-text="reconcileScan.isRunning ? 'Scanning...' : 'Run Scan'"></span>
+              </button>
+            </div>
+
+            <!-- Progress/Results -->
+            <template x-if="reconcileScan.lastResult !== null">
+              <div class="mt-3 pt-3 border-t border-border/50">
+                <div class="text-xs text-muted-foreground mb-2">Last scan results:</div>
+                <div class="grid grid-cols-3 gap-4 text-sm">
+                  <div class="text-center">
+                    <div class="font-medium" x-text="reconcileScan.lastResult.backfilled"></div>
+                    <div class="text-xs text-muted-foreground">Backfilled</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="font-medium" x-text="reconcileScan.lastResult.duplicates_merged"></div>
+                    <div class="text-xs text-muted-foreground">Duplicates Merged</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="font-medium" x-text="reconcileScan.lastResult.errors"></div>
+                    <div class="text-xs text-muted-foreground">Errors</div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <p class="text-xs text-muted-foreground">
+            Updates file fingerprints (inode and content hash) to enable move detection,
+            and merges any duplicate entries found in your library.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Appearance Section -->
+    <div x-show="$store.ui.settingsSection === 'appearance'" data-testid="settings-section-appearance">
+      <h3 class="text-xl font-semibold mb-4">Appearance</h3>
+      <div class="space-y-6">
+        <div>
+          <label class="block text-sm font-medium mb-2">Theme</label>
+          <div class="flex gap-3">
+            <button
+              class="px-4 py-2 rounded-md border text-sm transition-colors"
+              :class="$store.ui.themePreset === 'light' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted/50'"
+              @click="$store.ui.setThemePreset('light')"
+              data-testid="settings-theme-light"
+            >
+              Light
+            </button>
+            <button
+              class="px-4 py-2 rounded-md border text-sm transition-colors"
+              :class="$store.ui.themePreset === 'metro-teal' ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted/50'"
+              @click="$store.ui.setThemePreset('metro-teal')"
+              data-testid="settings-theme-metro-teal"
+            >
+              Metro Teal
+            </button>
+          </div>
+          <p class="text-xs text-muted-foreground mt-2">Metro Teal uses a dark theme with teal accents.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shortcuts Section -->
+    <div x-show="$store.ui.settingsSection === 'shortcuts'" data-testid="settings-section-shortcuts">
+      <h3 class="text-xl font-semibold mb-4">Shortcuts</h3>
+      <div class="space-y-3">
+        <div class="flex items-center justify-between py-2 border-b border-border/50">
+          <span class="text-sm">Queue next</span>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">-</span>
+            <div class="relative group">
+              <svg class="w-4 h-4 text-muted-foreground cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <div class="absolute right-0 bottom-full mb-2 px-2 py-1 bg-foreground text-background text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                Not configurable yet
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-between py-2 border-b border-border/50">
+          <span class="text-sm">Queue last</span>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">-</span>
+            <div class="relative group">
+              <svg class="w-4 h-4 text-muted-foreground cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <div class="absolute right-0 bottom-full mb-2 px-2 py-1 bg-foreground text-background text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                Not configurable yet
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-between py-2 border-b border-border/50">
+          <span class="text-sm">Stop after track</span>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">-</span>
+            <div class="relative group">
+              <svg class="w-4 h-4 text-muted-foreground cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <div class="absolute right-0 bottom-full mb-2 px-2 py-1 bg-foreground text-background text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                Not configurable yet
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sorting Section -->
+    <div x-show="$store.ui.settingsSection === 'sorting'" data-testid="settings-section-sorting">
+      <h3 class="text-xl font-semibold mb-4">Sorting</h3>
+
+      <div class="space-y-6">
+        <!-- Ignore Words -->
+        <div>
+          <h4 class="text-sm font-medium mb-3">Ignore words when sorting</h4>
+          <div class="space-y-4">
+            <!-- Enable toggle -->
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                x-model="$store.ui.sortIgnoreWords"
+                @change="$store.library.applyFilters()"
+                class="w-4 h-4 rounded border-border text-primary focus:ring-primary focus:ring-offset-0"
+                data-testid="settings-sort-ignore-words-toggle"
+              />
+              <div class="flex-1">
+                <div class="text-sm font-medium">Enable ignore words</div>
+                <div class="text-xs text-muted-foreground">
+                  Strip article prefixes (like "The", "Le", "Los") when sorting by artist, album, or title
+                </div>
+              </div>
+            </label>
+
+            <!-- Ignore words list input -->
+            <div class="pl-7">
+              <label class="block text-sm font-medium mb-2">Ignore words list</label>
+              <input
+                type="text"
+                x-model="$store.ui.sortIgnoreWordsList"
+                @input.debounce.500ms="$store.library.applyFilters()"
+                :disabled="!$store.ui.sortIgnoreWords"
+                placeholder="the, le, la, los, a"
+                class="w-full px-3 py-2 rounded-md border border-border bg-background text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:ring-1 focus:ring-primary focus:border-primary"
+                data-testid="settings-sort-ignore-words-input"
+              />
+              <p class="text-xs text-muted-foreground mt-2">
+                Enter comma-separated prefixes to ignore. Case-insensitive.
+              </p>
+            </div>
+          </div>
+
+          <!-- Example -->
+          <div class="mt-4 p-4 bg-muted/30 rounded-lg">
+            <h5 class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Example</h5>
+            <div class="text-sm space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-muted-foreground">-></span>
+                <span>"The Beatles" sorts under <strong>B</strong></span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-muted-foreground">-></span>
+                <span>"Los Lobos" sorts under <strong>L</strong></span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-muted-foreground">-></span>
+                <span>"Le Tigre" sorts under <strong>T</strong></span>
+              </div>
+            </div>
+            <p class="text-xs text-muted-foreground mt-3">
+              The full name is still displayed - only the sort order changes.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced Section -->
+    <div x-show="$store.ui.settingsSection === 'advanced'" data-testid="settings-section-advanced">
+      <h3 class="text-xl font-semibold mb-4">Advanced</h3>
+
+      <!-- App Info -->
+      <div class="mb-8">
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">App Info</h4>
+        <div class="bg-muted/30 rounded-lg p-4 space-y-2">
+          <div class="flex justify-between text-sm">
+            <span class="text-muted-foreground">Version</span>
+            <span x-text="appInfo.version" data-testid="settings-app-version">-</span>
+          </div>
+          <div class="flex justify-between text-sm">
+            <span class="text-muted-foreground">Build</span>
+            <span x-text="appInfo.build" data-testid="settings-app-build">-</span>
+          </div>
+          <div class="flex justify-between text-sm">
+            <span class="text-muted-foreground">Platform</span>
+            <span x-text="appInfo.platform" data-testid="settings-app-platform">-</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Maintenance -->
+      <div>
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Maintenance</h4>
+        <div class="space-y-3">
+          <button
+            class="w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+            @click="resetSettings()"
+            data-testid="settings-reset"
+          >
+            <div class="font-medium text-sm">Reset Settings</div>
+            <div class="text-xs text-muted-foreground mt-0.5">Restore all settings to their defaults</div>
+          </button>
+          <button
+            class="w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            @click="exportLogs()"
+            :disabled="isExportingLogs"
+            data-testid="settings-export-logs"
+          >
+            <div class="flex items-center gap-2">
+              <span class="font-medium text-sm">Export Logs</span>
+              <span x-show="isExportingLogs" class="text-xs text-muted-foreground">Exporting...</span>
+            </div>
+            <div class="text-xs text-muted-foreground mt-0.5">Save diagnostic information for troubleshooting</div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Last.fm Section -->
+     <div x-show="$store.ui.settingsSection === 'lastfm'" data-testid="settings-section-lastfm">
+       <h3 class="text-xl font-semibold mb-4">Last.fm</h3>
+
+       <!-- Connection Status -->
+       <div class="mb-8">
+         <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Connection</h4>
+         <div class="bg-muted/30 rounded-lg p-4">
+           <div class="flex items-center justify-between mb-3">
+             <div class="flex items-center gap-3">
+               <div
+                 class="w-3 h-3 rounded-full"
+                 :class="lastfm.authenticated ? 'bg-green-500' : (lastfm.pendingToken ? 'bg-yellow-500' : 'bg-red-500')"
+               ></div>
+               <span class="text-sm font-medium" x-text="lastfm.authenticated ? (lastfm.username ? 'Connected as ' + lastfm.username : 'Connected') : (lastfm.pendingToken ? 'Awaiting Authorization' : 'Not Connected')"></span>
+             </div>
+             <div class="flex gap-2">
+               <!-- Initial connect button -->
+               <button
+                 x-show="!lastfm.authenticated && !lastfm.pendingToken"
+                 class="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
+                 :disabled="lastfm.isConnecting"
+                 @click="connectLastfm()"
+                 data-testid="lastfm-connect"
+               >
+                 <span x-text="lastfm.isConnecting ? 'Connecting...' : 'Connect'"></span>
+               </button>
+               <!-- Complete auth button (shown after user clicks Connect and is redirected to Last.fm) -->
+               <button
+                 x-show="!lastfm.authenticated && lastfm.pendingToken"
+                 class="px-3 py-1.5 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
+                 :disabled="lastfm.isConnecting"
+                 @click="completeLastfmAuth()"
+                 data-testid="lastfm-complete-auth"
+               >
+                 <span x-text="lastfm.isConnecting ? 'Completing...' : 'Complete Authentication'"></span>
+               </button>
+               <!-- Cancel pending auth -->
+               <button
+                 x-show="!lastfm.authenticated && lastfm.pendingToken"
+                 class="px-3 py-1.5 text-xs bg-muted text-muted-foreground rounded-md hover:bg-muted/80 transition-colors"
+                 @click="cancelLastfmAuth()"
+                 data-testid="lastfm-cancel-auth"
+               >
+                 Cancel
+               </button>
+               <button
+                 x-show="lastfm.authenticated"
+                 class="px-3 py-1.5 text-xs bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                 @click="disconnectLastfm()"
+                 data-testid="lastfm-disconnect"
+               >
+                 Disconnect
+               </button>
+             </div>
+           </div>
+           <p class="text-xs text-muted-foreground">
+             <span x-show="!lastfm.pendingToken">Connect your Last.fm account to enable scrobbling and loved tracks import.</span>
+             <span x-show="lastfm.pendingToken">After authorizing on Last.fm, click "Complete Authentication" to finish setup.</span>
+           </p>
+         </div>
+       </div>
+
+       <!-- Scrobbling Settings -->
+       <div x-show="lastfm.authenticated" class="mb-8">
+           <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Scrobbling</h4>
+           <div class="space-y-4">
+           <!-- Enable/Disable Toggle -->
+           <div class="flex items-center justify-between">
+             <div>
+             <div class="text-sm font-medium">Enable Scrobbling</div>
+             <div class="text-xs text-muted-foreground">Automatically scrobble tracks to Last.fm</div>
+             </div>
+             <button
+             class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+             :class="lastfm.enabled ? 'bg-primary' : 'bg-muted'"
+             @click="toggleLastfm()"
+             data-testid="lastfm-toggle"
+             >
+             <span
+               class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+               :class="lastfm.enabled ? 'translate-x-6' : 'translate-x-1'"
+             ></span>
+             </button>
+           </div>
+
+           <!-- Threshold Slider -->
+           <div x-show="lastfm.enabled">
+             <div class="text-sm font-medium mb-2">Scrobble Threshold</div>
+             <div class="text-xs text-muted-foreground mb-3">
+             Tracks will be scrobbled after playing for <span x-text="lastfm.scrobbleThreshold"></span>% of their duration
+             </div>
+             <div class="px-2">
+             <input
+             type="range"
+             min="50"
+             max="100"
+             step="10"
+             x-model.number="lastfm.scrobbleThreshold"
+             @input="updateScrobbleThreshold()"
+             class="w-full cursor-pointer accent-primary"
+             style="-webkit-appearance: auto; appearance: auto; box-shadow: none;"
+             data-testid="lastfm-threshold-slider"
+             >
+             <div class="flex justify-between text-xs text-muted-foreground mt-1">
+             <span class="w-[30px] text-center">50%</span>
+             <span class="w-[30px] text-center">60%</span>
+             <span class="w-[30px] text-center">70%</span>
+             <span class="w-[30px] text-center">80%</span>
+             <span class="w-[30px] text-center">90%</span>
+             <span class="w-[30px] text-center">100%</span>
+             </div>
+             </div>
+           </div>
+           </div>
+           </div>
+
+
+       <!-- Loved Tracks -->
+       <div x-show="lastfm.authenticated" class="mb-8">
+         <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Loved Tracks</h4>
+         <div class="space-y-3">
+           <button
+             class="w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors disabled:opacity-50"
+             :disabled="lastfm.importInProgress"
+             @click="importLovedTracks()"
+             data-testid="lastfm-import-loved"
+           >
+             <div class="font-medium text-sm" x-text="lastfm.importInProgress ? 'Importing...' : 'Import Loved Tracks'"></div>
+             <div class="text-xs text-muted-foreground mt-0.5">Import your loved tracks from Last.fm and mark them as favorites</div>
+           </button>
+         </div>
+       </div>
+
+       <!-- Queue Status -->
+       <div x-show="lastfm.authenticated && lastfm.enabled" class="mb-8">
+         <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Scrobble Queue</h4>
+         <div class="bg-muted/30 rounded-lg p-4">
+           <div class="flex items-center justify-between mb-2">
+             <span class="text-sm font-medium">Queued Scrobbles</span>
+             <button
+               x-show="lastfm.queueStatus.queued_scrobbles > 0"
+               class="px-3 py-1 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+               @click="retryQueuedScrobbles()"
+               data-testid="lastfm-retry-queue"
+             >
+               Retry All
+             </button>
+           </div>
+           <div class="text-sm text-muted-foreground">
+             <span x-text="lastfm.queueStatus.queued_scrobbles || 0"></span> scrobbles queued
+           </div>
+         </div>
+       </div>
+     </div>
+  </div>
+</div>

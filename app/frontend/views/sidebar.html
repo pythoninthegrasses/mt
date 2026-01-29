@@ -1,0 +1,223 @@
+<aside
+  x-data="sidebar"
+  @dragover="console.log('[Sidebar/aside] dragover event', $event.target)"
+  @drop="console.log('[Sidebar/aside] drop event', $event.target)"
+  class="border-r border-border bg-muted/30 flex flex-col shrink-0 overflow-hidden transition-all duration-200"
+  :class="isCollapsed ? 'w-[70px]' : 'w-52'"
+>
+  <!-- Search (Apple Music style pill) -->
+  <div x-show="!isCollapsed" class="p-3">
+    <div class="relative">
+      <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+      </svg>
+      <input
+        type="text"
+        class="w-full text-xs py-1.5 pl-8 pr-7 rounded-full bg-muted/80 border-0 focus:ring-1 focus:ring-primary/50 focus:outline-none text-foreground placeholder:text-foreground/50"
+        placeholder="Search"
+        x-model="$store.library.searchQuery"
+        @input.debounce.300ms="$store.library.search($store.library.searchQuery)"
+        data-testid="sidebar-search"
+      >
+      <button
+        x-show="$store.library.searchQuery"
+        @click="$store.library.searchQuery = ''; $store.library.search('')"
+        class="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full bg-foreground/30 hover:bg-foreground/40 text-background transition-colors"
+        data-testid="sidebar-search-clear"
+      >
+        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Sidebar content -->
+  <nav class="flex-1 overflow-y-auto p-2 space-y-4">
+    <!-- Library section -->
+    <div>
+      <h3 x-show="!isCollapsed" class="text-[10px] font-semibold text-foreground/40 uppercase tracking-wider px-2 mb-2">Library</h3>
+      <ul class="space-y-0.5">
+        <template x-for="section in sections" :key="section.id">
+          <li>
+            <button
+              class="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors sidebar-no-select"
+              :class="[
+                isActive(section.id) ? 'bg-primary/15 text-primary' : 'hover:bg-muted/70 hover:text-primary text-foreground/80',
+                isCollapsed ? 'justify-center' : ''
+              ]"
+              @click="loadSection(section.id)"
+              @contextmenu.prevent
+              :title="isCollapsed ? section.label : ''"
+              :data-testid="'sidebar-section-' + section.id"
+            >
+              <!-- Icons -->
+              <template x-if="section.icon === 'music'">
+                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                </svg>
+              </template>
+              <template x-if="section.icon === 'speaker'">
+                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+                </svg>
+              </template>
+              <template x-if="section.icon === 'heart'">
+                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                </svg>
+              </template>
+              <template x-if="section.icon === 'clock'">
+                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+              </template>
+              <template x-if="section.icon === 'sparkles'">
+                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+                </svg>
+              </template>
+              <template x-if="section.icon === 'fire'">
+                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z"></path>
+                </svg>
+              </template>
+              <span x-show="!isCollapsed" x-text="section.label" class="truncate"></span>
+            </button>
+          </li>
+        </template>
+      </ul>
+    </div>
+
+    <!-- Playlists section -->
+    <div x-show="!isCollapsed">
+      <div class="flex items-center justify-between px-2 mb-2">
+        <h3 class="text-[10px] font-semibold text-foreground/40 uppercase tracking-wider">Playlists</h3>
+        <button
+          class="p-0.5 text-[#8E8E93] hover:text-foreground transition-colors sidebar-no-select"
+          @click="createPlaylist()"
+          @contextmenu.prevent
+          title="New Playlist"
+          data-testid="create-playlist"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"></path>
+          </svg>
+        </button>
+      </div>
+      <ul class="space-y-0.5" tabindex="0" @keydown="handlePlaylistKeydown($event)" data-testid="playlist-list">
+        <template x-for="(playlist, index) in playlists" :key="playlist.id">
+          <li>
+            <template x-if="editingPlaylist?.playlistId === playlist.playlistId">
+              <div class="flex items-center gap-2 px-2 py-1">
+                <svg class="w-4 h-4 shrink-0 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
+                </svg>
+                <input
+                  type="text"
+                  x-model="editingName"
+                  @blur="commitInlineRename()"
+                  @keydown="handleRenameKeydown($event)"
+                  class="flex-1 min-w-0 text-sm bg-muted border border-primary rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                  data-testid="playlist-rename-input"
+                >
+              </div>
+            </template>
+            <template x-if="editingPlaylist?.playlistId !== playlist.playlistId">
+              <button
+                class="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-all duration-150 select-none"
+                :class="[
+                  isActive(playlist.id) ? 'bg-primary/15 text-primary' : 'hover:bg-muted/70 text-foreground/80',
+                  isPlaylistSelected(playlist.playlistId) ? 'bg-[#DFDFDF] dark:bg-[#3a3a3a]' : '',
+                  isPlaylistDragOver(playlist.playlistId) ? 'ring-2 ring-primary ring-inset bg-primary/10' : '',
+                  isPlaylistDragging(index) ? 'bg-card shadow-lg z-10 relative' : '',
+                  isOtherPlaylistDragging(index) ? 'opacity-50' : '',
+                  getPlaylistReorderClass(index),
+                  isCollapsed ? 'justify-center' : ''
+                ]"
+                :style="isPlaylistDragging(index) ? 'transform:' + getPlaylistDragTransform(index) + '; transition: none;' : ''"
+                @click="handlePlaylistClick($event, playlist, index)"
+                @contextmenu.prevent="showPlaylistContextMenu($event, playlist)"
+                @mousedown="startPlaylistReorder(index, $event)"
+                @dragstart.prevent
+                @dragover.prevent="handlePlaylistDragOver($event, playlist)"
+                @dragleave="handlePlaylistDragLeave($event, playlist)"
+                @drop.prevent="handlePlaylistDrop($event, playlist)"
+                :data-testid="'sidebar-playlist-' + playlist.playlistId"
+                :data-playlist-id="playlist.playlistId"
+                :data-playlist-reorder-index="index"
+                :data-selected="isPlaylistSelected(playlist.playlistId) ? 'true' : 'false'"
+              >
+                <svg class="w-4 h-4 shrink-0" :class="isActive(playlist.id) ? 'text-primary' : 'text-foreground/50'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
+                </svg>
+                <span x-text="playlist.name" class="truncate"></span>
+              </button>
+            </template>
+          </li>
+        </template>
+        <li x-show="playlists.length === 0" class="select-none pointer-events-none">
+          <p class="text-xs text-foreground/40 px-2 py-1">No playlists yet</p>
+        </li>
+      </ul>
+
+      <!-- Playlist Context Menu -->
+      <div
+        x-show="contextMenuPlaylist"
+        x-cloak
+        @click.away="hidePlaylistContextMenu()"
+        @keydown.escape.window="hidePlaylistContextMenu()"
+        class="context-menu bg-card"
+        :style="`left: ${contextMenuX}px; top: ${contextMenuY}px;`"
+        data-testid="playlist-context-menu"
+      >
+        <button
+          class="context-menu-item w-full justify-start"
+          @click="renamePlaylist()"
+          data-testid="playlist-rename"
+        >
+          Rename
+        </button>
+        <button
+          class="context-menu-item w-full justify-start text-destructive"
+          @click="deletePlaylist()"
+          data-testid="playlist-delete"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+
+  </nav>
+
+  <!-- Bottom controls: Settings + Collapse toggle -->
+  <div
+    class="border-t border-border/50 p-2 flex items-center gap-1"
+    :class="isCollapsed ? 'gap-0 pr-0.75' : 'gap-1'"
+  >
+    <button
+      class="flex items-center justify-center p-1.5 rounded-md hover:bg-muted/70 transition-colors text-foreground/50 hover:text-primary sidebar-no-select"
+      @click="$store.ui.toggleSettings()"
+      @contextmenu.prevent
+      title="Settings (⌘,)"
+      data-testid="sidebar-settings"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+      </svg>
+    </button>
+    <button
+      class="flex items-center justify-center p-1.5 rounded-md hover:bg-muted/70 transition-colors text-foreground/50 hover:text-primary sidebar-no-select"
+      @click="toggleCollapse()"
+      @contextmenu.prevent
+      :title="isCollapsed ? 'Expand' : 'Collapse'"
+      data-testid="sidebar-collapse-toggle"
+    >
+      <svg class="w-4 h-4 transition-transform" :class="isCollapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>
+      </svg>
+    </button>
+  </div>
+</aside>

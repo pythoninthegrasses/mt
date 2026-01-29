@@ -1,0 +1,301 @@
+<!-- Library View -->
+<div
+  x-show="$store.ui.view === 'library'"
+  x-cloak
+  x-data="libraryBrowser"
+  @keydown.window="$store.ui.view === 'library' && handleKeydown($event)"
+  class="h-full flex flex-col min-h-0"
+>
+<!-- Track table - single scroll container for both vertical and horizontal -->
+<div class="flex-1 min-h-0 w-full overflow-auto" x-ref="scrollContainer">
+        <!-- Table header (CSS Grid) - sticky at top of scroll container -->
+        <div
+          data-testid="library-header"
+          class="grid border-b border-border text-sm font-medium text-muted-foreground relative sticky top-0 z-10 bg-background"
+          :class="{ 'resizing-columns': resizingColumn }"
+          :style="`grid-template-columns: ${getGridTemplateColumns()}`"
+          @contextmenu.prevent="handleHeaderContextMenu($event)"
+        >
+        <template x-for="(col, colIndex) in columns" :key="col.key">
+          <div
+            :class="[
+              'column-header-cell',
+              col.sortable ? 'cursor-grab' : '',
+              library.sortBy === col.key ? 'column-header-active text-foreground' : '',
+              colIndex < columns.length - 1 ? 'border-r border-border' : '',
+              col.key === 'status' ? 'px-1' : (col.key === 'index' ? 'px-2' : (col.key === 'duration' ? 'pl-[3px] pr-[10px]' : 'px-4')),
+              isColumnDragging(col.key) ? 'dragging-column' : '',
+              isOtherColumnDragging(col.key) ? 'other-dragging' : '',
+              getColumnShiftDirection(colIndex) === 'left' ? 'shift-left' : '',
+              getColumnShiftDirection(colIndex) === 'right' ? 'shift-right' : ''
+            ]"
+            class="py-2 select-none flex items-center relative overflow-visible"
+            :style="isColumnDragging(col.key) ? 'transform:' + getColumnDragTransform(col.key) + '; z-index: 50;' : ''"
+            @mousedown="if (!$event.target.closest('.column-resizer-left') && !$event.target.closest('.column-resizer-right')) startColumnDrag(col, $event)"
+            @click="if (!draggingColumnKey && !wasResizing && !wasColumnDragging) handleSort(col.key)"
+          >
+            <span x-text="col.label" class="truncate"></span>
+            <span
+              x-show="col.sortable && library.sortBy === col.key"
+              x-text="getSortIndicator(col.key)"
+              class="sort-indicator ml-1 shrink-0"
+            ></span>
+            <!-- Left resizer (resizes previous column) - not on first column -->
+            <div
+              x-show="colIndex > 0"
+              class="column-resizer-left"
+              :data-testid="`col-resizer-left-${col.key}`"
+              @mousedown.stop.prevent="startColumnResize(columns[colIndex - 1], $event)"
+              @dblclick.stop.prevent="autoFitColumn(columns[colIndex - 1], $event)"
+              @click.stop.prevent
+            ></div>
+            <!-- Right resizer (resizes current column) -->
+            <div
+              class="column-resizer-right"
+              :class="{ 'last-column-resizer': colIndex === columns.length - 1 }"
+              :data-testid="`col-resizer-right-${col.key}`"
+              @mousedown.stop.prevent="startColumnResize(col, $event)"
+              @dblclick.stop.prevent="autoFitColumn(col, $event)"
+              @click.stop.prevent
+            ></div>
+          </div>
+        </template>
+      </div>
+
+  <!-- Header context menu for column visibility -->
+  <div
+    x-show="headerContextMenu"
+    x-cloak
+    class="header-context-menu fixed z-100 min-w-45 border border-border rounded-lg shadow-lg p-1 bg-card"
+    :style="headerContextMenu ? `left: ${headerContextMenu.x}px; top: ${headerContextMenu.y}px` : ''"
+    @click.away="headerContextMenu = null"
+  >
+    <template x-if="headerContextMenu">
+      <div>
+        <div class="px-2 py-1 text-xs text-muted-foreground font-medium">Show Columns</div>
+        <template x-for="item in headerContextMenu.items" :key="item.key">
+          <div
+            class="context-menu-item"
+            :class="{ 'opacity-50 cursor-not-allowed': !item.canToggle && item.visible }"
+            @click="item.canToggle && toggleColumnVisibility(item.key)"
+          >
+            <span class="w-4 text-center" x-text="item.visible ? '✓' : ''"></span>
+            <span x-text="item.label"></span>
+          </div>
+        </template>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" @click="resetColumnDefaults()">
+          <span class="w-4"></span>
+          <span>Reset Columns to Defaults</span>
+        </div>
+        <div class="context-menu-item" @click="showAllColumns()">
+          <span class="w-4"></span>
+          <span>Show All Columns</span>
+        </div>
+      </div>
+    </template>
+  </div>
+
+        <!-- Track list - no scroll, parent handles both -->
+        <div class="track-list flex-1 min-h-0 w-full">
+    <!-- Loading state -->
+    <div x-show="library.loading && library.tracks.length === 0" class="flex items-center justify-center py-12">
+      <div class="text-center">
+        <svg class="animate-spin w-8 h-8 mx-auto mb-2 text-primary" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="text-muted-foreground">Loading library...</p>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <div x-show="!library.loading && library.filteredTracks.length === 0" class="flex items-center justify-center h-full">
+      <!-- Liked Songs empty state -->
+      <template x-if="library.currentSection === 'liked' && !library.searchQuery">
+        <div class="text-center">
+          <svg class="w-24 h-24 mx-auto mb-6 text-muted-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+          </svg>
+          <p class="text-lg font-medium">Liked Songs is empty</p>
+          <p class="text-sm text-muted-foreground mt-1">Favorite a track to get started</p>
+        </div>
+      </template>
+      <!-- Search empty state -->
+      <template x-if="library.searchQuery">
+        <div class="text-center">
+          <svg class="w-24 h-24 mx-auto mb-6 text-muted-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+          <p class="text-lg font-medium">No tracks found</p>
+          <p class="text-sm text-muted-foreground mt-1">Try a different search term</p>
+        </div>
+      </template>
+      <!-- Library empty state -->
+      <template x-if="library.currentSection !== 'liked' && !library.searchQuery">
+        <div class="text-center">
+          <svg class="w-24 h-24 mx-auto mb-6 text-muted-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+          </svg>
+          <p class="text-lg font-medium">Library is empty</p>
+          <p class="text-sm text-muted-foreground mt-1">Add music to your library to get started</p>
+        </div>
+      </template>
+    </div>
+
+    <!-- Track rows (CSS Grid matching header) -->
+    <template x-for="(track, index) in library.filteredTracks" :key="track.id">
+      <div
+        class="grid border-b border-border/30 text-sm cursor-default transition-colors select-none"
+        :style="`grid-template-columns: ${getGridTemplateColumns()};` + (isDraggingTrack(index) ? ` transform: ${getTrackDragTransform(index)}; transition: none;` : '')"
+        :class="[
+          isSelected(track.id) ? 'track-row-selected' : (index % 2 === 0 ? 'track-row-even' : 'track-row-odd'),
+          isPlaying(track.id) && !isSelected(track.id) ? 'track-row-playing' : '',
+          !isSelected(track.id) && !isPlaying(track.id) ? 'hover:bg-muted/50' : '',
+          isDraggingTrack(index) ? 'bg-card shadow-lg z-10 relative' : '',
+          isOtherTrackDragging(index) ? 'opacity-50' : '',
+          getDragOverClass(index)
+        ]"
+        :data-track-id="track.id"
+        draggable="true"
+        @dragstart="handleTrackDragStart($event, track)"
+        @dragend="handleTrackDragEnd($event)"
+        @click="handleRowClick($event, track, index)"
+        @dblclick="handleDoubleClick(track, index)"
+        @contextmenu="handleContextMenu($event, track, index)"
+      >
+        <template x-for="col in columns" :key="col.key">
+          <div
+            :class="[
+              'py-1.5 overflow-hidden text-ellipsis whitespace-nowrap',
+              col.key === 'status' ? 'px-1' : (col.key === 'index' ? 'px-2' : (col.key === 'duration' ? 'pl-[3px] pr-[10px]' : 'px-4')),
+              col.key !== 'title' && col.key !== 'status' && !isSelected(track.id) ? 'text-muted-foreground' : ''
+            ]"
+            :data-column="col.key"
+          >
+            <template x-if="col.key === 'status'">
+              <span class="flex items-center justify-center w-full h-full">
+                <button
+                  x-show="track.missing"
+                  @click.stop="$store.ui.openMissingTrackPopover(track, $event)"
+                  class="text-warning hover:text-warning/80 cursor-pointer p-0.5 rounded hover:bg-muted/50"
+                  data-testid="missing-track-icon"
+                  title="File not found - click for details"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="16" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                  </svg>
+                </button>
+              </span>
+            </template>
+            <template x-if="col.key === 'index'">
+              <span class="flex items-center gap-1">
+                <span
+                  x-show="isInPlaylistView()"
+                  class="cursor-grab text-muted-foreground/50 hover:text-foreground/70 shrink-0"
+                  @mousedown="startPlaylistDrag(index, $event)"
+                  @touchstart="startPlaylistDrag(index, $event)"
+                >⠿</span>
+                <span x-text="track.track_number || (index + 1)"></span>
+              </span>
+            </template>
+            <template x-if="col.key === 'title'">
+              <span class="flex items-center">
+                <span x-show="isPlaying(track.id)" class="text-primary shrink-0 mr-2">▶</span>
+                <span class="truncate" :class="track.missing ? 'text-muted-foreground/70 italic' : ''" x-text="track.title || track.filename || 'Unknown'"></span>
+              </span>
+            </template>
+            <template x-if="col.key === 'artist'">
+              <span x-text="track.artist || 'Unknown Artist'"></span>
+            </template>
+            <template x-if="col.key === 'album'">
+              <span x-text="track.album || ''"></span>
+            </template>
+            <template x-if="col.key === 'lastPlayed'">
+              <span x-text="formatRelativeTime(track.last_played)"></span>
+            </template>
+            <template x-if="col.key === 'dateAdded'">
+              <span x-text="formatRelativeTime(track.added_date)"></span>
+            </template>
+            <template x-if="col.key === 'playCount'">
+              <span x-text="track.play_count || 0"></span>
+            </template>
+            <template x-if="col.key === 'duration'">
+              <span x-text="formatDuration(track.duration)"></span>
+            </template>
+          </div>
+        </template>
+      </div>
+    </template>
+        </div>
+      </div>
+
+  <!-- Context menu -->
+  <div
+    x-show="contextMenu"
+    x-cloak
+    class="context-menu track-context-menu bg-card"
+    data-testid="track-context-menu"
+    :style="contextMenu ? `left: ${contextMenu.x}px; top: ${contextMenu.y}px` : ''"
+    @click.outside="contextMenu = null; showPlaylistSubmenu = false"
+  >
+    <template x-if="contextMenu">
+      <div>
+        <template x-for="(item, idx) in contextMenu.items" :key="idx">
+          <div>
+            <template x-if="item.type === 'separator'">
+              <div class="context-menu-separator"></div>
+            </template>
+            <template x-if="item.type !== 'separator'">
+              <div
+                class="context-menu-item relative"
+                :class="{ 'disabled': item.disabled, 'danger': item.danger }"
+                @click="if (!item.disabled && !item.hasSubmenu) { item.action(); contextMenu = null; } else if (!item.disabled) { item.action(); }"
+                @mouseenter="if (item.hasSubmenu) { showPlaylistSubmenu = true; submenuY = $el.getBoundingClientRect().top; if (submenuCloseTimeout) { clearTimeout(submenuCloseTimeout); submenuCloseTimeout = null; } } else { showPlaylistSubmenu = false; }"
+                @mouseleave="if (item.hasSubmenu) { submenuCloseTimeout = setTimeout(() => { showPlaylistSubmenu = false; }, 150); }"
+              >
+                <span x-text="item.icon" class="w-4 text-center"></span>
+                <span x-text="item.label" class="flex-1"></span>
+                <span x-show="item.hasSubmenu" class="text-muted-foreground" x-text="submenuOnLeft ? '◀' : '▶'"></span>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </template>
+  </div>
+
+  <!-- Add to Playlist submenu -->
+  <div
+    x-show="contextMenu && showPlaylistSubmenu"
+    x-cloak
+    class="context-menu bg-card"
+    data-testid="playlist-submenu"
+    :style="contextMenu ? `left: ${submenuOnLeft ? contextMenu.x - 180 : contextMenu.x + 180 + 45}px; top: ${submenuY}px` : ''"
+    @mouseenter="if (submenuCloseTimeout) { clearTimeout(submenuCloseTimeout); submenuCloseTimeout = null; }"
+    @mouseleave="showPlaylistSubmenu = false"
+  >
+    <div
+      class="context-menu-item"
+      @click="createPlaylistWithTracks()"
+    >
+      <span class="w-4 text-center">+</span>
+      <span>New Playlist...</span>
+    </div>
+    <div class="context-menu-separator" x-show="playlists.length > 0"></div>
+    <template x-for="playlist in playlists" :key="playlist.id">
+      <div
+        class="context-menu-item"
+        @click="addToPlaylist(playlist.id)"
+      >
+        <span class="w-4 text-center"></span>
+        <span x-text="playlist.name" class="truncate"></span>
+      </div>
+    </template>
+    <div x-show="playlists.length === 0" class="px-3 py-2 text-sm text-muted-foreground">
+      No playlists yet
+    </div>
+  </div>
+</div>
