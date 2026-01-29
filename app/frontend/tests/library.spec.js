@@ -1948,6 +1948,100 @@ test.describe('Column Customization', () => {
     const artistIdx = columnOrder.indexOf('artist');
     expect(albumIdx).toBeLessThan(artistIdx);
   });
+
+  test('should reset column order when using Reset Columns to Defaults', async ({ page }) => {
+    // Set custom column order (album before artist)
+    await setColumnSettings(page, {
+      widths: {},
+      visibility: {},
+      order: ['index', 'title', 'album', 'artist', 'duration']
+    });
+
+    await page.reload();
+    await waitForAlpine(page);
+    await page.waitForSelector('[x-data="libraryBrowser"]', { state: 'visible' });
+
+    // Verify custom order is applied
+    const customOrder = await page.evaluate(() => {
+      const el = document.querySelector('[x-data="libraryBrowser"]');
+      return window.Alpine.$data(el).columns.map(c => c.key);
+    });
+    const albumIdxBefore = customOrder.indexOf('album');
+    const artistIdxBefore = customOrder.indexOf('artist');
+    expect(albumIdxBefore).toBeLessThan(artistIdxBefore);
+
+    // Open context menu and click Reset Columns to Defaults
+    const headerRow = page.locator('[data-testid="library-header"]');
+    await headerRow.click({ button: 'right' });
+    await page.waitForSelector('.header-context-menu', { state: 'visible', timeout: 5000 });
+
+    const resetMenuItem = page.locator('.header-context-menu .context-menu-item:has-text("Reset Columns to Defaults")');
+    await resetMenuItem.click();
+    await page.waitForTimeout(100);
+
+    // Verify order is reset to default (artist before album)
+    const resetOrder = await page.evaluate(() => {
+      const el = document.querySelector('[x-data="libraryBrowser"]');
+      return window.Alpine.$data(el).columns.map(c => c.key);
+    });
+    const albumIdxAfter = resetOrder.indexOf('album');
+    const artistIdxAfter = resetOrder.indexOf('artist');
+    expect(artistIdxAfter).toBeLessThan(albumIdxAfter);
+  });
+
+  test('should show visual feedback during column drag', async ({ page }) => {
+    const headerRow = page.locator('[data-testid="library-header"]');
+    await expect(headerRow).toBeVisible();
+
+    // Get artist header element
+    const artistHeader = headerRow.locator('div.column-header-cell').filter({ hasText: 'Artist' }).first();
+    const albumHeader = headerRow.locator('div.column-header-cell').filter({ hasText: 'Album' }).first();
+
+    const artistBox = await artistHeader.boundingBox();
+
+    // Verify no drag state initially
+    const initialDragState = await page.evaluate(() => {
+      const el = document.querySelector('[x-data="libraryBrowser"]');
+      return window.Alpine.$data(el).draggingColumnKey;
+    });
+    expect(initialDragState).toBeNull();
+
+    // Start drag (mousedown + move to trigger drag state)
+    await page.mouse.move(artistBox.x + artistBox.width / 2, artistBox.y + artistBox.height / 2);
+    await page.mouse.down();
+    // Move more than 5px to trigger drag state
+    await page.mouse.move(artistBox.x + artistBox.width / 2 + 50, artistBox.y + artistBox.height / 2, { steps: 3 });
+
+    // Verify dragging state is set
+    const draggingKey = await page.evaluate(() => {
+      const el = document.querySelector('[x-data="libraryBrowser"]');
+      return window.Alpine.$data(el).draggingColumnKey;
+    });
+    expect(draggingKey).toBe('artist');
+
+    // Verify visual feedback class is applied to dragging column
+    const hasDraggingClass = await artistHeader.evaluate(el => el.classList.contains('dragging-column'));
+    expect(hasDraggingClass).toBe(true);
+
+    // Verify other columns have other-dragging class
+    const hasOtherDraggingClass = await albumHeader.evaluate(el => el.classList.contains('other-dragging'));
+    expect(hasOtherDraggingClass).toBe(true);
+
+    // Release mouse
+    await page.mouse.up();
+
+    // Verify drag state is cleared
+    await page.waitForTimeout(50);
+    const finalDragState = await page.evaluate(() => {
+      const el = document.querySelector('[x-data="libraryBrowser"]');
+      return window.Alpine.$data(el).draggingColumnKey;
+    });
+    expect(finalDragState).toBeNull();
+
+    // Verify dragging-column class is removed
+    const hasDraggingClassAfter = await artistHeader.evaluate(el => el.classList.contains('dragging-column'));
+    expect(hasDraggingClassAfter).toBe(false);
+  });
 });
 
 /**
