@@ -105,6 +105,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
+        continue-on-error: true  # Don't fail job on upload timeout (self-hosted network issues)
         uses: actions/upload-artifact@v6
         with:
           name: playwright-report
@@ -113,6 +114,7 @@ jobs:
 
       - name: Upload test results
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: playwright-results
@@ -172,6 +174,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: vitest-coverage
@@ -282,6 +285,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: rust-coverage
