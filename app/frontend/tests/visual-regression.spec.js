@@ -3,6 +3,10 @@ import { waitForAlpine } from './fixtures/helpers.js';
 import { createLibraryState, setupLibraryMocks } from './fixtures/mock-library.js';
 import { createPlaylistState, setupPlaylistMocks } from './fixtures/mock-playlists.js';
 
+// Skip visual regression tests in CI (snapshots are gitignored)
+const isCI = process.env.CI === 'true';
+test.skip(() => isCI, 'Visual regression tests skipped in CI (snapshots not committed)');
+
 /**
  * Visual Regression Tests
  *
