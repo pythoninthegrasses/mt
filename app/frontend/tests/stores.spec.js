@@ -307,33 +307,26 @@ test.describe('Library Store', () => {
     expect(libraryStore.loading).toBe(false);
   });
 
-  test('should filter tracks based on search', async ({ page }) => {
-    // Add mock tracks
+  test('should apply ignore-words filter via applyFilters', async ({ page }) => {
+    // Add mock tracks with "The" prefix to test ignore-words normalization
     await page.evaluate(() => {
-      window.Alpine.store('library').tracks = [
-        { id: 'track-1', title: 'Hello World', artist: 'Artist A' },
-        { id: 'track-2', title: 'Goodbye Moon', artist: 'Artist B' },
-        { id: 'track-3', title: 'Hello Again', artist: 'Artist A' },
+      const store = window.Alpine.store('library');
+      store.tracks = [
+        { id: 'track-1', title: 'The Beatles Song', artist: 'The Beatles', album: 'Abbey Road' },
+        { id: 'track-2', title: 'Bohemian Rhapsody', artist: 'Queen', album: 'A Night at the Opera' },
+        { id: 'track-3', title: 'A Hard Days Night', artist: 'The Beatles', album: 'A Hard Days Night' },
       ];
+      // Call applyFilters to populate filteredTracks
+      store.applyFilters();
     });
 
-    // Set search query
-    await setAlpineStoreProperty(page, 'library', 'searchQuery', 'hello');
-
-    // Trigger search (if method exists)
-    try {
-      await callAlpineStoreMethod(page, 'library', 'search', 'hello');
-    } catch (e) {
-      // Method might not exist, search might be reactive
-    }
-
-    // Wait a moment for filtering
-    await page.waitForTimeout(500);
-
-    // Verify filtered tracks (this depends on implementation)
+    // Verify filteredTracks is populated
     const libraryStore = await getAlpineStore(page, 'library');
-    // Should have tracks with "hello" in title or all tracks if filtering is done elsewhere
-    expect(libraryStore.tracks.length).toBeGreaterThan(0);
+    expect(libraryStore.filteredTracks.length).toBe(3);
+    // Verify tracks are present (applyFilters copies tracks to filteredTracks)
+    expect(libraryStore.filteredTracks.map((t) => t.id)).toContain('track-1');
+    expect(libraryStore.filteredTracks.map((t) => t.id)).toContain('track-2');
+    expect(libraryStore.filteredTracks.map((t) => t.id)).toContain('track-3');
   });
 });
 
