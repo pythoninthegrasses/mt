@@ -684,6 +684,56 @@ test.describe('Playlist Feature Parity (task-150)', () => {
     expect(result.hasGetReorderClass).toBe(true);
     expect(result.hasIsDragging).toBe(true);
   });
+
+  test('should rename playlist via context menu click', async ({ page }) => {
+    const playlist1 = page.locator('[data-testid="sidebar-playlist-1"]');
+    await playlist1.click({ button: 'right' });
+
+    const renameOption = page.locator('[data-testid="playlist-rename"]');
+    await expect(renameOption).toBeVisible();
+    await renameOption.click();
+
+    const renameInput = page.locator('[data-testid="playlist-rename-input"]');
+    await expect(renameInput).toBeVisible();
+    await expect(renameInput).toBeFocused();
+
+    await renameInput.fill('Context Menu Renamed');
+    await renameInput.press('Enter');
+
+    await page.waitForTimeout(300);
+
+    const renameCalls = findApiCalls(playlistState, 'PUT', '/playlists/1');
+    expect(renameCalls.length).toBeGreaterThan(0);
+    expect(renameCalls[0].body.name).toBe('Context Menu Renamed');
+  });
+
+  test('renamed playlist persists after page reload (mocked)', async ({ page }) => {
+    const playlist1 = page.locator('[data-testid="sidebar-playlist-1"]');
+    await playlist1.click({ button: 'right' });
+
+    const renameOption = page.locator('[data-testid="playlist-rename"]');
+    await renameOption.click();
+
+    const renameInput = page.locator('[data-testid="playlist-rename-input"]');
+    await renameInput.fill('Persistent Name');
+    await renameInput.press('Enter');
+
+    await page.waitForTimeout(300);
+
+    const renameCalls = findApiCalls(playlistState, 'PUT', '/playlists/1');
+    expect(renameCalls.length).toBeGreaterThan(0);
+
+    playlistState.playlists[0].name = 'Persistent Name';
+
+    await page.reload();
+    await setupPlaylistMocks(page, playlistState);
+    await page.goto('/');
+    await waitForAlpine(page);
+    await page.waitForSelector('aside[x-data="sidebar"]', { state: 'visible' });
+
+    const renamedPlaylist = page.locator('[data-testid="sidebar-playlist-1"]');
+    await expect(renamedPlaylist).toContainText('Persistent Name');
+  });
 });
 
 test.describe('Sidebar Responsiveness', () => {

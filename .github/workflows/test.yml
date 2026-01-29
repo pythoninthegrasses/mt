@@ -105,6 +105,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
+        continue-on-error: true  # Don't fail job on upload timeout (self-hosted network issues)
         uses: actions/upload-artifact@v6
         with:
           name: playwright-report
@@ -113,6 +114,7 @@ jobs:
 
       - name: Upload test results
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: playwright-results
@@ -172,6 +174,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: vitest-coverage
@@ -191,6 +194,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Add Homebrew to PATH
+        run: echo "/opt/homebrew/bin:/opt/homebrew/sbin" >> $GITHUB_PATH
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -198,6 +204,26 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.14.0
+
+      - name: Install TagLib (macOS)
+        run: |
+          if ! pkg-config --exists taglib_c 2>/dev/null; then
+            echo "Installing TagLib via Homebrew..."
+            brew install taglib
+          else
+            echo "TagLib already installed: $(pkg-config --modversion taglib_c)"
+          fi
+
+      - name: Verify build dependencies
+        run: |
+          echo "Zig: $(zig version)"
+          echo "TagLib: $(pkg-config --modversion taglib_c)"
+          echo "pkg-config path: $(pkg-config --variable=libdir taglib_c)"
 
       - name: Install frontend dependencies
         working-directory: ./app/frontend
@@ -208,8 +234,7 @@ jobs:
         run: npm run build
 
       - name: Check Rust build
-        working-directory: ./src-tauri
-        run: cargo check --all-features
+        run: cargo check --workspace --all-features
 
   # Rust backend tests with coverage
   rust-tests:
@@ -225,8 +250,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Add Homebrew to PATH
+        run: echo "/opt/homebrew/bin:/opt/homebrew/sbin" >> $GITHUB_PATH
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.14.0
+
+      - name: Install TagLib (macOS)
+        run: |
+          if ! pkg-config --exists taglib_c 2>/dev/null; then
+            brew install taglib
+          fi
 
       - name: Install cargo-tarpaulin
         run: |
@@ -238,17 +277,17 @@ jobs:
           fi
 
       - name: Run Rust tests with coverage
-        working-directory: ./src-tauri
         run: |
-          cargo tarpaulin --out Html --out Json --output-dir coverage \
+          cargo tarpaulin --workspace --out Html --out Json --output-dir coverage \
             --ignore-tests --skip-clean \
-            --exclude-files 'src/commands/*' 'src/lib.rs' 'src/main.rs' 'src/watcher.rs' 'src/dialog.rs' 'src/media_keys.rs' \
+            --exclude-files 'crates/mt-tauri/src/commands/*' 'crates/mt-tauri/src/lib.rs' 'crates/mt-tauri/src/main.rs' 'crates/mt-tauri/src/watcher.rs' 'crates/mt-tauri/src/dialog.rs' 'crates/mt-tauri/src/media_keys.rs' \
             --fail-under 50
 
       - name: Upload coverage report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: rust-coverage
-          path: src-tauri/coverage/
+          path: coverage/
           retention-days: 30

@@ -5,7 +5,7 @@ shopt: ['globstar']
 
 env:
   CARGO_HOME: "{{.ROOT_DIR}}/.cache/cargo"
-  CARGO_TARGET_DIR: "{{.ROOT_DIR}}/src-tauri/target"
+  CARGO_TARGET_DIR: "{{.ROOT_DIR}}/target"
   RUSTUP_TOOLCHAIN: nightly
   RUSTFLAGS: "-Zthreads=16"
 
@@ -13,7 +13,7 @@ vars:
   APP_NAME: '{{.APP_NAME | default "mt"}}'
   APP_VERSION: '{{.APP_VERSION | default "1.0.0"}}'
   BUNDLE_ID: '{{.BUNDLE_ID | default "com.mt.desktop"}}'
-  TAURI_DIR: "{{.ROOT_DIR}}/src-tauri"
+  TAURI_DIR: "{{.ROOT_DIR}}/crates/mt-tauri"
   MACOS_ARM64_TARGET: "aarch64-apple-darwin"
   MACOS_X64_TARGET: "x86_64-apple-darwin"
 
@@ -99,6 +99,14 @@ tasks:
     interactive: true
     ignore_error: true
 
+  dev:mcp:
+    desc: "Run Tauri in development mode with MCP bridge for AI agent debugging"
+    deps: [":deno:install"]
+    cmds:
+      - deno run -A npm:@tauri-apps/cli dev -- --features mcp
+    interactive: true
+    ignore_error: true
+
   icons:
     desc: "Generate app icons from logo"
     cmds:
@@ -119,13 +127,13 @@ tasks:
   clean:rust:
     desc: "Clean only Rust build artifacts"
     cmds:
-      - cargo clean --manifest-path {{.TAURI_DIR}}/Cargo.toml
+      - cargo clean
     silent: true
 
   test-app:
     desc: "Launch the built macOS app"
     vars:
-      APP_PATH: "{{.TAURI_DIR}}/target/{{.MACOS_ARM64_TARGET}}/release/bundle/macos/{{.APP_NAME}}.app"
+      APP_PATH: "{{.ROOT_DIR}}/target/{{.MACOS_ARM64_TARGET}}/release/bundle/macos/{{.APP_NAME}}.app"
     cmds:
       - open "{{.APP_PATH}}"
     preconditions:

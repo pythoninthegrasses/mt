@@ -13,6 +13,7 @@ MT is a desktop music player built with:
 
 ## Documentation
 
+- [**Testing Guide**](testing.md) - Testing strategy, E2E workflows, and MCP-based test authoring
 - [**Tauri Architecture**](tauri-architecture.md) - System architecture and component design
 - [**Last.fm Integration**](lastfm.md) - Rust implementation of Last.fm scrobbling and authentication
 - [**FastAPI Migration Analysis**](fastapi-to-rust-migration-analysis.md) - Historical reference for the Python-to-Rust migration

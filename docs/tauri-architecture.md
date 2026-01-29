@@ -233,6 +233,18 @@ mt/
 | CPU (playing) | < 5% |
 | Binary size | ~30MB |
 
+## Development Tools
+
+### MCP Bridge (AI Agent Debugging)
+
+The optional `tauri-plugin-mcp-bridge` enables AI agents (Claude, Cursor, Windsurf) to interact with the running app via the Model Context Protocol:
+
+```bash
+task tauri:dev:mcp   # Run with MCP bridge enabled
+```
+
+Features: Screenshots, DOM snapshots, IPC monitoring, UI automation, console logs. See [hypothesi/mcp-server-tauri](https://github.com/hypothesi/mcp-server-tauri).
+
 ## Key Dependencies
 
 ### Rust (Cargo.toml)

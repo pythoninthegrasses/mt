@@ -151,6 +151,56 @@ export function createLibraryState(options = {}) {
 }
 
 /**
+ * Calculate search relevance score for a track
+ * @param {Object} track - Track object
+ * @param {string} query - Search query (lowercase)
+ * @returns {number} Relevance score (higher is more relevant)
+ */
+function calculateSearchScore(track, query) {
+  const title = (track.title || '').toLowerCase();
+  const artist = (track.artist || '').toLowerCase();
+  const album = (track.album || '').toLowerCase();
+
+  // Exact title match (highest priority)
+  if (title === query) {
+    return 100;
+  }
+
+  // Title starts with query
+  if (title.startsWith(query)) {
+    return 90;
+  }
+
+  // Partial title match (word boundary or contains)
+  if (title.includes(query)) {
+    return 80;
+  }
+
+  // Exact artist match
+  if (artist === query) {
+    return 70;
+  }
+
+  // Artist starts with or contains query
+  if (artist.includes(query)) {
+    return 60;
+  }
+
+  // Exact album match
+  if (album === query) {
+    return 50;
+  }
+
+  // Album starts with or contains query
+  if (album.includes(query)) {
+    return 40;
+  }
+
+  // No match (shouldn't happen if track passed filter)
+  return 0;
+}
+
+/**
  * Filter and sort tracks based on query parameters
  * @param {Array} tracks - All tracks
  * @param {Object} params - Query parameters
@@ -158,16 +208,29 @@ export function createLibraryState(options = {}) {
  */
 function filterAndSortTracks(tracks, params) {
   let result = [...tracks];
+  const hasSearch = params.search && params.search.trim().length > 0;
+  const query = hasSearch ? params.search.toLowerCase() : '';
 
   // Search filter
-  if (params.search) {
-    const query = params.search.toLowerCase();
+  if (hasSearch) {
     result = result.filter(
       (t) =>
         t.title?.toLowerCase().includes(query) ||
         t.artist?.toLowerCase().includes(query) ||
         t.album?.toLowerCase().includes(query)
     );
+
+    // Calculate and attach search scores for ranking
+    result = result.map((track) => ({
+      ...track,
+      _searchScore: calculateSearchScore(track, query),
+    }));
+
+    // Sort by search score descending (most relevant first)
+    result.sort((a, b) => b._searchScore - a._searchScore);
+
+    // Remove internal score property before returning
+    result = result.map(({ _searchScore, ...track }) => track);
   }
 
   // Artist filter
@@ -184,28 +247,30 @@ function filterAndSortTracks(tracks, params) {
     );
   }
 
-  // Sort
-  const sortBy = params.sort_by || params.sortBy || 'album';
-  const sortOrder = params.sort_order || params.sortOrder || 'asc';
-  const multiplier = sortOrder === 'desc' ? -1 : 1;
+  // Sort (only apply if not searching - search results are already ranked)
+  if (!hasSearch) {
+    const sortBy = params.sort_by || params.sortBy || 'album';
+    const sortOrder = params.sort_order || params.sortOrder || 'asc';
+    const multiplier = sortOrder === 'desc' ? -1 : 1;
 
-  result.sort((a, b) => {
-    let aVal = a[sortBy];
-    let bVal = b[sortBy];
+    result.sort((a, b) => {
+      let aVal = a[sortBy];
+      let bVal = b[sortBy];
 
-    // Handle null/undefined
-    if (aVal == null && bVal == null) return 0;
-    if (aVal == null) return 1;
-    if (bVal == null) return -1;
+      // Handle null/undefined
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
 
-    // String comparison
-    if (typeof aVal === 'string') {
-      return multiplier * aVal.localeCompare(bVal);
-    }
+      // String comparison
+      if (typeof aVal === 'string') {
+        return multiplier * aVal.localeCompare(bVal);
+      }
 
-    // Numeric comparison
-    return multiplier * (aVal - bVal);
-  });
+      // Numeric comparison
+      return multiplier * (aVal - bVal);
+    });
+  }
 
   // Pagination
   const offset = parseInt(params.offset) || 0;

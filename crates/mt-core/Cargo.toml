@@ -1,0 +1,21 @@
+[package]
+name = "mt-core"
+version = "0.1.0"
+description = "Core library for mt music player - Zig FFI and pure logic"
+authors = ["pythoninthegrass"]
+edition = "2024"
+
+[lib]
+name = "mt_core"
+crate-type = ["rlib"]
+
+[build-dependencies]
+pkg-config = "0.3"
+
+[dependencies]
+# Serialization (for types shared across FFI boundary)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+thiserror = "2"

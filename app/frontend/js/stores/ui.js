@@ -364,9 +364,9 @@ export function createUIStore(Alpine) {
           ],
         });
 
-         if (selected) {
-           const trackId = this.missingTrackPopover.track.id;
-           await api.library.locate(trackId, selected);
+        if (selected) {
+          const trackId = this.missingTrackPopover.track.id;
+          await api.library.locate(trackId, selected);
 
           this.missingTrackPopover.track.missing = false;
           this.missingTrackPopover.track.filepath = selected;
@@ -422,9 +422,9 @@ export function createUIStore(Alpine) {
           ],
         });
 
-         if (selected) {
-           const trackId = this.missingTrackModal.track.id;
-           await api.library.locate(trackId, selected);
+        if (selected) {
+          const trackId = this.missingTrackModal.track.id;
+          await api.library.locate(trackId, selected);
           this.toast('File located successfully', 'success');
           this.closeMissingTrackModal('located', selected);
         } else {

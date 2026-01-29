@@ -14,6 +14,8 @@ includes:
     taskfile: ./taskfiles/deno.yml
   tauri:
     taskfile: ./taskfiles/tauri.yml
+  zig:
+    taskfile: ./taskfiles/zig.yml
 
 tasks:
   default:
@@ -47,23 +49,26 @@ tasks:
   lint:
     desc: "Run linters"
     cmds:
-      - cargo clippy --manifest-path src-tauri/Cargo.toml
+      - task: zig:fmt:check
+      - cargo clippy --workspace
       - deno lint
 
   format:
     desc: "Run formatters"
     cmds:
-      - cargo fmt --manifest-path src-tauri/Cargo.toml
+      - task: zig:fmt
+      - cargo fmt --all
       - deno fmt
 
   test:
-    desc: "Run tests (uses cargo-nextest if available, otherwise cargo test)"
+    desc: "Run tests (Zig + Rust + Frontend)"
     cmds:
+      - task: zig:test
       - |
         if command -v cargo-nextest &> /dev/null; then
-          cargo nextest run --manifest-path src-tauri/Cargo.toml
+          cargo nextest run --workspace
         else
-          cargo test --manifest-path src-tauri/Cargo.toml
+          cargo test --workspace
         fi
       - npm --prefix app/frontend test
 
@@ -89,9 +94,8 @@ tasks:
 
   build:timings:
     desc: "Analyze build performance bottlenecks"
-    dir: src-tauri
     cmds:
-      - cargo build --timings
+      - cargo build --workspace --timings
       - |
         if [[ "$OSTYPE" == "darwin"* ]]; then
           open target/cargo-timings/cargo-timing.html

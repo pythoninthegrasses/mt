@@ -1,10 +1,10 @@
 ---
 id: task-230
 title: 'E2E: Playlist rename and delete confirmation tests'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-01-28 05:40'
-updated_date: '2026-01-28 08:13'
+updated_date: '2026-01-28 21:25'
 labels:
   - e2e
   - playlists
@@ -22,8 +22,8 @@ Add Playwright E2E tests for playlist rename and delete operations with confirma
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Rename playlist via context menu
-- [ ] #2 Rename persists after refresh (mocked)
-- [ ] #3 Delete shows confirmation dialog
-- [ ] #4 Cancel delete preserves playlist
+- [x] #1 Rename playlist via context menu
+- [x] #2 Rename persists after refresh (mocked)
+- [x] #3 Delete shows confirmation dialog
+- [x] #4 Cancel delete preserves playlist
 <!-- AC:END -->

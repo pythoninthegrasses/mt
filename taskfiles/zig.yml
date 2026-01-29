@@ -1,0 +1,97 @@
+version: "3.0"
+
+set: ['e', 'u', 'pipefail']
+shopt: ['globstar']
+
+vars:
+  ZIG_CORE_DIR: "{{.ROOT_DIR}}/zig-core"
+  ZIG_OUT_DIR: "{{.ZIG_CORE_DIR}}/zig-out"
+  ZIG_CACHE_DIR: "{{.ZIG_CORE_DIR}}/.zig-cache"
+
+tasks:
+  info:
+    desc: "Show Zig build configuration"
+    summary: |
+        Zig Build Configuration:
+          Zig Version: $(zig version)
+          Source Directory: {{.ZIG_CORE_DIR}}/src
+          Output Directory: {{.ZIG_OUT_DIR}}
+          Cache Directory: {{.ZIG_CACHE_DIR}}
+
+        Available tasks:
+          - build           Build zig-core library (debug)
+          - build:release   Build zig-core library (release)
+          - test            Run Zig unit tests
+          - test:verbose    Run Zig unit tests with verbose output
+          - fmt             Format Zig source files
+          - fmt:check       Check Zig formatting (no changes)
+          - clean           Clean build artifacts
+          - check-deps      Verify Zig is installed
+
+        Output locations:
+          - Static library: {{.ZIG_OUT_DIR}}/lib/libmtcore.a
+
+  check-deps:
+    desc: "Verify Zig is installed"
+    cmds:
+      - |
+        if ! command -v zig &> /dev/null; then
+          echo "zig not found. Install Zig from https://ziglang.org/download/"
+          exit 1
+        fi
+        echo "Zig version: $(zig version)"
+    silent: true
+
+  build:
+    desc: "Build zig-core library (debug)"
+    cmds:
+      - cd {{.ZIG_CORE_DIR}} && zig build
+    sources:
+      - "{{.ZIG_CORE_DIR}}/src/**/*.zig"
+      - "{{.ZIG_CORE_DIR}}/build.zig"
+      - "{{.ZIG_CORE_DIR}}/build.zig.zon"
+    generates:
+      - "{{.ZIG_OUT_DIR}}/lib/libmtcore.a"
+
+  build:release:
+    desc: "Build zig-core library (release optimized)"
+    cmds:
+      - cd {{.ZIG_CORE_DIR}} && zig build -Doptimize=ReleaseFast
+    sources:
+      - "{{.ZIG_CORE_DIR}}/src/**/*.zig"
+      - "{{.ZIG_CORE_DIR}}/build.zig"
+      - "{{.ZIG_CORE_DIR}}/build.zig.zon"
+    generates:
+      - "{{.ZIG_OUT_DIR}}/lib/libmtcore.a"
+
+  test:
+    desc: "Run Zig unit tests"
+    cmds:
+      - cd {{.ZIG_CORE_DIR}} && zig build test
+
+  test:verbose:
+    desc: "Run Zig unit tests with verbose output"
+    cmds:
+      - cd {{.ZIG_CORE_DIR}} && zig build test --summary all
+
+  fmt:
+    desc: "Format Zig source files"
+    cmds:
+      - cd {{.ZIG_CORE_DIR}} && zig fmt src/
+
+  fmt:check:
+    desc: "Check Zig formatting without making changes"
+    cmds:
+      - cd {{.ZIG_CORE_DIR}} && zig fmt --check src/
+
+  clean:
+    desc: "Clean Zig build artifacts"
+    cmds:
+      - rm -rf {{.ZIG_OUT_DIR}}
+      - rm -rf {{.ZIG_CACHE_DIR}}
+    silent: true
+
+  check:
+    desc: "Check Zig syntax without full build"
+    cmds:
+      - cd {{.ZIG_CORE_DIR}} && zig build --summary none

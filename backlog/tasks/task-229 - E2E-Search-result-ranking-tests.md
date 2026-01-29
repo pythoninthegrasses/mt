@@ -1,10 +1,10 @@
 ---
 id: task-229
 title: 'E2E: Search result ranking tests'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-01-28 05:40'
-updated_date: '2026-01-28 08:13'
+updated_date: '2026-01-28 21:23'
 labels:
   - e2e
   - library
@@ -23,8 +23,8 @@ Add Playwright E2E tests for search result ranking logic. Search tests exist but
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Exact title match ranks first
-- [ ] #2 Artist match ranks appropriately
-- [ ] #3 Partial matches appear after exact matches
-- [ ] #4 Search with multiple terms returns expected order
+- [x] #1 Exact title match ranks first
+- [x] #2 Artist match ranks appropriately
+- [x] #3 Partial matches appear after exact matches
+- [x] #4 Search with multiple terms returns expected order
 <!-- AC:END -->

@@ -349,6 +349,34 @@ Available mock fixtures:
 
 Each mock creates a mutable state object that persists for the test and tracks API calls for assertions.
 
+**E2E Test Authoring with MCP (Required Workflow):**
+
+When **drafting or debugging** Playwright E2E tests, you MUST use the MCP bridge for faster iteration and richer diagnostics. This requirement applies to test authoring only—test runs in CI use mocks.
+
+1. **Start the app with MCP enabled:**
+   ```bash
+   task tauri:dev:mcp
+   ```
+
+2. **Capture required diagnostics** during test development:
+   | Artifact | MCP Tool | Purpose |
+   |----------|----------|---------|
+   | Screenshots | `webview_screenshot` | Visual proof of UI state |
+   | Console logs | `read_logs` (source: console) | Capture JS errors/warnings |
+   | Network traces | `ipc_get_captured` | Verify IPC command payloads |
+   | IPC logs | `ipc_monitor` | Monitor backend communication |
+
+3. **Store evidence** under `/tmp/mt-e2e-evidence/<test-name>-<timestamp>/`
+   - On Windows: use `%TEMP%\mt-e2e-evidence\`
+   - Evidence is for debugging; no cleanup required
+
+4. **Validate before committing tests:**
+   - Confirm test passes with mocks (browser-only mode)
+   - Confirm test captures expected diagnostics
+   - Reference [MCP Bridge docs](docs/tauri-architecture.md#mcp-bridge-ai-agent-debugging) for full tool list
+
+**Note:** MCP is required for **drafting** tests only. Production test runs use mocks and do not require MCP.
+
 ### Code Coverage
 
 The project uses code coverage tools to track test effectiveness:
