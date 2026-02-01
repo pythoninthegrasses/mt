@@ -1253,6 +1253,58 @@ export const api = {
         method: 'POST',
       });
     },
+
+    /**
+     * Cache loved tracks from Last.fm (with incremental support)
+     * @returns {Promise<{status: string, fetched: number, new_tracks: number, total_cached: number}>}
+     */
+    async cacheLovedTracks() {
+      if (invoke) {
+        try {
+          return await invoke('lastfm_cache_loved_tracks');
+        } catch (error) {
+          console.error('[api.lastfm.cacheLovedTracks] Tauri error:', error);
+          throw new ApiError(500, error.toString());
+        }
+      }
+      return request('/lastfm/cache-loved-tracks', {
+        method: 'POST',
+      });
+    },
+
+    /**
+     * Match cached loved tracks against local library (no API call)
+     * @returns {Promise<{status: string, matched: number, already_matched: number, not_found: number, new_favorites: number}>}
+     */
+    async matchLovedTracks() {
+      if (invoke) {
+        try {
+          return await invoke('lastfm_match_loved_tracks');
+        } catch (error) {
+          console.error('[api.lastfm.matchLovedTracks] Tauri error:', error);
+          throw new ApiError(500, error.toString());
+        }
+      }
+      return request('/lastfm/match-loved-tracks', {
+        method: 'POST',
+      });
+    },
+
+    /**
+     * Get loved tracks cache statistics
+     * @returns {Promise<{total_cached: number, matched: number, unmatched: number, most_recent_loved: number|null}>}
+     */
+    async getLovedStats() {
+      if (invoke) {
+        try {
+          return await invoke('lastfm_loved_stats');
+        } catch (error) {
+          console.error('[api.lastfm.getLovedStats] Tauri error:', error);
+          throw new ApiError(500, error.toString());
+        }
+      }
+      return request('/lastfm/loved-stats');
+    },
   },
 
   watchedFolders: {

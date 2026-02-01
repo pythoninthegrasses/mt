@@ -406,6 +406,47 @@ pub fn run() {
                 }
             });
 
+            // Start Last.fm loved tracks matching background task
+            let app_handle_loved = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                use std::time::Duration;
+
+                // Wait 60 seconds before starting background matching
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                println!("Last.fm loved tracks matcher started (30-minute interval)");
+
+                loop {
+                    // Wait 30 minutes between match attempts
+                    tokio::time::sleep(Duration::from_secs(1800)).await;
+
+                    // Check for unmatched loved tracks and try to match them
+                    if let Some(db) = app_handle_loved.try_state::<db::Database>() {
+                        let has_unmatched = db
+                            .with_conn(|conn| {
+                                db::lastfm_loved::get_unmatched_loved_tracks(conn, Some(1))
+                                    .map(|tracks| !tracks.is_empty())
+                            })
+                            .unwrap_or(false);
+
+                        if has_unmatched {
+                            match lastfm_match_loved_tracks(db.clone()) {
+                                Ok(response) => {
+                                    if response.new_favorites > 0 {
+                                        println!(
+                                            "[lastfm] Background match: {} new favorites",
+                                            response.new_favorites
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("[lastfm] Background match failed: {}", e);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
             Ok(())
         })
         .on_window_event(|_window, _event| {

@@ -21,6 +21,10 @@ export function createSettingsView(Alpine) {
       importInProgress: false,
       queueStatus: { queued_scrobbles: 0 },
       pendingToken: null,
+      // Loved tracks cache
+      lovedStats: { total_cached: 0, matched: 0, unmatched: 0 },
+      isCachingLoved: false,
+      isMatchingLoved: false,
     },
 
     reconcileScan: {
@@ -230,9 +234,10 @@ export function createSettingsView(Alpine) {
         this.lastfm.authenticated = settings.authenticated;
         this.lastfm.scrobbleThreshold = settings.scrobble_threshold;
 
-        // Load queue status if authenticated
+        // Load queue status and loved stats if authenticated
         if (settings.authenticated) {
           await this.loadQueueStatus();
+          await this.loadLovedStats();
         }
       } catch (error) {
         console.error('[settings] Failed to load Last.fm settings:', error);
@@ -410,6 +415,69 @@ export function createSettingsView(Alpine) {
       } catch (error) {
         console.error('[settings] Failed to retry queued scrobbles:', error);
         Alpine.store('ui').toast('Failed to retry queued scrobbles', 'error');
+      }
+    },
+
+    async loadLovedStats() {
+      try {
+        this.lastfm.lovedStats = await api.lastfm.getLovedStats();
+      } catch (error) {
+        console.error('[settings] Failed to load loved stats:', error);
+      }
+    },
+
+    async cacheLovedTracks() {
+      if (!this.lastfm.authenticated) {
+        Alpine.store('ui').toast('Please connect to Last.fm first', 'warning');
+        return;
+      }
+
+      this.lastfm.isCachingLoved = true;
+      try {
+        const result = await api.lastfm.cacheLovedTracks();
+        Alpine.store('ui').toast(
+          `Cached ${result.new_tracks} new loved tracks (${result.total_cached} total)`,
+          'success',
+        );
+        await this.loadLovedStats();
+      } catch (error) {
+        console.error('[settings] Failed to cache loved tracks:', error);
+        Alpine.store('ui').toast('Failed to cache loved tracks', 'error');
+      } finally {
+        this.lastfm.isCachingLoved = false;
+      }
+    },
+
+    async matchLovedTracks() {
+      if (!this.lastfm.authenticated) {
+        Alpine.store('ui').toast('Please connect to Last.fm first', 'warning');
+        return;
+      }
+
+      this.lastfm.isMatchingLoved = true;
+      try {
+        const result = await api.lastfm.matchLovedTracks();
+        if (result.new_favorites > 0) {
+          Alpine.store('ui').toast(
+            `Found ${result.matched} matches, added ${result.new_favorites} new favorites`,
+            'success',
+          );
+          // Refresh library to show updated favorites
+          Alpine.store('library').load();
+        } else if (result.matched > 0) {
+          Alpine.store('ui').toast(
+            `Found ${result.matched} matches (already favorited)`,
+            'info',
+          );
+        } else {
+          Alpine.store('ui').toast('No new matches found', 'info');
+        }
+        await this.loadLovedStats();
+      } catch (error) {
+        console.error('[settings] Failed to match loved tracks:', error);
+        Alpine.store('ui').toast('Failed to match loved tracks', 'error');
+      } finally {
+        this.lastfm.isMatchingLoved = false;
       }
     },
 

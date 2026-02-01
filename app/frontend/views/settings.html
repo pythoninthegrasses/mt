@@ -590,15 +590,62 @@
        <!-- Loved Tracks -->
        <div x-show="lastfm.authenticated" class="mb-8">
          <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Loved Tracks</h4>
+
+         <!-- Stats Display -->
+         <div class="bg-muted/30 rounded-lg p-4 mb-4" x-show="lastfm.lovedStats.total_cached > 0">
+           <div class="grid grid-cols-3 gap-4 text-center">
+             <div>
+               <div class="text-2xl font-semibold" x-text="lastfm.lovedStats.total_cached"></div>
+               <div class="text-xs text-muted-foreground">Cached</div>
+             </div>
+             <div>
+               <div class="text-2xl font-semibold text-green-500" x-text="lastfm.lovedStats.matched"></div>
+               <div class="text-xs text-muted-foreground">In Library</div>
+             </div>
+             <div>
+               <div class="text-2xl font-semibold text-yellow-500" x-text="lastfm.lovedStats.unmatched"></div>
+               <div class="text-xs text-muted-foreground">Not Found</div>
+             </div>
+           </div>
+           <div class="mt-3 pt-3 border-t border-border/50">
+             <div class="text-xs text-muted-foreground text-center">
+               <span x-text="lastfm.lovedStats.matched"></span> of <span x-text="lastfm.lovedStats.total_cached"></span> loved tracks in your library
+             </div>
+           </div>
+         </div>
+
          <div class="space-y-3">
+           <!-- Sync from Last.fm button -->
+           <button
+             class="w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors disabled:opacity-50"
+             :disabled="lastfm.isCachingLoved"
+             @click="cacheLovedTracks()"
+             data-testid="lastfm-cache-loved"
+           >
+             <div class="font-medium text-sm" x-text="lastfm.isCachingLoved ? 'Syncing...' : 'Sync from Last.fm'"></div>
+             <div class="text-xs text-muted-foreground mt-0.5">Fetch your loved tracks from Last.fm and cache locally</div>
+           </button>
+
+           <!-- Check for new matches button -->
+           <button
+             class="w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors disabled:opacity-50"
+             :disabled="lastfm.isMatchingLoved || lastfm.lovedStats.total_cached === 0"
+             @click="matchLovedTracks()"
+             data-testid="lastfm-match-loved"
+           >
+             <div class="font-medium text-sm" x-text="lastfm.isMatchingLoved ? 'Matching...' : 'Check for New Matches'"></div>
+             <div class="text-xs text-muted-foreground mt-0.5">Match cached loved tracks against your library (no API call)</div>
+           </button>
+
+           <!-- Legacy import button (direct API import) -->
            <button
              class="w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors disabled:opacity-50"
              :disabled="lastfm.importInProgress"
              @click="importLovedTracks()"
              data-testid="lastfm-import-loved"
            >
-             <div class="font-medium text-sm" x-text="lastfm.importInProgress ? 'Importing...' : 'Import Loved Tracks'"></div>
-             <div class="text-xs text-muted-foreground mt-0.5">Import your loved tracks from Last.fm and mark them as favorites</div>
+             <div class="font-medium text-sm" x-text="lastfm.importInProgress ? 'Importing...' : 'Direct Import'"></div>
+             <div class="text-xs text-muted-foreground mt-0.5">Import loved tracks directly (for tracks already in library)</div>
            </button>
          </div>
        </div>

@@ -3,10 +3,10 @@ id: task-208
 title: >-
   Cache Last.fm loved tracks for automatic favoriting of future library
   additions
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-01-25 23:14'
-updated_date: '2026-02-01 03:08'
+updated_date: '2026-02-01 04:27'
 labels:
   - lastfm
   - database
@@ -94,9 +94,9 @@ CREATE TABLE lastfm_loved_tracks (
 - [x] #2 Implement import command to fetch and cache loved tracks from Last.fm
 - [x] #3 Add matching logic to cross-reference cached tracks with local library
 - [x] #4 Integrate with scanner to auto-favorite newly added tracks that match cached loved tracks
-- [ ] #5 Add UI to show import progress and match statistics
-- [ ] #6 Implement periodic background sync for unmatched tracks
-- [ ] #7 Add manual "Check for new matches" button without API re-fetch
+- [x] #5 Add UI to show import progress and match statistics
+- [x] #6 Implement periodic background sync for unmatched tracks
+- [x] #7 Add manual "Check for new matches" button without API re-fetch
 - [x] #8 Handle incremental updates when new tracks are loved on Last.fm
 - [x] #9 Add database migration for existing installations
 <!-- AC:END -->
@@ -149,4 +149,17 @@ CREATE TABLE lastfm_loved_tracks (
 - Fixed module visibility for `match_new_tracks_against_loved` export
 - Fixed FK constraint issues in tests by creating library tracks before setting matches
 - All 547 tests passing
+
+### UI & Background Sync (Jan 31, 2026)
+
+**UI Implementation:**
+- Added stats display showing cached/matched/unmatched counts
+- Added "Sync from Last.fm" button to cache loved tracks
+- Added "Check for New Matches" button for manual matching
+- Added API methods: cacheLovedTracks, matchLovedTracks, getLovedStats
+
+**Background Sync:**
+- Added 30-minute interval background task for matching unmatched tracks
+- Task checks for unmatched loved tracks and auto-favorites matches
+- Logs when new favorites are added
 <!-- SECTION:NOTES:END -->
