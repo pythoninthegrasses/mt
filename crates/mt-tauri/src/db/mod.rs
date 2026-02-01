@@ -4,6 +4,7 @@
 //! matching the schema and functionality of the Python backend.
 
 pub mod favorites;
+pub mod lastfm_loved;
 pub mod library;
 pub mod models;
 pub mod playlists;

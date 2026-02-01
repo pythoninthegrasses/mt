@@ -123,6 +123,20 @@ pub const CREATE_TABLES: &[(&str, &str)] = &[
             original_order_json TEXT
         )",
     ),
+    (
+        "lastfm_loved_tracks",
+        "CREATE TABLE IF NOT EXISTS lastfm_loved_tracks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            artist TEXT NOT NULL,
+            track TEXT NOT NULL,
+            loved_at INTEGER,
+            matched_track_id INTEGER,
+            last_checked_at INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(artist, track),
+            FOREIGN KEY (matched_track_id) REFERENCES library(id) ON DELETE SET NULL
+        )",
+    ),
 ];
 
 /// Create all database tables
@@ -252,6 +266,46 @@ pub fn run_migrations(conn: &Connection) -> DbResult<()> {
         println!("[migration] content_hash index created successfully");
     }
 
+    // Migration: Create lastfm_loved_tracks table for existing databases
+    if !table_exists(conn, "lastfm_loved_tracks")? {
+        println!("[migration] Creating lastfm_loved_tracks table...");
+        conn.execute(
+            "CREATE TABLE lastfm_loved_tracks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                artist TEXT NOT NULL,
+                track TEXT NOT NULL,
+                loved_at INTEGER,
+                matched_track_id INTEGER,
+                last_checked_at INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(artist, track),
+                FOREIGN KEY (matched_track_id) REFERENCES library(id) ON DELETE SET NULL
+            )",
+            [],
+        )?;
+        println!("[migration] lastfm_loved_tracks table created successfully");
+    }
+
+    // Migration: Add index on lastfm_loved_tracks for fast lookups on artist/track
+    if !index_exists(conn, "idx_lastfm_loved_artist_track")? {
+        println!("[migration] Creating artist/track index on lastfm_loved_tracks table...");
+        conn.execute(
+            "CREATE INDEX idx_lastfm_loved_artist_track ON lastfm_loved_tracks(artist, track)",
+            [],
+        )?;
+        println!("[migration] artist/track index created successfully");
+    }
+
+    // Migration: Add partial index for unmatched loved tracks (common query pattern)
+    if !index_exists(conn, "idx_lastfm_loved_unmatched")? {
+        println!("[migration] Creating unmatched tracks index on lastfm_loved_tracks table...");
+        conn.execute(
+            "CREATE INDEX idx_lastfm_loved_unmatched ON lastfm_loved_tracks(id) WHERE matched_track_id IS NULL",
+            [],
+        )?;
+        println!("[migration] unmatched tracks index created successfully");
+    }
+
     Ok(())
 }
 
@@ -270,6 +324,16 @@ fn index_exists(conn: &Connection, index_name: &str) -> DbResult<bool> {
     let count: i32 = conn.query_row(
         "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?",
         [index_name],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
+/// Check if a table exists
+fn table_exists(conn: &Connection, table_name: &str) -> DbResult<bool> {
+    let count: i32 = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+        [table_name],
         |row| row.get(0),
     )?;
     Ok(count > 0)
@@ -294,7 +358,7 @@ mod tests {
             .filter_map(|r| r.ok())
             .collect();
 
-        assert_eq!(tables.len(), 10);
+        assert_eq!(tables.len(), 11);
         assert!(tables.contains(&"library".to_string()));
         assert!(tables.contains(&"queue".to_string()));
         assert!(tables.contains(&"queue_state".to_string()));
@@ -305,6 +369,7 @@ mod tests {
         assert!(tables.contains(&"scrobble_queue".to_string()));
         assert!(tables.contains(&"watched_folders".to_string()));
         assert!(tables.contains(&"lyrics_cache".to_string()));
+        assert!(tables.contains(&"lastfm_loved_tracks".to_string()));
     }
 
     #[test]

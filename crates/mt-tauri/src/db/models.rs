@@ -151,6 +151,26 @@ pub struct LyricsCache {
     pub fetched_at: Option<String>,
 }
 
+/// Last.fm loved track cache entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LastfmLovedTrack {
+    pub id: i64,
+    pub artist: String,
+    pub track: String,
+    pub loved_at: Option<i64>,
+    pub matched_track_id: Option<i64>,
+    pub last_checked_at: Option<i64>,
+    pub created_at: Option<String>,
+}
+
+/// Statistics for Last.fm loved tracks cache
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LastfmLovedStats {
+    pub total_cached: i64,
+    pub matched_count: i64,
+    pub unmatched_count: i64,
+}
+
 /// Library statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibraryStats {

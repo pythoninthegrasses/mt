@@ -16,9 +16,10 @@ pub use favorites::{
 };
 
 pub use lastfm::{
-    lastfm_auth_callback, lastfm_disconnect, lastfm_get_auth_url, lastfm_get_settings,
-    lastfm_import_loved_tracks, lastfm_now_playing, lastfm_queue_retry, lastfm_queue_status,
-    lastfm_scrobble, lastfm_update_settings,
+    lastfm_auth_callback, lastfm_cache_loved_tracks, lastfm_disconnect, lastfm_get_auth_url,
+    lastfm_get_settings, lastfm_import_loved_tracks, lastfm_loved_stats, lastfm_match_loved_tracks,
+    lastfm_now_playing, lastfm_queue_retry, lastfm_queue_status, lastfm_scrobble,
+    lastfm_update_settings,
 };
 
 pub use playlists::{

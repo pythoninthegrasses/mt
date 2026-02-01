@@ -96,6 +96,35 @@ pub struct ImportLovedTracksResponse {
     pub message: String,
 }
 
+/// Cache loved tracks response (fetches from Last.fm and stores in cache)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheLovedTracksResponse {
+    pub status: String,
+    pub total_fetched: usize,
+    pub newly_cached: usize,
+    pub message: String,
+}
+
+/// Match loved tracks response (matches cached tracks against library)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MatchLovedTracksResponse {
+    pub status: String,
+    pub matched: usize,
+    pub already_matched: usize,
+    pub no_match: usize,
+    pub new_favorites: usize,
+    pub message: String,
+}
+
+/// Loved tracks statistics response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LovedTracksStatsResponse {
+    pub total_cached: i64,
+    pub matched: i64,
+    pub unmatched: i64,
+    pub most_recent_loved: Option<i64>,
+}
+
 /// Last.fm API token response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenResponse {
@@ -151,6 +180,22 @@ pub struct LovedTracksAttr {
 pub struct LovedTrack {
     pub name: String,
     pub artist: ArtistInfo,
+    #[serde(default)]
+    pub date: Option<LovedDate>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LovedDate {
+    pub uts: String,    // Unix timestamp as string
+    #[serde(rename = "#text")]
+    pub text: Option<String>, // Human-readable date
+}
+
+impl LovedDate {
+    /// Get the Unix timestamp as i64
+    pub fn timestamp(&self) -> Option<i64> {
+        self.uts.parse().ok()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

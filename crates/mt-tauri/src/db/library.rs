@@ -274,6 +274,32 @@ pub fn add_tracks_bulk(conn: &Connection, tracks: &[(String, TrackMetadata)]) ->
     Ok(count)
 }
 
+/// Get track IDs by filepaths
+///
+/// Returns a Vec of track IDs for the given filepaths (in the same order).
+/// Missing filepaths are skipped.
+pub fn get_track_ids_by_filepaths(conn: &Connection, filepaths: &[String]) -> DbResult<Vec<i64>> {
+    if filepaths.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let placeholders = filepaths.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT id FROM library WHERE filepath IN ({}) ORDER BY id ASC",
+        placeholders
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+    let ids: Vec<i64> = stmt
+        .query_map(rusqlite::params_from_iter(filepaths.iter()), |row| {
+            row.get(0)
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(ids)
+}
+
 /// Update multiple tracks in a single transaction
 pub fn update_tracks_bulk(conn: &Connection, tracks: &[(String, TrackMetadata)]) -> DbResult<i64> {
     if tracks.is_empty() {

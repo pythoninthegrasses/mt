@@ -9,6 +9,7 @@ use std::time::Instant;
 use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
+use crate::commands::lastfm::match_new_tracks_against_loved;
 use crate::db::{library, Database};
 use crate::events::{EventEmitter, LibraryUpdatedEvent, ScanCompleteEvent, ScanProgressEvent};
 use crate::scanner::artwork::{get_artwork, Artwork};
@@ -169,6 +170,25 @@ pub async fn scan_paths_to_library(
         if !truly_new.is_empty() {
             added_count = truly_new.len();
             library::add_tracks_bulk(&conn, &truly_new).map_err(|e| e.to_string())?;
+
+            // Auto-favorite tracks that match cached Last.fm loved tracks
+            let new_filepaths: Vec<String> = truly_new.iter().map(|(fp, _)| fp.clone()).collect();
+            if let Ok(new_track_ids) = library::get_track_ids_by_filepaths(&conn, &new_filepaths) {
+                if !new_track_ids.is_empty() {
+                    match match_new_tracks_against_loved(&conn, &new_track_ids) {
+                        Ok(favorited) if favorited > 0 => {
+                            println!(
+                                "[scanner] Auto-favorited {} tracks from Last.fm loved cache",
+                                favorited
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("[scanner] Failed to auto-favorite from loved cache: {}", e);
+                        }
+                        _ => {}
+                    }
+                }
+            }
         }
     }
 
