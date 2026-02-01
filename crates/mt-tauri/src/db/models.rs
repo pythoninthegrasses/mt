@@ -16,7 +16,10 @@ pub struct Track {
     pub album_artist: Option<String>,
     pub track_number: Option<String>,
     pub track_total: Option<String>,
+    pub disc_number: Option<String>,
+    pub disc_total: Option<String>,
     pub date: Option<String>,
+    pub genre: Option<String>,
     pub duration: Option<f64>,
     pub file_size: i64,
     pub file_mtime_ns: Option<i64>,
@@ -38,7 +41,10 @@ pub struct TrackMetadata {
     pub album_artist: Option<String>,
     pub track_number: Option<String>,
     pub track_total: Option<String>,
+    pub disc_number: Option<String>,
+    pub disc_total: Option<String>,
     pub date: Option<String>,
+    pub genre: Option<String>,
     pub duration: Option<f64>,
     pub file_size: Option<i64>,
     pub file_mtime_ns: Option<i64>,
@@ -227,6 +233,11 @@ pub enum LibrarySortColumn {
     PlayCount,
     Duration,
     LastPlayed,
+    Year,
+    Genre,
+    DiscNumber,
+    TrackTotal,
+    TrackNumber,
 }
 
 
@@ -240,6 +251,11 @@ impl LibrarySortColumn {
             LibrarySortColumn::PlayCount => "play_count",
             LibrarySortColumn::Duration => "duration",
             LibrarySortColumn::LastPlayed => "last_played",
+            LibrarySortColumn::Year => "date",
+            LibrarySortColumn::Genre => "genre",
+            LibrarySortColumn::DiscNumber => "disc_number",
+            LibrarySortColumn::TrackTotal => "track_total",
+            LibrarySortColumn::TrackNumber => "track_number",
         }
     }
 }
@@ -256,6 +272,11 @@ impl std::str::FromStr for LibrarySortColumn {
             "play_count" => LibrarySortColumn::PlayCount,
             "duration" => LibrarySortColumn::Duration,
             "last_played" => LibrarySortColumn::LastPlayed,
+            "date" | "year" => LibrarySortColumn::Year,
+            "genre" => LibrarySortColumn::Genre,
+            "disc_number" => LibrarySortColumn::DiscNumber,
+            "track_total" => LibrarySortColumn::TrackTotal,
+            "track_number" => LibrarySortColumn::TrackNumber,
             _ => LibrarySortColumn::AddedDate,
         })
     }

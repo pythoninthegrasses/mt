@@ -225,6 +225,18 @@
             <template x-if="col.key === 'duration'">
               <span x-text="formatDuration(track.duration)"></span>
             </template>
+            <template x-if="col.key === 'year'">
+              <span x-text="track.date || ''"></span>
+            </template>
+            <template x-if="col.key === 'genre'">
+              <span x-text="track.genre || ''"></span>
+            </template>
+            <template x-if="col.key === 'trackTotal'">
+              <span x-text="track.track_total || ''"></span>
+            </template>
+            <template x-if="col.key === 'discNumber'">
+              <span x-text="track.disc_number || ''"></span>
+            </template>
           </div>
         </template>
       </div>

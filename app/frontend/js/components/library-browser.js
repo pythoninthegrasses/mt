@@ -7,6 +7,10 @@ const DEFAULT_COLUMN_WIDTHS = {
   title: 320,
   artist: 431,
   album: 411,
+  year: 70,
+  genre: 120,
+  trackTotal: 60,
+  discNumber: 60,
   lastPlayed: 120,
   dateAdded: 120,
   playCount: 83,
@@ -24,6 +28,10 @@ const DEFAULT_COLUMN_VISIBILITY = {
   title: true,
   artist: true,
   album: true,
+  year: true, // Visible by default
+  genre: false, // Hidden by default, toggleable
+  trackTotal: false, // Hidden by default, toggleable
+  discNumber: false, // Hidden by default, toggleable
   lastPlayed: true,
   dateAdded: true,
   playCount: true,
@@ -36,10 +44,14 @@ const DEFAULT_COLUMN_ORDER = [
   'title',
   'artist',
   'album',
+  'year', // Year before duration/Time
   'duration',
   'lastPlayed',
   'dateAdded',
   'playCount',
+  'genre', // Hidden by default
+  'trackTotal', // Hidden by default
+  'discNumber', // Hidden by default
 ];
 
 export function createLibraryBrowser(Alpine) {
@@ -89,6 +101,10 @@ export function createLibraryBrowser(Alpine) {
       { key: 'title', label: 'Title', sortable: true, minWidth: 100, canHide: false },
       { key: 'artist', label: 'Artist', sortable: true, minWidth: 80, canHide: true },
       { key: 'album', label: 'Album', sortable: true, minWidth: 80, canHide: true },
+      { key: 'year', label: 'Year', sortable: true, minWidth: 50, canHide: true },
+      { key: 'genre', label: 'Genre', sortable: true, minWidth: 80, canHide: true },
+      { key: 'trackTotal', label: 'Total', sortable: true, minWidth: 40, canHide: true },
+      { key: 'discNumber', label: 'Disc', sortable: true, minWidth: 40, canHide: true },
     ],
 
     // Extra columns for dynamic playlists
@@ -120,7 +136,18 @@ export function createLibraryBrowser(Alpine) {
 
     get columns() {
       const section = this.library.currentSection;
-      const availableKeys = new Set(['status', 'index', 'title', 'artist', 'album', 'duration']);
+      const availableKeys = new Set([
+        'status',
+        'index',
+        'title',
+        'artist',
+        'album',
+        'year',
+        'genre',
+        'trackTotal',
+        'discNumber',
+        'duration',
+      ]);
 
       if (this.extraColumns[section]) {
         availableKeys.add(this.extraColumns[section].key);
@@ -134,7 +161,18 @@ export function createLibraryBrowser(Alpine) {
 
     get allColumns() {
       const section = this.library.currentSection;
-      const availableKeys = new Set(['status', 'index', 'title', 'artist', 'album', 'duration']);
+      const availableKeys = new Set([
+        'status',
+        'index',
+        'title',
+        'artist',
+        'album',
+        'year',
+        'genre',
+        'trackTotal',
+        'discNumber',
+        'duration',
+      ]);
 
       if (this.extraColumns[section]) {
         availableKeys.add(this.extraColumns[section].key);
@@ -786,17 +824,8 @@ export function createLibraryBrowser(Alpine) {
     resetColumnDefaults() {
       this._baseColumnWidths = { ...DEFAULT_COLUMN_WIDTHS };
       this.columnWidths = { ...DEFAULT_COLUMN_WIDTHS };
-      this.columnOrder = [
-        'status',
-        'index',
-        'title',
-        'artist',
-        'album',
-        'duration',
-        'lastPlayed',
-        'dateAdded',
-        'playCount',
-      ];
+      this.columnOrder = [...DEFAULT_COLUMN_ORDER];
+      this.columnVisibility = { ...DEFAULT_COLUMN_VISIBILITY };
       this.library.sortBy = 'default';
       this.library.sortOrder = 'asc';
       this.library.applyFilters();

@@ -78,6 +78,10 @@ export function createLibraryStore(Alpine) {
           dateAdded: 'added_date',
           lastPlayed: 'last_played',
           playCount: 'play_count',
+          year: 'date',
+          genre: 'genre',
+          trackTotal: 'track_total',
+          discNumber: 'disc_number',
         };
 
         // Pass search/sort to backend, remove 10K limit

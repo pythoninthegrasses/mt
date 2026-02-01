@@ -22,7 +22,10 @@ fn row_to_track(row: &Row) -> rusqlite::Result<Track> {
         album_artist: row.get("album_artist")?,
         track_number: row.get("track_number")?,
         track_total: row.get("track_total")?,
+        disc_number: row.get("disc_number")?,
+        disc_total: row.get("disc_total")?,
         date: row.get("date")?,
+        genre: row.get("genre")?,
         duration: row.get("duration")?,
         file_size: row.get::<_, Option<i64>>("file_size")?.unwrap_or(0),
         file_mtime_ns: row.get("file_mtime_ns")?,
@@ -97,9 +100,9 @@ pub fn get_all_tracks(conn: &Connection, query: &LibraryQuery) -> DbResult<Pagin
     // Get tracks
     let sql = format!(
         "SELECT id, filepath, title, artist, album, album_artist,
-                track_number, track_total, date, duration, file_size,
-                play_count, last_played, added_date, missing, last_seen_at,
-                file_mtime_ns, file_inode, content_hash
+                track_number, track_total, disc_number, disc_total, date, genre,
+                duration, file_size, play_count, last_played, added_date,
+                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
          FROM library
          {}
          ORDER BY {} {}
@@ -129,9 +132,9 @@ pub fn get_all_tracks(conn: &Connection, query: &LibraryQuery) -> DbResult<Pagin
 pub fn get_track_by_id(conn: &Connection, track_id: i64) -> DbResult<Option<Track>> {
     let mut stmt = conn.prepare(
         "SELECT id, filepath, title, artist, album, album_artist,
-                track_number, track_total, date, duration, file_size,
-                play_count, last_played, added_date, missing, last_seen_at,
-                file_mtime_ns, file_inode, content_hash
+                track_number, track_total, disc_number, disc_total, date, genre,
+                duration, file_size, play_count, last_played, added_date,
+                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
          FROM library WHERE id = ?",
     )?;
 
@@ -147,9 +150,9 @@ pub fn get_track_by_id(conn: &Connection, track_id: i64) -> DbResult<Option<Trac
 pub fn get_track_by_filepath(conn: &Connection, filepath: &str) -> DbResult<Option<Track>> {
     let mut stmt = conn.prepare(
         "SELECT id, filepath, title, artist, album, album_artist,
-                track_number, track_total, date, duration, file_size,
-                play_count, last_played, added_date, missing, last_seen_at,
-                file_mtime_ns, file_inode, content_hash
+                track_number, track_total, disc_number, disc_total, date, genre,
+                duration, file_size, play_count, last_played, added_date,
+                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
          FROM library WHERE filepath = ?",
     )?;
 
@@ -214,9 +217,9 @@ pub fn add_track(conn: &Connection, filepath: &str, metadata: &TrackMetadata) ->
     conn.execute(
         "INSERT INTO library
          (filepath, title, artist, album, album_artist,
-          track_number, track_total, date, duration, file_size, file_mtime_ns,
-          file_inode, content_hash, missing)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+          track_number, track_total, disc_number, disc_total, date, genre,
+          duration, file_size, file_mtime_ns, file_inode, content_hash, missing)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
         params![
             filepath,
             metadata.title,
@@ -225,7 +228,10 @@ pub fn add_track(conn: &Connection, filepath: &str, metadata: &TrackMetadata) ->
             metadata.album_artist,
             metadata.track_number,
             metadata.track_total,
+            metadata.disc_number,
+            metadata.disc_total,
             metadata.date,
+            metadata.genre,
             metadata.duration,
             metadata.file_size.unwrap_or(0),
             metadata.file_mtime_ns,
@@ -246,9 +252,9 @@ pub fn add_tracks_bulk(conn: &Connection, tracks: &[(String, TrackMetadata)]) ->
     let mut stmt = conn.prepare(
         "INSERT INTO library
          (filepath, title, artist, album, album_artist,
-          track_number, track_total, date, duration, file_size, file_mtime_ns,
-          file_inode, content_hash, missing)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+          track_number, track_total, disc_number, disc_total, date, genre,
+          duration, file_size, file_mtime_ns, file_inode, content_hash, missing)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
     )?;
 
     let mut count = 0;
@@ -261,7 +267,10 @@ pub fn add_tracks_bulk(conn: &Connection, tracks: &[(String, TrackMetadata)]) ->
             metadata.album_artist,
             metadata.track_number,
             metadata.track_total,
+            metadata.disc_number,
+            metadata.disc_total,
             metadata.date,
+            metadata.genre,
             metadata.duration,
             metadata.file_size.unwrap_or(0),
             metadata.file_mtime_ns,
@@ -314,7 +323,10 @@ pub fn update_tracks_bulk(conn: &Connection, tracks: &[(String, TrackMetadata)])
             album_artist = ?,
             track_number = ?,
             track_total = ?,
+            disc_number = ?,
+            disc_total = ?,
             date = ?,
+            genre = ?,
             duration = ?,
             file_size = ?,
             file_mtime_ns = ?
@@ -330,7 +342,10 @@ pub fn update_tracks_bulk(conn: &Connection, tracks: &[(String, TrackMetadata)])
             metadata.album_artist,
             metadata.track_number,
             metadata.track_total,
+            metadata.disc_number,
+            metadata.disc_total,
             metadata.date,
+            metadata.genre,
             metadata.duration,
             metadata.file_size.unwrap_or(0),
             metadata.file_mtime_ns,
@@ -399,7 +414,10 @@ pub fn update_track_metadata(
             album_artist = ?,
             track_number = ?,
             track_total = ?,
+            disc_number = ?,
+            disc_total = ?,
             date = ?,
+            genre = ?,
             duration = ?,
             file_size = ?,
             file_mtime_ns = ?
@@ -411,7 +429,10 @@ pub fn update_track_metadata(
             metadata.album_artist,
             metadata.track_number,
             metadata.track_total,
+            metadata.disc_number,
+            metadata.disc_total,
             metadata.date,
+            metadata.genre,
             metadata.duration,
             metadata.file_size.unwrap_or(0),
             metadata.file_mtime_ns,
@@ -569,9 +590,9 @@ pub fn update_track_filepath(conn: &Connection, track_id: i64, new_path: &str) -
 pub fn get_missing_tracks(conn: &Connection) -> DbResult<Vec<Track>> {
     let mut stmt = conn.prepare(
         "SELECT id, filepath, title, artist, album, album_artist,
-                track_number, track_total, date, duration, file_size,
-                play_count, last_played, added_date, missing, last_seen_at,
-                file_mtime_ns, file_inode, content_hash
+                track_number, track_total, disc_number, disc_total, date, genre,
+                duration, file_size, play_count, last_played, added_date,
+                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
          FROM library WHERE missing = 1 ORDER BY title ASC",
     )?;
 
@@ -602,9 +623,9 @@ pub fn check_and_update_track_status(conn: &Connection, track_id: i64) -> DbResu
 pub fn find_missing_track_by_inode(conn: &Connection, inode: u64) -> DbResult<Option<Track>> {
     let mut stmt = conn.prepare(
         "SELECT id, filepath, title, artist, album, album_artist,
-                track_number, track_total, date, duration, file_size,
-                play_count, last_played, added_date, missing, last_seen_at,
-                file_mtime_ns, file_inode, content_hash
+                track_number, track_total, disc_number, disc_total, date, genre,
+                duration, file_size, play_count, last_played, added_date,
+                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
          FROM library WHERE file_inode = ? AND missing = 1 LIMIT 1",
     )?;
 
@@ -622,9 +643,9 @@ pub fn find_missing_track_by_content_hash(
 ) -> DbResult<Option<Track>> {
     let mut stmt = conn.prepare(
         "SELECT id, filepath, title, artist, album, album_artist,
-                track_number, track_total, date, duration, file_size,
-                play_count, last_played, added_date, missing, last_seen_at,
-                file_mtime_ns, file_inode, content_hash
+                track_number, track_total, disc_number, disc_total, date, genre,
+                duration, file_size, play_count, last_played, added_date,
+                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
          FROM library WHERE content_hash = ? AND missing = 1 LIMIT 1",
     )?;
 

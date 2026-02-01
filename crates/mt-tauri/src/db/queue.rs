@@ -11,7 +11,8 @@ pub fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
     let mut stmt = conn.prepare(
         "SELECT q.id as queue_id, q.filepath,
                 l.id, l.title, l.artist, l.album, l.album_artist,
-                l.track_number, l.track_total, l.date, l.duration, l.file_size,
+                l.track_number, l.track_total, l.disc_number, l.disc_total,
+                l.date, l.genre, l.duration, l.file_size,
                 l.play_count, l.last_played, l.added_date, l.missing, l.last_seen_at,
                 l.file_mtime_ns, l.file_inode, l.content_hash
          FROM queue q
@@ -34,7 +35,10 @@ pub fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
             album_artist: row.get("album_artist")?,
             track_number: row.get("track_number")?,
             track_total: row.get("track_total")?,
+            disc_number: row.get("disc_number")?,
+            disc_total: row.get("disc_total")?,
             date: row.get("date")?,
+            genre: row.get("genre")?,
             duration: row.get("duration")?,
             file_size: row.get::<_, Option<i64>>("file_size")?.unwrap_or(0),
             file_mtime_ns: row.get("file_mtime_ns")?,

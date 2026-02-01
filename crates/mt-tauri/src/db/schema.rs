@@ -27,7 +27,10 @@ pub const CREATE_TABLES: &[(&str, &str)] = &[
             album_artist TEXT,
             track_number TEXT,
             track_total TEXT,
+            disc_number TEXT,
+            disc_total TEXT,
             date TEXT,
+            genre TEXT,
             duration REAL,
             file_size INTEGER DEFAULT 0,
             file_mtime_ns INTEGER,
@@ -306,6 +309,28 @@ pub fn run_migrations(conn: &Connection) -> DbResult<()> {
         println!("[migration] unmatched tracks index created successfully");
     }
 
+    // Migration: Add disc_number column for disc metadata
+    let library_columns = get_table_columns(conn, "library")?;
+    if !library_columns.contains(&"disc_number".to_string()) {
+        println!("[migration] Adding disc_number column to library table...");
+        conn.execute("ALTER TABLE library ADD COLUMN disc_number TEXT", [])?;
+        println!("[migration] disc_number column added successfully");
+    }
+
+    // Migration: Add disc_total column for disc metadata
+    if !library_columns.contains(&"disc_total".to_string()) {
+        println!("[migration] Adding disc_total column to library table...");
+        conn.execute("ALTER TABLE library ADD COLUMN disc_total TEXT", [])?;
+        println!("[migration] disc_total column added successfully");
+    }
+
+    // Migration: Add genre column for track metadata
+    if !library_columns.contains(&"genre".to_string()) {
+        println!("[migration] Adding genre column to library table...");
+        conn.execute("ALTER TABLE library ADD COLUMN genre TEXT", [])?;
+        println!("[migration] genre column added successfully");
+    }
+
     Ok(())
 }
 
@@ -389,5 +414,9 @@ mod tests {
         assert!(columns.contains(&"last_seen_at".to_string()));
         assert!(columns.contains(&"file_inode".to_string()));
         assert!(columns.contains(&"content_hash".to_string()));
+        // Metadata columns
+        assert!(columns.contains(&"disc_number".to_string()));
+        assert!(columns.contains(&"disc_total".to_string()));
+        assert!(columns.contains(&"genre".to_string()));
     }
 }
