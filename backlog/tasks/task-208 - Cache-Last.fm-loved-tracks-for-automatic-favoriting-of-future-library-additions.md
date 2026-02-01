@@ -3,10 +3,10 @@ id: task-208
 title: >-
   Cache Last.fm loved tracks for automatic favoriting of future library
   additions
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-01-25 23:14'
-updated_date: '2026-01-28 08:16'
+updated_date: '2026-02-01 02:51'
 labels:
   - lastfm
   - database
@@ -15,7 +15,7 @@ labels:
   - cache
 dependencies: []
 priority: medium
-ordinal: 7906.25
+ordinal: 6187.5
 ---
 
 ## Description
@@ -90,13 +90,53 @@ CREATE TABLE lastfm_loved_tracks (
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Create lastfm_loved_tracks database table with proper indexes
-- [ ] #2 Implement import command to fetch and cache loved tracks from Last.fm
-- [ ] #3 Add matching logic to cross-reference cached tracks with local library
-- [ ] #4 Integrate with scanner to auto-favorite newly added tracks that match cached loved tracks
+- [x] #1 Create lastfm_loved_tracks database table with proper indexes
+- [x] #2 Implement import command to fetch and cache loved tracks from Last.fm
+- [x] #3 Add matching logic to cross-reference cached tracks with local library
+- [x] #4 Integrate with scanner to auto-favorite newly added tracks that match cached loved tracks
 - [ ] #5 Add UI to show import progress and match statistics
 - [ ] #6 Implement periodic background sync for unmatched tracks
 - [ ] #7 Add manual "Check for new matches" button without API re-fetch
-- [ ] #8 Handle incremental updates when new tracks are loved on Last.fm
-- [ ] #9 Add database migration for existing installations
+- [x] #8 Handle incremental updates when new tracks are loved on Last.fm
+- [x] #9 Add database migration for existing installations
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Implementation Progress
+
+### Completed
+1. **Database Schema** - Created `lastfm_loved_tracks` table with:
+   - id, artist, track, loved_at, matched_track_id, last_checked_at, created_at
+   - UNIQUE(artist, track) constraint
+   - Foreign key to library(id) with ON DELETE SET NULL
+   - Indexes on (artist, track) and unmatched tracks
+
+2. **Database Module** (`db/lastfm_loved.rs`):
+   - `upsert_loved_track` - Insert or update a loved track
+   - `bulk_insert_loved_tracks` - Efficient bulk insert
+   - `get_unmatched_loved_tracks` - Get tracks not yet matched to library
+   - `get_all_loved_tracks` - Get all cached tracks with pagination
+   - `set_matched_track` - Set matched library track ID
+   - `mark_checked` - Update last_checked_at without setting a match
+   - `clear_match` - Clear match when library track is removed
+   - `get_loved_stats` - Get cache statistics
+   - `get_most_recent_loved_at` - For incremental imports
+
+3. **New Tauri Commands**:
+   - `lastfm_cache_loved_tracks` - Fetch from Last.fm and cache (with incremental support)
+   - `lastfm_match_loved_tracks` - Match cached tracks against library without API call
+   - `lastfm_loved_stats` - Get cache statistics
+
+4. **Scanner Integration**:
+   - Auto-matches newly scanned tracks against cached loved tracks
+   - Auto-favorites matched tracks
+
+5. **Types Updated**:
+   - Added `LovedDate` struct to capture loved timestamp from API
+   - Added response types for new commands
+
+### Pending
+- UI components for showing stats and controlling cache
+<!-- SECTION:PLAN:END -->
