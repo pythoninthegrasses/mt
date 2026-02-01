@@ -496,6 +496,7 @@ mod tests {
         let track = LovedTrack {
             name: "Loved Song".to_string(),
             artist: ArtistInfo::Simple("Artist Name".to_string()),
+            date: None,
         };
 
         let json = serde_json::to_string(&track).unwrap();

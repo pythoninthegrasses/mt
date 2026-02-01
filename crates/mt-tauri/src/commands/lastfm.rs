@@ -1016,9 +1016,6 @@ pub fn match_new_tracks_against_loved(
     conn: &rusqlite::Connection,
     new_track_ids: &[i64],
 ) -> Result<usize, String> {
-    use crate::db::library::LibraryQuery;
-    use crate::db::{LibrarySortColumn, SortOrder};
-
     let mut favorited = 0;
 
     // Get all unmatched loved tracks

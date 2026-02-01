@@ -257,6 +257,16 @@ mod tests {
         conn
     }
 
+    /// Helper to insert a minimal library track for testing FK relationships
+    fn insert_test_library_track(conn: &Connection, filepath: &str) -> i64 {
+        conn.execute(
+            "INSERT INTO library (filepath, duration) VALUES (?1, 180)",
+            [filepath],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
+
     #[test]
     fn test_upsert_loved_track() {
         let conn = setup_test_db();
@@ -303,8 +313,11 @@ mod tests {
         let id1 = upsert_loved_track(&conn, "Artist 1", "Track 1", None).unwrap();
         let _id2 = upsert_loved_track(&conn, "Artist 2", "Track 2", None).unwrap();
 
+        // Create a library track to satisfy FK constraint
+        let library_track_id = insert_test_library_track(&conn, "/test/track1.mp3");
+
         // Mark one as matched
-        set_matched_track(&conn, id1, 42).unwrap();
+        set_matched_track(&conn, id1, library_track_id).unwrap();
 
         // Should only get the unmatched one
         let unmatched = get_unmatched_loved_tracks(&conn, None).unwrap();
@@ -320,7 +333,10 @@ mod tests {
         let id2 = upsert_loved_track(&conn, "Artist 2", "Track 2", None).unwrap();
         upsert_loved_track(&conn, "Artist 3", "Track 3", None).unwrap();
 
-        set_matched_track(&conn, id2, 100).unwrap();
+        // Create a library track to satisfy FK constraint
+        let library_track_id = insert_test_library_track(&conn, "/test/track2.mp3");
+
+        set_matched_track(&conn, id2, library_track_id).unwrap();
 
         let stats = get_loved_stats(&conn).unwrap();
         assert_eq!(stats.total_cached, 3);
@@ -333,14 +349,18 @@ mod tests {
         let conn = setup_test_db();
 
         let id = upsert_loved_track(&conn, "Artist", "Track", None).unwrap();
-        set_matched_track(&conn, id, 42).unwrap();
+
+        // Create a library track to satisfy FK constraint
+        let library_track_id = insert_test_library_track(&conn, "/test/track.mp3");
+
+        set_matched_track(&conn, id, library_track_id).unwrap();
 
         let entry = get_loved_by_name(&conn, "Artist", "Track")
             .unwrap()
             .unwrap();
-        assert_eq!(entry.matched_track_id, Some(42));
+        assert_eq!(entry.matched_track_id, Some(library_track_id));
 
-        clear_match(&conn, 42).unwrap();
+        clear_match(&conn, library_track_id).unwrap();
 
         let entry = get_loved_by_name(&conn, "Artist", "Track")
             .unwrap()

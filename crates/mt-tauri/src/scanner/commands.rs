@@ -9,7 +9,7 @@ use std::time::Instant;
 use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
-use crate::commands::lastfm::match_new_tracks_against_loved;
+use crate::commands::match_new_tracks_against_loved;
 use crate::db::{library, Database};
 use crate::events::{EventEmitter, LibraryUpdatedEvent, ScanCompleteEvent, ScanProgressEvent};
 use crate::scanner::artwork::{get_artwork, Artwork};
