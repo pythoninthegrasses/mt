@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-01-25 23:14'
-updated_date: '2026-02-01 02:51'
+updated_date: '2026-02-01 03:08'
 labels:
   - lastfm
   - database
@@ -140,3 +140,13 @@ CREATE TABLE lastfm_loved_tracks (
 ### Pending
 - UI components for showing stats and controlling cache
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+### Build Fixes (Jan 31, 2026)
+- Removed `mcp-bridge:default` from capabilities/default.json (was blocking builds when MCP feature not enabled)
+- Fixed module visibility for `match_new_tracks_against_loved` export
+- Fixed FK constraint issues in tests by creating library tracks before setting matches
+- All 547 tests passing
+<!-- SECTION:NOTES:END -->
