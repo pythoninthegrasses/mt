@@ -131,6 +131,12 @@ export const mockTracks = generateMockTracks(50);
  * @param {Object} options - Configuration options
  * @param {number} options.trackCount - Number of tracks to generate (default: 50)
  * @param {Array} options.tracks - Custom tracks array (overrides trackCount)
+ * @param {Object} options.artworkConfig - Per-track artwork configuration
+ *   Keys are track IDs (as strings or numbers), values are:
+ *   - 'none': Return 404 (no artwork)
+ *   - 'broken': Return invalid/broken image data
+ *   - { data, mime_type, source }: Custom artwork data
+ *   - undefined: Use default placeholder artwork
  * @returns {Object} Mutable state object for library
  */
 export function createLibraryState(options = {}) {
@@ -145,6 +151,8 @@ export function createLibraryState(options = {}) {
       total_artists: new Set(tracks.map((t) => t.artist)).size,
       total_albums: new Set(tracks.map((t) => t.album)).size,
     },
+    // Per-track artwork configuration
+    artworkConfig: options.artworkConfig || {},
     // Track API calls for assertions
     apiCalls: [],
   };
@@ -385,7 +393,44 @@ export async function setupLibraryMocks(page, state) {
     const trackId = parseInt(match[1], 10);
     state.apiCalls.push({ method: 'GET', url: `/api/library/${trackId}/artwork` });
 
-    // Return a simple placeholder artwork (1x1 transparent PNG)
+    // Check for per-track artwork configuration
+    const config = state.artworkConfig[trackId] || state.artworkConfig[String(trackId)];
+
+    if (config === 'none') {
+      // No artwork - return 404
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Artwork not found' }),
+      });
+      return;
+    }
+
+    if (config === 'broken') {
+      // Return invalid/broken image data
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: 'not-valid-base64-data!!!',
+          mime_type: 'image/png',
+          source: 'mock-broken',
+        }),
+      });
+      return;
+    }
+
+    if (config && typeof config === 'object') {
+      // Custom artwork data
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(config),
+      });
+      return;
+    }
+
+    // Default: Return a simple placeholder artwork (1x1 transparent PNG)
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -620,4 +665,17 @@ export function findApiCalls(state, method, urlPattern) {
     }
     return urlPattern.test(call.url);
   });
+}
+
+/**
+ * Helper to set artwork configuration for a track
+ * @param {Object} state - State from createLibraryState()
+ * @param {number|string} trackId - Track ID
+ * @param {string|Object} config - Artwork config:
+ *   - 'none': No artwork (returns 404)
+ *   - 'broken': Invalid/broken image data
+ *   - { data, mime_type, source }: Custom artwork data
+ */
+export function setTrackArtwork(state, trackId, config) {
+  state.artworkConfig[trackId] = config;
 }

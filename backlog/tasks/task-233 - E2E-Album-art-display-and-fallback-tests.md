@@ -1,10 +1,10 @@
 ---
 id: task-233
 title: 'E2E: Album art display and fallback tests'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-01-28 05:40'
-updated_date: '2026-01-28 08:13'
+updated_date: '2026-01-29 22:10'
 labels:
   - e2e
   - library
@@ -22,8 +22,8 @@ Add Playwright E2E tests for album art display including fallback handling for m
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Track with album art displays image correctly
-- [ ] #2 Track without album art shows placeholder/fallback
-- [ ] #3 Album art loads lazily if applicable
-- [ ] #4 Broken image URL shows fallback gracefully
+- [x] #1 Track with album art displays image correctly
+- [x] #2 Track without album art shows placeholder/fallback
+- [x] #3 Album art loads lazily if applicable
+- [x] #4 Broken image URL shows fallback gracefully
 <!-- AC:END -->

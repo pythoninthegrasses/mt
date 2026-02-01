@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = ["crates/mt-core", "crates/mt-tauri"]
+
+# Shared profile settings for all workspace members
+[profile.dev]
+split-debuginfo = "unpacked"  # macOS-specific: up to 70% faster incremental debug builds
+debug = "line-tables-only"    # Reduce debug info for faster builds (still get line numbers in backtraces)
+
+# Optimize build scripts and proc-macros even in dev mode
+[profile.dev.build-override]
+opt-level = 3  # Faster builds when proc-macros are dependencies (serde_derive, tauri macros)
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

@@ -8,13 +8,6 @@
       "command": "npx",
       "args": ["@playwright/mcp@latest"]
     },
-    "screencap": {
-      "command": "/Users/lance/.local/bin/uv",
-      "args": ["--directory", "/Users/lance/git/screencap", "run", "server.py"],
-      "env": {
-        "UV_PROJECT_ENVIRONMENT": "/Users/lance/git/screencap/.venv"
-      }
-    },
     "tauri-mcp": {
       "command": "npx",
       "args": ["-y", "@hypothesi/tauri-mcp-server"]

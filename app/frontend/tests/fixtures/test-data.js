@@ -100,9 +100,18 @@ export const testTracks = [
 
 /**
  * Common viewport sizes for testing responsive behavior
+ *
+ * Standard breakpoints:
+ * - 4K UHD: 3840x2160
+ * - QHD: 2560x1440
+ * - Desktop large: 1920x1080 (Full HD)
+ * - Desktop: 1624x1057 (app minimum)
+ * - Desktop small: 1366x768 (common laptop)
  */
 export const viewportSizes = {
-  desktop: { width: 1624, height: 1057 },
+  uhd4k: { width: 3840, height: 2160 },
+  qhd: { width: 2560, height: 1440 },
   desktopLarge: { width: 1920, height: 1080 },
+  desktop: { width: 1624, height: 1057 },
   desktopSmall: { width: 1366, height: 768 },
 };

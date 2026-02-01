@@ -1,0 +1,198 @@
+<!-- Player controls footer -->
+<footer
+  x-data="playerControls"
+  class="border-t border-border bg-card shrink-0 h-[65px]"
+>
+  <div class="flex items-center gap-4 px-4 h-full">
+    <!-- Left: Transport controls -->
+    <div class="flex items-stretch h-full">
+      <button
+        class="px-1 text-[#8E8E93] hover:text-foreground hover:bg-muted/50 transition-colors flex items-center"
+        :class="!hasTrack && 'opacity-40'"
+        @click="previous()"
+        :disabled="!hasTrack"
+        title="Previous"
+        data-testid="player-prev"
+      >
+        <svg class="w-[37px] h-[37px]" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"></path>
+        </svg>
+      </button>
+
+      <button
+        class="px-1 text-[#8E8E93] hover:text-foreground hover:bg-muted/50 transition-colors flex items-center"
+        @click="togglePlay()"
+        title="Play/Pause"
+        data-testid="player-playpause"
+      >
+        <template x-if="player.isPlaying">
+          <svg class="w-[37px] h-[37px]" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
+          </svg>
+        </template>
+        <template x-if="!player.isPlaying">
+          <svg class="w-[37px] h-[37px]" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z"></path>
+          </svg>
+        </template>
+      </button>
+
+      <button
+        class="px-1 text-[#8E8E93] hover:text-foreground hover:bg-muted/50 transition-colors flex items-center"
+        :class="!hasTrack && 'opacity-40'"
+        @click="next()"
+        :disabled="!hasTrack"
+        title="Next"
+        data-testid="player-next"
+      >
+        <svg class="w-[37px] h-[37px]" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Center: Track info + Progress bar + Time -->
+    <div class="flex-1 flex flex-col justify-center gap-0.5 min-w-0">
+      <div class="text-sm text-foreground truncate h-5 select-none cursor-default" :class="hasTrack ? 'visible' : 'invisible'" x-text="trackDisplayName" @dblclick="jumpToCurrentTrack()"></div>
+      <div class="flex items-center gap-3">
+        <div
+          class="flex-1 h-1 bg-muted rounded-full cursor-pointer relative"
+          x-ref="progressBar"
+          data-testid="player-progressbar"
+          @click="handleProgressClick($event)"
+          @mousedown="handleProgressDragStart($event)"
+          @mousemove.window="handleProgressDrag($event)"
+        >
+          <div
+            class="absolute inset-y-0 left-0 bg-primary rounded-full"
+            :style="`width: ${progressPercent}%`"
+          ></div>
+          <div
+            class="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-primary rounded-full shadow-sm"
+            :class="hasTrack ? 'opacity-100' : 'opacity-0'"
+            :style="`left: calc(${progressPercent}% - 5px)`"
+          ></div>
+        </div>
+        <span class="text-xs text-muted-foreground tabular-nums whitespace-nowrap" data-testid="player-time" x-text="formatTime(displayPosition) + ' / ' + formatTime(player.duration)"></span>
+      </div>
+    </div>
+
+    <!-- Right: Volume + Action buttons + Stats -->
+    <div class="flex items-center gap-2">
+      <button
+        class="p-1 text-[#8E8E93] hover:text-foreground transition-colors"
+        @click="toggleMute()"
+        title="Mute"
+        data-testid="player-mute"
+      >
+        <template x-if="volumeIcon === 'muted'">
+          <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path>
+          </svg>
+        </template>
+        <template x-if="volumeIcon === 'low'">
+          <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+          </svg>
+        </template>
+        <template x-if="volumeIcon === 'medium' || volumeIcon === 'high'">
+          <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+          </svg>
+        </template>
+      </button>
+      <div
+        class="w-20 h-1 bg-[#8E8E93]/30 rounded-full cursor-pointer relative group select-none"
+        x-ref="volumeBar"
+        data-testid="player-volume"
+        @click="handleVolumeClick($event)"
+        @mousedown.prevent="handleVolumeDragStart($event)"
+        @mouseenter="showVolumeTooltip = true"
+        @mouseleave="showVolumeTooltip = false"
+      >
+        <div
+          class="absolute inset-y-0 left-0 bg-[#8E8E93] rounded-full"
+          :style="`width: ${displayVolume}%`"
+        ></div>
+        <div
+          class="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-foreground rounded-full"
+          :class="isDraggingVolume ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+          :style="`left: calc(${displayVolume}% - 5px)`"
+        ></div>
+        <div
+          x-show="showVolumeTooltip || isDraggingVolume"
+          class="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-foreground text-background text-xs rounded whitespace-nowrap pointer-events-none"
+          x-text="volumeTooltipText"
+        ></div>
+      </div>
+
+      <div class="w-px h-4 bg-[#8E8E93]/20 mx-1"></div>
+
+      <button
+        class="p-1 transition-colors"
+        :class="isFavorite ? 'text-red-500' : 'text-[#8E8E93] hover:text-foreground'"
+        @click="toggleFavorite()"
+        :disabled="!hasTrack"
+        :title="isFavorite ? 'Remove from Liked Songs' : 'Add to Liked Songs'"
+      >
+        <template x-if="isFavorite">
+          <svg class="w-[18px] h-[18px]" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+          </svg>
+        </template>
+        <template x-if="!isFavorite">
+          <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+          </svg>
+        </template>
+      </button>
+
+      <button
+        class="p-1 transition-colors"
+        :class="isShuffleActive ? 'text-primary' : 'text-[#8E8E93] hover:text-foreground'"
+        @click="toggleShuffle()"
+        title="Shuffle"
+        data-testid="player-shuffle"
+      >
+        <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+        </svg>
+      </button>
+
+      <button
+        class="p-1 transition-colors"
+        :class="isLoopActive ? 'text-primary' : 'text-[#8E8E93] hover:text-foreground'"
+        @click="cycleLoop()"
+        title="Loop"
+        data-testid="player-loop"
+      >
+        <template x-if="queue.loop === 'one'">
+          <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            <text x="12" y="14" font-size="8" fill="currentColor" text-anchor="middle">1</text>
+          </svg>
+        </template>
+        <template x-if="queue.loop !== 'one'">
+          <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
+        </template>
+      </button>
+
+      <button
+        class="p-1 text-[#8E8E93] hover:text-foreground transition-colors"
+        @click="$store.library.openAddMusicDialog()"
+        title="Add music to library"
+      >
+        <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+      </button>
+
+      <div class="w-px h-4 bg-[#8E8E93]/20 mx-1"></div>
+
+      <span class="text-xs text-foreground/50 whitespace-nowrap" x-text="libraryStats"></span>
+    </div>
+  </div>
+</footer>
