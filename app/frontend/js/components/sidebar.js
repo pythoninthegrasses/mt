@@ -278,6 +278,7 @@ export function createSidebar(Alpine) {
         const playlistId = this.editingPlaylist.playlistId;
         this.editingPlaylist = null;
         await this.loadPlaylists();
+        window.dispatchEvent(new CustomEvent('mt:playlists-updated'));
 
         if (wasNew) {
           this.loadPlaylist(`playlist-${playlistId}`);
