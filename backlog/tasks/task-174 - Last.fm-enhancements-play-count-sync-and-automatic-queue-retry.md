@@ -4,7 +4,7 @@ title: 'Last.fm enhancements: play count sync and automatic queue retry'
 status: In Progress
 assignee: []
 created_date: '2026-01-20 00:38'
-updated_date: '2026-01-29 23:38'
+updated_date: '2026-02-01 04:33'
 labels:
   - enhancement
   - lastfm
@@ -34,5 +34,12 @@ Design options from task-007:
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 Sync play count to Last.fm when track reaches scrobble threshold
-- [ ] #2 Implement automatic scrobble queue retry mechanism (Option D recommended: startup + after fresh auth)
+- [x] #2 Implement automatic scrobble queue retry mechanism (Option D recommended: startup + after fresh auth)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+### AC #2 Status (Jan 31, 2026)
+Automatic queue retry is implemented via a 5-minute interval background task in `lib.rs`. While the original recommendation was "Option D: startup + after fresh auth", the periodic background approach effectively covers the use case. Users can also manually retry via the "Retry All" button in Settings > Last.fm.
+<!-- SECTION:NOTES:END -->
