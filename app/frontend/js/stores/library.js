@@ -10,6 +10,28 @@ import { api } from '../api.js';
 const { listen } = window.__TAURI__?.event ?? { listen: () => Promise.resolve(() => {}) };
 
 export function createLibraryStore(Alpine) {
+  const getInitialSection = () => {
+    let section = 'all';
+
+    if (window.settings?.initialized) {
+      section = window.settings.get('sidebar:activeSection', section);
+    } else {
+      const legacySidebar = localStorage.getItem('mt:sidebar');
+      if (legacySidebar) {
+        try {
+          const parsed = JSON.parse(legacySidebar);
+          if (parsed?.activeSection) {
+            section = parsed.activeSection;
+          }
+        } catch (_e) {
+          // Ignore malformed legacy sidebar storage
+        }
+      }
+    }
+
+    return section;
+  };
+
   Alpine.store('library', {
     // Track data
     tracks: [], // All tracks in library
@@ -19,7 +41,7 @@ export function createLibraryStore(Alpine) {
     searchQuery: '',
     sortBy: 'default', // 'default', 'artist', 'album', 'title', 'index', 'dateAdded', 'duration'
     sortOrder: 'asc', // 'asc', 'desc'
-    currentSection: 'all',
+    currentSection: getInitialSection(),
 
     // Loading state
     loading: false,
@@ -61,8 +83,19 @@ export function createLibraryStore(Alpine) {
     },
 
     async load() {
+      if (this.currentSection?.startsWith('playlist-')) {
+        console.log('[library]', 'load_skipped', {
+          reason: 'playlist_view',
+          section: this.currentSection,
+        });
+        return;
+      }
+
+      const loadSection = this.currentSection;
+
       console.log('[library]', 'load', {
         action: 'loading_library',
+        section: loadSection,
       });
 
       this.loading = true;
@@ -92,6 +125,14 @@ export function createLibraryStore(Alpine) {
           limit: 999999, // Effectively unlimited (backend defaults to 100 with null)
           offset: 0,
         });
+
+        if (this.currentSection !== loadSection || this.currentSection?.startsWith('playlist-')) {
+          console.log('[library]', 'load_discarded', {
+            startedIn: loadSection,
+            currentSection: this.currentSection,
+          });
+          return;
+        }
 
         this.tracks = data.tracks || [];
         this.totalTracks = data.total || this.tracks.length;
@@ -292,6 +333,13 @@ export function createLibraryStore(Alpine) {
     applyFilters() {
       // Backend already did search/sort, we only apply ignore-words normalization
       const result = [...this.tracks];
+
+      // Skip client-side sorting for playlists - they should maintain their stored order
+      const isPlaylistView = this.currentSection?.startsWith('playlist-');
+      if (isPlaylistView) {
+        this.filteredTracks = result;
+        return;
+      }
 
       const uiStore = Alpine.store('ui');
       const ignoreWordsEnabled = uiStore.sortIgnoreWords;

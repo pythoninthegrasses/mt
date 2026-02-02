@@ -30,11 +30,12 @@
               getColumnShiftDirection(colIndex) === 'right' ? 'shift-right' : ''
             ]"
             class="py-2 select-none flex items-center relative overflow-visible"
+            :title="col.key === 'index' ? (isInPlaylistView() ? 'Position' : '#') : (col.label || '')"
             :style="isColumnDragging(col.key) ? 'transform:' + getColumnDragTransform(col.key) + '; z-index: 50;' : ''"
             @mousedown="if (!$event.target.closest('.column-resizer-left') && !$event.target.closest('.column-resizer-right')) startColumnDrag(col, $event)"
             @click="if (!draggingColumnKey && !wasResizing && !wasColumnDragging) handleSort(col.key)"
           >
-            <span x-text="col.label" class="truncate"></span>
+            <span x-text="col.key === 'index' ? (isInPlaylistView() ? 'Position' : col.label) : col.label" class="truncate"></span>
             <span
               x-show="col.sortable && library.sortBy === col.key"
               x-text="getSortIndicator(col.key)"
@@ -175,6 +176,15 @@
           >
             <template x-if="col.key === 'status'">
               <span class="flex items-center justify-center w-full h-full">
+                <!-- In playlist view: show drag handle -->
+                <span
+                  x-show="isInPlaylistView() && !track.missing"
+                  class="drag-handle cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-foreground/70"
+                  @mousedown.prevent.stop="startPlaylistDrag(index, $event)"
+                  @touchstart.prevent.stop="startPlaylistDrag(index, $event)"
+                  @dblclick.stop
+                >⠿</span>
+                <!-- Missing track indicator (takes priority in playlist view too) -->
                 <button
                   x-show="track.missing"
                   @click.stop="$store.ui.openMissingTrackPopover(track, $event)"
@@ -191,15 +201,7 @@
               </span>
             </template>
             <template x-if="col.key === 'index'">
-              <span class="flex items-center gap-1">
-                <span
-                  x-show="isInPlaylistView()"
-                  class="cursor-grab text-muted-foreground/50 hover:text-foreground/70 shrink-0"
-                  @mousedown="startPlaylistDrag(index, $event)"
-                  @touchstart="startPlaylistDrag(index, $event)"
-                >⠿</span>
-                <span x-text="track.track_number || (index + 1)"></span>
-              </span>
+              <span x-text="isInPlaylistView() ? (index + 1) : (track.track_number || '')"></span>
             </template>
             <template x-if="col.key === 'title'">
               <span class="flex items-center">

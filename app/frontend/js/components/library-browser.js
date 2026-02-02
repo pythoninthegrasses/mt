@@ -2,7 +2,7 @@ import { api } from '../api.js';
 
 // Default column widths in pixels (all columns have explicit widths for grid layout)
 const DEFAULT_COLUMN_WIDTHS = {
-  status: 24, // Left gutter for missing track indicator
+  status: 24, // Left gutter for status/drag handle
   index: 48,
   title: 320,
   artist: 431,
@@ -321,8 +321,46 @@ export function createLibraryBrowser(Alpine) {
     init() {
       this._initColumnSettings();
 
-      if (this.$store.library.tracks.length === 0 && !this.$store.library.loading) {
-        this.$store.library.load();
+      const libraryStore = this.$store.library;
+      let initialSection = libraryStore.currentSection;
+
+      if (window.settings?.initialized) {
+        initialSection = window.settings.get('sidebar:activeSection', initialSection);
+      } else {
+        const legacySidebar = localStorage.getItem('mt:sidebar');
+        if (legacySidebar) {
+          try {
+            const parsed = JSON.parse(legacySidebar);
+            if (parsed?.activeSection) {
+              initialSection = parsed.activeSection;
+            }
+          } catch (_e) {
+            // Ignore malformed legacy sidebar storage
+          }
+        }
+      }
+
+      // Initialize current section from persisted playlist selection
+      if (initialSection && initialSection.startsWith('playlist-')) {
+        if (libraryStore.currentSection !== initialSection) {
+          libraryStore.setSection(initialSection);
+        }
+        this.currentPlaylistId = parseInt(initialSection.replace('playlist-', ''), 10);
+      }
+
+      const shouldAutoLoadLibrary = !initialSection || initialSection === 'all';
+      if (libraryStore.tracks.length === 0 && !libraryStore.loading && shouldAutoLoadLibrary) {
+        this.$nextTick(() => {
+          const hasSidebar = Boolean(document.querySelector('[data-testid="playlist-list"]'));
+          if (hasSidebar) return;
+          if (
+            libraryStore.tracks.length === 0 &&
+            !libraryStore.loading &&
+            libraryStore.currentSection === 'all'
+          ) {
+            libraryStore.load();
+          }
+        });
       }
 
       this.loadPlaylists();
@@ -415,13 +453,32 @@ export function createLibraryBrowser(Alpine) {
     _initColumnSettings() {
       // Load settings from backend
       if (window.settings && window.settings.initialized) {
-        this.columnVisibility = window.settings.get('library:columnVisibility', {
-          ...DEFAULT_COLUMN_VISIBILITY,
-        });
-        this.columnOrder = window.settings.get('library:columnOrder', [...DEFAULT_COLUMN_ORDER]);
-        this._persistedWidths = window.settings.get('library:columnWidths', {
-          ...DEFAULT_COLUMN_WIDTHS,
-        });
+        const savedVisibility = window.settings.get('library:columnVisibility', {});
+        const savedOrder = window.settings.get('library:columnOrder', []);
+        const savedWidths = window.settings.get('library:columnWidths', {});
+
+        // Merge saved visibility with defaults (ensures new columns get default visibility)
+        this.columnVisibility = { ...DEFAULT_COLUMN_VISIBILITY, ...savedVisibility };
+
+        // Merge saved widths with defaults (ensures new columns get default widths)
+        this._persistedWidths = { ...DEFAULT_COLUMN_WIDTHS, ...savedWidths };
+
+        // Merge saved order with defaults (ensures new columns are added at correct positions)
+        if (savedOrder.length > 0) {
+          // Add any new columns from defaults that aren't in saved order
+          const savedSet = new Set(savedOrder);
+          const newOrder = [...savedOrder];
+          DEFAULT_COLUMN_ORDER.forEach((col, idx) => {
+            if (!savedSet.has(col)) {
+              // Insert new column at its default position (or end if beyond saved length)
+              const insertIdx = Math.min(idx, newOrder.length);
+              newOrder.splice(insertIdx, 0, col);
+            }
+          });
+          this.columnOrder = newOrder;
+        } else {
+          this.columnOrder = [...DEFAULT_COLUMN_ORDER];
+        }
 
         console.log('[LibraryBrowser] Loaded column settings from backend');
 
@@ -471,11 +528,24 @@ export function createLibraryBrowser(Alpine) {
       if (oldData) {
         try {
           const data = JSON.parse(oldData);
-          if (data.widths) this._persistedWidths = data.widths;
+          if (data.widths) {
+            this._persistedWidths = { ...DEFAULT_COLUMN_WIDTHS, ...data.widths };
+          }
           if (data.visibility) {
             this.columnVisibility = { ...DEFAULT_COLUMN_VISIBILITY, ...data.visibility };
           }
-          if (data.order && Array.isArray(data.order)) this.columnOrder = data.order;
+          if (data.order && Array.isArray(data.order)) {
+            // Merge with defaults to add any new columns
+            const savedSet = new Set(data.order);
+            const newOrder = [...data.order];
+            DEFAULT_COLUMN_ORDER.forEach((col, idx) => {
+              if (!savedSet.has(col)) {
+                const insertIdx = Math.min(idx, newOrder.length);
+                newOrder.splice(insertIdx, 0, col);
+              }
+            });
+            this.columnOrder = newOrder;
+          }
           localStorage.removeItem('mt:column-settings');
         } catch (_e) {
           localStorage.removeItem('mt:column-settings');
@@ -633,27 +703,23 @@ export function createLibraryBrowser(Alpine) {
       const edgeThreshold = 0.05;
 
       // Check columns to the right - only swap with immediate neighbor
-      for (let i = dragIdx + 1; i < cells.length; i++) {
-        const rect = cells[i].getBoundingClientRect();
+      const rightIdx = dragIdx + 1;
+      if (rightIdx < cells.length) {
+        const rect = cells[rightIdx].getBoundingClientRect();
         const triggerX = rect.left + rect.width * edgeThreshold;
         if (x > triggerX) {
-          newOverIdx = i; // Swap with this column (not i+1)
-          break; // Only swap with immediate next column
-        } else {
-          break; // Cursor hasn't reached this column, stop
+          newOverIdx = rightIdx; // Swap with this column (not i+1)
         }
       }
 
       // Check columns to the left - only if we haven't moved right
       if (newOverIdx === dragIdx) {
-        for (let i = dragIdx - 1; i >= 0; i--) {
-          const rect = cells[i].getBoundingClientRect();
+        const leftIdx = dragIdx - 1;
+        if (leftIdx >= 0) {
+          const rect = cells[leftIdx].getBoundingClientRect();
           const triggerX = rect.right - rect.width * edgeThreshold;
           if (x < triggerX) {
-            newOverIdx = i; // Swap with this column
-            break; // Only swap with immediate next column
-          } else {
-            break; // Cursor hasn't reached this column, stop
+            newOverIdx = leftIdx; // Swap with this column
           }
         }
       }
@@ -1497,7 +1563,8 @@ export function createLibraryBrowser(Alpine) {
     },
 
     isInPlaylistView() {
-      return this.currentPlaylistId !== null;
+      // Check the library store directly for reliability (avoids event timing issues)
+      return this.$store.library.currentSection?.startsWith('playlist-') || this.currentPlaylistId !== null;
     },
 
     startPlaylistDrag(index, event) {
@@ -1579,7 +1646,7 @@ export function createLibraryBrowser(Alpine) {
             this.library.tracks = tracks;
             this.library.applyFilters();
           } catch (error) {
-            console.error('Failed to reorder playlist:', error);
+            console.error('[PlaylistDrag] Failed to reorder playlist:', error);
             this.$store.ui.toast('Failed to reorder tracks', 'error');
           }
         }
@@ -1608,16 +1675,38 @@ export function createLibraryBrowser(Alpine) {
       if (this.draggingIndex === null || this.dragOverIndex === null) return '';
       if (index === this.draggingIndex) return '';
 
+      const classes = [];
+
+      // Add translation classes for items between drag source and target
       if (this.draggingIndex < this.dragOverIndex) {
         if (index > this.draggingIndex && index < this.dragOverIndex) {
-          return 'translate-y-[-100%]';
+          classes.push('translate-y-[-100%]');
         }
       } else {
         if (index >= this.dragOverIndex && index < this.draggingIndex) {
-          return 'translate-y-[100%]';
+          classes.push('translate-y-[100%]');
         }
       }
-      return '';
+
+      // Add drop indicator class (shows a line where the item will be inserted)
+      // Only show if actual reorder would happen (i.e., adjusted position differs)
+      let adjustedToPosition = this.dragOverIndex;
+      if (this.draggingIndex < this.dragOverIndex) {
+        adjustedToPosition = this.dragOverIndex - 1;
+      }
+      const wouldReorder = this.draggingIndex !== adjustedToPosition;
+
+      // Show indicator ABOVE this row if dragOverIndex equals this row's index
+      if (wouldReorder && index === this.dragOverIndex && this.dragOverIndex !== this.draggingIndex) {
+        classes.push('playlist-drop-indicator-above');
+      }
+      // Show indicator BELOW the last row if dragging to the end
+      const trackCount = this.library?.filteredTracks?.length || 0;
+      if (wouldReorder && index === trackCount - 1 && this.dragOverIndex === trackCount) {
+        classes.push('playlist-drop-indicator-below');
+      }
+
+      return classes.join(' ');
     },
   }));
 }

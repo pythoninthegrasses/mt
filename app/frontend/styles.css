@@ -134,8 +134,35 @@ aside button:hover svg {
   transform: translateY(100%);
 }
 
-[data-playlist-reorder-index] {
-  transition: transform 0.15s ease-out;
+/* Playlist drag drop indicator - shows where item will be inserted */
+.playlist-drop-indicator-above {
+  position: relative;
+}
+
+.playlist-drop-indicator-above::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: hsl(var(--primary));
+  z-index: 10;
+}
+
+.playlist-drop-indicator-below {
+  position: relative;
+}
+
+.playlist-drop-indicator-below::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: hsl(var(--primary));
+  z-index: 10;
 }
 
 [data-track-id] {

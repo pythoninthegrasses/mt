@@ -157,6 +157,61 @@ test.describe('Library Browser', () => {
   });
 });
 
+test.describe('Playlist Position Column', () => {
+  test.beforeEach(async ({ page }) => {
+    const libraryState = createLibraryState();
+    await setupLibraryMocks(page, libraryState);
+
+    const playlistState = createPlaylistState();
+    await setupPlaylistMocks(page, playlistState);
+
+    await page.goto('/');
+    await waitForAlpine(page);
+    await page.waitForSelector('[x-data="libraryBrowser"]', { state: 'visible' });
+  });
+
+  test('should show position header and sequential values in playlists', async ({ page }) => {
+    await page.waitForSelector('[data-track-id]', { state: 'visible' });
+
+    const headerTexts = await page.locator('.column-header-cell').allTextContents();
+    expect(headerTexts.some((text) => text.trim() === '#')).toBe(true);
+
+    const playlistItem = page.locator('[data-playlist-id="1"]');
+    await expect(playlistItem).toBeVisible();
+    await playlistItem.click();
+
+    await page.waitForSelector('[data-track-id="101"]', { state: 'visible' });
+
+    const playlistHeaderTexts = await page.locator('.column-header-cell').allTextContents();
+    expect(playlistHeaderTexts.some((text) => text.trim() === 'Position')).toBe(true);
+
+    const positionHeader = page.locator('.column-header-cell', { hasText: 'Position' }).first();
+    await expect(positionHeader).toHaveAttribute('title', 'Position');
+
+    const firstRow = page.locator('[data-track-id]').nth(0);
+    const secondRow = page.locator('[data-track-id]').nth(1);
+
+    await expect(firstRow.locator('[data-column="index"]')).toHaveText('1');
+    await expect(secondRow.locator('[data-column="index"]')).toHaveText('2');
+    await expect(firstRow.locator('[data-column="title"]')).toContainText('Track A');
+    await expect(secondRow.locator('[data-column="title"]')).toContainText('Track B');
+
+    await page.evaluate(async () => {
+      await fetch('/api/playlists/1/tracks/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from_position: 0, to_position: 1 }),
+      });
+      await window.Alpine.store('library').loadPlaylist(1);
+    });
+
+    await expect(page.locator('[data-track-id]').nth(0).locator('[data-column="title"]')).toContainText('Track B');
+    await expect(page.locator('[data-track-id]').nth(1).locator('[data-column="title"]')).toContainText('Track A');
+    await expect(page.locator('[data-track-id]').nth(0).locator('[data-column="index"]')).toHaveText('1');
+    await expect(page.locator('[data-track-id]').nth(1).locator('[data-column="index"]')).toHaveText('2');
+  });
+});
+
 test.describe('Search Functionality', () => {
   test.beforeEach(async ({ page }) => {
     const libraryState = createLibraryState();
@@ -2513,6 +2568,69 @@ test.describe('Playlist Feature Parity - Library Browser (task-150)', () => {
     } else {
       expect(arrowText).toBe('▶');
     }
+  });
+});
+
+test.describe('Playlist load regression guard (task-179)', () => {
+  test('restores playlist section without loading full library', async ({ page }) => {
+    const playlistState = createPlaylistState();
+    const libraryCalls = [];
+
+    await setupPlaylistMocks(page, playlistState);
+
+    await page.route(/\/api\/library(\?.*)?$/, async (route, request) => {
+      if (request.method() !== 'GET') {
+        await route.continue();
+        return;
+      }
+
+      libraryCalls.push({ method: 'GET', url: '/api/library' });
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          tracks: [
+            {
+              id: 201,
+              title: 'Library Track 1',
+              artist: 'Library Artist',
+              album: 'Library Album',
+              duration: 180,
+              track_number: 9,
+              filepath: '/music/library-track-1.mp3',
+            },
+          ],
+          total: 1,
+        }),
+      });
+    });
+
+    await page.addInitScript(() => {
+      localStorage.setItem('mt:sidebar', JSON.stringify({ activeSection: 'playlist-1' }));
+    });
+
+    const playlistLoadResponse = page.waitForResponse((response) => (
+      /\/api\/playlists\/1$/.test(response.url()) &&
+      response.request().method() === 'GET'
+    ));
+
+    await page.goto('/');
+    await waitForAlpine(page);
+    await page.waitForSelector('[x-data="libraryBrowser"]', { state: 'visible' });
+    await playlistLoadResponse;
+    await expect(page.locator('[data-track-id]')).toHaveCount(2);
+
+    const titleCells = page.locator('[data-track-id] [data-column="title"]');
+    await expect(titleCells.nth(0)).toContainText('Track A');
+    await expect(titleCells.nth(1)).toContainText('Track B');
+
+    await page.waitForTimeout(700);
+
+    await expect(page.locator('[data-track-id]')).toHaveCount(2);
+    expect(libraryCalls.length).toBe(0);
   });
 });
 

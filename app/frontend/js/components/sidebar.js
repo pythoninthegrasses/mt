@@ -38,7 +38,12 @@ export function createSidebar(Alpine) {
       });
       this._migrateOldStorage();
       this.loadPlaylists();
-      this.loadSection(this.activeSection);
+      // Use loadPlaylist for playlist sections, loadSection for built-in sections
+      if (this.activeSection.startsWith('playlist-')) {
+        this.loadPlaylist(this.activeSection);
+      } else {
+        this.loadSection(this.activeSection);
+      }
     },
 
     /**
@@ -163,7 +168,10 @@ export function createSidebar(Alpine) {
       }
 
       this.library.searchQuery = '';
-      this.library.sortBy = 'title';
+      // Don't set sortBy for playlists - they should maintain their stored order
+      // Setting sortBy to null/default prevents the sort indicator from showing
+      // and preserves the playlist's custom track order
+      this.library.sortBy = 'default';
       this.library.sortOrder = 'asc';
       await this.library.loadPlaylist(playlistId);
     },
