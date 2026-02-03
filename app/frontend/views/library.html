@@ -145,17 +145,118 @@
     </div>
 
     <!-- Track rows (CSS Grid matching header) -->
+    <!-- Playlist view uses x-sort for drag reordering; library view uses standard drag for adding to playlists -->
+    <template x-if="isInPlaylistView()">
+    <div
+      x-sort="handlePlaylistTrackReorder"
+      x-sort:config="{ animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen', forceFallback: true }"
+      class="playlist-track-sortable"
+    >
+      <template x-for="(track, index) in library.filteredTracks" :key="track.id">
+        <div
+          x-sort:item
+          x-init="$el._x_sort_key = index"
+          class="grid border-b border-border/30 text-sm cursor-default transition-colors select-none"
+          :style="`grid-template-columns: ${getGridTemplateColumns()};`"
+          :class="[
+            isSelected(track.id) ? 'track-row-selected' : (index % 2 === 0 ? 'track-row-even' : 'track-row-odd'),
+            isPlaying(track.id) && !isSelected(track.id) ? 'track-row-playing' : '',
+            !isSelected(track.id) && !isPlaying(track.id) ? 'hover:bg-muted/50' : ''
+          ]"
+          :data-track-id="track.id"
+          @click="handleRowClick($event, track, index)"
+          @dblclick="handleDoubleClick(track, index)"
+          @contextmenu="handleContextMenu($event, track, index)"
+        >
+          <template x-for="col in columns" :key="col.key">
+            <div
+              :class="[
+                'py-1.5 overflow-hidden text-ellipsis whitespace-nowrap',
+                col.key === 'status' ? 'px-1' : (col.key === 'index' ? 'px-2' : (col.key === 'duration' ? 'pl-[3px] pr-[10px]' : 'px-4')),
+                col.key !== 'title' && col.key !== 'status' && !isSelected(track.id) ? 'text-muted-foreground' : ''
+              ]"
+              :data-column="col.key"
+            >
+              <template x-if="col.key === 'status'">
+                <span class="flex items-center justify-center w-full h-full">
+                  <!-- Drag handle for playlist reordering -->
+                  <span
+                    x-show="!track.missing"
+                    class="drag-handle cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-foreground/70"
+                    @dblclick.stop
+                  >⠿</span>
+                  <!-- Missing track indicator -->
+                  <button
+                    x-show="track.missing"
+                    @click.stop="$store.ui.openMissingTrackPopover(track, $event)"
+                    class="text-warning hover:text-warning/80 cursor-pointer p-0.5 rounded hover:bg-muted/50"
+                    data-testid="missing-track-icon"
+                    title="File not found - click for details"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="16" x2="12" y2="12"/>
+                      <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                  </button>
+                </span>
+              </template>
+              <template x-if="col.key === 'index'">
+                <span x-text="index + 1"></span>
+              </template>
+              <template x-if="col.key === 'title'">
+                <span class="flex items-center">
+                  <span x-show="isPlaying(track.id)" class="text-primary shrink-0 mr-2">▶</span>
+                  <span class="truncate" :class="track.missing ? 'text-muted-foreground/70 italic' : ''" x-text="track.title || track.filename || 'Unknown'"></span>
+                </span>
+              </template>
+              <template x-if="col.key === 'artist'">
+                <span x-text="track.artist || 'Unknown Artist'"></span>
+              </template>
+              <template x-if="col.key === 'album'">
+                <span x-text="track.album || ''"></span>
+              </template>
+              <template x-if="col.key === 'lastPlayed'">
+                <span x-text="formatRelativeTime(track.last_played)"></span>
+              </template>
+              <template x-if="col.key === 'dateAdded'">
+                <span x-text="formatRelativeTime(track.added_date)"></span>
+              </template>
+              <template x-if="col.key === 'playCount'">
+                <span x-text="track.play_count || 0"></span>
+              </template>
+              <template x-if="col.key === 'duration'">
+                <span x-text="formatDuration(track.duration)"></span>
+              </template>
+              <template x-if="col.key === 'year'">
+                <span x-text="track.date || ''"></span>
+              </template>
+              <template x-if="col.key === 'genre'">
+                <span x-text="track.genre || ''"></span>
+              </template>
+              <template x-if="col.key === 'trackTotal'">
+                <span x-text="track.track_total || ''"></span>
+              </template>
+              <template x-if="col.key === 'discNumber'">
+                <span x-text="track.disc_number || ''"></span>
+              </template>
+            </div>
+          </template>
+        </div>
+      </template>
+    </div>
+    </template>
+    <!-- Library view (non-playlist) - standard draggable rows for adding to playlists -->
+    <template x-if="!isInPlaylistView()">
+    <div class="library-track-list">
     <template x-for="(track, index) in library.filteredTracks" :key="track.id">
       <div
         class="grid border-b border-border/30 text-sm cursor-default transition-colors select-none"
-        :style="`grid-template-columns: ${getGridTemplateColumns()};` + (isDraggingTrack(index) ? ` transform: ${getTrackDragTransform(index)}; transition: none;` : '')"
+        :style="`grid-template-columns: ${getGridTemplateColumns()};`"
         :class="[
           isSelected(track.id) ? 'track-row-selected' : (index % 2 === 0 ? 'track-row-even' : 'track-row-odd'),
           isPlaying(track.id) && !isSelected(track.id) ? 'track-row-playing' : '',
-          !isSelected(track.id) && !isPlaying(track.id) ? 'hover:bg-muted/50' : '',
-          isDraggingTrack(index) ? 'bg-card shadow-lg z-10 relative' : '',
-          isOtherTrackDragging(index) ? 'opacity-50' : '',
-          getDragOverClass(index)
+          !isSelected(track.id) && !isPlaying(track.id) ? 'hover:bg-muted/50' : ''
         ]"
         :data-track-id="track.id"
         draggable="true"
@@ -176,15 +277,7 @@
           >
             <template x-if="col.key === 'status'">
               <span class="flex items-center justify-center w-full h-full">
-                <!-- In playlist view: show drag handle -->
-                <span
-                  x-show="isInPlaylistView() && !track.missing"
-                  class="drag-handle cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-foreground/70"
-                  @mousedown.prevent.stop="startPlaylistDrag(index, $event)"
-                  @touchstart.prevent.stop="startPlaylistDrag(index, $event)"
-                  @dblclick.stop
-                >⠿</span>
-                <!-- Missing track indicator (takes priority in playlist view too) -->
+                <!-- Missing track indicator -->
                 <button
                   x-show="track.missing"
                   @click.stop="$store.ui.openMissingTrackPopover(track, $event)"
@@ -201,7 +294,7 @@
               </span>
             </template>
             <template x-if="col.key === 'index'">
-              <span x-text="isInPlaylistView() ? (index + 1) : (track.track_number || '')"></span>
+              <span x-text="track.track_number || ''"></span>
             </template>
             <template x-if="col.key === 'title'">
               <span class="flex items-center">
@@ -243,8 +336,9 @@
         </template>
       </div>
     </template>
-        </div>
-      </div>
+    </div>
+    </template>
+  </div>
 
   <!-- Context menu -->
   <div

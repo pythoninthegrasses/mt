@@ -66,10 +66,6 @@ export function createLibraryBrowser(Alpine) {
     submenuY: 0,
     submenuCloseTimeout: null,
     currentPlaylistId: null,
-    draggingIndex: null,
-    dragOverIndex: null,
-    dragY: 0,
-    dragStartY: 0,
 
     resizingColumn: null,
     resizingNeighbor: null,
@@ -1567,146 +1563,39 @@ export function createLibraryBrowser(Alpine) {
       return this.$store.library.currentSection?.startsWith('playlist-') || this.currentPlaylistId !== null;
     },
 
-    startPlaylistDrag(index, event) {
-      if (!this.isInPlaylistView()) return;
-      event.preventDefault();
+    /**
+     * Handler for Alpine.js Sort plugin playlist track reordering
+     * Called when user completes a drag-drop operation in playlist view
+     *
+     * @param {number} itemKey - The x-sort:item key (original index) of dragged item
+     * @param {number} newPosition - New position (0-indexed)
+     */
+    async handlePlaylistTrackReorder(itemKey, newPosition) {
+      if (!this.isInPlaylistView() || !this.currentPlaylistId) return;
 
-      const rows = document.querySelectorAll('[data-track-id]');
-      const draggedRow = rows[index];
-      const rect = draggedRow?.getBoundingClientRect();
-      const startY = event.clientY || event.touches?.[0]?.clientY || 0;
+      const fromIdx = parseInt(itemKey, 10);
+      if (isNaN(fromIdx) || fromIdx === newPosition) return;
 
-      this.draggingIndex = index;
-      this.dragOverIndex = null;
-      this.dragY = startY;
-      this.dragStartY = rect ? rect.top + rect.height / 2 : startY;
-
-      const onMove = (e) => {
-        const y = e.clientY || e.touches?.[0]?.clientY;
-        if (y === undefined) return;
-        this.dragY = y;
-        this.updatePlaylistDragTarget(y);
-      };
-
-      const onEnd = () => {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onEnd);
-        document.removeEventListener('touchmove', onMove);
-        document.removeEventListener('touchend', onEnd);
-        this.finishPlaylistDrag();
-      };
-
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onEnd);
-      document.addEventListener('touchmove', onMove, { passive: true });
-      document.addEventListener('touchend', onEnd);
-    },
-
-    updatePlaylistDragTarget(y) {
-      const rows = document.querySelectorAll('[data-track-id]');
-      let newOverIdx = null;
-
-      for (let i = 0; i < rows.length; i++) {
-        if (i === this.draggingIndex) continue;
-        const rect = rows[i].getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
-        if (y < midY) {
-          newOverIdx = i;
-          break;
-        }
+      // Calculate backend position (API expects final position after removal)
+      let toPosition = newPosition;
+      if (fromIdx < newPosition) {
+        toPosition--;
       }
 
-      if (newOverIdx === null) {
-        newOverIdx = this.library.filteredTracks.length;
+      if (fromIdx === toPosition) return;
+
+      try {
+        await api.playlists.reorder(this.currentPlaylistId, fromIdx, toPosition);
+
+        // Refresh playlist data
+        const playlist = await api.playlists.get(this.currentPlaylistId);
+        const tracks = (playlist.tracks || []).map((item) => item.track);
+        this.library.tracks = tracks;
+        this.library.applyFilters();
+      } catch (error) {
+        console.error('[PlaylistTrackReorder] Failed to reorder playlist:', error);
+        this.$store.ui.toast('Failed to reorder tracks', 'error');
       }
-
-      if (newOverIdx > this.draggingIndex) {
-        newOverIdx = Math.min(newOverIdx, this.library.filteredTracks.length);
-      }
-
-      this.dragOverIndex = newOverIdx;
-    },
-
-    async finishPlaylistDrag() {
-      if (
-        this.draggingIndex !== null && this.dragOverIndex !== null &&
-        this.draggingIndex !== this.dragOverIndex
-      ) {
-        let toPosition = this.dragOverIndex;
-        if (this.draggingIndex < toPosition) {
-          toPosition--;
-        }
-
-        if (this.draggingIndex !== toPosition) {
-          try {
-            await api.playlists.reorder(this.currentPlaylistId, this.draggingIndex, toPosition);
-
-            const playlist = await api.playlists.get(this.currentPlaylistId);
-            const tracks = (playlist.tracks || []).map((item) => item.track);
-            this.library.tracks = tracks;
-            this.library.applyFilters();
-          } catch (error) {
-            console.error('[PlaylistDrag] Failed to reorder playlist:', error);
-            this.$store.ui.toast('Failed to reorder tracks', 'error');
-          }
-        }
-      }
-
-      this.draggingIndex = null;
-      this.dragOverIndex = null;
-    },
-
-    isDraggingTrack(index) {
-      return this.draggingIndex === index;
-    },
-
-    isOtherTrackDragging(index) {
-      return this.draggingIndex !== null && this.draggingIndex !== index;
-    },
-
-    getTrackDragTransform(index) {
-      if (this.draggingIndex !== index) return '';
-
-      const offsetY = this.dragY - this.dragStartY;
-      return `translateY(${offsetY}px)`;
-    },
-
-    getDragOverClass(index) {
-      if (this.draggingIndex === null || this.dragOverIndex === null) return '';
-      if (index === this.draggingIndex) return '';
-
-      const classes = [];
-
-      // Add translation classes for items between drag source and target
-      if (this.draggingIndex < this.dragOverIndex) {
-        if (index > this.draggingIndex && index < this.dragOverIndex) {
-          classes.push('translate-y-[-100%]');
-        }
-      } else {
-        if (index >= this.dragOverIndex && index < this.draggingIndex) {
-          classes.push('translate-y-[100%]');
-        }
-      }
-
-      // Add drop indicator class (shows a line where the item will be inserted)
-      // Only show if actual reorder would happen (i.e., adjusted position differs)
-      let adjustedToPosition = this.dragOverIndex;
-      if (this.draggingIndex < this.dragOverIndex) {
-        adjustedToPosition = this.dragOverIndex - 1;
-      }
-      const wouldReorder = this.draggingIndex !== adjustedToPosition;
-
-      // Show indicator ABOVE this row if dragOverIndex equals this row's index
-      if (wouldReorder && index === this.dragOverIndex && this.dragOverIndex !== this.draggingIndex) {
-        classes.push('playlist-drop-indicator-above');
-      }
-      // Show indicator BELOW the last row if dragging to the end
-      const trackCount = this.library?.filteredTracks?.length || 0;
-      if (wouldReorder && index === trackCount - 1 && this.dragOverIndex === trackCount) {
-        classes.push('playlist-drop-indicator-below');
-      }
-
-      return classes.join(' ');
     },
   }));
 }

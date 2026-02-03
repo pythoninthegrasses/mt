@@ -2509,7 +2509,7 @@ test.describe('Playlist Feature Parity - Library Browser (task-150)', () => {
     await expect(removeFromLibrary).toBeVisible();
   });
 
-  test('AC#6: drag reorder in playlist view shows drag handle and sets state', async ({ page }) => {
+  test('AC#6: drag reorder in playlist view shows drag handle and uses x-sort', async ({ page }) => {
     // Navigate to playlist view
     await page.evaluate(() => {
       const libraryBrowser = window.Alpine.$data(document.querySelector('[x-data="libraryBrowser"]'));
@@ -2518,7 +2518,7 @@ test.describe('Playlist Feature Parity - Library Browser (task-150)', () => {
 
     await page.waitForSelector('[data-track-id]', { state: 'visible' });
 
-    const dragHandle = page.locator('[data-track-id] .cursor-grab').first();
+    const dragHandle = page.locator('[data-track-id] .drag-handle').first();
     await expect(dragHandle).toBeVisible();
 
     const isInPlaylistView = await page.evaluate(() => {
@@ -2527,19 +2527,19 @@ test.describe('Playlist Feature Parity - Library Browser (task-150)', () => {
     });
     expect(isInPlaylistView).toBe(true);
 
-    // Click on the drag handle itself to trigger drag state
-    const dragHandleBox = await dragHandle.boundingBox();
-    await page.mouse.move(dragHandleBox.x + dragHandleBox.width / 2, dragHandleBox.y + dragHandleBox.height / 2);
-    await page.mouse.down();
-
-    const draggingIndex = await page.evaluate(() => {
-      const libraryBrowser = window.Alpine.$data(document.querySelector('[x-data="libraryBrowser"]'));
-      return libraryBrowser.draggingIndex;
+    // Verify x-sort container is present in playlist view
+    const hasXSort = await page.evaluate(() => {
+      const sortContainer = document.querySelector('.playlist-track-sortable');
+      return sortContainer !== null && sortContainer.hasAttribute('x-sort');
     });
+    expect(hasXSort).toBe(true);
 
-    expect(draggingIndex).toBe(0);
-
-    await page.mouse.up();
+    // Verify x-sort:item is present on track rows
+    const hasXSortItem = await page.evaluate(() => {
+      const trackRow = document.querySelector('[data-track-id][x-sort\\:item]');
+      return trackRow !== null;
+    });
+    expect(hasXSortItem).toBe(true);
   });
 
   test('submenu flips to left side when near right viewport edge', async ({ page }) => {
