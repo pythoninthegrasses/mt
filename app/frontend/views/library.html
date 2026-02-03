@@ -15,25 +15,23 @@
           :class="{ 'resizing-columns': resizingColumn }"
           :style="`grid-template-columns: ${getGridTemplateColumns()}`"
           @contextmenu.prevent="handleHeaderContextMenu($event)"
+          x-sort="handleColumnReorder"
+          x-sort:config="{ animation: 150, ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen', forceFallback: true, filter: '.column-resizer-left, .column-resizer-right' }"
         >
         <template x-for="(col, colIndex) in columns" :key="col.key">
           <div
+            x-sort:item
+            x-init="$el._x_sort_key = col.key"
             :class="[
               'column-header-cell',
               col.sortable ? 'cursor-grab' : '',
               library.sortBy === col.key ? 'column-header-active text-foreground' : '',
-              colIndex < columns.length - 1 ? 'border-r border-border' : '',
-              col.key === 'status' ? 'px-1' : (col.key === 'index' ? 'px-2' : (col.key === 'duration' ? 'pl-[3px] pr-[10px]' : 'px-4')),
-              isColumnDragging(col.key) ? 'dragging-column' : '',
-              isOtherColumnDragging(col.key) ? 'other-dragging' : '',
-              getColumnShiftDirection(colIndex) === 'left' ? 'shift-left' : '',
-              getColumnShiftDirection(colIndex) === 'right' ? 'shift-right' : ''
+              colIndex < columns.length - 1 ? 'border-r border-border' : ''
             ]"
+            :style="col.key === 'status' ? 'padding-left: 0.25rem; padding-right: 0.25rem;' : (col.key === 'index' ? 'padding-left: 0.5rem; padding-right: 0.5rem;' : (col.key === 'duration' ? 'padding-left: 3px; padding-right: 10px;' : 'padding-left: 1rem; padding-right: 1rem;'))"
             class="py-2 select-none flex items-center relative overflow-visible"
             :title="col.key === 'index' ? (isInPlaylistView() ? 'Position' : '#') : (col.label || '')"
-            :style="isColumnDragging(col.key) ? 'transform:' + getColumnDragTransform(col.key) + '; z-index: 50;' : ''"
-            @mousedown="if (!$event.target.closest('.column-resizer-left') && !$event.target.closest('.column-resizer-right')) startColumnDrag(col, $event)"
-            @click="if (!draggingColumnKey && !wasResizing && !wasColumnDragging) handleSort(col.key)"
+            @click="if (!wasResizing && !wasColumnDragging) handleSort(col.key)"
           >
             <span x-text="col.key === 'index' ? (isInPlaylistView() ? 'Position' : col.label) : col.label" class="truncate"></span>
             <span

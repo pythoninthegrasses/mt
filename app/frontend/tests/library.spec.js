@@ -1618,23 +1618,28 @@ test.describe('Column Customization', () => {
     expect(rowWidth).toBeGreaterThanOrEqual(containerWidth);
   });
 
-  test('should not flash column drag state on single click', async ({ page }) => {
-    const titleHeader = page.locator('[data-testid="library-header"] > div').filter({ hasText: 'Title' }).first();
-    
-    const hasDraggingBefore = await page.evaluate(() => {
-      const el = document.querySelector('[x-data="libraryBrowser"]');
-      return window.Alpine.$data(el).draggingColumnKey;
-    });
-    expect(hasDraggingBefore).toBeNull();
+  test('AC#11: column header uses x-sort for reordering', async ({ page }) => {
+    // Verify x-sort directive is present on header container
+    const headerContainer = page.locator('[data-testid="library-header"]');
+    await expect(headerContainer).toHaveAttribute('x-sort', 'handleColumnReorder');
 
-    await titleHeader.click();
+    // Verify x-sort:config includes filter for resize handles
+    const xSortConfig = await headerContainer.getAttribute('x-sort:config');
+    expect(xSortConfig).toContain('filter');
+    expect(xSortConfig).toContain('.column-resizer-left');
+    expect(xSortConfig).toContain('.column-resizer-right');
+
+    // Verify column header cells have x-sort:item attribute (rendered from x-for template)
+    const columnHeaders = page.locator('[data-testid="library-header"] div.column-header-cell[x-sort\\:item]');
+    const count = await columnHeaders.count();
+    expect(count).toBeGreaterThan(0);
+
+    // Verify clicking still triggers sort (not blocked by x-sort)
+    const artistHeader = page.locator('[data-testid="library-header"]').locator('div.column-header-cell').filter({ hasText: 'Artist' }).first();
+    await artistHeader.click();
     await page.waitForTimeout(50);
-
-    const hasDraggingAfter = await page.evaluate(() => {
-      const el = document.querySelector('[x-data="libraryBrowser"]');
-      return window.Alpine.$data(el).draggingColumnKey;
-    });
-    expect(hasDraggingAfter).toBeNull();
+    const newSortBy = await page.evaluate(() => window.Alpine.store('library').sortBy);
+    expect(newSortBy).toBe('artist');
   });
 
   test('should not trigger sort when resizing column', async ({ page }) => {
@@ -1876,7 +1881,9 @@ test.describe('Column Customization', () => {
     expect(componentData.columnVisibility.artist).toBe(true);
   });
 
-  test('should reorder columns by dragging', async ({ page }) => {
+  test('should reorder columns via handleColumnReorder callback', async ({ page }) => {
+    // Test the x-sort callback directly since SortableJS drag events
+    // don't trigger via Playwright mouse simulation with forceFallback: true
     const headerRow = page.locator('[data-testid="library-header"]');
     await expect(headerRow).toBeVisible();
 
@@ -1891,18 +1898,16 @@ test.describe('Column Customization', () => {
     const albumIdx = initialOrder.indexOf('album');
     expect(artistIdx).toBeLessThan(albumIdx);
 
-    const artistHeader = headerRow.locator('div').filter({ hasText: 'Artist' }).first();
-    const albumHeader = headerRow.locator('div').filter({ hasText: 'Album' }).first();
-    
-    const artistBox = await artistHeader.boundingBox();
-    const albumBox = await albumHeader.boundingBox();
+    // Invoke the x-sort callback directly: move 'artist' column to album's position
+    await page.evaluate(() => {
+      const el = document.querySelector('[x-data="libraryBrowser"]');
+      const component = window.Alpine.$data(el);
+      // handleColumnReorder(itemKey, newPosition) - move artist to album's position
+      const albumPosition = component.columns.findIndex(c => c.key === 'album');
+      component.handleColumnReorder('artist', albumPosition);
+    });
 
-    await page.mouse.move(artistBox.x + artistBox.width / 2, artistBox.y + artistBox.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(albumBox.x + albumBox.width - 10, albumBox.y + albumBox.height / 2, { steps: 5 });
-    await page.mouse.up();
-
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(50);
 
     const newOrder = await page.evaluate(() => {
       const el = document.querySelector('[x-data="libraryBrowser"]');
@@ -1914,11 +1919,13 @@ test.describe('Column Customization', () => {
     expect(newArtistIdx).toBeGreaterThan(newAlbumIdx);
   });
 
-  test('should not overshoot when dragging column back to original position', async ({ page }) => {
+  test('should correctly reorder columns in both directions via callback', async ({ page }) => {
+    // Test the x-sort callback handles bidirectional moves correctly
+    // (SortableJS drag events don't trigger via Playwright with forceFallback: true)
     const headerRow = page.locator('[data-testid="library-header"]');
     await expect(headerRow).toBeVisible();
 
-    // Get initial order: [#, Title, Artist, Album, Time]
+    // Get initial order and save original artist/album positions
     const initialOrder = await page.evaluate(() => {
       const el = document.querySelector('[x-data="libraryBrowser"]');
       return window.Alpine.$data(el).columns.map(c => c.key);
@@ -1928,20 +1935,16 @@ test.describe('Column Customization', () => {
     const initialAlbumIdx = initialOrder.indexOf('album');
     expect(initialArtistIdx).toBeLessThan(initialAlbumIdx);
 
-    // Step 1: Drag Album left to swap with Artist
-    const albumHeader1 = headerRow.locator('div').filter({ hasText: 'Album' }).first();
-    const artistHeader1 = headerRow.locator('div').filter({ hasText: 'Artist' }).first();
+    // Step 1: Move Album left to position before Artist
+    await page.evaluate(() => {
+      const el = document.querySelector('[x-data="libraryBrowser"]');
+      const component = window.Alpine.$data(el);
+      const artistPosition = component.columns.findIndex(c => c.key === 'artist');
+      component.handleColumnReorder('album', artistPosition);
+    });
+    await page.waitForTimeout(50);
 
-    const albumBox1 = await albumHeader1.boundingBox();
-    const artistBox1 = await artistHeader1.boundingBox();
-
-    await page.mouse.move(albumBox1.x + albumBox1.width / 2, albumBox1.y + albumBox1.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(artistBox1.x + 10, artistBox1.y + artistBox1.height / 2, { steps: 5 });
-    await page.mouse.up();
-    await page.waitForTimeout(100);
-
-    // Verify Album is now before Artist: [#, Title, Album, Artist, Time]
+    // Verify Album is now before Artist
     const orderAfterStep1 = await page.evaluate(() => {
       const el = document.querySelector('[x-data="libraryBrowser"]');
       return window.Alpine.$data(el).columns.map(c => c.key);
@@ -1950,22 +1953,16 @@ test.describe('Column Customization', () => {
     const artistIdxStep1 = orderAfterStep1.indexOf('artist');
     expect(albumIdxStep1).toBeLessThan(artistIdxStep1);
 
-    // Step 2: Drag Album back right to swap with Artist (return to original position)
-    // This tests the bug fix - Album should not overshoot and jump over Time
-    const albumHeader2 = headerRow.locator('div').filter({ hasText: 'Album' }).first();
-    const artistHeader2 = headerRow.locator('div').filter({ hasText: 'Artist' }).first();
+    // Step 2: Move Artist left (to original position) which puts it before Album again
+    await page.evaluate(() => {
+      const el = document.querySelector('[x-data="libraryBrowser"]');
+      const component = window.Alpine.$data(el);
+      const albumPosition = component.columns.findIndex(c => c.key === 'album');
+      component.handleColumnReorder('artist', albumPosition);
+    });
+    await page.waitForTimeout(50);
 
-    const albumBox2 = await albumHeader2.boundingBox();
-    const artistBox2 = await artistHeader2.boundingBox();
-
-    await page.mouse.move(albumBox2.x + albumBox2.width / 2, albumBox2.y + albumBox2.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(artistBox2.x + artistBox2.width - 10, artistBox2.y + artistBox2.height / 2, { steps: 5 });
-    await page.mouse.up();
-    await page.waitForTimeout(100);
-
-    // Verify we're back to original order: [#, Title, Artist, Album, Time]
-    // Album should be right after Artist, NOT after Time (which would be overshooting)
+    // Verify Artist is now before Album again (restored to original order)
     const finalOrder = await page.evaluate(() => {
       const el = document.querySelector('[x-data="libraryBrowser"]');
       return window.Alpine.$data(el).columns.map(c => c.key);
@@ -1973,14 +1970,12 @@ test.describe('Column Customization', () => {
 
     const finalArtistIdx = finalOrder.indexOf('artist');
     const finalAlbumIdx = finalOrder.indexOf('album');
-    const finalDurationIdx = finalOrder.indexOf('duration');
 
-    // Artist should be before Album
+    // Artist should be before Album (back to original order)
     expect(finalArtistIdx).toBeLessThan(finalAlbumIdx);
-    // Album should be before Time/Duration (not after it - that would be overshooting)
-    expect(finalAlbumIdx).toBeLessThan(finalDurationIdx);
-    // Verify exact positions: Artist at original-1, Album at original (since we moved left then right)
-    expect(finalAlbumIdx - finalArtistIdx).toBe(1);
+    // Positions should match original
+    expect(finalArtistIdx).toBe(initialArtistIdx);
+    expect(finalAlbumIdx).toBe(initialAlbumIdx);
   });
 
   test('should persist column order to localStorage', async ({ page }) => {
@@ -2044,58 +2039,20 @@ test.describe('Column Customization', () => {
     expect(artistIdxAfter).toBeLessThan(albumIdxAfter);
   });
 
-  test('should show visual feedback during column drag', async ({ page }) => {
+  test('should show x-sort visual feedback during column drag', async ({ page }) => {
     const headerRow = page.locator('[data-testid="library-header"]');
     await expect(headerRow).toBeVisible();
 
-    // Get artist header element
-    const artistHeader = headerRow.locator('div.column-header-cell').filter({ hasText: 'Artist' }).first();
-    const albumHeader = headerRow.locator('div.column-header-cell').filter({ hasText: 'Album' }).first();
+    // Verify x-sort:config includes ghost and chosen classes
+    const xSortConfig = await headerRow.getAttribute('x-sort:config');
+    expect(xSortConfig).toContain('ghostClass');
+    expect(xSortConfig).toContain('sortable-ghost');
+    expect(xSortConfig).toContain('chosenClass');
+    expect(xSortConfig).toContain('sortable-chosen');
+    expect(xSortConfig).toContain('animation');
 
-    const artistBox = await artistHeader.boundingBox();
-
-    // Verify no drag state initially
-    const initialDragState = await page.evaluate(() => {
-      const el = document.querySelector('[x-data="libraryBrowser"]');
-      return window.Alpine.$data(el).draggingColumnKey;
-    });
-    expect(initialDragState).toBeNull();
-
-    // Start drag (mousedown + move to trigger drag state)
-    await page.mouse.move(artistBox.x + artistBox.width / 2, artistBox.y + artistBox.height / 2);
-    await page.mouse.down();
-    // Move more than 5px to trigger drag state
-    await page.mouse.move(artistBox.x + artistBox.width / 2 + 50, artistBox.y + artistBox.height / 2, { steps: 3 });
-
-    // Verify dragging state is set
-    const draggingKey = await page.evaluate(() => {
-      const el = document.querySelector('[x-data="libraryBrowser"]');
-      return window.Alpine.$data(el).draggingColumnKey;
-    });
-    expect(draggingKey).toBe('artist');
-
-    // Verify visual feedback class is applied to dragging column
-    const hasDraggingClass = await artistHeader.evaluate(el => el.classList.contains('dragging-column'));
-    expect(hasDraggingClass).toBe(true);
-
-    // Verify other columns have other-dragging class
-    const hasOtherDraggingClass = await albumHeader.evaluate(el => el.classList.contains('other-dragging'));
-    expect(hasOtherDraggingClass).toBe(true);
-
-    // Release mouse
-    await page.mouse.up();
-
-    // Verify drag state is cleared
-    await page.waitForTimeout(50);
-    const finalDragState = await page.evaluate(() => {
-      const el = document.querySelector('[x-data="libraryBrowser"]');
-      return window.Alpine.$data(el).draggingColumnKey;
-    });
-    expect(finalDragState).toBeNull();
-
-    // Verify dragging-column class is removed
-    const hasDraggingClassAfter = await artistHeader.evaluate(el => el.classList.contains('dragging-column'));
-    expect(hasDraggingClassAfter).toBe(false);
+    // Verify forceFallback is enabled for Tauri compatibility
+    expect(xSortConfig).toContain('forceFallback');
   });
 });
 
