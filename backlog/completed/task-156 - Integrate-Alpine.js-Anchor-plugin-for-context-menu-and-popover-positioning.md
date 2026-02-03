@@ -1,10 +1,10 @@
 ---
 id: task-156
 title: Integrate Alpine.js Anchor plugin for context menu and popover positioning
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-01-16 22:19'
-updated_date: '2026-01-19 06:12'
+updated_date: '2026-02-03 05:51'
 labels:
   - frontend
   - alpine.js
@@ -212,4 +212,6 @@ This is **lower priority** because:
 2. Find element-anchored dropdown (not mouse-position menu) (15-20 min)
 3. Implement x-anchor on one component (20-30 min)
 4. Compare with basecoat and document (20-30 min)
+
+Task closed without implementation. Mouse-position context menus still require manual X/Y coordinates, and basecoat already provides adequate popover positioning. The effort did not justify the limited benefit.
 <!-- SECTION:NOTES:END -->

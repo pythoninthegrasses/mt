@@ -4,9 +4,12 @@ title: Implement cross-platform support
 status: To Do
 assignee: []
 created_date: '2025-09-17 04:10'
-updated_date: '2026-01-26 01:32'
+updated_date: '2026-02-03 05:58'
 labels: []
-dependencies: []
+dependencies:
+  - task-108
+  - task-109
+  - task-021
 ordinal: 37000
 ---
 

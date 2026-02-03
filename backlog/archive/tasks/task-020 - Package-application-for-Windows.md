@@ -4,7 +4,7 @@ title: Package application for Windows
 status: To Do
 assignee: []
 created_date: '2025-09-17 04:10'
-updated_date: '2026-01-10 05:55'
+updated_date: '2026-02-03 05:49'
 labels: []
 dependencies: []
 ordinal: 17000
@@ -24,3 +24,9 @@ Create Windows distributable packages and ensure compatibility
 - [ ] #4 Test Windows compatibility and performance
 - [ ] #5 Document Windows-specific requirements
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Superseded by task-109 which has detailed Tauri-specific Windows support requirements.
+<!-- SECTION:NOTES:END -->

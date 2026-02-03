@@ -1,10 +1,10 @@
 ---
 id: task-159
 title: Implement browser WebAudio fallback for playback
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-01-17 00:15'
-updated_date: '2026-01-19 00:41'
+updated_date: '2026-02-03 05:51'
 labels:
   - frontend
   - backend
@@ -71,3 +71,9 @@ In `player.js`, detect `window.__TAURI__`:
 - [ ] #7 Volume control works in browser
 - [ ] #8 No changes to Tauri playback path
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Task closed without implementation. Browser WebAudio fallback was a dev-experience enhancement but not critical for production. Development and testing continue via Tauri dev mode.
+<!-- SECTION:NOTES:END -->

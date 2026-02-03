@@ -1,10 +1,10 @@
 ---
 id: task-153
 title: Integrate Alpine.js Sort plugin to replace custom drag-and-drop implementation
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-01-16 22:19'
-updated_date: '2026-01-19 06:12'
+updated_date: '2026-02-03 06:49'
 labels:
   - frontend
   - alpine.js
@@ -211,12 +211,35 @@ export function createNowPlayingView(Alpine) {
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Install and register @alpinejs/sort plugin
-- [ ] #2 Replace custom drag-and-drop code with x-sort directive
-- [ ] #3 Implement handleReorder callback for queue reordering
-- [ ] #4 Maintain current index tracking during reorder
+- [x] #1 Install and register @alpinejs/sort plugin
+- [x] #2 Replace custom drag-and-drop code with x-sort directive
+- [x] #3 Implement handleReorder callback for queue reordering
+- [x] #4 Maintain current index tracking during reorder
 - [ ] #5 Remove all bespoke drag state variables and methods
 - [ ] #6 Verify touch/mobile drag-and-drop works correctly
-- [ ] #7 All queue reorder Playwright tests pass
-- [ ] #8 Visual drag feedback matches or improves current UX
+- [x] #7 All queue reorder Playwright tests pass
+- [x] #8 Visual drag feedback matches or improves current UX
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Phase 1 Complete: Queue Reordering (2026-02-03)
+
+### Changes Made
+- Replaced ~195 lines of custom drag-drop code with Alpine.js Sort plugin (~15 lines)
+- Added `forceFallback: true` config to bypass Tauri's native drag-drop interception
+- Fixed race condition in `queue.reorder()` - added `_updating` guard to prevent backend events from overwriting local state
+- Added `typeof item !== 'undefined'` guards in now-playing.html to handle SortableJS clone elements (fallback mode clones are outside x-for scope)
+- Added optional chaining `Alpine.store('player')?.stop()` to fix startup race condition
+
+### Technical Notes
+- SortableJS `forceFallback: true` creates DOM clones outside Alpine's x-for scope
+- Clone elements trigger `x-init` but have no access to loop variables
+- Solution: Store item data in `$el._itemData` during init, fall back to it in bindings
+
+### Tests Passing
+- 223 Vitest unit tests
+- 5 queue E2E tests
+- 18 drag-and-drop E2E tests
+<!-- SECTION:NOTES:END -->
