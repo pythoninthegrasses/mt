@@ -9,6 +9,7 @@
 >
   <div class="absolute inset-0 bg-black/50" @click="close()"></div>
   <div
+    x-trap.noscroll.inert="isOpen"
     class="relative bg-card border border-border rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-hidden flex flex-col"
     @click.stop
   >
@@ -251,6 +252,7 @@
 >
   <div
     x-show="$store.ui.missingTrackPopover"
+    x-trap="$store.ui.missingTrackPopover"
     x-transition:enter="transition ease-out duration-150"
     x-transition:enter-start="opacity-0 scale-95"
     x-transition:enter-end="opacity-100 scale-100"
@@ -315,6 +317,7 @@
 >
   <div
     x-show="$store.ui.missingTrackModal"
+    x-trap.noscroll.inert="$store.ui.missingTrackModal"
     x-transition:enter="transition ease-out duration-200"
     x-transition:enter-start="opacity-0 scale-95"
     x-transition:enter-end="opacity-100 scale-100"

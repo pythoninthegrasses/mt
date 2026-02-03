@@ -165,6 +165,7 @@
       <!-- Playlist Context Menu -->
       <div
         x-show="contextMenuPlaylist"
+        x-trap="contextMenuPlaylist"
         x-cloak
         @click.away="hidePlaylistContextMenu()"
         @keydown.escape.window="hidePlaylistContextMenu()"
