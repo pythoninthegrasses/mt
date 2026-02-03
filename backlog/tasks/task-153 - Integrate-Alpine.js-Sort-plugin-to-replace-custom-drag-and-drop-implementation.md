@@ -4,7 +4,7 @@ title: Integrate Alpine.js Sort plugin to replace custom drag-and-drop implement
 status: In Progress
 assignee: []
 created_date: '2026-01-16 22:19'
-updated_date: '2026-02-03 06:49'
+updated_date: '2026-02-03 07:02'
 labels:
   - frontend
   - alpine.js
@@ -215,10 +215,14 @@ export function createNowPlayingView(Alpine) {
 - [x] #2 Replace custom drag-and-drop code with x-sort directive
 - [x] #3 Implement handleReorder callback for queue reordering
 - [x] #4 Maintain current index tracking during reorder
-- [ ] #5 Remove all bespoke drag state variables and methods
-- [ ] #6 Verify touch/mobile drag-and-drop works correctly
+- [x] #5 Remove all bespoke drag state variables and methods
+- [x] #6 Verify touch/mobile drag-and-drop works correctly
 - [x] #7 All queue reorder Playwright tests pass
 - [x] #8 Visual drag feedback matches or improves current UX
+
+- [ ] #9 #9 Phase 2: Migrate playlist track reordering (views/playlist.html) to x-sort
+- [ ] #10 #10 Phase 3: Migrate sidebar playlist reordering (views/sidebar.html) to x-sort
+- [ ] #11 #11 Phase 4: Migrate library column header reordering (components/library-table.html) to x-sort
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -242,4 +246,19 @@ export function createNowPlayingView(Alpine) {
 - 223 Vitest unit tests
 - 5 queue E2E tests
 - 18 drag-and-drop E2E tests
+
+## Phase 2-4 Migration Pattern
+
+Remaining views to migrate:
+| Phase | Component | View/File | Drag Behavior |
+|-------|-----------|-----------|---------------|
+| 2 | Playlist Tracks | views/playlist.html | Reorder tracks within a playlist |
+| 3 | Sidebar Playlists | views/sidebar.html | Reorder playlists in sidebar |
+| 4 | Column Headers | components/library-table.html | Reorder table columns |
+
+Each follows the same pattern established in Phase 1:
+- Add `x-sort` directive with handler callback
+- Add `x-sort:item` to draggable elements
+- Use `forceFallback: true` for Tauri compatibility
+- Guard against clone scope issues with `typeof` checks
 <!-- SECTION:NOTES:END -->
