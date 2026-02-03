@@ -2,6 +2,7 @@ import Alpine from 'alpinejs';
 import persist from '@alpinejs/persist';
 import intersect from '@alpinejs/intersect';
 import focus from '@alpinejs/focus';
+import sort from '@alpinejs/sort';
 import { initStores } from './js/stores/index.js';
 import { initComponents } from './js/components/index.js';
 import api from './js/api.js';
@@ -13,6 +14,7 @@ import './styles.css';
 Alpine.plugin(persist);
 Alpine.plugin(intersect);
 Alpine.plugin(focus);
+Alpine.plugin(sort);
 
 window.Alpine = Alpine;
 
