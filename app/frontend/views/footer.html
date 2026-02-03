@@ -7,7 +7,7 @@
     <!-- Left: Transport controls -->
     <div class="flex items-stretch h-full">
       <button
-        class="px-1 text-[#8E8E93] hover:text-foreground hover:bg-muted/50 transition-colors flex items-center"
+        class="px-1 text-[#8E8E93] hover:text-foreground transition-colors flex items-center"
         :class="!hasTrack && 'opacity-40'"
         @click="previous()"
         :disabled="!hasTrack"
@@ -20,7 +20,7 @@
       </button>
 
       <button
-        class="px-1 text-[#8E8E93] hover:text-foreground hover:bg-muted/50 transition-colors flex items-center"
+        class="px-1 text-[#8E8E93] hover:text-foreground transition-colors flex items-center"
         @click="togglePlay()"
         title="Play/Pause"
         data-testid="player-playpause"
@@ -38,7 +38,7 @@
       </button>
 
       <button
-        class="px-1 text-[#8E8E93] hover:text-foreground hover:bg-muted/50 transition-colors flex items-center"
+        class="px-1 text-[#8E8E93] hover:text-foreground transition-colors flex items-center"
         :class="!hasTrack && 'opacity-40'"
         @click="next()"
         :disabled="!hasTrack"
