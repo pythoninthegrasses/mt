@@ -1,8 +1,10 @@
 {
   "version": "5",
   "specifiers": {
+    "npm:@alpinejs/focus@^3.15.8": "3.15.8",
     "npm:@alpinejs/intersect@^3.15.4": "3.15.5",
     "npm:@alpinejs/persist@^3.15.4": "3.15.5",
+    "npm:@alpinejs/sort@^3.15.8": "3.15.8",
     "npm:@fast-check/vitest@~0.2.4": "0.2.4_vitest@4.0.18__jsdom@27.4.0__vite@6.4.1___picomatch@4.0.3_jsdom@27.4.0",
     "npm:@playwright/test@^1.57.0": "1.58.0",
     "npm:@tailwindcss/vite@4": "4.1.18_vite@6.4.1__picomatch@4.0.3",
@@ -24,11 +26,21 @@
     "@acemir/cssom@0.9.31": {
       "integrity": "sha512-ZnR3GSaH+/vJ0YlHau21FjfLYjMpYVIzTD8M8vIEQvIGxeOXyXdzCI140rrCY862p/C/BbzWsjc1dgnM9mkoTA=="
     },
+    "@alpinejs/focus@3.15.8": {
+      "integrity": "sha512-YPF7jtaMFqrWI7xLjathWe/Hi/dXLReGoeZZxJZCW6pgmbFaVKqUFhl3DA+kUPSYsEhh9xk2wr9yoTZ2aB8xew==",
+      "dependencies": [
+        "focus-trap",
+        "tabbable"
+      ]
+    },
     "@alpinejs/intersect@3.15.5": {
       "integrity": "sha512-O4Xq4RZE5JFQ1zLxfKkQsgmkMKs2YZ5FDW62bjVtK8t06F3/gq6VTT7RQiCIF+HN3Tv6paCyAvxo2K7CjqYgQw=="
     },
     "@alpinejs/persist@3.15.5": {
       "integrity": "sha512-COUYM1ji0tvWkj4jL0Ov7vI8jgenzm6V9l7cWuKlLpkCjuXpP6opwubkc319hjhT+CKQZMA5HvrsJIqaC0/0sQ=="
+    },
+    "@alpinejs/sort@3.15.8": {
+      "integrity": "sha512-m+bfzlSgC8u9Q8kDjVb+0DnFWxERYLGC4MarlRMdz5KpSp5OZwx42o0j87ceRfD6PBIwsrA/uGOfN3oj1J/JmQ=="
     },
     "@asamuzakjp/css-color@4.1.1_@csstools+css-parser-algorithms@3.0.5__@csstools+css-tokenizer@3.0.4_@csstools+css-tokenizer@3.0.4": {
       "integrity": "sha512-B0Hv6G3gWGMn0xKJ0txEi/jM5iFpT3MfDxmhZFb4W047GvytCf1DHQ1D69W3zHI4yWe2aTZAA0JnbMZ7Xc8DuQ==",
@@ -1002,6 +1014,12 @@
         "picomatch"
       ]
     },
+    "focus-trap@6.9.4": {
+      "integrity": "sha512-v2NTsZe2FF59Y+sDykKY+XjqZ0cPfhq/hikWVL88BqLivnNiEffAsac6rP6H45ff9wG9LL5ToiDqrLEP9GX9mw==",
+      "dependencies": [
+        "tabbable"
+      ]
+    },
     "fsevents@2.3.2": {
       "integrity": "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==",
       "os": ["darwin"],
@@ -1338,6 +1356,9 @@
     "symbol-tree@3.2.4": {
       "integrity": "sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw=="
     },
+    "tabbable@5.3.3": {
+      "integrity": "sha512-QD9qKY3StfbZqWOPLp0++pOrAVb/HbUi5xCc8cUo4XjP19808oaMiDzn0leBY5mCespIBM0CIZePzZjgzR83kA=="
+    },
     "tailwindcss@4.1.18": {
       "integrity": "sha512-4+Z+0yiYyEtUVCScyfHCxOYP06L5Ne+JiHhY2IjR2KWMIWhJOYZKLSGZaP5HkZ8+bY0cxfzwDE5uOmzFXyIwxw=="
     },
@@ -1501,8 +1522,10 @@
       "app/frontend": {
         "packageJson": {
           "dependencies": [
+            "npm:@alpinejs/focus@^3.15.8",
             "npm:@alpinejs/intersect@^3.15.4",
             "npm:@alpinejs/persist@^3.15.4",
+            "npm:@alpinejs/sort@^3.15.8",
             "npm:@fast-check/vitest@~0.2.4",
             "npm:@playwright/test@^1.57.0",
             "npm:@tailwindcss/vite@4",
