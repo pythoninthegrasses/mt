@@ -1,10 +1,10 @@
 ---
 id: task-153
 title: Integrate Alpine.js Sort plugin to replace custom drag-and-drop implementation
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-01-16 22:19'
-updated_date: '2026-02-03 07:02'
+updated_date: '2026-02-04 05:03'
 labels:
   - frontend
   - alpine.js
@@ -12,7 +12,7 @@ labels:
   - tech-debt
 dependencies: []
 priority: high
-ordinal: 1531.25
+ordinal: 13375
 ---
 
 ## Description
@@ -211,14 +211,14 @@ export function createNowPlayingView(Alpine) {
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [x] #1 Install and register @alpinejs/sort plugin
-- [x] #2 Replace custom drag-and-drop code with x-sort directive
-- [x] #3 Implement handleReorder callback for queue reordering
-- [x] #4 Maintain current index tracking during reorder
-- [x] #5 Remove all bespoke drag state variables and methods
-- [x] #6 Verify touch/mobile drag-and-drop works correctly
-- [x] #7 All queue reorder Playwright tests pass
-- [x] #8 Visual drag feedback matches or improves current UX
+- [ ] #1 Install and register @alpinejs/sort plugin
+- [ ] #2 Replace custom drag-and-drop code with x-sort directive
+- [ ] #3 Implement handleReorder callback for queue reordering
+- [ ] #4 Maintain current index tracking during reorder
+- [ ] #5 Remove all bespoke drag state variables and methods
+- [ ] #6 Verify touch/mobile drag-and-drop works correctly
+- [ ] #7 All queue reorder Playwright tests pass
+- [ ] #8 Visual drag feedback matches or improves current UX
 
 - [ ] #9 #9 Phase 2: Migrate playlist track reordering (views/playlist.html) to x-sort
 - [ ] #10 #10 Phase 3: Migrate sidebar playlist reordering (views/sidebar.html) to x-sort
@@ -261,4 +261,8 @@ Each follows the same pattern established in Phase 1:
 - Add `x-sort:item` to draggable elements
 - Use `forceFallback: true` for Tauri compatibility
 - Guard against clone scope issues with `typeof` checks
+
+## Reverted (2026-02-03)
+
+All x-sort migrations reverted in commit `a73c7de`. The bespoke drag-and-drop implementations are being kept as they provide more polished and functional behavior. Tech debt accepted.
 <!-- SECTION:NOTES:END -->
