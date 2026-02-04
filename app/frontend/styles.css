@@ -291,6 +291,24 @@ aside button:hover svg {
 }
 
 @layer components {
+  /* Disable grid layout animations - instant column sizing at startup and view switch
+   * This ensures columns snap to their widths immediately rather than animating.
+   * CSS grid-template-columns changes should be instant, not animated.
+   * Header: only allow visual property transitions (no transform needed)
+   * Track rows: allow transform transitions for drag-and-drop row shifting
+   */
+  [data-testid="library-header"] {
+    transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow;
+    transition-duration: 0.15s;
+    transition-timing-function: ease;
+  }
+
+  .track-list > .grid {
+    transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+    transition-duration: 0.15s;
+    transition-timing-function: ease-out;
+  }
+
   /* Custom scrollbar for vertical scroll container */
   .library-scroll-container {
     scrollbar-width: thin;
