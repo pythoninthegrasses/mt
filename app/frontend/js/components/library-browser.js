@@ -448,6 +448,14 @@ export function createLibraryBrowser(Alpine) {
       window.addEventListener('mt:playlists-updated', () => {
         this.loadPlaylists();
       });
+
+      window.addEventListener('mt:column-settings-reset', () => {
+        // Reload column settings from backend when reset from Settings page
+        this._initColumnSettings();
+        this.$nextTick(() => {
+          this.distributeExtraWidth();
+        });
+      });
     },
 
     _initColumnSettings() {
@@ -897,6 +905,40 @@ export function createLibraryBrowser(Alpine) {
       this.library.applyFilters();
       this.distributeExtraWidth();
       this.saveColumnSettings();
+      this.headerContextMenu = null;
+    },
+
+    async confirmResetColumnDefaults() {
+      // Check if confirmation is disabled in settings
+      const showConfirmation = window.settings?.initialized
+        ? window.settings.get('columns:showResetConfirmation', true)
+        : true;
+
+      if (!showConfirmation) {
+        // Skip confirmation - reset immediately
+        this.resetColumnDefaults();
+        this.$store.ui.toast('Column settings reset to defaults', 'success');
+        return;
+      }
+
+      const message = 'Reset all column settings to defaults?\n\n' +
+        '\u2022 Column widths\n\u2022 Column order\n\u2022 Column visibility\n\u2022 Sort settings';
+
+      let confirmed = false;
+      if (window.__TAURI__?.dialog?.confirm) {
+        confirmed = await window.__TAURI__.dialog.confirm(message, {
+          title: 'Reset Column Settings',
+          kind: 'warning',
+        });
+      } else {
+        confirmed = confirm(message);
+      }
+
+      if (confirmed) {
+        this.resetColumnDefaults();
+        this.$store.ui.toast('Column settings reset to defaults', 'success');
+      }
+
       this.headerContextMenu = null;
     },
 

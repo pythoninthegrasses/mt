@@ -290,6 +290,16 @@ aside button:hover svg {
   background-color: #1E1E1E !important;
 }
 
+/* Metro-teal settings panels need more contrast */
+[data-theme-preset="metro-teal"] [data-testid="settings-view"] .bg-muted\/30 {
+  background-color: rgba(50, 50, 50, 0.6) !important;
+  border: 1px solid #404040;
+}
+
+[data-theme-preset="metro-teal"] [data-testid="settings-view"] .border-border\/50 {
+  border-color: #404040 !important;
+}
+
 @layer components {
   /* Disable grid layout animations - instant column sizing at startup and view switch
    * This ensures columns snap to their widths immediately rather than animating.

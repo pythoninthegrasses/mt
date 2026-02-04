@@ -32,6 +32,19 @@ export function createSettingsView(Alpine) {
       lastResult: null,
     },
 
+    // Column settings for Settings > Columns section
+    columnSettings: {
+      visibleCount: 0,
+      hiddenCount: 0,
+      hasCustomOrder: false,
+      showResetConfirmation: true,
+      // Reset option checkboxes
+      resetWidths: true,
+      resetOrder: true,
+      resetVisibility: true,
+      resetSort: true,
+    },
+
     isExportingLogs: false,
     isDraggingThreshold: false,
 
@@ -39,6 +52,7 @@ export function createSettingsView(Alpine) {
       await this.loadAppInfo();
       await this.loadWatchedFolders();
       await this.loadLastfmSettings();
+      this.loadColumnSettings();
     },
 
     async loadAppInfo() {
@@ -513,6 +527,149 @@ export function createSettingsView(Alpine) {
         Alpine.store('ui').toast('Reconcile scan failed', 'error');
       } finally {
         this.reconcileScan.isRunning = false;
+      }
+    },
+
+    // ============================================
+    // Column Settings methods
+    // ============================================
+
+    loadColumnSettings() {
+      // Default column order for comparison
+      const defaultOrder = [
+        'status', 'index', 'title', 'artist', 'album', 'year', 'duration',
+        'lastPlayed', 'dateAdded', 'playCount', 'genre', 'trackTotal', 'discNumber',
+      ];
+
+      // Default visibility
+      const defaultVisibility = {
+        status: true, index: true, title: true, artist: true, album: true,
+        year: true, genre: false, trackTotal: false, discNumber: false,
+        lastPlayed: true, dateAdded: true, playCount: true, duration: true,
+      };
+
+      if (window.settings?.initialized) {
+        // Load column visibility and order from settings
+        const visibility = window.settings.get('library:columnVisibility', defaultVisibility);
+        const order = window.settings.get('library:columnOrder', defaultOrder);
+        const showConfirm = window.settings.get('columns:showResetConfirmation', true);
+
+        // Count visible and hidden columns
+        const allColumnKeys = Object.keys(defaultVisibility);
+        let visibleCount = 0;
+        let hiddenCount = 0;
+
+        allColumnKeys.forEach((key) => {
+          if (visibility[key] !== false) {
+            visibleCount++;
+          } else {
+            hiddenCount++;
+          }
+        });
+
+        // Check if order differs from default
+        const hasCustomOrder = order.length !== defaultOrder.length ||
+          order.some((key, idx) => defaultOrder[idx] !== key);
+
+        this.columnSettings.visibleCount = visibleCount;
+        this.columnSettings.hiddenCount = hiddenCount;
+        this.columnSettings.hasCustomOrder = hasCustomOrder;
+        this.columnSettings.showResetConfirmation = showConfirm;
+      } else {
+        // Use defaults when settings not available
+        const allColumnKeys = Object.keys(defaultVisibility);
+        this.columnSettings.visibleCount = allColumnKeys.filter((k) => defaultVisibility[k]).length;
+        this.columnSettings.hiddenCount = allColumnKeys.filter((k) => !defaultVisibility[k]).length;
+        this.columnSettings.hasCustomOrder = false;
+        this.columnSettings.showResetConfirmation = true;
+      }
+    },
+
+    async saveColumnConfirmationSetting() {
+      if (window.settings?.initialized) {
+        try {
+          await window.settings.set(
+            'columns:showResetConfirmation',
+            this.columnSettings.showResetConfirmation,
+          );
+        } catch (error) {
+          console.error('[settings] Failed to save column confirmation setting:', error);
+        }
+      }
+    },
+
+    async resetSelectedColumnSettings() {
+      // Check if confirmation is needed
+      if (this.columnSettings.showResetConfirmation) {
+        const parts = [];
+        if (this.columnSettings.resetWidths) parts.push('widths');
+        if (this.columnSettings.resetOrder) parts.push('order');
+        if (this.columnSettings.resetVisibility) parts.push('visibility');
+        if (this.columnSettings.resetSort) parts.push('sort settings');
+
+        const message = `Reset column ${parts.join(', ')}?`;
+
+        let confirmed = false;
+        if (window.__TAURI__?.dialog?.confirm) {
+          confirmed = await window.__TAURI__.dialog.confirm(message, {
+            title: 'Reset Column Settings',
+            kind: 'warning',
+          });
+        } else {
+          confirmed = confirm(message);
+        }
+
+        if (!confirmed) return;
+      }
+
+      // Default values for reset (must match DEFAULT_COLUMN_WIDTHS in library-browser.js)
+      const defaultWidths = {
+        status: 24, index: 48, title: 320, artist: 431, album: 411, year: 70,
+        genre: 120, trackTotal: 60, discNumber: 60, lastPlayed: 120,
+        dateAdded: 120, playCount: 83, duration: 52,
+      };
+      const defaultOrder = [
+        'status', 'index', 'title', 'artist', 'album', 'year', 'duration',
+        'lastPlayed', 'dateAdded', 'playCount', 'genre', 'trackTotal', 'discNumber',
+      ];
+      const defaultVisibility = {
+        status: true, index: true, title: true, artist: true, album: true,
+        year: true, genre: false, trackTotal: false, discNumber: false,
+        lastPlayed: true, dateAdded: true, playCount: true, duration: true,
+      };
+
+      try {
+        if (window.settings?.initialized) {
+          if (this.columnSettings.resetWidths) {
+            await window.settings.set('library:columnWidths', defaultWidths);
+          }
+          if (this.columnSettings.resetOrder) {
+            await window.settings.set('library:columnOrder', defaultOrder);
+          }
+          if (this.columnSettings.resetVisibility) {
+            await window.settings.set('library:columnVisibility', defaultVisibility);
+          }
+          if (this.columnSettings.resetSort) {
+            // Reset sort to default (no sort)
+            const library = Alpine.store('library');
+            if (library) {
+              library.sortBy = 'default';
+              library.sortOrder = 'asc';
+              library.applyFilters();
+            }
+          }
+        }
+
+        // Dispatch event to notify library browser to reload settings
+        window.dispatchEvent(new CustomEvent('mt:column-settings-reset'));
+
+        // Reload column settings to update UI
+        this.loadColumnSettings();
+
+        Alpine.store('ui').toast('Column settings reset', 'success');
+      } catch (error) {
+        console.error('[settings] Failed to reset column settings:', error);
+        Alpine.store('ui').toast('Failed to reset column settings', 'error');
       }
     },
   }));

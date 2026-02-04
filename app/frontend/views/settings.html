@@ -39,6 +39,15 @@
           Library
         </button>
       </li>
+      <li>
+        <button
+          class="w-full text-left px-3 py-2 rounded-md text-sm transition-colors"
+          :class="$store.ui.settingsSection === 'columns' ? 'bg-primary/15 text-primary' : 'hover:bg-muted/70 text-foreground/80'"
+          @click="$store.ui.setSettingsSection('columns')"
+          data-testid="settings-nav-columns"
+        >
+          Columns
+        </button>
       </li>
       <li>
         <button
@@ -296,6 +305,126 @@
             </button>
           </div>
           <p class="text-xs text-muted-foreground mt-2">Metro Teal uses a dark theme with teal accents.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Columns Section -->
+    <div x-show="$store.ui.settingsSection === 'columns'" data-testid="settings-section-columns">
+      <h3 class="text-xl font-semibold mb-4">Columns</h3>
+
+      <!-- Current Layout Preview -->
+      <div class="mb-8">
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Current Layout</h4>
+        <div class="bg-muted/30 rounded-lg p-4">
+          <div class="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span class="text-muted-foreground">Visible columns:</span>
+              <span class="font-medium ml-2" x-text="columnSettings.visibleCount"></span>
+            </div>
+            <div>
+              <span class="text-muted-foreground">Hidden columns:</span>
+              <span class="font-medium ml-2" x-text="columnSettings.hiddenCount"></span>
+            </div>
+          </div>
+          <div class="mt-3 pt-3 border-t border-border/50 text-xs text-muted-foreground">
+            <span x-show="columnSettings.hasCustomOrder">Custom column order in use</span>
+            <span x-show="!columnSettings.hasCustomOrder">Using default column order</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reset Options -->
+      <div class="mb-8">
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Reset Options</h4>
+        <div class="space-y-4">
+          <!-- Selective reset checkboxes -->
+          <div class="bg-muted/30 rounded-lg p-4 space-y-3">
+            <p class="text-sm text-muted-foreground mb-3">Select what to reset:</p>
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                x-model="columnSettings.resetWidths"
+                class="w-4 h-4 rounded border-border text-primary focus:ring-primary focus:ring-offset-0"
+                data-testid="settings-columns-reset-widths"
+              />
+              <span class="text-sm">Column widths</span>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                x-model="columnSettings.resetOrder"
+                class="w-4 h-4 rounded border-border text-primary focus:ring-primary focus:ring-offset-0"
+                data-testid="settings-columns-reset-order"
+              />
+              <span class="text-sm">Column order</span>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                x-model="columnSettings.resetVisibility"
+                class="w-4 h-4 rounded border-border text-primary focus:ring-primary focus:ring-offset-0"
+                data-testid="settings-columns-reset-visibility"
+              />
+              <span class="text-sm">Column visibility</span>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                x-model="columnSettings.resetSort"
+                class="w-4 h-4 rounded border-border text-primary focus:ring-primary focus:ring-offset-0"
+                data-testid="settings-columns-reset-sort"
+              />
+              <span class="text-sm">Sort settings</span>
+            </label>
+          </div>
+
+          <!-- Reset button -->
+          <button
+            class="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
+            :disabled="!columnSettings.resetWidths && !columnSettings.resetOrder && !columnSettings.resetVisibility && !columnSettings.resetSort"
+            @click="resetSelectedColumnSettings()"
+            data-testid="settings-columns-reset-btn"
+          >
+            Reset Selected
+          </button>
+        </div>
+      </div>
+
+      <!-- Confirmation Toggle -->
+      <div class="mb-8">
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Behavior</h4>
+        <div class="space-y-4">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              x-model="columnSettings.showResetConfirmation"
+              @change="saveColumnConfirmationSetting()"
+              class="w-4 h-4 rounded border-border text-primary focus:ring-primary focus:ring-offset-0"
+              data-testid="settings-columns-show-confirmation"
+            />
+            <div class="flex-1">
+              <div class="text-sm font-medium">Show confirmation when resetting columns</div>
+              <div class="text-xs text-muted-foreground">
+                When disabled, reset happens immediately without asking
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Tip Box -->
+      <div class="p-4 bg-muted/30 rounded-lg border border-border/50">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-primary shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <div>
+            <p class="text-sm font-medium">Quick Tip</p>
+            <p class="text-xs text-muted-foreground mt-1">
+              Right-click the column header in the library view for quick access to column visibility toggles and reset options.
+            </p>
+          </div>
         </div>
       </div>
     </div>
