@@ -7,10 +7,16 @@
   <script src="/js/basecoat/all.min.js" defer></script>
   <script type="module" src="/main.js"></script>
   <style>
+    /* Hide elements with x-cloak until Alpine.js initializes */
     [x-cloak] { display: none !important; }
+    /* App-level cloak: hide entire app until ready, prevent flash */
+    body[x-cloak] {
+      display: block !important;
+      visibility: hidden !important;
+    }
   </style>
 </head>
-<body class="bg-background text-foreground h-screen overflow-hidden">
+<body x-cloak class="bg-background text-foreground h-screen overflow-hidden">
   <!-- macOS title bar drag region (overlay mode) - positioned absolutely over content -->
   <div
     data-tauri-drag-region

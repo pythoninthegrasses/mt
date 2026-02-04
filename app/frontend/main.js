@@ -168,6 +168,27 @@ async function initTitlebarDrag() {
   }
 }
 
+/**
+ * Show the app window and reveal the UI.
+ * Called after Alpine is initialized and initial data is loaded.
+ */
+async function revealApp() {
+  // Remove x-cloak from body to reveal the UI via CSS
+  document.body.removeAttribute('x-cloak');
+
+  // Show the Tauri window (it starts hidden via visible: false in config)
+  if (window.__TAURI__) {
+    try {
+      const { getCurrentWindow } = window.__TAURI__.window;
+      const appWindow = getCurrentWindow();
+      await appWindow.show();
+      console.log('[main] App ready, window revealed');
+    } catch (error) {
+      console.error('[main] Failed to show window:', error);
+    }
+  }
+}
+
 // Initialize application
 async function initApp() {
   // Initialize settings service first (loads settings from backend)
@@ -193,6 +214,13 @@ async function initApp() {
   Alpine.start();
   console.log('[main] Alpine started with stores and components');
   console.log('[main] Test dialog with: testDialog()');
+
+  // Reveal the app after Alpine has initialized the DOM
+  // Note: We use setTimeout instead of requestAnimationFrame because
+  // RAF callbacks don't fire when the window is hidden (visible: false)
+  setTimeout(() => {
+    revealApp();
+  }, 0);
 }
 
 // Make settings service globally available

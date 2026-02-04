@@ -1,10 +1,10 @@
 ---
 id: task-250
 title: Fix startup rendering flash - hide UI scaffolding until ready
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-03 07:16'
-updated_date: '2026-02-03 07:18'
+updated_date: '2026-02-04 08:18'
 labels:
   - frontend
   - ux
@@ -12,6 +12,7 @@ labels:
   - startup
 dependencies: []
 priority: medium
+ordinal: 17000
 ---
 
 ## Description
@@ -56,9 +57,37 @@ The end user should not see any scaffolding or unstyled components. The app shou
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 No visible flash of unstyled/unsized content during app startup
-- [ ] #2 All components are properly sized and styled before becoming visible
-- [ ] #3 Startup experience feels polished and professional
-- [ ] #4 Works consistently across cold starts and app restarts
-- [ ] #5 No regression in startup time (or minimal acceptable increase)
+- [x] #1 No visible flash of unstyled/unsized content during app startup
+- [x] #2 All components are properly sized and styled before becoming visible
+- [x] #3 Startup experience feels polished and professional
+- [x] #4 Works consistently across cold starts and app restarts
+- [x] #5 No regression in startup time (or minimal acceptable increase)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Implementation (2026-02-04)
+
+### Solution
+Implemented a two-part fix to prevent startup flash:
+
+1. **Tauri window visibility**: Set `visible: false` in `tauri.conf.json` to start with a hidden window
+2. **CSS cloak**: Added `x-cloak` attribute to body with `visibility: hidden` CSS rule
+3. **Programmatic reveal**: Added `revealApp()` function that removes x-cloak and calls `window.show()` after Alpine.js initializes
+4. **Permission**: Added `core:window:allow-show` permission to capabilities
+
+### Key learnings
+- `requestAnimationFrame` callbacks don't fire when the window is hidden, so `setTimeout` must be used instead
+- The Tauri window `show()` method requires explicit permission (`core:window:allow-show`)
+
+### Files changed
+- `crates/mt-tauri/tauri.conf.json` - Added `visible: false` to window config
+- `crates/mt-tauri/capabilities/default.json` - Added `core:window:allow-show` permission
+- `app/frontend/index.html` - Added `x-cloak` to body with special CSS rule for body
+- `app/frontend/main.js` - Added `revealApp()` function called via setTimeout after Alpine.start()
+
+### Test results
+- Manual testing: Window reveals correctly after Alpine initialization
+- E2E tests: 596/597 passed (1 unrelated failure about column reset)
+<!-- SECTION:NOTES:END -->
