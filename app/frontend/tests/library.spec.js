@@ -182,11 +182,9 @@ test.describe('Playlist Position Column', () => {
 
     await page.waitForSelector('[data-track-id="101"]', { state: 'visible' });
 
+    // Column header shows "#" in both library and playlist views
     const playlistHeaderTexts = await page.locator('.column-header-cell').allTextContents();
-    expect(playlistHeaderTexts.some((text) => text.trim() === 'Position')).toBe(true);
-
-    const positionHeader = page.locator('.column-header-cell', { hasText: 'Position' }).first();
-    await expect(positionHeader).toHaveAttribute('title', 'Position');
+    expect(playlistHeaderTexts.some((text) => text.trim() === '#')).toBe(true);
 
     const firstRow = page.locator('[data-track-id]').nth(0);
     const secondRow = page.locator('[data-track-id]').nth(1);

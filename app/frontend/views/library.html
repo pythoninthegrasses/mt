@@ -30,12 +30,12 @@
               getColumnShiftDirection(colIndex) === 'right' ? 'shift-right' : ''
             ]"
             class="py-2 select-none flex items-center relative overflow-visible"
-            :title="col.key === 'index' ? (isInPlaylistView() ? 'Position' : '#') : (col.label || '')"
+            :title="col.label || ''"
             :style="isColumnDragging(col.key) ? 'transform:' + getColumnDragTransform(col.key) + '; z-index: 50;' : ''"
             @mousedown="if (!$event.target.closest('.column-resizer-left') && !$event.target.closest('.column-resizer-right')) startColumnDrag(col, $event)"
             @click="if (!draggingColumnKey && !wasResizing && !wasColumnDragging) handleSort(col.key)"
           >
-            <span x-text="col.key === 'index' ? (isInPlaylistView() ? 'Position' : col.label) : col.label" class="truncate"></span>
+            <span x-text="col.label" class="truncate"></span>
             <span
               x-show="col.sortable && library.sortBy === col.key"
               x-text="getSortIndicator(col.key)"
