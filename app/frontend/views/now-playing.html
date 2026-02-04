@@ -48,52 +48,57 @@
           <p class="text-sm">Queue is empty</p>
           <p class="text-xs mt-1">Add tracks from the library</p>
         </div>
-        <div
-          x-show="$store.queue.items.length > 0"
-          x-ref="sortableContainer"
-          x-sort="handleReorder"
-          x-sort:config="{ animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen', forceFallback: true }"
-          class="relative"
-        >
+        <div x-show="$store.queue.items.length > 0" x-ref="sortableContainer" class="relative">
           <template x-for="(item, displayIndex) in $store.queue.playOrderItems" :key="item.track.id + '-' + item.originalIndex">
-            <!-- Note: typeof checks used throughout to prevent ReferenceError when SortableJS
-                 clones this element for fallback drag mode (clone is outside x-for scope) -->
             <div
-              x-sort:item
-              x-init="typeof item !== 'undefined' && ($el._x_sort_key = item.originalIndex, $el._itemData = { isCurrentTrack: item.isCurrentTrack, originalIndex: item.originalIndex, trackId: item.track.id, title: item.track.title, artist: item.track.artist })"
-              class="queue-item flex items-center gap-3 px-3 py-2 border-b border-[#E5E5E5] dark:border-[#323232] select-none cursor-default"
-              :class="typeof item !== 'undefined' ? (item.isCurrentTrack ? 'bg-primary/20 text-primary' : 'hover:bg-muted/50') : ($el._itemData?.isCurrentTrack ? 'bg-primary/20 text-primary' : 'hover:bg-muted/50')"
-              :data-id="typeof item !== 'undefined' ? item.track.id : $el._itemData?.trackId"
-              @dblclick.stop="typeof item !== 'undefined' && $store.queue.playIndex(item.originalIndex)"
+              class="queue-item-wrapper"
+              :class="[
+                getShiftDirection(item.originalIndex) === 'up' ? 'shift-up' : '',
+                getShiftDirection(item.originalIndex) === 'down' ? 'shift-down' : ''
+              ]"
             >
               <div
-                class="drag-handle cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground"
-                @dblclick.stop
+                class="queue-item flex items-center gap-3 px-3 py-2 border-b border-[#E5E5E5] dark:border-[#323232] select-none cursor-default"
+                :class="[
+                  item.isCurrentTrack ? 'bg-primary/20 text-primary' : '',
+                  isDragging(item.originalIndex) ? 'dragging-item' : '',
+                  isOtherDragging(item.originalIndex) ? 'other-dragging' : 'hover:bg-muted/50'
+                ]"
+                :style="isDragging(item.originalIndex) ? 'transform:' + getDragTransform() + '; z-index: 50;' : ''"
+                :data-id="item.track.id"
+                @dblclick.stop="$store.queue.playIndex(item.originalIndex)"
               >
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
-                </svg>
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium truncate" x-text="typeof item !== 'undefined' ? (item.track.title || 'Unknown') : ($el._itemData?.title || 'Unknown')"></p>
-                <p class="text-xs truncate" :class="typeof item !== 'undefined' ? (item.isCurrentTrack ? 'text-primary/70' : 'text-muted-foreground') : ($el._itemData?.isCurrentTrack ? 'text-primary/70' : 'text-muted-foreground')" x-text="typeof item !== 'undefined' ? (item.track.artist || 'Unknown Artist') : ($el._itemData?.artist || 'Unknown Artist')"></p>
-              </div>
-              <template x-if="typeof item !== 'undefined' ? item.isCurrentTrack : $el._itemData?.isCurrentTrack">
-                <div class="shrink-0">
-                  <svg class="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                <div
+                  class="drag-handle cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground"
+                  @mousedown.prevent="startDrag(item.originalIndex, $event)"
+                  @touchstart.prevent="startDrag(item.originalIndex, $event)"
+                  @dblclick.stop
+                >
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
                   </svg>
                 </div>
-              </template>
-              <button
-                class="shrink-0 p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
-                @click.stop="typeof item !== 'undefined' && $store.queue.remove(item.originalIndex)"
-                title="Remove from queue"
-              >
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-              </button>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium truncate" x-text="item.track.title || 'Unknown'"></p>
+                  <p class="text-xs truncate" :class="item.isCurrentTrack ? 'text-primary/70' : 'text-muted-foreground'" x-text="item.track.artist || 'Unknown Artist'"></p>
+                </div>
+                <template x-if="item.isCurrentTrack">
+                  <div class="shrink-0">
+                    <svg class="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                    </svg>
+                  </div>
+                </template>
+                <button
+                  class="shrink-0 p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+                  @click.stop="$store.queue.remove(item.originalIndex)"
+                  title="Remove from queue"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           </template>
         </div>

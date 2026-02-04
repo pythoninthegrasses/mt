@@ -106,19 +106,9 @@
           </svg>
         </button>
       </div>
-      <ul
-        class="space-y-0.5"
-        tabindex="0"
-        @keydown="handlePlaylistKeydown($event)"
-        data-testid="playlist-list"
-        x-sort="handlePlaylistReorder"
-        x-sort:config="{ animation: 150, ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen', forceFallback: true }"
-      >
+      <ul class="space-y-0.5" tabindex="0" @keydown="handlePlaylistKeydown($event)" data-testid="playlist-list">
         <template x-for="(playlist, index) in playlists" :key="playlist.id">
-          <li
-            x-sort:item
-            x-init="$el._x_sort_key = index"
-          >
+          <li>
             <template x-if="editingPlaylist?.playlistId === playlist.playlistId">
               <div class="flex items-center gap-2 px-2 py-1">
                 <svg class="w-4 h-4 shrink-0 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -141,10 +131,15 @@
                   isActive(playlist.id) ? 'bg-primary/15 text-primary' : 'hover:bg-muted/70 text-foreground/80',
                   isPlaylistSelected(playlist.playlistId) ? 'bg-[#DFDFDF] dark:bg-[#3a3a3a]' : '',
                   isPlaylistDragOver(playlist.playlistId) ? 'ring-2 ring-primary ring-inset bg-primary/10' : '',
+                  isPlaylistDragging(index) ? 'bg-card shadow-lg z-10 relative' : '',
+                  isOtherPlaylistDragging(index) ? 'opacity-50' : '',
+                  getPlaylistReorderClass(index),
                   isCollapsed ? 'justify-center' : ''
                 ]"
+                :style="isPlaylistDragging(index) ? 'transform:' + getPlaylistDragTransform(index) + '; transition: none;' : ''"
                 @click="handlePlaylistClick($event, playlist, index)"
                 @contextmenu.prevent="showPlaylistContextMenu($event, playlist)"
+                @mousedown="startPlaylistReorder(index, $event)"
                 @dragstart.prevent
                 @dragover.prevent="handlePlaylistDragOver($event, playlist)"
                 @dragleave="handlePlaylistDragLeave($event, playlist)"

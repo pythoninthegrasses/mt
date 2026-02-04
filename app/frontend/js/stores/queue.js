@@ -299,7 +299,7 @@ export function createQueueStore(Alpine) {
         // Currently playing track was removed
         if (this.items.length === 0) {
           this.currentIndex = -1;
-          Alpine.store('player')?.stop();
+          Alpine.store('player').stop();
         } else if (this.currentIndex >= this.items.length) {
           this.currentIndex = this.items.length - 1;
         }
@@ -325,7 +325,7 @@ export function createQueueStore(Alpine) {
       this._originalOrder = [];
       this._playHistory = [];
 
-      Alpine.store('player')?.stop();
+      Alpine.store('player').stop();
 
       // Persist to backend
       try {
@@ -345,41 +345,33 @@ export function createQueueStore(Alpine) {
       if (from < 0 || from >= this.items.length) return;
       if (to < 0 || to >= this.items.length) return;
 
-      // CRITICAL: Prevent QUEUE_STATE_CHANGED event from overwriting state during operation
-      this._updating = true;
+      const track = this.items[from];
+      console.log('[queue]', 'reorder_track', {
+        from,
+        to,
+        trackId: track?.id,
+        trackTitle: track?.title,
+        wasCurrentTrack: from === this.currentIndex,
+      });
 
+      // Update local state
+      const [item] = this.items.splice(from, 1);
+      this.items.splice(to, 0, item);
+
+      // Adjust current index
+      if (from === this.currentIndex) {
+        this.currentIndex = to;
+      } else if (from < this.currentIndex && to >= this.currentIndex) {
+        this.currentIndex--;
+      } else if (from > this.currentIndex && to <= this.currentIndex) {
+        this.currentIndex++;
+      }
+
+      // Persist to backend
       try {
-        const track = this.items[from];
-        console.log('[queue]', 'reorder_track', {
-          from,
-          to,
-          trackId: track?.id,
-          trackTitle: track?.title,
-          wasCurrentTrack: from === this.currentIndex,
-        });
-
-        // Update local state
-        const [item] = this.items.splice(from, 1);
-        this.items.splice(to, 0, item);
-
-        // Adjust current index
-        if (from === this.currentIndex) {
-          this.currentIndex = to;
-        } else if (from < this.currentIndex && to >= this.currentIndex) {
-          this.currentIndex--;
-        } else if (from > this.currentIndex && to <= this.currentIndex) {
-          this.currentIndex++;
-        }
-
-        // Persist to backend
         await api.queue.move(from, to);
       } catch (error) {
         console.error('[queue] Failed to persist reorder:', error);
-      } finally {
-        // Delay reset to let pending backend events pass
-        setTimeout(() => {
-          this._updating = false;
-        }, 200);
       }
     },
 

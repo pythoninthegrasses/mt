@@ -66,6 +66,10 @@ export function createLibraryBrowser(Alpine) {
     submenuY: 0,
     submenuCloseTimeout: null,
     currentPlaylistId: null,
+    draggingIndex: null,
+    dragOverIndex: null,
+    dragY: 0,
+    dragStartY: 0,
 
     resizingColumn: null,
     resizingNeighbor: null,
@@ -74,6 +78,10 @@ export function createLibraryBrowser(Alpine) {
     resizeNeighborStartWidth: 0,
     wasResizing: false,
 
+    draggingColumnKey: null,
+    dragOverColumnIdx: null,
+    columnDragX: 0,
+    columnDragStartX: 0,
     wasColumnDragging: false,
 
     containerWidth: 0,
@@ -633,24 +641,110 @@ export function createLibraryBrowser(Alpine) {
       }, 100);
     },
 
-    /**
-     * Handler for Alpine.js Sort plugin column header reordering
-     * Called when user completes a drag-drop operation on column headers
-     *
-     * @param {string} itemKey - The x-sort:item key (column key) of dragged column
-     * @param {number} newPosition - New position (0-indexed)
-     */
-    handleColumnReorder(itemKey, newPosition) {
-      const fromIdx = this.columns.findIndex((c) => c.key === itemKey);
-      if (fromIdx === -1 || fromIdx === newPosition) return;
+    startColumnDrag(col, event) {
+      if (this.resizingColumn) return;
+      if (this.headerContextMenu) {
+        this.headerContextMenu = null;
+        return;
+      }
 
-      this.reorderColumnByIndex(fromIdx, newPosition);
+      event.preventDefault();
 
-      // Set flag to prevent sort click from firing
-      this.wasColumnDragging = true;
-      setTimeout(() => {
-        this.wasColumnDragging = false;
-      }, 100);
+      const header = document.querySelector('[data-testid="library-header"]');
+      if (!header) return;
+
+      const cells = header.querySelectorAll(':scope > div');
+      const colIdx = this.columns.findIndex((c) => c.key === col.key);
+      if (colIdx === -1 || !cells[colIdx]) return;
+
+      const rect = cells[colIdx].getBoundingClientRect();
+      const dragStartX = rect.left + rect.width / 2;
+      const startX = event.clientX;
+      let hasMoved = false;
+
+      document.body.style.cursor = 'grabbing';
+      document.body.style.userSelect = 'none';
+
+      const onMove = (e) => {
+        if (!hasMoved && Math.abs(e.clientX - startX) > 5) {
+          hasMoved = true;
+          this.draggingColumnKey = col.key;
+          this.columnDragStartX = dragStartX;
+          this.dragOverColumnIdx = null;
+        }
+        if (hasMoved) {
+          this.columnDragX = e.clientX;
+          this.updateColumnDropTarget(e.clientX);
+        }
+      };
+
+      const onEnd = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onEnd);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        if (hasMoved) {
+          this.finishColumnDrag(true);
+        }
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onEnd);
+    },
+
+    updateColumnDropTarget(x) {
+      const header = document.querySelector('[data-testid="library-header"]');
+      if (!header) return;
+
+      const cells = header.querySelectorAll(':scope > div');
+      const dragIdx = this.columns.findIndex((c) => c.key === this.draggingColumnKey);
+      let newOverIdx = dragIdx;
+
+      const edgeThreshold = 0.05;
+
+      // Check columns to the right - only swap with immediate neighbor
+      const rightIdx = dragIdx + 1;
+      if (rightIdx < cells.length) {
+        const rect = cells[rightIdx].getBoundingClientRect();
+        const triggerX = rect.left + rect.width * edgeThreshold;
+        if (x > triggerX) {
+          newOverIdx = rightIdx; // Swap with this column (not i+1)
+        }
+      }
+
+      // Check columns to the left - only if we haven't moved right
+      if (newOverIdx === dragIdx) {
+        const leftIdx = dragIdx - 1;
+        if (leftIdx >= 0) {
+          const rect = cells[leftIdx].getBoundingClientRect();
+          const triggerX = rect.right - rect.width * edgeThreshold;
+          if (x < triggerX) {
+            newOverIdx = leftIdx; // Swap with this column
+          }
+        }
+      }
+
+      this.dragOverColumnIdx = newOverIdx;
+    },
+
+    finishColumnDrag(hasMoved = false) {
+      if (this.draggingColumnKey !== null && this.dragOverColumnIdx !== null) {
+        const fromIdx = this.columns.findIndex((c) => c.key === this.draggingColumnKey);
+        if (fromIdx !== -1 && fromIdx !== this.dragOverColumnIdx) {
+          this.reorderColumnByIndex(fromIdx, this.dragOverColumnIdx);
+        }
+      }
+
+      if (hasMoved) {
+        this.wasColumnDragging = true;
+        setTimeout(() => {
+          this.wasColumnDragging = false;
+        }, 100);
+      }
+
+      this.draggingColumnKey = null;
+      this.dragOverColumnIdx = null;
+      this.columnDragStartX = 0;
     },
 
     reorderColumnByIndex(fromIdx, toIdx) {
@@ -678,6 +772,42 @@ export function createLibraryBrowser(Alpine) {
 
       this.columnOrder = newOrder;
       this.saveColumnSettings();
+    },
+
+    isColumnDragging(key) {
+      return this.draggingColumnKey === key;
+    },
+
+    isOtherColumnDragging(key) {
+      return this.draggingColumnKey !== null && this.draggingColumnKey !== key;
+    },
+
+    getColumnShiftDirection(colIdx) {
+      if (this.draggingColumnKey === null || this.dragOverColumnIdx === null) return 'none';
+
+      const dragIdx = this.columns.findIndex((c) => c.key === this.draggingColumnKey);
+      if (colIdx === dragIdx) return 'none';
+
+      const overIdx = this.dragOverColumnIdx;
+
+      if (dragIdx < overIdx) {
+        if (colIdx > dragIdx && colIdx < overIdx) {
+          return 'left';
+        }
+      } else {
+        if (colIdx >= overIdx && colIdx < dragIdx) {
+          return 'right';
+        }
+      }
+
+      return 'none';
+    },
+
+    getColumnDragTransform(key) {
+      if (this.draggingColumnKey !== key) return '';
+
+      const offsetX = this.columnDragX - this.columnDragStartX;
+      return `translateX(${offsetX}px)`;
     },
 
     autoFitColumn(col, event) {
@@ -1437,39 +1567,146 @@ export function createLibraryBrowser(Alpine) {
       return this.$store.library.currentSection?.startsWith('playlist-') || this.currentPlaylistId !== null;
     },
 
-    /**
-     * Handler for Alpine.js Sort plugin playlist track reordering
-     * Called when user completes a drag-drop operation in playlist view
-     *
-     * @param {number} itemKey - The x-sort:item key (original index) of dragged item
-     * @param {number} newPosition - New position (0-indexed)
-     */
-    async handlePlaylistTrackReorder(itemKey, newPosition) {
-      if (!this.isInPlaylistView() || !this.currentPlaylistId) return;
+    startPlaylistDrag(index, event) {
+      if (!this.isInPlaylistView()) return;
+      event.preventDefault();
 
-      const fromIdx = parseInt(itemKey, 10);
-      if (isNaN(fromIdx) || fromIdx === newPosition) return;
+      const rows = document.querySelectorAll('[data-track-id]');
+      const draggedRow = rows[index];
+      const rect = draggedRow?.getBoundingClientRect();
+      const startY = event.clientY || event.touches?.[0]?.clientY || 0;
 
-      // Calculate backend position (API expects final position after removal)
-      let toPosition = newPosition;
-      if (fromIdx < newPosition) {
-        toPosition--;
+      this.draggingIndex = index;
+      this.dragOverIndex = null;
+      this.dragY = startY;
+      this.dragStartY = rect ? rect.top + rect.height / 2 : startY;
+
+      const onMove = (e) => {
+        const y = e.clientY || e.touches?.[0]?.clientY;
+        if (y === undefined) return;
+        this.dragY = y;
+        this.updatePlaylistDragTarget(y);
+      };
+
+      const onEnd = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onEnd);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onEnd);
+        this.finishPlaylistDrag();
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onEnd);
+      document.addEventListener('touchmove', onMove, { passive: true });
+      document.addEventListener('touchend', onEnd);
+    },
+
+    updatePlaylistDragTarget(y) {
+      const rows = document.querySelectorAll('[data-track-id]');
+      let newOverIdx = null;
+
+      for (let i = 0; i < rows.length; i++) {
+        if (i === this.draggingIndex) continue;
+        const rect = rows[i].getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (y < midY) {
+          newOverIdx = i;
+          break;
+        }
       }
 
-      if (fromIdx === toPosition) return;
-
-      try {
-        await api.playlists.reorder(this.currentPlaylistId, fromIdx, toPosition);
-
-        // Refresh playlist data
-        const playlist = await api.playlists.get(this.currentPlaylistId);
-        const tracks = (playlist.tracks || []).map((item) => item.track);
-        this.library.tracks = tracks;
-        this.library.applyFilters();
-      } catch (error) {
-        console.error('[PlaylistTrackReorder] Failed to reorder playlist:', error);
-        this.$store.ui.toast('Failed to reorder tracks', 'error');
+      if (newOverIdx === null) {
+        newOverIdx = this.library.filteredTracks.length;
       }
+
+      if (newOverIdx > this.draggingIndex) {
+        newOverIdx = Math.min(newOverIdx, this.library.filteredTracks.length);
+      }
+
+      this.dragOverIndex = newOverIdx;
+    },
+
+    async finishPlaylistDrag() {
+      if (
+        this.draggingIndex !== null && this.dragOverIndex !== null &&
+        this.draggingIndex !== this.dragOverIndex
+      ) {
+        let toPosition = this.dragOverIndex;
+        if (this.draggingIndex < toPosition) {
+          toPosition--;
+        }
+
+        if (this.draggingIndex !== toPosition) {
+          try {
+            await api.playlists.reorder(this.currentPlaylistId, this.draggingIndex, toPosition);
+
+            const playlist = await api.playlists.get(this.currentPlaylistId);
+            const tracks = (playlist.tracks || []).map((item) => item.track);
+            this.library.tracks = tracks;
+            this.library.applyFilters();
+          } catch (error) {
+            console.error('[PlaylistDrag] Failed to reorder playlist:', error);
+            this.$store.ui.toast('Failed to reorder tracks', 'error');
+          }
+        }
+      }
+
+      this.draggingIndex = null;
+      this.dragOverIndex = null;
+    },
+
+    isDraggingTrack(index) {
+      return this.draggingIndex === index;
+    },
+
+    isOtherTrackDragging(index) {
+      return this.draggingIndex !== null && this.draggingIndex !== index;
+    },
+
+    getTrackDragTransform(index) {
+      if (this.draggingIndex !== index) return '';
+
+      const offsetY = this.dragY - this.dragStartY;
+      return `translateY(${offsetY}px)`;
+    },
+
+    getDragOverClass(index) {
+      if (this.draggingIndex === null || this.dragOverIndex === null) return '';
+      if (index === this.draggingIndex) return '';
+
+      const classes = [];
+
+      // Add translation classes for items between drag source and target
+      if (this.draggingIndex < this.dragOverIndex) {
+        if (index > this.draggingIndex && index < this.dragOverIndex) {
+          classes.push('translate-y-[-100%]');
+        }
+      } else {
+        if (index >= this.dragOverIndex && index < this.draggingIndex) {
+          classes.push('translate-y-[100%]');
+        }
+      }
+
+      // Add drop indicator class (shows a line where the item will be inserted)
+      // Only show if actual reorder would happen (i.e., adjusted position differs)
+      let adjustedToPosition = this.dragOverIndex;
+      if (this.draggingIndex < this.dragOverIndex) {
+        adjustedToPosition = this.dragOverIndex - 1;
+      }
+      const wouldReorder = this.draggingIndex !== adjustedToPosition;
+
+      // Show indicator ABOVE this row if dragOverIndex equals this row's index
+      if (wouldReorder && index === this.dragOverIndex && this.dragOverIndex !== this.draggingIndex) {
+        classes.push('playlist-drop-indicator-above');
+      }
+      // Show indicator BELOW the last row if dragging to the end
+      const trackCount = this.library?.filteredTracks?.length || 0;
+      if (wouldReorder && index === trackCount - 1 && this.dragOverIndex === trackCount) {
+        classes.push('playlist-drop-indicator-below');
+      }
+
+      return classes.join(' ');
     },
   }));
 }

@@ -620,36 +620,69 @@ test.describe('Playlist Feature Parity (task-150)', () => {
     expect(reorderIndex).toBe('0');
   });
 
-  test('playlist list uses x-sort for reordering', async ({ page }) => {
-    // Verify x-sort container is present
-    const hasXSort = await page.evaluate(() => {
-      const playlistList = document.querySelector('[data-testid="playlist-list"]');
-      return playlistList !== null && playlistList.hasAttribute('x-sort');
+  test('playlist should shift down when dragging from above', async ({ page }) => {
+    await page.evaluate(() => {
+      const sidebar = window.Alpine.$data(document.querySelector('aside[x-data="sidebar"]'));
+      sidebar.reorderDraggingIndex = 0;
+      sidebar.reorderDragOverIndex = 2;
     });
-    expect(hasXSort).toBe(true);
-  });
 
-  test('playlist items use x-sort:item for reordering', async ({ page }) => {
     await page.waitForTimeout(300);
 
-    // Verify x-sort:item is present on playlist li elements
-    const hasXSortItems = await page.evaluate(() => {
-      const playlistItems = document.querySelectorAll('[data-testid="playlist-list"] > template + li[x-sort\\:item]');
-      // We have 3 playlists in mock, so at least one should have x-sort:item
-      return playlistItems.length > 0;
-    });
-    expect(hasXSortItems).toBe(true);
+    const playlistB = page.locator('[data-testid="sidebar-playlist-2"]');
+    const classes = await playlistB.getAttribute('class');
+    expect(classes).toContain('playlist-shift-up');
   });
 
-  test('sidebar has handlePlaylistReorder handler defined', async ({ page }) => {
+  test('playlist should shift up when dragging from below', async ({ page }) => {
+    await page.evaluate(() => {
+      const sidebar = window.Alpine.$data(document.querySelector('aside[x-data="sidebar"]'));
+      sidebar.reorderDraggingIndex = 2;
+      sidebar.reorderDragOverIndex = 0;
+    });
+
+    await page.waitForTimeout(300);
+
+    const playlistA = page.locator('[data-testid="sidebar-playlist-1"]');
+    const playlistB = page.locator('[data-testid="sidebar-playlist-2"]');
+    const classesA = await playlistA.getAttribute('class');
+    const classesB = await playlistB.getAttribute('class');
+    expect(classesA).toContain('playlist-shift-down');
+    expect(classesB).toContain('playlist-shift-down');
+  });
+
+  test('dragging playlist should show opacity change', async ({ page }) => {
+    await page.evaluate(() => {
+      const sidebar = window.Alpine.$data(document.querySelector('aside[x-data="sidebar"]'));
+      sidebar.reorderDraggingIndex = 0;
+    });
+
+    await page.waitForTimeout(300);
+
+    // Check a different playlist (not the one being dragged)
+    // Playlist 1 is at index 0, so check playlist 2 (at index 1)
+    const playlistButton = page.locator('[data-testid="sidebar-playlist-2"]');
+    const classes = await playlistButton.getAttribute('class');
+    expect(classes).toContain('opacity-50');
+  });
+
+  test('sidebar has reorder handlers defined', async ({ page }) => {
     const result = await page.evaluate(() => {
       const sidebar = window.Alpine.$data(document.querySelector('aside[x-data="sidebar"]'));
       return {
-        hasHandleReorder: typeof sidebar.handlePlaylistReorder === 'function',
+        hasStartReorder: typeof sidebar.startPlaylistReorder === 'function',
+        hasUpdateTarget: typeof sidebar.updatePlaylistReorderTarget === 'function',
+        hasFinishReorder: typeof sidebar.finishPlaylistReorder === 'function',
+        hasGetReorderClass: typeof sidebar.getPlaylistReorderClass === 'function',
+        hasIsDragging: typeof sidebar.isPlaylistDragging === 'function',
       };
     });
 
-    expect(result.hasHandleReorder).toBe(true);
+    expect(result.hasStartReorder).toBe(true);
+    expect(result.hasUpdateTarget).toBe(true);
+    expect(result.hasFinishReorder).toBe(true);
+    expect(result.hasGetReorderClass).toBe(true);
+    expect(result.hasIsDragging).toBe(true);
   });
 
   test('should rename playlist via context menu click', async ({ page }) => {
