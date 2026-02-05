@@ -178,13 +178,28 @@
               <span class="flex items-center justify-center w-full h-full">
                 <!-- In playlist view: show drag handle -->
                 <span
-                  x-show="isInPlaylistView() && !track.missing"
+                  x-show="isInPlaylistView() && !track.missing && !isPlaying(track.id)"
                   class="drag-handle cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-foreground/70"
                   @mousedown.prevent.stop="startPlaylistDrag(index, $event)"
                   @touchstart.prevent.stop="startPlaylistDrag(index, $event)"
                   @dblclick.stop
                 >⠿</span>
-                <!-- Missing track indicator (takes priority in playlist view too) -->
+                <!-- Now playing indicator (shows pause when playing, play when paused) -->
+                <template x-if="isPlaying(track.id) && !track.missing">
+                  <span class="text-primary" data-testid="now-playing-indicator">
+                    <template x-if="$store.player.isPlaying">
+                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
+                      </svg>
+                    </template>
+                    <template x-if="!$store.player.isPlaying">
+                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"></path>
+                      </svg>
+                    </template>
+                  </span>
+                </template>
+                <!-- Missing track indicator (takes priority) -->
                 <button
                   x-show="track.missing"
                   @click.stop="$store.ui.openMissingTrackPopover(track, $event)"
@@ -204,10 +219,7 @@
               <span x-text="isInPlaylistView() ? (index + 1) : (track.track_number || '')"></span>
             </template>
             <template x-if="col.key === 'title'">
-              <span class="flex items-center">
-                <span x-show="isPlaying(track.id)" class="text-primary shrink-0 mr-2">▶</span>
-                <span class="truncate" :class="track.missing ? 'text-muted-foreground/70 italic' : ''" x-text="track.title || track.filename || 'Unknown'"></span>
-              </span>
+              <span class="truncate" :class="track.missing ? 'text-muted-foreground/70 italic' : ''" x-text="track.title || track.filename || 'Unknown'"></span>
             </template>
             <template x-if="col.key === 'artist'">
               <span x-text="track.artist || 'Unknown Artist'"></span>

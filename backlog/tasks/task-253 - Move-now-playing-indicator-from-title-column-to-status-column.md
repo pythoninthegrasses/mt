@@ -1,10 +1,10 @@
 ---
 id: task-253
 title: Move now playing indicator from title column to status column
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-04 06:52'
-updated_date: '2026-02-04 07:55'
+updated_date: '2026-02-05 04:44'
 labels:
   - frontend
   - ui
@@ -19,15 +19,16 @@ ordinal: 25500
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Currently, the now playing symbol (▶) is displayed to the left of the track title in the Title column. This takes up space in the title cell and can cause the title text to shift or truncate.
 
-Move the now playing indicator to the # (status) column instead, replacing the track number when a track is playing. This is a common pattern in music players like iTunes/Apple Music where the track number becomes a speaker/play icon for the currently playing track.
+Move the now playing indicator to the # (status) column instead, displaying it alongside the track number rather than in the title. The track number should remain visible.
 
 **Current behavior:**
 - Track number shows in # column
 - Play symbol (▶) appears before track title: "▶ Strobe"
 
 **Desired behavior:**
-- Play symbol (▶) replaces track number in # column for currently playing track
+- Play symbol (▶) displays in # column alongside track number (e.g., "▶ 5" or "5 ▶")
 - Track title displays without prefix: "Strobe"
+- Track number remains visible
 
 This affects:
 - Library view
@@ -37,8 +38,8 @@ This affects:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Now playing indicator (▶) displays in # column instead of track number for currently playing track
-- [ ] #2 Track title displays without play symbol prefix
-- [ ] #3 Indicator appears correctly in library view, now playing view, and playlist views
-- [ ] #4 When track stops playing, track number is restored in # column
+- [x] #1 Now playing indicator (▶) displays in # column alongside the track number for currently playing track
+- [x] #2 Track number remains visible when track is playing (not replaced by indicator)
+- [x] #3 Track title displays without play symbol prefix
+- [x] #4 Indicator appears correctly in library view, now playing view, and playlist views
 <!-- AC:END -->
