@@ -1039,6 +1039,51 @@ cargo update
 - **rustfmt**: Code formatter: `cargo fmt`
 - **cargo-expand**: View macro expansions: `cargo expand`
 
+## Video Demo
+
+Convert screen recording (mp4) to AVIF for README using SVT-AV1 (fast, good quality):
+
+```bash
+ffmpeg -i input.mp4 -c:v libsvtav1 -vf scale=-1:720 -crf 30 demo.avif
+```
+
+- `libsvtav1` is 10-50x faster than `libaom-av1`
+- `-crf 30` balances quality/size (lower = better quality, larger file)
+- Scale to 720p height for reasonable file size
+
+### Video Frame Extraction for Debugging
+
+Extract frames from screen recordings (MP4/MOV) for debugging UI issues:
+
+```bash
+# High-quality PNG frames at source resolution
+ffmpeg -i video.mp4 -vf "fps=15" /tmp/frames/frame_%03d.png
+
+# With downscaling for large videos (720p height, maintain aspect)
+ffmpeg -i video.mp4 -vf "fps=15,scale=-1:720" /tmp/frames/frame_%03d.png
+
+# Extract specific time range (2s to 5s)
+ffmpeg -i video.mp4 -ss 2 -to 5 -vf "fps=15" /tmp/frames/frame_%03d.png
+
+# Maximum quality (lossless PNG, no frame skip)
+ffmpeg -i video.mp4 -vf "fps=30" -compression_level 0 /tmp/frames/frame_%03d.png
+
+# JPEG for smaller files (quality 2 = high, 31 = low)
+ffmpeg -i video.mp4 -vf "fps=15" -qscale:v 2 /tmp/frames/frame_%03d.jpg
+```
+
+**Parameters:**
+- `fps=15` - Extract 15 frames per second (adjust based on video framerate)
+- `scale=-1:720` - Scale to 720p height, auto-calculate width
+- `-compression_level 0` - Fastest PNG encoding (larger files)
+- `-qscale:v 2` - JPEG quality (2=best, 31=worst)
+
+**Use cases:**
+- Debugging spinner/loading issues
+- Capturing exact UI state during animations
+- Documenting visual bugs for reports
+
+
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 
 <CRITICAL_INSTRUCTION>
@@ -1067,65 +1112,3 @@ You MUST read the overview resource to understand the complete workflow. The inf
 </CRITICAL_INSTRUCTION>
 
 <!-- BACKLOG.MD MCP GUIDELINES END -->
-
-<!-- MANTIC SEARCH GUIDELINES START -->
-
-<CRITICAL_INSTRUCTION>
-
-## SEARCH CAPABILITY (MANTIC v1.0.21)
-
-This project uses Mantic for intelligent code search. Use it before resorting to grep/find commands.
-
-**Basic Search:**
-```bash
-npx mantic.sh "your query here"
-```
-
-**Advanced Features:**
-
-**Zero-Query Mode (Context Detection):**
-```bash
-npx mantic.sh ""  # Shows modified files, suggestions, impact
-```
-
-**Context Carryover (Session Mode):**
-```bash
-npx mantic.sh "query" --session "session-name"
-```
-
-**Output Formats:**
-```bash
-npx mantic.sh "query" --json        # Full metadata
-npx mantic.sh "query" --files        # Paths only
-npx mantic.sh "query" --markdown    # Pretty output
-```
-
-**Impact Analysis:**
-```bash
-npx mantic.sh "query" --impact      # Shows blast radius
-```
-
-**File Type Filters:**
-```bash
-npx mantic.sh "query" --code        # Code files only
-npx mantic.sh "query" --test        # Test files only
-npx mantic.sh "query" --config       # Config files only
-```
-
-### Search Quality (v1.0.21)
-
-- CamelCase detection: "ScriptController" finds script_controller.h
-- Exact filename matching: "download_manager.cc" returns exact file first
-- Path sequence: "blink renderer core dom" matches directory structure
-- Word boundaries: "script" won't match "javascript"
-- Directory boosting: "gpu" prioritizes files in gpu/ directories
-
-### Best Practices
-
-**DO NOT use grep/find blindly. Use Mantic first.**
-
-Mantic provides brain-inspired scoring that prioritizes business logic over boilerplate, making it more effective for finding relevant code than traditional text search tools.
-
-</CRITICAL_INSTRUCTION>
-
-<!-- MANTIC SEARCH GUIDELINES END -->
