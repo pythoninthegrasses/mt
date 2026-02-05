@@ -7,6 +7,7 @@ import {
   createLibraryState,
   setupLibraryMocks,
 } from './fixtures/mock-library.js';
+import { DEFAULT_SORT_IGNORE_WORDS } from '../js/constants.js';
 
 /**
  * Settings Persistence and Immediate Application Tests
@@ -583,7 +584,7 @@ test.describe('Sort Ignore Words Settings', () => {
 
   test('should have default sort ignore words list', async ({ page }) => {
     const uiStore = await getAlpineStore(page, 'ui');
-    expect(uiStore.sortIgnoreWordsList).toBe('the, le, la, los, a');
+    expect(uiStore.sortIgnoreWordsList).toBe(DEFAULT_SORT_IGNORE_WORDS);
   });
 
   test('should toggle sort ignore words setting', async ({ page }) => {
@@ -617,7 +618,7 @@ test.describe('Sort Ignore Words Settings', () => {
     const input = page.locator('[data-testid="settings-sort-ignore-words-input"]');
 
     // Verify initial value
-    await expect(input).toHaveValue('the, le, la, los, a');
+    await expect(input).toHaveValue(DEFAULT_SORT_IGNORE_WORDS);
 
     // Update the value
     await input.clear();

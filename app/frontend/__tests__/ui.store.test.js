@@ -12,6 +12,7 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { test, fc } from '@fast-check/vitest';
+import { DEFAULT_SORT_IGNORE_WORDS } from '../js/constants.js';
 
 // Mock window.settings
 const mockSettings = {
@@ -80,7 +81,7 @@ function createTestUIStore() {
     themePreset: 'light',
     settingsSection: 'general',
     sortIgnoreWords: true,
-    sortIgnoreWordsList: 'the, le, la, los, a',
+    sortIgnoreWordsList: DEFAULT_SORT_IGNORE_WORDS,
 
     modal: null,
     contextMenu: null,
@@ -613,7 +614,7 @@ describe('UI Store - Sort Ignore Words', () => {
   });
 
   it('should have default sort ignore words list', () => {
-    expect(store.sortIgnoreWordsList).toBe('the, le, la, los, a');
+    expect(store.sortIgnoreWordsList).toBe(DEFAULT_SORT_IGNORE_WORDS);
   });
 });
 

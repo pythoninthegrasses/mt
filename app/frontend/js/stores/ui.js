@@ -1,4 +1,8 @@
 import { api } from '../api.js';
+import { DEFAULT_SORT_IGNORE_WORDS } from '../constants.js';
+
+// Re-export for consumers that import from ui.js
+export { DEFAULT_SORT_IGNORE_WORDS };
 
 export function createUIStore(Alpine) {
   Alpine.store('ui', {
@@ -13,7 +17,7 @@ export function createUIStore(Alpine) {
     themePreset: 'light',
     settingsSection: 'general',
     sortIgnoreWords: true,
-    sortIgnoreWordsList: 'the, le, la, los, a',
+    sortIgnoreWordsList: DEFAULT_SORT_IGNORE_WORDS,
 
     modal: null,
     contextMenu: null,
@@ -54,7 +58,7 @@ export function createUIStore(Alpine) {
       this.sortIgnoreWords = window.settings.get('ui:sortIgnoreWords', true);
       this.sortIgnoreWordsList = window.settings.get(
         'ui:sortIgnoreWordsList',
-        'the, le, la, los, a',
+        DEFAULT_SORT_IGNORE_WORDS,
       );
 
       console.log('[ui] Loaded settings from backend');

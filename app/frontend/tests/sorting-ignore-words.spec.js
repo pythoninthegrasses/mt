@@ -7,6 +7,7 @@ import {
   createLibraryState,
   setupLibraryMocks,
 } from './fixtures/mock-library.js';
+import { DEFAULT_SORT_IGNORE_WORDS } from '../js/constants.js';
 
 test.describe('Sorting - Ignore Words Feature', () => {
   test.beforeEach(async ({ page }) => {
@@ -70,7 +71,7 @@ test.describe('Sorting - Ignore Words Feature', () => {
       // Check default value
       const input = page.locator('[data-testid="settings-sort-ignore-words-input"]');
       const value = await input.inputValue();
-      expect(value).toBe('the, le, la, los, a');
+      expect(value).toBe(DEFAULT_SORT_IGNORE_WORDS);
     });
 
     test('should have ignore words enabled by default', async ({ page }) => {
@@ -104,13 +105,13 @@ test.describe('Sorting - Ignore Words Feature', () => {
   test.describe('Sorting Behavior', () => {
     test('should strip "The" prefix when sorting by artist', async ({ page }) => {
       // Enable ignore words and set sort by artist
-      await page.evaluate(() => {
+      await page.evaluate((defaultWords) => {
         window.Alpine.store('ui').sortIgnoreWords = true;
-        window.Alpine.store('ui').sortIgnoreWordsList = 'the, le, la, los, a';
+        window.Alpine.store('ui').sortIgnoreWordsList = defaultWords;
         window.Alpine.store('library').sortBy = 'artist';
         window.Alpine.store('library').sortOrder = 'asc';
         window.Alpine.store('library').applyFilters();
-      });
+      }, DEFAULT_SORT_IGNORE_WORDS);
 
       await page.waitForTimeout(300);
 
@@ -125,13 +126,13 @@ test.describe('Sorting - Ignore Words Feature', () => {
     });
 
     test('should strip "Los" prefix when sorting by artist', async ({ page }) => {
-      await page.evaluate(() => {
+      await page.evaluate((defaultWords) => {
         window.Alpine.store('ui').sortIgnoreWords = true;
-        window.Alpine.store('ui').sortIgnoreWordsList = 'the, le, la, los, a';
+        window.Alpine.store('ui').sortIgnoreWordsList = defaultWords;
         window.Alpine.store('library').sortBy = 'artist';
         window.Alpine.store('library').sortOrder = 'asc';
         window.Alpine.store('library').applyFilters();
-      });
+      }, DEFAULT_SORT_IGNORE_WORDS);
 
       await page.waitForTimeout(300);
 
@@ -144,13 +145,13 @@ test.describe('Sorting - Ignore Words Feature', () => {
     });
 
     test('should strip "The" prefix when sorting by album', async ({ page }) => {
-      await page.evaluate(() => {
+      await page.evaluate((defaultWords) => {
         window.Alpine.store('ui').sortIgnoreWords = true;
-        window.Alpine.store('ui').sortIgnoreWordsList = 'the, le, la, los, a';
+        window.Alpine.store('ui').sortIgnoreWordsList = defaultWords;
         window.Alpine.store('library').sortBy = 'album';
         window.Alpine.store('library').sortOrder = 'asc';
         window.Alpine.store('library').applyFilters();
-      });
+      }, DEFAULT_SORT_IGNORE_WORDS);
 
       await page.waitForTimeout(300);
 
@@ -166,13 +167,13 @@ test.describe('Sorting - Ignore Words Feature', () => {
     });
 
     test('should strip "A" prefix when sorting by title', async ({ page }) => {
-      await page.evaluate(() => {
+      await page.evaluate((defaultWords) => {
         window.Alpine.store('ui').sortIgnoreWords = true;
-        window.Alpine.store('ui').sortIgnoreWordsList = 'the, le, la, los, a';
+        window.Alpine.store('ui').sortIgnoreWordsList = defaultWords;
         window.Alpine.store('library').sortBy = 'title';
         window.Alpine.store('library').sortOrder = 'asc';
         window.Alpine.store('library').applyFilters();
-      });
+      }, DEFAULT_SORT_IGNORE_WORDS);
 
       await page.waitForTimeout(300);
 
@@ -229,7 +230,7 @@ test.describe('Sorting - Ignore Words Feature', () => {
     });
 
     test('should be case-insensitive when matching prefixes', async ({ page }) => {
-      await page.evaluate(() => {
+      await page.evaluate((defaultWords) => {
         // Add a track with uppercase prefix
         const tracks = window.Alpine.store('library').tracks;
         tracks.push({
@@ -240,11 +241,11 @@ test.describe('Sorting - Ignore Words Feature', () => {
           duration: 180000,
         });
         window.Alpine.store('ui').sortIgnoreWords = true;
-        window.Alpine.store('ui').sortIgnoreWordsList = 'the, le, la, los, a';
+        window.Alpine.store('ui').sortIgnoreWordsList = defaultWords;
         window.Alpine.store('library').sortBy = 'artist';
         window.Alpine.store('library').sortOrder = 'asc';
         window.Alpine.store('library').applyFilters();
-      });
+      }, DEFAULT_SORT_IGNORE_WORDS);
 
       await page.waitForTimeout(300);
 

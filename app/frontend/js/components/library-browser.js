@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { DEFAULT_SORT_IGNORE_WORDS } from '../constants.js';
 
 // Default column widths in pixels (all columns have explicit widths for grid layout)
 const DEFAULT_COLUMN_WIDTHS = {
@@ -83,6 +84,10 @@ export function createLibraryBrowser(Alpine) {
     columnDragX: 0,
     columnDragStartX: 0,
     wasColumnDragging: false,
+
+    // Type-to-jump state
+    _typeBuffer: '',           // Accumulated typed characters
+    _typeDebounceTimer: null,  // Timeout ID for clearing buffer
 
     containerWidth: 0,
     resizeObserver: null,
@@ -412,6 +417,9 @@ export function createLibraryBrowser(Alpine) {
           }
         }
       });
+
+      // Type-to-jump: listen for printable characters to jump to matching artist
+      document.addEventListener('keydown', (e) => this.handleTypeToJump(e));
 
       document.addEventListener('mouseup', () => {
         if (this.resizingColumn) {
@@ -1562,6 +1570,104 @@ export function createLibraryBrowser(Alpine) {
         tagName === 'SELECT' ||
         event.target.isContentEditable
       );
+    },
+
+    /**
+     * Handle type-to-jump navigation - jump to artist matching typed characters
+     * @param {KeyboardEvent} event
+     */
+    handleTypeToJump(event) {
+      // Only in library view
+      if (this.$store.ui.view !== 'library') return;
+
+      // Ignore if typing in input field
+      if (this.isTypingInInput(event)) return;
+
+      // Ignore modifier-only keys and non-printable characters
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key.length !== 1) return; // Only single printable chars
+
+      // Append to buffer
+      this._typeBuffer += event.key;
+
+      // Find and scroll to matching artist
+      this.jumpToMatchingArtist(this._typeBuffer);
+
+      // Reset debounce timer
+      this.resetTypeDebounce();
+    },
+
+    /**
+     * Strip leading ignore word prefix from a string (respects sortIgnoreWords setting)
+     * @param {string} value - String to process (lowercase)
+     * @returns {string} String with prefix removed if ignore words enabled
+     */
+    stripIgnoredPrefix(value) {
+      const uiStore = this.$store.ui;
+      if (!uiStore.sortIgnoreWords) {
+        return value;
+      }
+
+      // Fall back to default list when user clears the input
+      const wordsList = uiStore.sortIgnoreWordsList?.trim() || DEFAULT_SORT_IGNORE_WORDS;
+
+      const ignoreWords = wordsList
+        .split(',')
+        .map((w) => w.trim().toLowerCase())
+        .filter(Boolean);
+
+      for (const word of ignoreWords) {
+        const prefix = word + ' ';
+        if (value.startsWith(prefix)) {
+          return value.slice(prefix.length);
+        }
+      }
+      return value;
+    },
+
+    /**
+     * Find and scroll to first track with artist matching the query at a word boundary
+     * @param {string} query - The search query (typed characters)
+     */
+    jumpToMatchingArtist(query) {
+      const normalizedQuery = query.toLowerCase();
+
+      // Find first track with artist matching at word boundary
+      const matchingTrack = this.library.filteredTracks.find((track) => {
+        if (!track.artist) return false;
+        const artist = track.artist.toLowerCase();
+
+        // Check if query matches at start of artist name (with ignore words stripped)
+        const strippedArtist = this.stripIgnoredPrefix(artist);
+        if (strippedArtist.startsWith(normalizedQuery)) return true;
+
+        // Also check full artist name (for cases where user types "the")
+        if (artist.startsWith(normalizedQuery)) return true;
+
+        // Check if query matches at start of any word in artist name
+        const words = artist.split(/\s+/);
+        return words.some((word) => word.startsWith(normalizedQuery));
+      });
+
+      if (matchingTrack) {
+        // Select and scroll to the track
+        this.selectedTracks.clear();
+        this.selectedTracks.add(matchingTrack.id);
+        this.scrollToTrack(matchingTrack.id);
+      }
+    },
+
+    /**
+     * Reset the type-to-jump debounce timer
+     */
+    resetTypeDebounce() {
+      if (this._typeDebounceTimer) {
+        clearTimeout(this._typeDebounceTimer);
+      }
+      this._typeDebounceTimer = setTimeout(() => {
+        this._typeBuffer = '';
+        this._typeDebounceTimer = null;
+      }, 500); // 500ms matches existing debounce patterns in codebase
     },
 
     /**
