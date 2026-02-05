@@ -1,9 +1,5 @@
 {
   "mcpServers": {
-    "mantic": {
-      "command": "npx",
-      "args": ["-y", "mantic.sh@latest", "server"]
-    },
     "playwright": {
       "command": "npx",
       "args": ["@playwright/mcp@latest"]
