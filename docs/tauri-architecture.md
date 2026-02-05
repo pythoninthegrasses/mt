@@ -122,6 +122,19 @@ Modern web UI:
 - Settings panel
 - Metadata editor
 
+**View Caching:**
+
+The library store implements persistent caching to eliminate loading spinners when switching between views:
+
+| Feature | Implementation |
+|---------|----------------|
+| **Per-section cache** | Each library section (Music, Liked, Recent, Added, Top 25) and playlist cached separately |
+| **Persistent storage** | Cache stored in Tauri settings (`library:sectionCache`) - survives app restarts |
+| **Background refresh** | Cached data shown instantly, fresh data fetched silently in background |
+| **Cache invalidation** | Cleared on library changes, playlist modifications, or file system events |
+
+Cache keys: `all`, `liked`, `recent`, `added`, `top25`, `playlist-{id}`
+
 ## Communication Patterns
 
 ### Frontend ↔ Tauri Core

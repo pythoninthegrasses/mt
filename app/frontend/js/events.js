@@ -186,6 +186,11 @@ export async function initEventListeners(Alpine) {
 
     console.log(`[events] Playlists ${action}: playlist ${playlist_id}`);
 
+    // Clear playlist cache for this playlist (tracks may have changed)
+    if (library._clearCache && playlist_id) {
+      library._clearCache(`playlist-${playlist_id}`);
+    }
+
     // Refresh playlists
     if (library.loadPlaylists) {
       library.loadPlaylists();

@@ -401,7 +401,7 @@ export function createSettingsView(Alpine) {
         );
 
         // Refresh library to show updated favorites
-        Alpine.store('library').load();
+        Alpine.store('library').load({ forceReload: true });
       } catch (error) {
         console.error('[settings] Failed to import loved tracks:', error);
         Alpine.store('ui').toast('Failed to import loved tracks', 'error');
@@ -477,7 +477,7 @@ export function createSettingsView(Alpine) {
             'success',
           );
           // Refresh library to show updated favorites
-          Alpine.store('library').load();
+          Alpine.store('library').load({ forceReload: true });
         } else if (result.matched > 0) {
           Alpine.store('ui').toast(
             `Found ${result.matched} matches (already favorited)`,
@@ -518,7 +518,7 @@ export function createSettingsView(Alpine) {
             'success',
           );
           // Refresh library to reflect merged/updated tracks
-          Alpine.store('library').load();
+          Alpine.store('library').load({ forceReload: true });
         } else {
           Alpine.store('ui').toast('Scan complete: no changes needed', 'info');
         }
