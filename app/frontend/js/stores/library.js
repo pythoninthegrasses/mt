@@ -742,10 +742,32 @@ export function createLibraryStore(Alpine) {
         const sortKey = this.sortBy === 'default' ? 'album' : this.sortBy;
         const dir = this.sortOrder === 'desc' ? -1 : 1;
 
+        // Build canonical artist per album (MIN of album_artist/artist across all tracks
+        // in the same album). This keeps soundtrack/compilation albums together even when
+        // per-track artists differ.
+        const canonicalArtistMap = new Map();
+        if (sortKey === 'artist') {
+          for (const track of result) {
+            const album = track.album || '';
+            const artist = track.album_artist || track.artist || '';
+            const existing = canonicalArtistMap.get(album);
+            if (existing === undefined || artist < existing) {
+              canonicalArtistMap.set(album, artist);
+            }
+          }
+        }
+
         result.sort((a, b) => {
           // Primary sort with ignore-words stripping
-          const aVal = this._stripIgnoredPrefix(a[sortKey] || '', ignoreWords).toLowerCase();
-          const bVal = this._stripIgnoredPrefix(b[sortKey] || '', ignoreWords).toLowerCase();
+          // For artist sort, use canonical album artist to group albums together
+          const aRaw = sortKey === 'artist'
+            ? (canonicalArtistMap.get(a.album || '') || a.album_artist || a.artist || '')
+            : (a[sortKey] || '');
+          const bRaw = sortKey === 'artist'
+            ? (canonicalArtistMap.get(b.album || '') || b.album_artist || b.artist || '')
+            : (b[sortKey] || '');
+          const aVal = this._stripIgnoredPrefix(aRaw, ignoreWords).toLowerCase();
+          const bVal = this._stripIgnoredPrefix(bRaw, ignoreWords).toLowerCase();
 
           if (aVal < bVal) return -dir;
           if (aVal > bVal) return dir;
@@ -758,16 +780,22 @@ export function createLibraryStore(Alpine) {
             if (aAlbum > bAlbum) return 1;
           }
 
-          // Tiebreaker 2: Track Number
+          // Tiebreaker 2: Disc Number
+          const aDisc = parseInt(String(a.disc_number || '0').split('/')[0], 10) || 0;
+          const bDisc = parseInt(String(b.disc_number || '0').split('/')[0], 10) || 0;
+          if (aDisc < bDisc) return -1;
+          if (aDisc > bDisc) return 1;
+
+          // Tiebreaker 3: Track Number
           const aTrack = parseInt(String(a.track_number || '').split('/')[0], 10) || 999999;
           const bTrack = parseInt(String(b.track_number || '').split('/')[0], 10) || 999999;
           if (aTrack < bTrack) return -1;
           if (aTrack > bTrack) return 1;
 
-          // Tiebreaker 3: Artist (if not primary sort key)
+          // Tiebreaker 4: Artist (if not primary sort key)
           if (sortKey !== 'artist') {
-            const aArtist = this._stripIgnoredPrefix(a.artist || '', ignoreWords).toLowerCase();
-            const bArtist = this._stripIgnoredPrefix(b.artist || '', ignoreWords).toLowerCase();
+            const aArtist = this._stripIgnoredPrefix(a.album_artist || a.artist || '', ignoreWords).toLowerCase();
+            const bArtist = this._stripIgnoredPrefix(b.album_artist || b.artist || '', ignoreWords).toLowerCase();
             if (aArtist < bArtist) return -1;
             if (aArtist > bArtist) return 1;
           }

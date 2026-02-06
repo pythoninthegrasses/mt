@@ -105,11 +105,12 @@ pub fn get_all_tracks(conn: &Connection, query: &LibraryQuery) -> DbResult<Pagin
                 missing, last_seen_at, file_mtime_ns, file_inode, content_hash
          FROM library
          {}
-         ORDER BY {} {}
+         ORDER BY {} {}{}
          LIMIT ? OFFSET ?",
         where_clause,
         query.sort_by.as_sql(),
-        query.sort_order.as_sql()
+        query.sort_order.as_sql(),
+        query.sort_by.secondary_sort_sql()
     );
 
     let mut all_params: Vec<&dyn rusqlite::ToSql> = params_refs;

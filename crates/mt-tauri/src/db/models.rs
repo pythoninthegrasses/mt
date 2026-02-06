@@ -241,12 +241,19 @@ pub enum LibrarySortColumn {
 }
 
 
+/// Subquery to derive a canonical album_artist for all tracks in the same album.
+/// Uses MIN() with COLLATE NOCASE so all tracks sharing an album name get the same
+/// case-insensitive sort key, keeping soundtrack/compilation albums together.
+const CANONICAL_ALBUM_ARTIST: &str = "(SELECT MIN(COALESCE(l2.album_artist, l2.artist) \
+     COLLATE NOCASE) FROM library l2 WHERE l2.album = library.album \
+     AND (l2.missing = 0 OR l2.missing IS NULL))";
+
 impl LibrarySortColumn {
     pub fn as_sql(&self) -> &'static str {
         match self {
-            LibrarySortColumn::Title => "title",
-            LibrarySortColumn::Artist => "artist",
-            LibrarySortColumn::Album => "album",
+            LibrarySortColumn::Title => "title COLLATE NOCASE",
+            LibrarySortColumn::Artist => CANONICAL_ALBUM_ARTIST,
+            LibrarySortColumn::Album => "album COLLATE NOCASE",
             LibrarySortColumn::AddedDate => "added_date",
             LibrarySortColumn::PlayCount => "play_count",
             LibrarySortColumn::Duration => "duration",
@@ -256,6 +263,20 @@ impl LibrarySortColumn {
             LibrarySortColumn::DiscNumber => "disc_number",
             LibrarySortColumn::TrackTotal => "track_total",
             LibrarySortColumn::TrackNumber => "track_number",
+        }
+    }
+
+    /// Returns secondary ORDER BY columns for deterministic album track ordering.
+    /// Ensures tracks within the same album are sorted by disc number then track number.
+    /// Uses CAST(... AS INTEGER) because track_number and disc_number are TEXT columns.
+    /// Uses COLLATE NOCASE for case-insensitive text sorting.
+    pub fn secondary_sort_sql(&self) -> &'static str {
+        match self {
+            LibrarySortColumn::Artist => ", album COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC",
+            LibrarySortColumn::Album => ", CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC",
+            LibrarySortColumn::DiscNumber => ", CAST(track_number AS INTEGER) ASC",
+            LibrarySortColumn::TrackNumber => ", CAST(disc_number AS INTEGER) ASC",
+            _ => ", COALESCE(album_artist, artist) COLLATE NOCASE ASC, album COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC",
         }
     }
 }

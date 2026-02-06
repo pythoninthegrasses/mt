@@ -357,6 +357,74 @@ test.describe('Sorting - Ignore Words Feature', () => {
     });
   });
 
+  test.describe('Disc Number Tiebreaker', () => {
+    test('should sort multi-disc album tracks by disc then track number', async ({ page }) => {
+      // Create a multi-disc album with tracks in scrambled order
+      await page.evaluate((defaultWords) => {
+        const testTracks = [
+          { id: 'd1', title: 'Disc 2 Track 3', artist: 'Same Artist', album: 'Multi Disc Album', disc_number: '2', track_number: '3', duration: 180000 },
+          { id: 'd2', title: 'Disc 1 Track 2', artist: 'Same Artist', album: 'Multi Disc Album', disc_number: '1', track_number: '2', duration: 180000 },
+          { id: 'd3', title: 'Disc 2 Track 1', artist: 'Same Artist', album: 'Multi Disc Album', disc_number: '2', track_number: '1', duration: 180000 },
+          { id: 'd4', title: 'Disc 1 Track 1', artist: 'Same Artist', album: 'Multi Disc Album', disc_number: '1', track_number: '1', duration: 180000 },
+          { id: 'd5', title: 'Disc 1 Track 3', artist: 'Same Artist', album: 'Multi Disc Album', disc_number: '1', track_number: '3', duration: 180000 },
+          { id: 'd6', title: 'Disc 2 Track 2', artist: 'Same Artist', album: 'Multi Disc Album', disc_number: '2', track_number: '2', duration: 180000 },
+        ];
+        window.Alpine.store('ui').sortIgnoreWords = true;
+        window.Alpine.store('ui').sortIgnoreWordsList = defaultWords;
+        window.Alpine.store('library').tracks = testTracks;
+        window.Alpine.store('library').sortBy = 'artist';
+        window.Alpine.store('library').sortOrder = 'asc';
+        window.Alpine.store('library').applyFilters();
+      }, DEFAULT_SORT_IGNORE_WORDS);
+
+      await page.waitForTimeout(300);
+
+      const library = await getAlpineStore(page, 'library');
+      const titles = library.filteredTracks.map(t => t.title);
+
+      // Expected order: disc 1 tracks (1,2,3), then disc 2 tracks (1,2,3)
+      expect(titles).toEqual([
+        'Disc 1 Track 1',
+        'Disc 1 Track 2',
+        'Disc 1 Track 3',
+        'Disc 2 Track 1',
+        'Disc 2 Track 2',
+        'Disc 2 Track 3',
+      ]);
+    });
+
+    test('should sort tracks without disc number before tracks with disc number', async ({ page }) => {
+      await page.evaluate((defaultWords) => {
+        const testTracks = [
+          { id: 'n1', title: 'Track B', artist: 'Same Artist', album: 'Same Album', disc_number: '1', track_number: '2', duration: 180000 },
+          { id: 'n2', title: 'Track A', artist: 'Same Artist', album: 'Same Album', disc_number: null, track_number: '1', duration: 180000 },
+          { id: 'n3', title: 'Track C', artist: 'Same Artist', album: 'Same Album', disc_number: '1', track_number: '1', duration: 180000 },
+        ];
+        window.Alpine.store('ui').sortIgnoreWords = true;
+        window.Alpine.store('ui').sortIgnoreWordsList = defaultWords;
+        window.Alpine.store('library').tracks = testTracks;
+        window.Alpine.store('library').sortBy = 'artist';
+        window.Alpine.store('library').sortOrder = 'asc';
+        window.Alpine.store('library').applyFilters();
+      }, DEFAULT_SORT_IGNORE_WORDS);
+
+      await page.waitForTimeout(300);
+
+      const library = await getAlpineStore(page, 'library');
+      const tracks = library.filteredTracks.map(t => ({
+        disc: t.disc_number,
+        track: t.track_number,
+      }));
+
+      // Null disc (parsed as 0) sorts before disc 1
+      expect(tracks[0].disc).toBeNull();
+      expect(tracks[1].disc).toBe('1');
+      expect(tracks[1].track).toBe('1');
+      expect(tracks[2].disc).toBe('1');
+      expect(tracks[2].track).toBe('2');
+    });
+  });
+
   test.describe('Real-time Updates', () => {
     test('should update sort order when toggling ignore words', async ({ page }) => {
       // Start with ignore words disabled
