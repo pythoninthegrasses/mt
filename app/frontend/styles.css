@@ -1,22 +1,22 @@
-@import "tailwindcss";
-@import "basecoat-css";
+@import 'tailwindcss';
+@import 'basecoat-css';
 
 @theme {
-  --color-itunes-red: #FA2D48;
-  --color-itunes-red-hover: #E8222E;
-  --color-itunes-sidebar: #F5F5F7;
-  --color-itunes-row-alt: #FAFAFA;
-  --color-itunes-border: #E5E5EA;
-  --color-itunes-text-secondary: #8E8E93;
+  --color-itunes-red: #fa2d48;
+  --color-itunes-red-hover: #e8222e;
+  --color-itunes-sidebar: #f5f5f7;
+  --color-itunes-row-alt: #fafafa;
+  --color-itunes-border: #e5e5ea;
+  --color-itunes-text-secondary: #8e8e93;
 }
 
 :root {
-  --itunes-red: #FA2D48;
-  --itunes-red-hover: #E8222E;
-  --itunes-sidebar-bg: #F5F5F7;
-  --itunes-row-alt: #FAFAFA;
-  --itunes-border: #E5E5EA;
-  --itunes-text-secondary: #8E8E93;
+  --itunes-red: #fa2d48;
+  --itunes-red-hover: #e8222e;
+  --itunes-sidebar-bg: #f5f5f7;
+  --itunes-row-alt: #fafafa;
+  --itunes-border: #e5e5ea;
+  --itunes-text-secondary: #8e8e93;
 }
 
 [data-tauri-drag-region] {
@@ -30,7 +30,7 @@
 }
 
 .dark .titlebar-drag-region {
-  background-color: #1E1E1E;
+  background-color: #1e1e1e;
 }
 
 .track-row-even {
@@ -169,7 +169,7 @@ aside button:hover svg {
   transition: transform 0.15s ease-out;
 }
 
-[data-theme-preset="metro-teal"] {
+[data-theme-preset='metro-teal'] {
   --background: 0 0% 12%;
   --foreground: 0 0% 100%;
   --card: 0 0% 12%;
@@ -199,104 +199,104 @@ aside button:hover svg {
   --mt-progress-fill: 184 100% 38%;
 }
 
-[data-theme-preset="metro-teal"] .track-row-even {
+[data-theme-preset='metro-teal'] .track-row-even {
   background-color: hsl(var(--mt-row-even));
 }
 
-[data-theme-preset="metro-teal"] .track-row-odd {
+[data-theme-preset='metro-teal'] .track-row-odd {
   background-color: hsl(var(--mt-row-odd));
 }
 
-[data-theme-preset="metro-teal"] .track-row-selected {
+[data-theme-preset='metro-teal'] .track-row-selected {
   background-color: hsl(var(--primary)) !important;
   color: hsl(var(--primary-foreground)) !important;
   border-bottom: none !important;
 }
 
-[data-theme-preset="metro-teal"] .track-row-playing {
+[data-theme-preset='metro-teal'] .track-row-playing {
   background-color: hsl(var(--mt-playing-bg)) !important;
   color: hsl(var(--mt-playing-fg)) !important;
 }
 
-[data-theme-preset="metro-teal"] footer {
+[data-theme-preset='metro-teal'] footer {
   background-color: #000000;
   border-color: #323232;
 }
 
-[data-theme-preset="metro-teal"] .border-border {
+[data-theme-preset='metro-teal'] .border-border {
   border-color: #323232;
 }
 
-[data-theme-preset="metro-teal"] footer button {
-  color: #CCCCCC !important;
+[data-theme-preset='metro-teal'] footer button {
+  color: #cccccc !important;
 }
 
-[data-theme-preset="metro-teal"] footer button:hover {
-  color: #7FDBE1 !important;
+[data-theme-preset='metro-teal'] footer button:hover {
+  color: #7fdbe1 !important;
 }
 
-[data-theme-preset="metro-teal"] footer button.text-primary,
-[data-theme-preset="metro-teal"] footer button.text-red-500 {
-  color: #7FDBE1 !important;
+[data-theme-preset='metro-teal'] footer button.text-primary,
+[data-theme-preset='metro-teal'] footer button.text-red-500 {
+  color: #7fdbe1 !important;
 }
 
-[data-theme-preset="metro-teal"] [data-testid="player-progressbar"] {
+[data-theme-preset='metro-teal'] [data-testid='player-progressbar'] {
   background-color: #404040 !important;
 }
 
-[data-theme-preset="metro-teal"] [data-testid="player-progressbar"] > div:first-child {
+[data-theme-preset='metro-teal'] [data-testid='player-progressbar'] > div:first-child {
   background-color: #00b7c3 !important;
 }
 
-[data-theme-preset="metro-teal"] [data-testid="player-progressbar"] > div:last-child {
+[data-theme-preset='metro-teal'] [data-testid='player-progressbar'] > div:last-child {
   background-color: #00b7c3 !important;
 }
 
-[data-theme-preset="metro-teal"] footer .bg-\[\#8E8E93\]\/20 {
+[data-theme-preset='metro-teal'] footer .bg-\[\#8E8E93\]\/20 {
   background-color: #323232 !important;
 }
 
-[data-theme-preset="metro-teal"] .track-row-even,
-[data-theme-preset="metro-teal"] .track-row-odd {
+[data-theme-preset='metro-teal'] .track-row-even,
+[data-theme-preset='metro-teal'] .track-row-odd {
   border-bottom: none !important;
 }
 
-[data-theme-preset="metro-teal"] aside > div:last-child {
+[data-theme-preset='metro-teal'] aside > div:last-child {
   border-top: none !important;
 }
 
-[data-theme-preset="metro-teal"] [data-testid="library-header"] {
-  background-color: #1E1E1E !important;
+[data-theme-preset='metro-teal'] [data-testid='library-header'] {
+  background-color: #1e1e1e !important;
 }
 
-[data-theme-preset="metro-teal"] [data-testid="library-header"] .column-header-active {
+[data-theme-preset='metro-teal'] [data-testid='library-header'] .column-header-active {
   background: transparent !important;
 }
 
-[data-theme-preset="metro-teal"] aside {
-  background-color: #1E1E1E !important;
+[data-theme-preset='metro-teal'] aside {
+  background-color: #1e1e1e !important;
 }
 
-[data-theme-preset="metro-teal"] .bg-card\/50,
-[data-theme-preset="metro-teal"] .bg-card {
-  background-color: #1E1E1E !important;
+[data-theme-preset='metro-teal'] .bg-card\/50,
+[data-theme-preset='metro-teal'] .bg-card {
+  background-color: #1e1e1e !important;
 }
 
-[data-theme-preset="metro-teal"] .bg-background {
-  background-color: #1E1E1E !important;
+[data-theme-preset='metro-teal'] .bg-background {
+  background-color: #1e1e1e !important;
 }
 
-[data-theme-preset="metro-teal"] .titlebar-drag-region {
-  background-color: #1E1E1E !important;
+[data-theme-preset='metro-teal'] .titlebar-drag-region {
+  background-color: #1e1e1e !important;
 }
 
 /* Metro-teal settings panels need more contrast */
-[data-theme-preset="metro-teal"] [data-testid="settings-view"] .bg-muted\/30 {
+[data-theme-preset='metro-teal'] [data-testid='settings-view'] .bg-muted\/30 {
   background-color: rgba(50, 50, 50, 0.6) !important;
   border: 1px solid #404040;
 }
 
-[data-theme-preset="metro-teal"] [data-testid="settings-view"] .border-border\/50 {
+[data-theme-preset='metro-teal'] [data-testid='settings-view'] .border-border\/50 {
   border-color: #404040 !important;
 }
 
@@ -307,14 +307,22 @@ aside button:hover svg {
    * Header: only allow visual property transitions (no transform needed)
    * Track rows: allow transform transitions for drag-and-drop row shifting
    */
-  [data-testid="library-header"] {
+  [data-testid='library-header'] {
     transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow;
     transition-duration: 0.15s;
     transition-timing-function: ease;
   }
 
   .track-list > .grid {
-    transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+    transition-property:
+      background-color,
+      border-color,
+      color,
+      fill,
+      stroke,
+      opacity,
+      box-shadow,
+      transform;
     transition-duration: 0.15s;
     transition-timing-function: ease-out;
   }
@@ -352,6 +360,22 @@ aside button:hover svg {
     border-radius: 0.5rem;
     box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
     padding: 0.25rem;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.5) transparent;
+  }
+  .context-menu::-webkit-scrollbar {
+    -webkit-appearance: none;
+    width: 6px;
+  }
+  .context-menu::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .context-menu::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.4);
+    border-radius: 3px;
+  }
+  .context-menu::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.7);
   }
   .context-menu-item {
     display: flex;
@@ -363,7 +387,7 @@ aside button:hover svg {
     font-size: 0.875rem;
   }
   .context-menu-item:hover {
-    background: #DFDFDF;
+    background: #dfdfdf;
   }
   .context-menu-item.disabled {
     opacity: 0.5;
@@ -373,7 +397,7 @@ aside button:hover svg {
     color: hsl(var(--destructive));
   }
   .context-menu-item.danger:hover {
-    background: #DFDFDF;
+    background: #dfdfdf;
   }
   .context-menu-separator {
     height: 1px;
@@ -463,7 +487,7 @@ aside button:hover svg {
   }
 
   /* Range slider styling for better visibility in dark themes */
-  input[type="range"] {
+  input[type='range'] {
     -webkit-appearance: none;
     appearance: none;
     background: transparent;
@@ -471,20 +495,20 @@ aside button:hover svg {
   }
 
   /* Slider track */
-  input[type="range"]::-webkit-slider-track {
+  input[type='range']::-webkit-slider-track {
     background: hsl(var(--muted));
     height: 8px;
     border-radius: 4px;
   }
 
-  input[type="range"]::-moz-range-track {
+  input[type='range']::-moz-range-track {
     background: hsl(var(--muted));
     height: 8px;
     border-radius: 4px;
   }
 
   /* Slider thumb */
-  input[type="range"]::-webkit-slider-thumb {
+  input[type='range']::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 18px;
@@ -496,7 +520,7 @@ aside button:hover svg {
     margin-top: -5px;
   }
 
-  input[type="range"]::-moz-range-thumb {
+  input[type='range']::-moz-range-thumb {
     width: 18px;
     height: 18px;
     border-radius: 50%;
@@ -507,22 +531,22 @@ aside button:hover svg {
   }
 
   /* Hover and active states */
-  input[type="range"]::-webkit-slider-thumb:hover {
+  input[type='range']::-webkit-slider-thumb:hover {
     background: hsl(var(--primary) / 0.9);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   }
 
-  input[type="range"]::-moz-range-thumb:hover {
+  input[type='range']::-moz-range-thumb:hover {
     background: hsl(var(--primary) / 0.9);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   }
 
-  input[type="range"]:active::-webkit-slider-thumb {
+  input[type='range']:active::-webkit-slider-thumb {
     background: hsl(var(--primary) / 0.8);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   }
 
-  input[type="range"]:active::-moz-range-thumb {
+  input[type='range']:active::-moz-range-thumb {
     background: hsl(var(--primary) / 0.8);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   }
