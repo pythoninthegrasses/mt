@@ -50,13 +50,14 @@ task npm:test:e2e:ui      # Playwright interactive UI mode
 ```
 
 ### Running Specific Tests
+**IMPORTANT: Playwright tests must be run from `app/frontend/` directory**
 ```bash
-cargo nextest run --workspace                                 # Rust backend (preferred)
-cargo test --workspace                                        # Rust backend (fallback)
-npm --prefix app/frontend test                                # Vitest unit
-npx playwright test tests/library.spec.js                     # Single E2E file
-npx playwright test --headed                                  # Headed browser
-npx playwright test --debug tests/sidebar.spec.js             # Debug mode
+cargo nextest run --workspace                                              # Rust backend (preferred)
+cargo test --workspace                                                     # Rust backend (fallback)
+npm --prefix app/frontend test                                             # Vitest unit
+cd app/frontend && npx playwright test tests/library.spec.js               # Single E2E file
+cd app/frontend && npx playwright test --headed                            # Headed browser
+cd app/frontend && npx playwright test --debug tests/sidebar.spec.js       # Debug mode
 ```
 
 ### Pre-commit

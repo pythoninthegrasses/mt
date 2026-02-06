@@ -661,6 +661,16 @@ export function createSidebar(Alpine) {
         event.code === 'Backspace';
 
       if (isDeleteKey) {
+        // If no explicit multi-selection, but a playlist is active, target it
+        if (this.selectedPlaylistIds.length === 0 && this.activeSection?.startsWith('playlist-')) {
+          const activePlaylistId = parseInt(this.activeSection.replace('playlist-', ''), 10);
+          if (!isNaN(activePlaylistId)) {
+            event.preventDefault();
+            this.selectedPlaylistIds = [activePlaylistId];
+            this.deleteSelectedPlaylists();
+            return;
+          }
+        }
         if (this.selectedPlaylistIds.length > 0) {
           event.preventDefault();
           this.deleteSelectedPlaylists();

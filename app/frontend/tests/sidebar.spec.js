@@ -952,3 +952,142 @@ test.describe('Playlist Multi-Select and Batch Delete (task-161)', () => {
     await page.keyboard.press('Delete');
   });
 });
+
+test.describe('Delete active playlist via keyboard (no multi-select)', () => {
+  let playlistState;
+
+  test.beforeEach(async ({ page }) => {
+    playlistState = createPlaylistState();
+    await setupPlaylistMocks(page, playlistState);
+    await page.goto('/');
+    await waitForAlpine(page);
+    await page.waitForSelector('aside[x-data="sidebar"]', { state: 'visible' });
+    await page.waitForSelector('[data-testid="sidebar-playlist-1"]', { state: 'visible' });
+  });
+
+  test('Delete key on active playlist shows confirmation dialog', async ({ page }) => {
+    const playlistList = page.locator('[data-testid="playlist-list"]');
+    const playlist1 = page.locator('[data-testid="sidebar-playlist-1"]');
+
+    // Regular click navigates to the playlist (no multi-select)
+    await playlist1.click();
+    await page.waitForTimeout(300);
+
+    // Verify activeSection is set but selectedPlaylistIds is empty
+    const state = await page.evaluate(() => {
+      const sidebar = window.Alpine.$data(document.querySelector('aside[x-data="sidebar"]'));
+      return {
+        activeSection: sidebar.activeSection,
+        selectedCount: sidebar.selectedPlaylistIds.length,
+      };
+    });
+    expect(state.activeSection).toBe('playlist-1');
+    expect(state.selectedCount).toBe(0);
+
+    // Focus the playlist list and press Delete
+    await playlistList.focus();
+
+    page.once('dialog', async (dialog) => {
+      expect(dialog.type()).toBe('confirm');
+      expect(dialog.message()).toContain('Delete playlist');
+      expect(dialog.message()).toContain('Test Playlist 1');
+      await dialog.dismiss();
+    });
+
+    await page.keyboard.press('Delete');
+  });
+
+  test('Backspace on active playlist shows confirmation dialog', async ({ page }) => {
+    const playlistList = page.locator('[data-testid="playlist-list"]');
+    const playlist2 = page.locator('[data-testid="sidebar-playlist-2"]');
+
+    await playlist2.click();
+    await page.waitForTimeout(300);
+
+    await playlistList.focus();
+
+    page.once('dialog', async (dialog) => {
+      expect(dialog.type()).toBe('confirm');
+      expect(dialog.message()).toContain('Test Playlist 2');
+      await dialog.dismiss();
+    });
+
+    await page.keyboard.press('Backspace');
+  });
+
+  test('confirmed deletion of active playlist removes it and navigates to all', async ({ page }) => {
+    const playlistList = page.locator('[data-testid="playlist-list"]');
+    const playlist1 = page.locator('[data-testid="sidebar-playlist-1"]');
+
+    await playlist1.click();
+    await page.waitForTimeout(300);
+    await playlistList.focus();
+
+    page.once('dialog', async (dialog) => {
+      await dialog.accept();
+    });
+
+    await page.keyboard.press('Delete');
+    await page.waitForTimeout(500);
+
+    // Verify the DELETE API call was made for playlist 1
+    const deleteCalls = findApiCalls(playlistState, 'DELETE', '/playlists/1');
+    expect(deleteCalls.length).toBeGreaterThan(0);
+
+    // Verify navigation to 'all' since active playlist was deleted
+    const activeSection = await page.evaluate(() => {
+      const sidebar = window.Alpine.$data(document.querySelector('aside[x-data="sidebar"]'));
+      return sidebar.activeSection;
+    });
+    expect(activeSection).toBe('all');
+  });
+
+  test('canceled deletion of active playlist leaves it unchanged', async ({ page }) => {
+    const playlistList = page.locator('[data-testid="playlist-list"]');
+    const playlist1 = page.locator('[data-testid="sidebar-playlist-1"]');
+
+    await playlist1.click();
+    await page.waitForTimeout(300);
+    await playlistList.focus();
+
+    page.once('dialog', async (dialog) => {
+      await dialog.dismiss();
+    });
+
+    await page.keyboard.press('Delete');
+    await page.waitForTimeout(300);
+
+    // No DELETE API call should have been made
+    const deleteCalls = findApiCalls(playlistState, 'DELETE', '/playlists/');
+    expect(deleteCalls.length).toBe(0);
+
+    // Playlist should still be visible
+    await expect(playlist1).toBeVisible();
+
+    // Active section should still be the playlist
+    const activeSection = await page.evaluate(() => {
+      const sidebar = window.Alpine.$data(document.querySelector('aside[x-data="sidebar"]'));
+      return sidebar.activeSection;
+    });
+    expect(activeSection).toBe('playlist-1');
+  });
+
+  test('Delete key does nothing when no playlist is active', async ({ page }) => {
+    const playlistList = page.locator('[data-testid="playlist-list"]');
+
+    // Ensure we're on 'all' section (no playlist active)
+    const activeSection = await page.evaluate(() => {
+      const sidebar = window.Alpine.$data(document.querySelector('aside[x-data="sidebar"]'));
+      return sidebar.activeSection;
+    });
+    expect(activeSection).toBe('all');
+
+    await playlistList.focus();
+    await page.keyboard.press('Delete');
+    await page.waitForTimeout(300);
+
+    // No DELETE API call should have been made
+    const deleteCalls = findApiCalls(playlistState, 'DELETE', '/playlists/');
+    expect(deleteCalls.length).toBe(0);
+  });
+});
