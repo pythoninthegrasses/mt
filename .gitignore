@@ -4,6 +4,7 @@
 .playwright-mcp/
 .sisyphus/
 .task/
+cert*
 CLAUDE.md
 playwright-report/
 repomix-output.md

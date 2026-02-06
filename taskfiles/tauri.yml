@@ -91,6 +91,26 @@ tasks:
       - "{{.TAURI_DIR}}/Cargo.toml"
       - "{{.TAURI_DIR}}/tauri.conf.json"
 
+  build:signed:
+    desc: "Build signed macOS app (requires APPLE_SIGNING_IDENTITY)"
+    deps: [":deno:install"]
+    preconditions:
+      - sh: '[ -n "$APPLE_SIGNING_IDENTITY" ]'
+        msg: "APPLE_SIGNING_IDENTITY env var is required"
+    cmds:
+      - task: _build
+        vars:
+          TARGET: "{{.MACOS_ARM64_TARGET}}"
+
+  build:dmg:
+    desc: "Build signed DMG installer (requires APPLE_SIGNING_IDENTITY)"
+    deps: [":deno:install"]
+    preconditions:
+      - sh: '[ -n "$APPLE_SIGNING_IDENTITY" ]'
+        msg: "APPLE_SIGNING_IDENTITY env var is required"
+    cmds:
+      - deno run -A npm:@tauri-apps/cli build --target {{.MACOS_ARM64_TARGET}} --bundles dmg
+
   dev:
     desc: "Run Tauri in development mode"
     deps: [":deno:install"]

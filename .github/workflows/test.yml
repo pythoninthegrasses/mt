@@ -194,40 +194,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Add Homebrew to PATH
-        run: echo "/opt/homebrew/bin:/opt/homebrew/sbin" >> $GITHUB_PATH
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup Zig
-        uses: mlugg/setup-zig@v1
-        with:
-          version: 0.14.0
-
-      - name: Install TagLib (macOS)
-        run: |
-          if ! pkg-config --exists taglib_c 2>/dev/null; then
-            echo "Installing TagLib via Homebrew..."
-            brew install taglib
-          else
-            echo "TagLib already installed: $(pkg-config --modversion taglib_c)"
-          fi
+      - name: Setup Tauri build environment
+        uses: ./.github/actions/setup-tauri-build
 
       - name: Verify build dependencies
         run: |
           echo "Zig: $(zig version)"
           echo "TagLib: $(pkg-config --modversion taglib_c)"
           echo "pkg-config path: $(pkg-config --variable=libdir taglib_c)"
-
-      - name: Install frontend dependencies
-        working-directory: ./app/frontend
-        run: npm ci
 
       - name: Build frontend
         working-directory: ./app/frontend
@@ -250,22 +224,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Add Homebrew to PATH
-        run: echo "/opt/homebrew/bin:/opt/homebrew/sbin" >> $GITHUB_PATH
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup Zig
-        uses: mlugg/setup-zig@v1
-        with:
-          version: 0.14.0
-
-      - name: Install TagLib (macOS)
-        run: |
-          if ! pkg-config --exists taglib_c 2>/dev/null; then
-            brew install taglib
-          fi
+      - name: Setup Tauri build environment
+        uses: ./.github/actions/setup-tauri-build
 
       - name: Install cargo-tarpaulin
         run: |

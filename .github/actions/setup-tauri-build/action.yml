@@ -1,0 +1,42 @@
+name: 'Setup Tauri Build Environment'
+description: 'Install Node.js, Rust, Zig, TagLib, and frontend deps for Tauri builds'
+
+inputs:
+  node-version:
+    description: 'Node.js version'
+    default: '20'
+  zig-version:
+    description: 'Zig version'
+    default: '0.14.0'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Add Homebrew to PATH
+      shell: bash
+      run: echo "/opt/homebrew/bin:/opt/homebrew/sbin" >> $GITHUB_PATH
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Setup Zig
+      uses: mlugg/setup-zig@v1
+      with:
+        version: ${{ inputs.zig-version }}
+
+    - name: Install TagLib
+      shell: bash
+      run: |
+        if ! pkg-config --exists taglib_c 2>/dev/null; then
+          brew install taglib
+        fi
+
+    - name: Install frontend dependencies
+      shell: bash
+      working-directory: ./app/frontend
+      run: npm ci

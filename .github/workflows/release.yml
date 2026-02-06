@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-macos:
+    name: Build macOS (ARM64)
+    runs-on: [macOS, ARM64]
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Tauri build environment
+        uses: ./.github/actions/setup-tauri-build
+
+      - name: Import Apple certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$HOME/Library/Keychains/ci_signing.keychain-db"
+          echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" ci_signing.keychain
+          security default-keychain -s ci_signing.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" ci_signing.keychain
+          security set-keychain-settings -t 3600 -u ci_signing.keychain
+          security import certificate.p12 -k ci_signing.keychain \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" ci_signing.keychain
+          security find-identity -v -p codesigning ci_signing.keychain
+          rm certificate.p12
+
+      - name: Write App Store Connect API key
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_KEY_ID }}
+          API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_KEY }}
+        run: |
+          mkdir -p ~/private_keys
+          echo "$API_KEY_CONTENT" | base64 --decode > ~/private_keys/AuthKey_${API_KEY_ID}.p8
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID }}
+          APPLE_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY_KEY_ID }}
+          APPLE_API_KEY_PATH: ~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_KEY_ID }}.p8
+        with:
+          tagName: v__VERSION__
+          releaseName: 'mt v__VERSION__'
+          releaseBody: 'See assets below to download and install.'
+          releaseDraft: true
+          prerelease: false
+          args: --target aarch64-apple-darwin
+          projectPath: './crates/mt-tauri'
+
+      - name: Cleanup CI keychain
+        if: always()
+        run: |
+          security delete-keychain ci_signing.keychain || true
+          rm -f ~/private_keys/AuthKey_*.p8
