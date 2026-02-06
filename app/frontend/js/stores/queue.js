@@ -17,6 +17,7 @@ export function createQueueStore(Alpine) {
     // Playback modes
     shuffle: false,
     loop: 'none', // 'none', 'all', 'one'
+    stopAfterCurrent: false, // Stop playback when current track ends
 
     // Repeat-one "play once more" state
     _repeatOnePending: false,
@@ -236,20 +237,29 @@ export function createQueueStore(Alpine) {
         currentIndex: this.currentIndex,
       });
 
-      // Update local state
-      this.items.splice(index, 0, ...tracksArray);
+      // Prevent QUEUE_STATE_CHANGED event from overwriting state during insert
+      this._updating = true;
 
-      // Adjust current index if needed
-      if (this.currentIndex >= index) {
-        this.currentIndex += tracksArray.length;
-      }
-
-      // Persist to backend
       try {
-        const trackIds = tracksArray.map((t) => t.id);
-        await api.queue.add(trackIds, index);
-      } catch (error) {
-        console.error('[queue] Failed to persist insert:', error);
+        // Update local state
+        this.items.splice(index, 0, ...tracksArray);
+
+        // Adjust current index if needed
+        if (this.currentIndex >= index) {
+          this.currentIndex += tracksArray.length;
+        }
+
+        // Persist to backend
+        try {
+          const trackIds = tracksArray.map((t) => t.id);
+          await api.queue.add(trackIds, index);
+        } catch (error) {
+          console.error('[queue] Failed to persist insert:', error);
+        }
+      } finally {
+        setTimeout(() => {
+          this._updating = false;
+        }, 200);
       }
     },
 
@@ -261,14 +271,18 @@ export function createQueueStore(Alpine) {
       const tracksArray = Array.isArray(tracks) ? tracks : [tracks];
       if (tracksArray.length === 0) return;
 
-      // Insert after current track, or at beginning if nothing playing
-      const insertIndex = this.currentIndex >= 0 ? this.currentIndex + 1 : 0;
+      // Append after any previously queued-next tracks (not before them)
+      if (!this._playNextOffset) this._playNextOffset = 0;
+      const insertIndex = (this.currentIndex >= 0 ? this.currentIndex + 1 : 0) + this._playNextOffset;
 
       console.log('[queue]', 'play_next_tracks', {
         count: tracksArray.length,
         trackIds: tracksArray.map((t) => t.id),
         insertIndex,
+        playNextOffset: this._playNextOffset,
       });
+
+      this._playNextOffset += tracksArray.length;
 
       await this.insert(insertIndex, tracksArray);
     },
@@ -388,6 +402,9 @@ export function createQueueStore(Alpine) {
         this._playHistory = [];
       }
 
+      // Reset play-next insertion offset when track changes
+      this._playNextOffset = 0;
+
       this.currentIndex = index;
       const track = this.items[index];
 
@@ -397,6 +414,13 @@ export function createQueueStore(Alpine) {
 
     async playNext() {
       if (this.items.length === 0) return;
+
+      // Stop after current track if flag is set
+      if (this.stopAfterCurrent) {
+        this.stopAfterCurrent = false;
+        Alpine.store('player').isPlaying = false;
+        return;
+      }
 
       if (this.loop === 'one') {
         if (this._repeatOnePending) {
