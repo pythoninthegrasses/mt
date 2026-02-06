@@ -4164,4 +4164,54 @@ test.describe('Type-to-jump artist navigation (task-255)', () => {
     // This could be "The La's" (stripped to "La's") or any artist with "la" at word boundary
     expect(selectedArtist).toBeTruthy();
   });
+
+  test('should prefer stripped-prefix match over word-boundary match', async ({ page }) => {
+    // Regression test for the "la" → "Konami Kukeiha Club" bug:
+    // Typing "la" should match "The La's" (stripped "the " → "la's" starts with "la")
+    // NOT an artist where "la" only matches at a word boundary deeper in the name
+    await page.evaluate(() => {
+      const library = window.Alpine.store('library');
+      // Insert tracks: word-boundary decoy first, then the target
+      library.tracks.unshift(
+        {
+          id: 9998,
+          title: 'Decoy Track',
+          artist: 'Konami Kukeiha Club - Yoann Laulan',
+          album: 'Test Album',
+          duration: 180,
+          filepath: '/music/test/decoy.mp3',
+        },
+        {
+          id: 9999,
+          title: 'There She Goes',
+          artist: "The La's",
+          album: "The La's",
+          duration: 200,
+          filepath: '/music/test/las.mp3',
+        },
+      );
+      library.applyFilters();
+      window.Alpine.store('ui').sortIgnoreWords = true;
+      window.Alpine.store('ui').sortIgnoreWordsList = 'the, a, an, la, le, les, los, las, el';
+    });
+    await page.waitForTimeout(100);
+
+    // Type "la"
+    await page.keyboard.type('la');
+    await page.waitForTimeout(200);
+
+    const selectedArtist = await page.evaluate(() => {
+      const browserEl = document.querySelector('[x-data="libraryBrowser"]');
+      if (!browserEl) return null;
+      const data = window.Alpine.$data(browserEl);
+      const selectedIds = Array.from(data.selectedTracks);
+      if (selectedIds.length === 0) return null;
+      const tracks = window.Alpine.store('library').filteredTracks;
+      const selectedTrack = tracks.find((t) => t.id === selectedIds[0]);
+      return selectedTrack?.artist;
+    });
+
+    // Must match "The La's" (priority 1: stripped prefix) not "Konami..." (priority 3: word boundary)
+    expect(selectedArtist).toBe("The La's");
+  });
 });

@@ -4,7 +4,7 @@ title: Type-to-jump artist navigation in library view
 status: In Progress
 assignee: []
 created_date: '2026-02-05 06:37'
-updated_date: '2026-02-05 15:18'
+updated_date: '2026-02-06 00:16'
 labels:
   - frontend
   - ux
@@ -65,24 +65,23 @@ Add keyboard-driven artist navigation in the music library view. When a track is
 - [x] #6 Does not trigger when typing in input fields
 - [x] #7 Only active in music library view
 
-- [ ] #8 Respects 'ignore words' setting from Settings > Sorting (uses sortIgnoreWordsList)
-- [ ] #9 Default ignore words include: the, a, an, la, le, les, los, las, el, die, der, das, il, lo, i, gli
+- [x] #8 Respects 'ignore words' setting from Settings > Sorting (uses sortIgnoreWordsList)
+- [x] #9 Default ignore words include: the, a, an, la, le, les, los, las, el, die, der, das, il, lo, i, gli
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-## Issue: Default ignore words fallback not working
+## Fix: Priority-based matching in jumpToMatchingArtist
 
-When `sortIgnoreWordsList` is empty but `sortIgnoreWords` is enabled, the fallback to `DEFAULT_SORT_IGNORE_WORDS` is not being applied correctly. Typing "la" jumps to "Konami" instead of "The La's".
+**Root cause:** The original `jumpToMatchingArtist()` used a single `.find()` call that iterated through tracks in order, treating all match types equally. A word-boundary match on "Laulan" (in "Konami Kukeiha Club - Yoann Laulan") at track index 19 was found before the stripped-prefix match on "The La's" at track index 268.
 
-**Current implementation** in `stripIgnoredPrefix()`:
-```javascript
-const wordsList = uiStore.sortIgnoreWordsList?.trim() || DEFAULT_SORT_IGNORE_WORDS;
-```
+**Fix:** Replaced single-pass `.find()` with a priority-based search:
+1. **Priority 1** (highest): Stripped prefix match — e.g., "The La's" → strip "the " → "la's" starts with "la"
+2. **Priority 2**: Full artist name starts with query — e.g., "La Dispute" starts with "la"
+3. **Priority 3** (lowest): Word boundary match — e.g., "Yoann Laulan" has word starting with "la"
 
-**To investigate**:
-- Verify the constant is being imported correctly at runtime
-- Check if the fallback logic triggers when the list is empty
-- May need to debug in the running app to see actual values
+The loop breaks immediately on priority 1 match. For lower priorities, it records the first match but keeps scanning for higher-priority matches.
+
+**The `DEFAULT_SORT_IGNORE_WORDS` fallback was already working correctly** — `sortIgnoreWordsList?.trim() || DEFAULT_SORT_IGNORE_WORDS` properly falls back when the stored value is empty string.
 <!-- SECTION:NOTES:END -->
