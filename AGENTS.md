@@ -38,6 +38,7 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 - websites/deno
 - websites/last_fm_api
 - websites/rs_tauri_2_9_5
+- websites/taskfile_dev
 
 ## Atomic Commit Workflow
 
