@@ -30,6 +30,7 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
     loop: 'none',
     _originalOrder: [...initialItems],
     _repeatOnePending: false,
+    _playNextOffset: 0,
 
     // --- Core operations (simplified, synchronous versions) ---
 
@@ -45,6 +46,15 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
       if (this.currentIndex >= index) {
         this.currentIndex += tracksArray.length;
       }
+    },
+
+    playNextTracks(tracks) {
+      const tracksArray = Array.isArray(tracks) ? tracks : [tracks];
+      if (tracksArray.length === 0) return;
+      if (!this._playNextOffset) this._playNextOffset = 0;
+      const insertIndex = (this.currentIndex >= 0 ? this.currentIndex + 1 : 0) + this._playNextOffset;
+      this._playNextOffset += tracksArray.length;
+      this.insert(insertIndex, tracksArray);
     },
 
     remove(index) {
@@ -86,6 +96,7 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
 
     playIndex(index) {
       if (index < 0 || index >= this.items.length) return;
+      this._playNextOffset = 0;
       this.currentIndex = index;
     },
 
@@ -335,6 +346,125 @@ describe('Queue Store - Permutation Preservation', () => {
       expect(store.currentTrack?.id).toBe(currentTrackId);
     }
   );
+});
+
+// -----------------------------------------------------------------------------
+// Deterministic Tests: playNextTracks (Queue Next / Cmd+D)
+// -----------------------------------------------------------------------------
+
+describe('Queue Store - playNextTracks (Queue Next)', () => {
+  /** Helper: create tracks with sequential IDs */
+  function makeTracks(names) {
+    return names.map((name, i) => ({
+      id: `track-${i}`,
+      title: name,
+      artist: 'Test',
+      album: 'Test',
+      duration: 180000,
+      filepath: `/music/${name}.mp3`,
+    }));
+  }
+
+  test('inserts track after current track', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0); // Playing A
+
+    const newTrack = { id: 'new-1', title: 'X', artist: 'T', album: 'T', duration: 1000, filepath: '/x.mp3' };
+    store.playNextTracks([newTrack]);
+
+    expect(store.items[1].id).toBe('new-1');
+    expect(store.items.map((t) => t.title)).toEqual(['A', 'X', 'B', 'C', 'D']);
+  });
+
+  test('preserves currentIndex after insert', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    const newTrack = { id: 'new-1', title: 'X', artist: 'T', album: 'T', duration: 1000, filepath: '/x.mp3' };
+    store.playNextTracks([newTrack]);
+
+    expect(store.currentIndex).toBe(0);
+    expect(store.currentTrack.title).toBe('A');
+  });
+
+  test('successive calls append in order (not prepend)', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    const x = { id: 'x', title: 'X', artist: 'T', album: 'T', duration: 1000, filepath: '/x.mp3' };
+    const y = { id: 'y', title: 'Y', artist: 'T', album: 'T', duration: 1000, filepath: '/y.mp3' };
+    const z = { id: 'z', title: 'Z', artist: 'T', album: 'T', duration: 1000, filepath: '/z.mp3' };
+
+    store.playNextTracks([x]);
+    store.playNextTracks([y]);
+    store.playNextTracks([z]);
+
+    // Expected order: A (playing), X, Y, Z, B, C
+    expect(store.items.map((t) => t.title)).toEqual(['A', 'X', 'Y', 'Z', 'B', 'C']);
+    expect(store.currentIndex).toBe(0);
+  });
+
+  test('playNextOffset resets when track changes via playIndex', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    const x = { id: 'x', title: 'X', artist: 'T', album: 'T', duration: 1000, filepath: '/x.mp3' };
+    store.playNextTracks([x]);
+    // Queue: [A*, X, B, C], offset=1
+
+    // Advance to next track (simulate Next button)
+    store.playIndex(1); // Now playing X, offset resets to 0
+
+    const y = { id: 'y', title: 'Y', artist: 'T', album: 'T', duration: 1000, filepath: '/y.mp3' };
+    store.playNextTracks([y]);
+
+    // Y should be right after X (index 2), not after the old offset
+    expect(store.items.map((t) => t.title)).toEqual(['A', 'X', 'Y', 'B', 'C']);
+    expect(store.currentIndex).toBe(1);
+  });
+
+  test('insert at beginning when nothing is playing', () => {
+    const tracks = makeTracks(['A', 'B']);
+    const store = createTestQueueStore(tracks);
+    // currentIndex = -1 (nothing playing)
+
+    const x = { id: 'x', title: 'X', artist: 'T', album: 'T', duration: 1000, filepath: '/x.mp3' };
+    store.playNextTracks([x]);
+
+    expect(store.items[0].title).toBe('X');
+    expect(store.items.map((t) => t.title)).toEqual(['X', 'A', 'B']);
+  });
+
+  test('multiple tracks queued at once are inserted in order', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    const batch = [
+      { id: 'x', title: 'X', artist: 'T', album: 'T', duration: 1000, filepath: '/x.mp3' },
+      { id: 'y', title: 'Y', artist: 'T', album: 'T', duration: 1000, filepath: '/y.mp3' },
+    ];
+    store.playNextTracks(batch);
+
+    expect(store.items.map((t) => t.title)).toEqual(['A', 'X', 'Y', 'B', 'C']);
+  });
+
+  test('currentIndex adjusts when inserting before current track', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(2); // Playing C at index 2
+
+    const x = { id: 'x', title: 'X', artist: 'T', album: 'T', duration: 1000, filepath: '/x.mp3' };
+    store.insert(0, [x]); // Insert at beginning
+
+    // currentIndex should shift from 2 to 3
+    expect(store.currentIndex).toBe(3);
+    expect(store.currentTrack.title).toBe('C');
+  });
 });
 
 // -----------------------------------------------------------------------------
