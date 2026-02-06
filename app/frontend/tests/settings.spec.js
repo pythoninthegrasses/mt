@@ -901,3 +901,169 @@ test.describe('Log Export', () => {
     await expect(page.locator('.toast')).not.toBeVisible();
   });
 });
+
+/**
+ * Sidebar Theme Styling on Load (task-256)
+ *
+ * Verifies that the sidebar always displays correct theme styling on every
+ * page load, with no flash of incorrect colors. The fix has two parts:
+ * 1. Theme is pre-applied to <html> before Alpine starts (applyInitialTheme)
+ * 2. Sidebar only transitions width, not background-color (transition-[width])
+ */
+test.describe('Sidebar Theme Styling on Load (task-256)', () => {
+  test.beforeEach(async ({ page }) => {
+    const libraryState = createLibraryState();
+    await setupLibraryMocks(page, libraryState);
+
+    await page.route(/\/api\/lastfm\/settings/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          enabled: false,
+          username: null,
+          authenticated: false,
+          configured: false,
+          scrobble_threshold: 50,
+        }),
+      });
+    });
+
+    await page.goto('/');
+    await waitForAlpine(page);
+  });
+
+  test('sidebar should only transition width, not all properties', async ({ page }) => {
+    const aside = page.locator('aside');
+    await expect(aside).toBeVisible();
+
+    const transitionProperty = await aside.evaluate(
+      (el) => window.getComputedStyle(el).transitionProperty
+    );
+    expect(transitionProperty).toBe('width');
+  });
+
+  test('metro-teal preset should set correct sidebar background immediately', async ({ page }) => {
+    // Switch to metro-teal
+    await page.evaluate(() => {
+      window.Alpine.store('ui').setThemePreset('metro-teal');
+    });
+
+    const aside = page.locator('aside');
+
+    // Background should be #1E1E1E immediately (no transition delay)
+    const bgColor = await aside.evaluate(
+      (el) => window.getComputedStyle(el).backgroundColor
+    );
+    expect(bgColor).toBe('rgb(30, 30, 30)');
+  });
+
+  test('metro-teal preset should set data-theme-preset and dark class on html', async ({ page }) => {
+    await page.evaluate(() => {
+      window.Alpine.store('ui').setThemePreset('metro-teal');
+    });
+
+    const attrs = await page.evaluate(() => ({
+      themePreset: document.documentElement.dataset.themePreset,
+      hasDark: document.documentElement.classList.contains('dark'),
+      hasLight: document.documentElement.classList.contains('light'),
+    }));
+
+    expect(attrs.themePreset).toBe('metro-teal');
+    expect(attrs.hasDark).toBe(true);
+    expect(attrs.hasLight).toBe(false);
+  });
+
+  test('light preset should clear data-theme-preset from html', async ({ page }) => {
+    // Set metro-teal first, then switch to light
+    await page.evaluate(() => {
+      window.Alpine.store('ui').setThemePreset('metro-teal');
+    });
+    await page.evaluate(() => {
+      window.Alpine.store('ui').setThemePreset('light');
+    });
+
+    const attrs = await page.evaluate(() => ({
+      themePreset: document.documentElement.dataset.themePreset,
+      hasDark: document.documentElement.classList.contains('dark'),
+    }));
+
+    expect(attrs.themePreset).toBeUndefined();
+    // Light theme should not have dark class (unless system prefers dark)
+  });
+
+  test('sidebar background should change instantly when switching themes', async ({ page }) => {
+    const aside = page.locator('aside');
+
+    // Set metro-teal
+    await page.evaluate(() => {
+      window.Alpine.store('ui').setThemePreset('metro-teal');
+    });
+
+    // Read background immediately (no waitForTimeout - transition-[width]
+    // means background changes are instant, not animated)
+    const metroTealBg = await aside.evaluate(
+      (el) => window.getComputedStyle(el).backgroundColor
+    );
+    expect(metroTealBg).toBe('rgb(30, 30, 30)');
+
+    // Switch to light
+    await page.evaluate(() => {
+      window.Alpine.store('ui').setThemePreset('light');
+    });
+
+    // Read background immediately - should already be the light theme color
+    const lightBg = await aside.evaluate(
+      (el) => window.getComputedStyle(el).backgroundColor
+    );
+    // Light theme sidebar should NOT be #1E1E1E
+    expect(lightBg).not.toBe('rgb(30, 30, 30)');
+  });
+
+  test('sidebar collapse animation should still work with narrowed transition', async ({ page }) => {
+    const aside = page.locator('aside');
+
+    // Get expanded width
+    const expandedWidth = await aside.evaluate((el) => el.offsetWidth);
+    expect(expandedWidth).toBeGreaterThan(100);
+
+    // Collapse sidebar
+    await page.click('[data-testid="sidebar-collapse-toggle"]');
+
+    // Wait for transition to complete (200ms duration)
+    await page.waitForTimeout(300);
+
+    // Should be collapsed to 70px
+    const collapsedWidth = await aside.evaluate((el) => el.offsetWidth);
+    expect(collapsedWidth).toBe(70);
+
+    // Expand again
+    await page.click('[data-testid="sidebar-collapse-toggle"]');
+    await page.waitForTimeout(300);
+
+    const restoredWidth = await aside.evaluate((el) => el.offsetWidth);
+    expect(restoredWidth).toBe(expandedWidth);
+  });
+
+  test('theme preset and html attributes should be consistent after reload', async ({ page }) => {
+    // Reload page
+    await page.reload();
+    await waitForAlpine(page);
+
+    // After reload in browser mode, defaults apply (light preset)
+    const state = await page.evaluate(() => ({
+      storePreset: window.Alpine.store('ui').themePreset,
+      htmlPreset: document.documentElement.dataset.themePreset,
+      htmlClasses: document.documentElement.className,
+    }));
+
+    // Store and DOM should be in sync
+    if (state.storePreset === 'metro-teal') {
+      expect(state.htmlPreset).toBe('metro-teal');
+      expect(state.htmlClasses).toContain('dark');
+    } else {
+      // Light preset: no data-theme-preset attribute
+      expect(state.htmlPreset).toBeUndefined();
+    }
+  });
+});

@@ -2,7 +2,7 @@
   x-data="sidebar"
   @dragover="console.log('[Sidebar/aside] dragover event', $event.target)"
   @drop="console.log('[Sidebar/aside] drop event', $event.target)"
-  class="border-r border-border bg-muted/30 flex flex-col shrink-0 overflow-hidden transition-all duration-200"
+  class="border-r border-border bg-muted/30 flex flex-col shrink-0 overflow-hidden transition-[width] duration-200"
   :class="isCollapsed ? 'w-[70px]' : 'w-52'"
 >
   <!-- Search (Apple Music style pill) -->

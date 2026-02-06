@@ -189,6 +189,32 @@ async function revealApp() {
   }
 }
 
+/**
+ * Apply theme classes to <html> before Alpine starts.
+ * This prevents a flash of incorrect styling (e.g., sidebar showing light-mode
+ * colors when metro-teal is selected) by ensuring CSS variables are set before
+ * the first visible paint.
+ */
+function applyInitialTheme() {
+  if (!settings.initialized) return;
+
+  const themePreset = settings.get('ui:themePreset', 'light');
+  const theme = settings.get('ui:theme', 'system');
+
+  document.documentElement.classList.remove('light', 'dark');
+  delete document.documentElement.dataset.themePreset;
+
+  if (themePreset === 'metro-teal') {
+    document.documentElement.classList.add('dark');
+    document.documentElement.dataset.themePreset = 'metro-teal';
+  } else {
+    const contentTheme = theme === 'system'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : theme;
+    document.documentElement.classList.add(contentTheme);
+  }
+}
+
 // Initialize application
 async function initApp() {
   // Initialize settings service first (loads settings from backend)
@@ -202,6 +228,11 @@ async function initApp() {
   } else {
     console.log('[main] Running in browser mode, settings service disabled');
   }
+
+  // Pre-apply theme to <html> before Alpine starts to prevent flash of incorrect styling.
+  // Without this, the theme is only applied when Alpine's ui store init() runs,
+  // which can cause the sidebar to briefly render with wrong theme colors.
+  applyInitialTheme();
 
   // Disable the default browser/webview context menu globally
   // App-specific context menus (tracks, headers, playlists) handle their own rendering
