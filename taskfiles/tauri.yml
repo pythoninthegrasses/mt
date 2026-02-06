@@ -2,12 +2,12 @@ version: "3.0"
 
 set: ['e', 'u', 'pipefail']
 shopt: ['globstar']
-
 env:
   CARGO_HOME: "{{.ROOT_DIR}}/.cache/cargo"
   CARGO_TARGET_DIR: "{{.ROOT_DIR}}/target"
   RUSTUP_TOOLCHAIN: nightly
   RUSTFLAGS: "-Zthreads=16"
+  APPLE_API_KEY_PATH: /tmp/auth_key.p8
 
 vars:
   APP_NAME: '{{.APP_NAME | default "mt"}}'
@@ -50,7 +50,6 @@ tasks:
       TARGET_FLAG: '{{if .TARGET}}--target {{.TARGET}}{{end}}'
     cmds:
       - |
-        echo "Building {{.APP_NAME}} v{{.APP_VERSION}}{{if .TARGET}} for {{.TARGET}}{{end}}..."
         deno run -A npm:@tauri-apps/cli build {{.TARGET_FLAG}}
 
   build:
@@ -91,6 +90,13 @@ tasks:
       - "{{.TAURI_DIR}}/Cargo.toml"
       - "{{.TAURI_DIR}}/tauri.conf.json"
 
+  _decode-api-key:
+    internal: true
+    desc: "Decode base64 ASC API key to /tmp/auth_key.p8"
+    cmds:
+      - echo '{{.APPLE_API_KEY_B64}}' | base64 --decode > /tmp/auth_key.p8
+    silent: true
+
   build:signed:
     desc: "Build signed macOS app (requires APPLE_SIGNING_IDENTITY)"
     deps: [":deno:install"]
@@ -98,6 +104,7 @@ tasks:
       - sh: '[ -n "$APPLE_SIGNING_IDENTITY" ]'
         msg: "APPLE_SIGNING_IDENTITY env var is required"
     cmds:
+      - task: _decode-api-key
       - task: _build
         vars:
           TARGET: "{{.MACOS_ARM64_TARGET}}"
@@ -109,6 +116,7 @@ tasks:
       - sh: '[ -n "$APPLE_SIGNING_IDENTITY" ]'
         msg: "APPLE_SIGNING_IDENTITY env var is required"
     cmds:
+      - task: _decode-api-key
       - deno run -A npm:@tauri-apps/cli build --target {{.MACOS_ARM64_TARGET}} --bundles dmg
 
   dev:
