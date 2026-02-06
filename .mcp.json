@@ -4,6 +4,18 @@
       "command": "npx",
       "args": ["@playwright/mcp@latest"]
     },
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "ide",
+        "--project-from-cwd"
+      ]
+    },
     "tauri-mcp": {
       "command": "npx",
       "args": ["-y", "@hypothesi/tauri-mcp-server"]
