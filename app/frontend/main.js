@@ -4,6 +4,7 @@ import intersect from '@alpinejs/intersect';
 import focus from '@alpinejs/focus';
 import { initStores } from './js/stores/index.js';
 import { initComponents } from './js/components/index.js';
+import { initKeyboardShortcuts } from './js/shortcuts.js';
 import api from './js/api.js';
 import { formatTime, formatDuration, formatBytes } from './js/utils/formatting.js';
 import { settings } from './js/services/settings.js';
@@ -134,17 +135,7 @@ window.testDialog = async function() {
 };
 
 function initGlobalKeyboardShortcuts() {
-  document.addEventListener('keydown', (event) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === ',') {
-      event.preventDefault();
-      Alpine.store('ui').toggleSettings();
-    }
-    
-    if (event.key === 'Escape' && Alpine.store('ui').view === 'settings') {
-      event.preventDefault();
-      Alpine.store('ui').toggleSettings();
-    }
-  });
+  initKeyboardShortcuts();
 }
 
 async function initTitlebarDrag() {
