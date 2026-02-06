@@ -1,10 +1,10 @@
 ---
 id: task-107
 title: 'P5: Implement keyboard shortcuts'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-01-12 04:09'
-updated_date: '2026-02-05 06:38'
+updated_date: '2026-02-06 03:57'
 labels:
   - frontend
   - ux
@@ -91,15 +91,21 @@ document.addEventListener('keydown', (e) => {
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Space toggles playback
-- [ ] #2 Arrow keys navigate tracks
-- [ ] #3 Volume keys work
-- [ ] #4 Cmd+F focuses search
-- [ ] #5 Shortcuts don't interfere with text input
+- [x] #1 Space toggles playback
+- [x] #2 Arrow keys navigate tracks
+- [x] #3 Volume keys work
+- [x] #4 Cmd+F focuses search
+- [x] #5 Shortcuts don't interfere with text input
 
-- [ ] #6 Cmd+D queues selected track to play next (library/playlist views only)
-- [ ] #7 Cmd+S enables stop after currently playing track (library/playlist views only)
-- [ ] #8 Context-aware shortcuts are disabled in Now Playing view
-- [ ] #9 Keyboard shortcuts section visible in Settings UI
-- [ ] #10 All shortcuts listed with their key combinations in Settings
+- [x] #6 Cmd+D queues selected track to play next (library/playlist views only)
+- [x] #7 Cmd+S enables stop after currently playing track (library/playlist views only)
+- [x] #8 Context-aware shortcuts are disabled in Now Playing view
+- [x] #9 Keyboard shortcuts section visible in Settings UI
+- [x] #10 All shortcuts listed with their key combinations in Settings
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+**Platform modifier key:** Use `Cmd` on macOS and `Ctrl` on Linux/Windows for all modifier shortcuts (Cmd+F, Cmd+D, Cmd+S, etc.).
+<!-- SECTION:NOTES:END -->
