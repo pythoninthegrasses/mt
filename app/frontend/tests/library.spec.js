@@ -3770,8 +3770,9 @@ test.describe('Library View Mode Parity (task-227)', () => {
  * Type-to-jump artist navigation (task-255)
  *
  * When in library view, typing characters jumps to the first artist
- * matching the typed prefix at a word boundary. Characters accumulate
- * within a 500ms debounce window.
+ * matching the typed prefix. Ignore words (e.g., "The", "La") are
+ * stripped before matching. Characters accumulate within a 500ms
+ * debounce window.
  */
 test.describe('Type-to-jump artist navigation (task-255)', () => {
   test.beforeEach(async ({ page }) => {
@@ -3829,8 +3830,8 @@ test.describe('Type-to-jump artist navigation (task-255)', () => {
     expect(selectedTrackArtist).toBe('queen');
   });
 
-  test('should match word boundaries', async ({ page }) => {
-    // Type "bea" which should match "The Beatles" at word boundary
+  test('should match after stripping ignore words', async ({ page }) => {
+    // Type "bea" which should match "The Beatles" after stripping "The "
     await page.keyboard.type('bea');
 
     await page.waitForTimeout(100);
@@ -3902,21 +3903,17 @@ test.describe('Type-to-jump artist navigation (task-255)', () => {
   });
 
   test('should NOT ignore article prefixes when sortIgnoreWords is disabled', async ({ page }) => {
-    // Disable sortIgnoreWords
-    await page.evaluate(() => {
+    // Disable sortIgnoreWords and invoke jumpToMatchingArtist directly
+    // to avoid intermediate single-character matches from keystrokes
+    const selectedArtist = await page.evaluate(() => {
       window.Alpine.store('ui').sortIgnoreWords = false;
-    });
 
-    // Type "dis" - should NOT match "La Dispute" since ignore words is disabled
-    // Instead it should match at word boundary or not match at all
-    await page.keyboard.type('dis');
-
-    await page.waitForTimeout(100);
-
-    const selectedTrackArtist = await page.evaluate(() => {
       const browserEl = document.querySelector('[x-data="libraryBrowser"]');
       if (!browserEl) return null;
       const data = window.Alpine.$data(browserEl);
+      data.selectedTracks.clear();
+      data.jumpToMatchingArtist('bea');
+
       const selectedIds = Array.from(data.selectedTracks);
       if (selectedIds.length === 0) return null;
       const tracks = window.Alpine.store('library').filteredTracks;
@@ -3924,9 +3921,9 @@ test.describe('Type-to-jump artist navigation (task-255)', () => {
       return selectedTrack?.artist?.toLowerCase();
     });
 
-    // When ignore words is disabled, "dis" should still match "La Dispute" via word boundary
-    // (the "Dis" in "Dispute" starts with "dis")
-    expect(selectedTrackArtist).toContain('la dispute');
+    // "bea" should NOT match "The Beatles" when ignore words is disabled
+    // because "the beatles" does not start with "bea" without stripping "The"
+    expect(selectedArtist).toBeNull();
   });
 
   test('should accumulate characters within debounce window', async ({ page }) => {
@@ -4161,22 +4158,19 @@ test.describe('Type-to-jump artist navigation (task-255)', () => {
     });
 
     // Should match an artist starting with "la" (after stripping default ignore words)
-    // This could be "The La's" (stripped to "La's") or any artist with "la" at word boundary
     expect(selectedArtist).toBeTruthy();
   });
 
-  test('should prefer stripped-prefix match over word-boundary match', async ({ page }) => {
-    // Regression test for the "la" → "Konami Kukeiha Club" bug:
-    // Typing "la" should match "The La's" (stripped "the " → "la's" starts with "la")
-    // NOT an artist where "la" only matches at a word boundary deeper in the name
+  test('should prefer stripped-prefix match over raw name match', async ({ page }) => {
+    // Regression test: typing "la" should match "The La's" (stripped "the " → "la's")
+    // not an unrelated artist whose raw name happens to start with "la"
     await page.evaluate(() => {
       const library = window.Alpine.store('library');
-      // Insert tracks: word-boundary decoy first, then the target
       library.tracks.unshift(
         {
           id: 9998,
           title: 'Decoy Track',
-          artist: 'Konami Kukeiha Club - Yoann Laulan',
+          artist: 'Lana Del Rey',
           album: 'Test Album',
           duration: 180,
           filepath: '/music/test/decoy.mp3',
@@ -4211,7 +4205,7 @@ test.describe('Type-to-jump artist navigation (task-255)', () => {
       return selectedTrack?.artist;
     });
 
-    // Must match "The La's" (priority 1: stripped prefix) not "Konami..." (priority 3: word boundary)
+    // "The La's" (stripped prefix: "la's") wins over "Lana Del Rey" (raw name: "lana del rey")
     expect(selectedArtist).toBe("The La's");
   });
 });

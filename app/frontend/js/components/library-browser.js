@@ -1626,56 +1626,39 @@ export function createLibraryBrowser(Alpine) {
     },
 
     /**
-     * Find and scroll to first track with artist matching the query at a word boundary.
-     * Uses priority matching: stripped prefix > full name start > word boundary.
+     * Find and scroll to first track with artist matching the query.
+     * Prefers stripped prefix match (ignore words removed) over raw artist name match.
      * @param {string} query - The search query (typed characters)
      */
     jumpToMatchingArtist(query) {
       const normalizedQuery = query.toLowerCase();
       const tracks = this.library.filteredTracks;
 
-      // Priority 1: Stripped prefix match (e.g., "The La's" → "la's" starts with "la")
-      // Priority 2: Full artist name starts with query (e.g., "Lana Del Rey" starts with "la")
-      let bestMatch = null;
-      let bestPriority = Infinity;
+      let fallback = null;
 
       for (const track of tracks) {
         if (!track.artist) continue;
         const artist = track.artist.toLowerCase();
 
-        // Priority 1: Stripped prefix match
-        if (bestPriority > 1) {
-          const strippedArtist = this.stripIgnoredPrefix(artist);
-          if (strippedArtist.startsWith(normalizedQuery)) {
-            bestMatch = track;
-            bestPriority = 1;
-            break; // Can't do better than priority 1
-          }
+        // Best match: artist starts with query after stripping ignore words
+        const strippedArtist = this.stripIgnoredPrefix(artist);
+        if (strippedArtist.startsWith(normalizedQuery)) {
+          this.selectedTracks.clear();
+          this.selectedTracks.add(track.id);
+          this.scrollToTrack(track.id);
+          return;
         }
 
-        // Priority 2: Full artist name starts with query
-        if (bestPriority > 2 && artist.startsWith(normalizedQuery)) {
-          bestMatch = track;
-          bestPriority = 2;
-          // Don't break - keep looking for priority 1
-        }
-
-        // Priority 3: Word boundary match
-        if (bestPriority > 3) {
-          const words = artist.split(/\s+/);
-          if (words.some((word) => word.startsWith(normalizedQuery))) {
-            bestMatch = track;
-            bestPriority = 3;
-            // Don't break - keep looking for higher priority
-          }
+        // Fallback: raw artist name starts with query (e.g., user types "the")
+        if (!fallback && artist.startsWith(normalizedQuery)) {
+          fallback = track;
         }
       }
 
-      if (bestMatch) {
-        // Select and scroll to the track
+      if (fallback) {
         this.selectedTracks.clear();
-        this.selectedTracks.add(bestMatch.id);
-        this.scrollToTrack(bestMatch.id);
+        this.selectedTracks.add(fallback.id);
+        this.scrollToTrack(fallback.id);
       }
     },
 
