@@ -203,6 +203,10 @@ async function initApp() {
     console.log('[main] Running in browser mode, settings service disabled');
   }
 
+  // Disable the default browser/webview context menu globally
+  // App-specific context menus (tracks, headers, playlists) handle their own rendering
+  document.addEventListener('contextmenu', (e) => e.preventDefault());
+
   // Initialize stores and components
   initStores(Alpine);
   initComponents(Alpine);
