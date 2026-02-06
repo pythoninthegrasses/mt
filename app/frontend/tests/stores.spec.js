@@ -610,19 +610,22 @@ test.describe('Settings Menu (task-046)', () => {
     expect(hasDarkClass).toBe(true);
   });
 
-  test('AC#2d: Shortcuts section displays stub with tooltips', async ({ page }) => {
+  test('AC#2d: Shortcuts section displays keyboard shortcuts', async ({ page }) => {
     await page.evaluate(() => {
       window.Alpine.store('ui').setView('settings');
       window.Alpine.store('ui').setSettingsSection('shortcuts');
     });
     await page.waitForTimeout(100);
-    
+
     const shortcutsSection = page.locator('[data-testid="settings-section-shortcuts"]');
     await expect(shortcutsSection).toBeVisible();
-    
-    await expect(shortcutsSection.getByText('Queue next')).toBeVisible();
-    await expect(shortcutsSection.getByText('Queue last')).toBeVisible();
-    await expect(shortcutsSection.getByText('Stop after track')).toBeVisible();
+
+    await expect(shortcutsSection.getByText('Play / Pause')).toBeVisible();
+    await expect(shortcutsSection.getByText('Next track')).toBeVisible();
+    await expect(shortcutsSection.getByText('Volume up')).toBeVisible();
+    await expect(shortcutsSection.getByText('Toggle shuffle')).toBeVisible();
+    await expect(shortcutsSection.getByText('Queue selected next')).toBeVisible();
+    await expect(shortcutsSection.getByText('Stop after current track')).toBeVisible();
   });
 
   test('AC#3: Advanced section shows app info', async ({ page }) => {

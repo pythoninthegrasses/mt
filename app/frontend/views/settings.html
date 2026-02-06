@@ -430,49 +430,75 @@
     </div>
 
     <!-- Shortcuts Section -->
-    <div x-show="$store.ui.settingsSection === 'shortcuts'" data-testid="settings-section-shortcuts">
-      <h3 class="text-xl font-semibold mb-4">Shortcuts</h3>
-      <div class="space-y-3">
-        <div class="flex items-center justify-between py-2 border-b border-border/50">
-          <span class="text-sm">Queue next</span>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">-</span>
-            <div class="relative group">
-              <svg class="w-4 h-4 text-muted-foreground cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-              <div class="absolute right-0 bottom-full mb-2 px-2 py-1 bg-foreground text-background text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                Not configurable yet
-              </div>
+    <div x-show="$store.ui.settingsSection === 'shortcuts'" x-data="shortcutsSettings" data-testid="settings-section-shortcuts">
+      <h3 class="text-xl font-semibold mb-4">Keyboard Shortcuts</h3>
+
+      <!-- Playback -->
+      <div class="mb-6">
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Playback</h4>
+        <div class="space-y-0">
+          <template x-for="s in playback" :key="s.action">
+            <div class="flex items-center justify-between py-2 border-b border-border/50">
+              <span class="text-sm" x-text="s.action"></span>
+              <kbd class="text-xs font-mono px-2 py-1 bg-muted rounded border border-border/50" x-text="s.label"></kbd>
             </div>
-          </div>
+          </template>
         </div>
-        <div class="flex items-center justify-between py-2 border-b border-border/50">
-          <span class="text-sm">Queue last</span>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">-</span>
-            <div class="relative group">
-              <svg class="w-4 h-4 text-muted-foreground cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-              <div class="absolute right-0 bottom-full mb-2 px-2 py-1 bg-foreground text-background text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                Not configurable yet
-              </div>
+      </div>
+
+      <!-- Volume -->
+      <div class="mb-6">
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Volume</h4>
+        <div class="space-y-0">
+          <template x-for="s in volume" :key="s.action">
+            <div class="flex items-center justify-between py-2 border-b border-border/50">
+              <span class="text-sm" x-text="s.action"></span>
+              <kbd class="text-xs font-mono px-2 py-1 bg-muted rounded border border-border/50" x-text="s.label"></kbd>
             </div>
-          </div>
+          </template>
         </div>
-        <div class="flex items-center justify-between py-2 border-b border-border/50">
-          <span class="text-sm">Stop after track</span>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">-</span>
-            <div class="relative group">
-              <svg class="w-4 h-4 text-muted-foreground cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-              <div class="absolute right-0 bottom-full mb-2 px-2 py-1 bg-foreground text-background text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                Not configurable yet
-              </div>
+      </div>
+
+      <!-- Navigation -->
+      <div class="mb-6">
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Navigation</h4>
+        <div class="space-y-0">
+          <template x-for="s in navigation" :key="s.action">
+            <div class="flex items-center justify-between py-2 border-b border-border/50">
+              <span class="text-sm" x-text="s.action"></span>
+              <kbd class="text-xs font-mono px-2 py-1 bg-muted rounded border border-border/50" x-text="s.label"></kbd>
             </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Context-Aware -->
+      <div class="mb-6">
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Context-Aware</h4>
+        <div class="space-y-0">
+          <template x-for="s in contextAware" :key="s.action">
+            <div class="flex items-center justify-between py-2 border-b border-border/50">
+              <div>
+                <span class="text-sm" x-text="s.action"></span>
+                <span class="text-xs text-muted-foreground ml-2" x-text="'(' + s.context + ')'"></span>
+              </div>
+              <kbd class="text-xs font-mono px-2 py-1 bg-muted rounded border border-border/50" x-text="s.label"></kbd>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Tip -->
+      <div class="p-4 bg-muted/30 rounded-lg border border-border/50">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-primary shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <div>
+            <p class="text-sm font-medium">Note</p>
+            <p class="text-xs text-muted-foreground mt-1">
+              Shortcuts are disabled while typing in text fields. Context-aware shortcuts only work in Library and Playlist views.
+            </p>
           </div>
         </div>
       </div>

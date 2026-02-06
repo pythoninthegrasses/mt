@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { SHORTCUT_DEFINITIONS, modLabel } from '../shortcuts.js';
 
 export function createSettingsView(Alpine) {
   Alpine.data('settingsView', () => ({
@@ -672,6 +673,27 @@ export function createSettingsView(Alpine) {
         Alpine.store('ui').toast('Failed to reset column settings', 'error');
       }
     },
+  }));
+}
+
+export function createShortcutsSettings(Alpine) {
+  const mod = modLabel();
+  const all = SHORTCUT_DEFINITIONS.map((s) => ({
+    ...s,
+    label: s.label.replace('{mod}', mod),
+  }));
+
+  Alpine.data('shortcutsSettings', () => ({
+    playback: all.filter((s) =>
+      ['Play / Pause', 'Next track', 'Seek forward 5s', 'Previous track', 'Seek back 5s', 'Cycle loop mode', 'Toggle shuffle'].includes(s.action)
+    ),
+    volume: all.filter((s) =>
+      ['Volume up', 'Volume down', 'Mute / Unmute'].includes(s.action)
+    ),
+    navigation: all.filter((s) =>
+      ['Focus search', 'Clear search / Close dialogs', 'Toggle settings'].includes(s.action)
+    ),
+    contextAware: all.filter((s) => s.context),
   }));
 }
 
