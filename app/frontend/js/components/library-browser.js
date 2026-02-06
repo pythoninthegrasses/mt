@@ -443,6 +443,12 @@ export function createLibraryBrowser(Alpine) {
         this.scrollToTrack(this.player.currentTrack?.id);
       });
 
+      window.addEventListener('mt:queue-next-shortcut', () => {
+        if (this.selectedTracks.size > 0) {
+          this.playSelectedNext();
+        }
+      });
+
       window.addEventListener('mt:section-change', (e) => {
         this.clearSelection();
         const section = e.detail?.section || '';
