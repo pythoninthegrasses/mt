@@ -1,10 +1,10 @@
 ---
 id: task-257
 title: Fix default library sort order to respect disc number
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-06 01:21'
-updated_date: '2026-02-06 01:49'
+updated_date: '2026-02-06 01:51'
 labels:
   - frontend
   - bug

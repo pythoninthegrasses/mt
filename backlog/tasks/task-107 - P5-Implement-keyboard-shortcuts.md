@@ -1,10 +1,10 @@
 ---
 id: task-107
 title: 'P5: Implement keyboard shortcuts'
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-01-12 04:09'
-updated_date: '2026-01-19 00:41'
+updated_date: '2026-02-05 06:38'
 labels:
   - frontend
   - ux
@@ -33,6 +33,18 @@ Add keyboard shortcuts for common actions.
 - `Cmd+F` / `Ctrl+F`: Focus search
 - `Escape`: Clear search / close dialogs
 - `Delete` / `Backspace`: Remove selected from queue
+- `Cmd+D`: Queue next (add selected track to play next in queue)
+- `Cmd+S`: Stop after currently playing track
+
+**Context-aware shortcuts:**
+The following shortcuts should only be active in library and playlist views, NOT in Now Playing:
+- `Cmd+D` (Queue next)
+- `Cmd+S` (Stop after current)
+
+These shortcuts require a track selection context to operate on.
+
+**Settings UI:**
+Expose all keyboard shortcuts in the Settings panel under a "Keyboard Shortcuts" section. Display the shortcut key combinations and their actions in a readable format. Consider making shortcuts customizable in a future iteration.
 
 **Implementation:**
 ```javascript
@@ -53,6 +65,24 @@ document.addEventListener('keydown', (e) => {
                 Alpine.store('player').next();
             }
             break;
+        case 'KeyD':
+            if (e.metaKey || e.ctrlKey) {
+                e.preventDefault();
+                // Queue next - only in library/playlist views
+                if (!isNowPlayingView()) {
+                    queueSelectedTrackNext();
+                }
+            }
+            break;
+        case 'KeyS':
+            if (e.metaKey || e.ctrlKey) {
+                e.preventDefault();
+                // Stop after current - only in library/playlist views
+                if (!isNowPlayingView()) {
+                    Alpine.store('player').stopAfterCurrent();
+                }
+            }
+            break;
         // ... etc
     }
 });
@@ -66,4 +96,10 @@ document.addEventListener('keydown', (e) => {
 - [ ] #3 Volume keys work
 - [ ] #4 Cmd+F focuses search
 - [ ] #5 Shortcuts don't interfere with text input
+
+- [ ] #6 Cmd+D queues selected track to play next (library/playlist views only)
+- [ ] #7 Cmd+S enables stop after currently playing track (library/playlist views only)
+- [ ] #8 Context-aware shortcuts are disabled in Now Playing view
+- [ ] #9 Keyboard shortcuts section visible in Settings UI
+- [ ] #10 All shortcuts listed with their key combinations in Settings
 <!-- AC:END -->
