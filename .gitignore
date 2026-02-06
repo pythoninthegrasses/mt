@@ -2,7 +2,6 @@
 *.db*
 *.sqlite
 .playwright-mcp/
-.serena/
 .sisyphus/
 .task/
 CLAUDE.md
