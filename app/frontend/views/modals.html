@@ -228,7 +228,7 @@
       class="px-4 py-2 rounded shadow-lg cursor-pointer transition-opacity"
       :class="{
         'bg-primary text-primary-foreground': toast.type === 'info',
-        'bg-green-500 text-white': toast.type === 'success',
+        'toast-accent': toast.type === 'success',
         'bg-yellow-500 text-black': toast.type === 'warning',
         'bg-destructive text-destructive-foreground': toast.type === 'error'
       }"

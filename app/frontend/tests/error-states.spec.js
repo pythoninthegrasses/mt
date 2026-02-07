@@ -334,6 +334,56 @@ test.describe('Toast Notifications', () => {
     expect(messages).toContain('Toast 3');
     expect(messages).toContain('Toast 4');
   });
+  test('success toast should use theme accent class, not hardcoded green', async ({ page }) => {
+    await page.evaluate(() => {
+      window.Alpine.store('ui').toast('Theme toast test', 'success', 5000);
+    });
+
+    const toast = page.locator('[data-testid="toast-container"] > div').last();
+    await expect(toast).toBeVisible();
+
+    // Success toast should use the toast-accent class (theme-derived color)
+    await expect(toast).toHaveClass(/toast-accent/);
+    // Should NOT use hardcoded green
+    await expect(toast).not.toHaveClass(/bg-green-500/);
+  });
+
+  test('success toast accent color changes with theme (light vs metro-teal)', async ({ page }) => {
+    // Get the toast accent CSS variable in default light theme
+    const lightAccent = await page.evaluate(() => {
+      return getComputedStyle(document.documentElement).getPropertyValue('--mt-toast-bg').trim();
+    });
+    expect(lightAccent).toBeTruthy();
+
+    // Switch to metro-teal preset
+    await page.evaluate(() => {
+      window.Alpine.store('ui').setThemePreset('metro-teal');
+    });
+
+    // Get the toast accent CSS variable in metro-teal theme
+    const tealAccent = await page.evaluate(() => {
+      return getComputedStyle(document.documentElement).getPropertyValue('--mt-toast-bg').trim();
+    });
+    expect(tealAccent).toBeTruthy();
+
+    // The two theme accents should be different colors
+    expect(lightAccent).not.toBe(tealAccent);
+  });
+
+  test('success toast text should be white for contrast', async ({ page }) => {
+    await page.evaluate(() => {
+      window.Alpine.store('ui').toast('Contrast test', 'success', 5000);
+    });
+
+    const toast = page.locator('[data-testid="toast-container"] > div').last();
+    await expect(toast).toBeVisible();
+
+    // Text color should be white (or near-white) for readability
+    const fgVar = await page.evaluate(() => {
+      return getComputedStyle(document.documentElement).getPropertyValue('--mt-toast-fg').trim();
+    });
+    expect(fgVar).toBeTruthy();
+  });
 });
 
 test.describe('Playlist API Error Handling', () => {

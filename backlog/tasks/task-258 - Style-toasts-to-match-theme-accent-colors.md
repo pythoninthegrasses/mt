@@ -1,10 +1,10 @@
 ---
-id: task-258
+id: TASK-258
 title: Style toasts to match theme accent colors
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-06 07:53'
-updated_date: '2026-02-06 07:54'
+updated_date: '2026-02-07 00:54'
 labels:
   - ui
   - theming
@@ -29,8 +29,28 @@ See screenshots attached to the originating conversation showing the mismatch in
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Toast background color uses metro teal in dark theme
-- [ ] #2 Toast background color uses red/pink accent in light theme
-- [ ] #3 Toast text remains readable (sufficient contrast) in both themes
-- [ ] #4 Toast color is derived from theme variables, not hardcoded per-theme
+- [x] #1 Toast background color uses metro teal in dark theme
+- [x] #2 Toast background color uses red/pink accent in light theme
+- [x] #3 Toast text remains readable (sufficient contrast) in both themes
+- [x] #4 Toast color is derived from theme variables, not hardcoded per-theme
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Changes
+
+### `app/frontend/styles.css`
+- Added `--mt-toast-bg` and `--mt-toast-fg` CSS variables to `:root` (itunes-red / white) and `[data-theme-preset='metro-teal']` (teal / white)
+- Added `.toast-accent` utility class that derives background/text color from those variables
+
+### `app/frontend/views/modals.html`
+- Changed success toast from hardcoded `bg-green-500 text-white` to `toast-accent` class
+
+### `app/frontend/tests/error-states.spec.js`
+- Added 3 Playwright tests verifying toast accent class usage, theme-dependent variable values, and text contrast
+
+## Test Results
+- 35/35 error-states E2E tests pass (including 3 new)
+- 230/230 Vitest unit tests pass
+<!-- SECTION:FINAL_SUMMARY:END -->

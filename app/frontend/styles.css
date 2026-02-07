@@ -17,6 +17,8 @@
   --itunes-row-alt: #fafafa;
   --itunes-border: #e5e5ea;
   --itunes-text-secondary: #8e8e93;
+  --mt-toast-bg: var(--itunes-red);
+  --mt-toast-fg: #ffffff;
 }
 
 [data-tauri-drag-region] {
@@ -47,6 +49,11 @@
 
 .dark .track-row-odd {
   background-color: transparent;
+}
+
+.toast-accent {
+  background-color: var(--mt-toast-bg);
+  color: var(--mt-toast-fg);
 }
 
 .track-row-selected {
@@ -197,6 +204,8 @@ aside button:hover svg {
   --mt-row-hover: 0 0% 20%;
   --mt-progress-bg: 0 0% 25%;
   --mt-progress-fill: 184 100% 38%;
+  --mt-toast-bg: hsl(184 100% 38%);
+  --mt-toast-fg: #ffffff;
 }
 
 [data-theme-preset='metro-teal'] .track-row-even {
