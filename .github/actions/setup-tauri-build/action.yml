@@ -1,5 +1,5 @@
 name: 'Setup Tauri Build Environment'
-description: 'Install Node.js, Rust, Zig, TagLib, and frontend deps for Tauri builds'
+description: 'Install Node.js, Rust, Zig, TagLib (static), and frontend deps for Tauri builds'
 
 inputs:
   node-version:
@@ -29,12 +29,9 @@ runs:
       with:
         version: ${{ inputs.zig-version }}
 
-    - name: Install TagLib
+    - name: Build TagLib (static)
       shell: bash
-      run: |
-        if ! pkg-config --exists taglib_c 2>/dev/null; then
-          brew install taglib
-        fi
+      run: scripts/build-taglib.sh
 
     - name: Install frontend dependencies
       shell: bash

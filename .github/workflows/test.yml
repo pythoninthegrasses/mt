@@ -200,8 +200,8 @@ jobs:
       - name: Verify build dependencies
         run: |
           echo "Zig: $(zig version)"
-          echo "TagLib: $(pkg-config --modversion taglib_c)"
-          echo "pkg-config path: $(pkg-config --variable=libdir taglib_c)"
+          echo "TagLib: static (vendor/taglib/lib/)"
+          ls -la vendor/taglib/lib/*.a
 
       - name: Build frontend
         working-directory: ./app/frontend

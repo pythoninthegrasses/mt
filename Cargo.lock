@@ -2804,7 +2804,6 @@ dependencies = [
 name = "mt-core"
 version = "0.1.0"
 dependencies = [
- "pkg-config",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

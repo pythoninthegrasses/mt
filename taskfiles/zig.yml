@@ -31,6 +31,21 @@ tasks:
         Output locations:
           - Static library: {{.ZIG_OUT_DIR}}/lib/libmtcore.a
 
+  build:taglib:
+    desc: "Build TagLib static libraries (vendor/taglib/)"
+    cmds:
+      - "{{.ROOT_DIR}}/scripts/build-taglib.sh"
+    sources:
+      - "{{.ROOT_DIR}}/scripts/build-taglib.sh"
+    generates:
+      - "{{.ROOT_DIR}}/vendor/taglib/lib/libtag.a"
+      - "{{.ROOT_DIR}}/vendor/taglib/lib/libtag_c.a"
+
+  build:taglib:force:
+    desc: "Rebuild TagLib static libraries from source"
+    cmds:
+      - "{{.ROOT_DIR}}/scripts/build-taglib.sh --force"
+
   check-deps:
     desc: "Verify Zig is installed"
     cmds:

@@ -9,9 +9,6 @@ edition = "2024"
 name = "mt_core"
 crate-type = ["rlib"]
 
-[build-dependencies]
-pkg-config = "0.3"
-
 [dependencies]
 # Serialization (for types shared across FFI boundary)
 serde = { version = "1", features = ["derive"] }

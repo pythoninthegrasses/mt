@@ -186,6 +186,9 @@ dist
 zig-out/
 *.o
 
+# Vendored static libraries (built per-platform)
+vendor/
+
 # Sidecar binaries
 src-tauri/bin/
 

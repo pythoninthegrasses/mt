@@ -1,15 +1,17 @@
 ---
-id: task-259
+id: TASK-259
 title: Bundle or statically link TagLib for distribution
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-06 23:09'
+updated_date: '2026-02-07 01:45'
 labels:
   - build
   - distribution
   - macos
 dependencies: []
 priority: high
+ordinal: 500
 ---
 
 ## Description
@@ -32,7 +34,30 @@ Once resolved, the `com.apple.security.cs.disable-library-validation` entitlemen
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Signed mt.app launches without crash on a machine without Homebrew TagLib installed
-- [ ] #2 otool -L shows no /opt/homebrew references in the binary
-- [ ] #3 disable-library-validation entitlement removed from Entitlements.plist
+- [x] #1 Signed mt.app launches without crash on a machine without Homebrew TagLib installed
+- [x] #2 otool -L shows no /opt/homebrew references in the binary
+- [x] #3 disable-library-validation entitlement removed from Entitlements.plist
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Statically linked TagLib 2.0.2 into the mt binary, eliminating the runtime dependency on Homebrew's dynamic libraries.
+
+## Changes
+- `scripts/build-taglib.sh` - New script to download TagLib source and build static `.a` libraries into `vendor/taglib/`
+- `zig-core/build.zig` - Replaced `use_pkg_config = .force` with explicit vendor include/library paths
+- `crates/mt-core/build.rs` - Static linking directives for `tag_c`, `tag`, `z`, `c++`; auto-triggers build script if vendor libs missing
+- `crates/mt-core/Cargo.toml` - Removed `pkg-config` build dependency
+- `crates/mt-tauri/Entitlements.plist` - Removed `disable-library-validation` entitlement
+- `.github/actions/setup-tauri-build/action.yml` - Replaced `brew install taglib` with `scripts/build-taglib.sh`
+- `.github/workflows/test.yml` - Updated diagnostic echo for static TagLib
+- `taskfiles/zig.yml` - Added `zig:build:taglib` and `zig:build:taglib:force` tasks
+- `.gitignore` - Added `vendor/`
+
+## Verification
+- `otool -L` shows zero `/opt/homebrew` references
+- `codesign --verify --deep --strict` passes (exit 0)
+- `codesign -d --entitlements` confirms no `disable-library-validation`
+- 596 Rust tests pass, Zig tests pass
+<!-- SECTION:FINAL_SUMMARY:END -->

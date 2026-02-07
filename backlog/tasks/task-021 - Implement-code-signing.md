@@ -1,10 +1,10 @@
 ---
-id: task-021
+id: TASK-021
 title: Implement code signing
 status: In Progress
 assignee: []
 created_date: '2025-09-17 04:11'
-updated_date: '2026-02-06 07:54'
+updated_date: '2026-02-07 00:46'
 labels:
   - signing
   - macos
@@ -23,11 +23,11 @@ Set up code signing for application packages and releases
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Research code signing requirements for macOS (done - Tauri v2 docs reviewed)
-- [ ] #2 Set up macOS code signing certificate (Developer ID Application)
-- [ ] #3 Create Entitlements.plist with hardened runtime and app-specific entitlements
-- [ ] #4 Configure tauri.conf.json with signingIdentity, entitlements, and DMG settings
-- [ ] #5 Set up notarization via App Store Connect API key
+- [x] #1 Research code signing requirements for macOS (done - Tauri v2 docs reviewed)
+- [x] #2 Set up macOS code signing certificate (Developer ID Application)
+- [x] #3 Create Entitlements.plist with hardened runtime and app-specific entitlements
+- [x] #4 Configure tauri.conf.json with signingIdentity, entitlements, and DMG settings
+- [x] #5 Set up notarization via App Store Connect API key
 
 - [ ] #6 Configure GitHub secrets for certificate and notarization
 - [ ] #7 Create release.yml GitHub Actions workflow with macOS ARM64 + x64 builds
