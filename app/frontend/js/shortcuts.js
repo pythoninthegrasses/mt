@@ -60,9 +60,9 @@ export const SHORTCUT_DEFINITIONS = [
   { key: 'mod+ArrowLeft', label: '{mod}+\u2190', action: 'Seek back 5s' },
   { key: 'ArrowUp', label: '\u2191', action: 'Volume up' },
   { key: 'ArrowDown', label: '\u2193', action: 'Volume down' },
-  { key: 'KeyM', label: 'M', action: 'Mute / Unmute' },
-  { key: 'KeyL', label: 'L', action: 'Cycle loop mode' },
-  { key: 'KeyS', label: 'S', action: 'Toggle shuffle' },
+  { key: 'mod+Shift+KeyM', label: '{mod}+Shift+M', action: 'Mute / Unmute' },
+  { key: 'mod+KeyL', label: '{mod}+L', action: 'Cycle loop mode' },
+  { key: 'mod+Shift+KeyS', label: '{mod}+Shift+S', action: 'Toggle shuffle' },
   { key: 'mod+KeyF', label: '{mod}+F', action: 'Focus search' },
   { key: 'Escape', label: 'Esc', action: 'Clear search / Close dialogs' },
   { key: 'mod+Comma', label: '{mod}+,', action: 'Toggle settings' },
@@ -131,14 +131,35 @@ function handleKeydown(event) {
     return;
   }
 
-  // Cmd/Ctrl+S : Stop after current track (library/playlist only)
-  if (hasMod && event.code === 'KeyS') {
+  // Cmd/Ctrl+Shift+S : Toggle shuffle
+  if (hasMod && event.shiftKey && event.code === 'KeyS') {
+    event.preventDefault();
+    queue.toggleShuffle();
+    return;
+  }
+
+  // Cmd/Ctrl+S (without Shift) : Stop after current track (library/playlist only)
+  if (hasMod && !event.shiftKey && event.code === 'KeyS') {
     event.preventDefault();
     if (isLibraryOrPlaylistView() && !isNowPlayingView()) {
       queue.stopAfterCurrent = !queue.stopAfterCurrent;
       const state = queue.stopAfterCurrent ? 'enabled' : 'disabled';
       ui.toast(`Stop after current track ${state}`, 'info');
     }
+    return;
+  }
+
+  // Cmd/Ctrl+Shift+M : Mute/Unmute
+  if (hasMod && event.shiftKey && event.code === 'KeyM') {
+    event.preventDefault();
+    player.toggleMute();
+    return;
+  }
+
+  // Cmd/Ctrl+L : Cycle loop mode
+  if (hasMod && event.code === 'KeyL') {
+    event.preventDefault();
+    queue.cycleLoop();
     return;
   }
 
@@ -182,21 +203,6 @@ function handleKeydown(event) {
     case 'ArrowDown':
       event.preventDefault();
       player.setVolume(player.volume - VOLUME_STEP);
-      break;
-
-    // M: Mute/Unmute
-    case 'KeyM':
-      player.toggleMute();
-      break;
-
-    // L: Cycle loop mode
-    case 'KeyL':
-      queue.cycleLoop();
-      break;
-
-    // S: Toggle shuffle (without modifier)
-    case 'KeyS':
-      queue.toggleShuffle();
       break;
 
     // Escape: Clear search, close settings, close dialogs
