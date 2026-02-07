@@ -9,10 +9,10 @@ MT uses a modern pure-Rust architecture:
 | Component | Technology |
 |-----------|------------|
 | Frontend | Tauri WebView (Alpine.js + Basecoat) |
-| Backend | Native Rust (87 Tauri commands) |
+| Backend | Native Rust (91 Tauri commands) |
 | Audio | Rust audio engine (symphonia + rodio) |
 | Database | SQLite via rusqlite |
-| Media Keys | Cross-platform via Tauri plugins |
+| Media Keys | souvlaki (MPRIS/SMTC) + tauri-plugin-global-shortcut |
 
 ## Architecture Diagram
 
@@ -69,7 +69,7 @@ The Rust backend handles all functionality:
 |-----------|----------------|
 | **Window Lifecycle** | Create, resize, minimize, close, fullscreen |
 | **Native Menus** | Application menu, context menus |
-| **Media Keys** | Global hotkeys via `tauri-plugin-global-shortcut` |
+| **Media Keys** | OS media integration via `souvlaki` (MPRIS/SMTC) + `tauri-plugin-global-shortcut` |
 | **Audio Engine** | Decode and play audio with sub-millisecond latency |
 | **Database** | SQLite operations via rusqlite |
 | **Library Scanner** | Directory traversal, metadata extraction |
@@ -188,7 +188,7 @@ User clicks "Add Music" button
 | Feature | Implementation |
 |---------|----------------|
 | Window chrome | Native titlebar with traffic lights |
-| Media keys | `tauri-plugin-global-shortcut` |
+| Media keys | `souvlaki` (Now Playing widget) + `tauri-plugin-global-shortcut` |
 | Menu bar | Native application menu |
 | File associations | Info.plist configuration |
 
@@ -210,19 +210,33 @@ User clicks "Add Music" button
 
 ## Directory Structure
 
+The project uses a Cargo workspace with two crates, plus a Zig FFI core library:
+
 ```
 mt/
-├── src-tauri/              # Tauri Rust backend
-│   ├── src/
-│   │   ├── main.rs         # Entry point
-│   │   ├── audio/          # Audio engine module
-│   │   ├── commands/       # Tauri command handlers
-│   │   ├── db/             # Database operations
-│   │   ├── lastfm/         # Last.fm integration
-│   │   ├── scanner/        # Library scanning
-│   │   └── watcher/        # File system monitoring
-│   ├── Cargo.toml
-│   └── tauri.conf.json
+├── Cargo.toml              # Workspace root (members: mt-core, mt-tauri)
+├── crates/
+│   ├── mt-core/            # Zig FFI bindings + pure logic
+│   │   ├── build.rs        # Builds Zig, links libmtcore.a
+│   │   └── src/
+│   │       └── ffi.rs      # FFI declarations
+│   └── mt-tauri/           # Tauri shell (depends on mt-core)
+│       ├── src/
+│       │   ├── main.rs     # Entry point
+│       │   ├── audio/      # Audio engine module
+│       │   ├── commands/   # Tauri command handlers
+│       │   ├── db/         # Database operations
+│       │   ├── lastfm/     # Last.fm integration
+│       │   ├── scanner/    # Library scanning
+│       │   └── watcher/    # File system monitoring
+│       ├── Cargo.toml
+│       └── tauri.conf.json
+├── zig-core/               # Zig business logic (C ABI)
+│   ├── build.zig
+│   └── src/
+│       ├── scanner/        # Metadata, fingerprinting, inventory
+│       ├── db/             # Models, queries, settings
+│       └── lastfm/         # Client, signature, types
 ├── app/frontend/           # Frontend source
 │   ├── index.html
 │   ├── js/
@@ -231,9 +245,7 @@ mt/
 │   ├── components/         # UI components
 │   └── styles/
 │       └── main.css        # Tailwind + Basecoat
-├── package.json            # Frontend dependencies
-├── vite.config.js
-└── tailwind.config.js
+└── package.json            # Frontend dependencies
 ```
 
 ## Performance
@@ -260,19 +272,21 @@ Features: Screenshots, DOM snapshots, IPC monitoring, UI automation, console log
 
 ## Key Dependencies
 
-### Rust (Cargo.toml)
+### Rust (crates/mt-tauri/Cargo.toml)
 
 ```toml
 [dependencies]
 tauri = { version = "2", features = ["shell-open"] }
 symphonia = { version = "0.5", features = ["mp3", "flac", "aac", "ogg"] }
-rodio = "0.19"
-rusqlite = { version = "0.32", features = ["bundled"] }
+rodio = { version = "0.21", features = ["flac", "mp3", "mp4", "vorbis", "wav"] }
+rusqlite = { version = "0.38", features = ["bundled"] }
 lofty = "0.22"
+souvlaki = "0.8"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["json"] }
+mt-core = { path = "../mt-core" }
 
 [dependencies.tauri-plugin-global-shortcut]
 version = "2"
@@ -284,12 +298,12 @@ version = "2"
 {
   "dependencies": {
     "alpinejs": "^3.14",
-    "@aspect/basecoat": "^0.1"
+    "basecoat-css": "^0.3.10-beta.2"
   },
   "devDependencies": {
     "vite": "^6",
-    "tailwindcss": "^3.4",
-    "@tailwindcss/forms": "^0.5"
+    "tailwindcss": "^4.0",
+    "@tailwindcss/vite": "^4.0"
   }
 }
 ```

@@ -1,5 +1,7 @@
 # Rust to Zig Migration Plan
 
+> **HISTORICAL**: The Zig FFI migration is complete and merged to main. All phases listed below are done. This document is preserved as architectural context.
+
 ## Overview
 
 This document outlines the plan to migrate business logic from Rust to Zig via FFI, while keeping Tauri as the desktop shell and the AlpineJS/Basecoat frontend unchanged.
@@ -277,7 +279,7 @@ zig build test
 
 ### Integration Tests (Rust)
 
-Existing Rust tests in `src-tauri/src/**/*_test.rs` continue to work, now exercising FFI paths.
+Existing Rust tests in `crates/mt-tauri/src/**/*_test.rs` continue to work, now exercising FFI paths.
 
 ### End-to-End (Playwright)
 
@@ -452,19 +454,12 @@ cd app/frontend && npm run test:e2e
 ```
 
 **Test Summary:**
-- Zig unit tests: ~50 tests (growing with migration)
-- Rust backend: 539 tests (mt-core: 32, mt-tauri: 507)
-- Integration tests: 17 tests
-- Vitest unit: 213 tests
-- Playwright E2E: 413 tests (fast mode, webkit only)
-- Total: 1,200+ tests
+- Zig unit tests: ~50 tests
+- Rust backend: ~596 tests (mt-core + mt-tauri + integration)
+- Vitest unit: ~246 tests
+- Playwright E2E: ~633 tests (fast mode, webkit only)
+- Total: 1,500+ tests
 
 ### Worktree
 
-The Zig migration work is developed in a separate worktree:
-
-```bash
-git worktree add ../mt-zig-migration zig-migration
-```
-
-This allows parallel development without disrupting the main branch.
+The Zig migration was developed in a separate worktree and has been merged to main.

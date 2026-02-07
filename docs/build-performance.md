@@ -4,7 +4,7 @@ This document covers build performance optimization for mt development.
 
 ## Current Configuration
 
-### Dev Profile (`src-tauri/Cargo.toml`)
+### Dev Profile (`Cargo.toml` workspace root)
 
 ```toml
 [profile.dev]
@@ -15,7 +15,7 @@ debug = "line-tables-only"    # Reduced debug info, still get line numbers in ba
 opt-level = 3  # Optimize proc-macros and build scripts
 ```
 
-### Linker (`src-tauri/.cargo/config.toml`)
+### Linker (`crates/mt-tauri/.cargo/config.toml`)
 
 ```toml
 [build]
@@ -50,7 +50,7 @@ Measured on Apple M4 Max, macOS 15.7.1:
 | Cold build | ~50.1s | -0.3% | Negligible difference |
 | Incremental build | ~0.82s | **-23%** | Significant improvement |
 
-**Key finding**: Nightly with `-Zthreads=16` provides **23% faster incremental builds** with 50x better variance (σ=0.012s vs σ=0.588s), while maintaining full test compatibility (734/734 tests pass).
+**Key finding**: Nightly with `-Zthreads=16` provides **23% faster incremental builds** with 50x better variance (σ=0.012s vs σ=0.588s), while maintaining full test compatibility (596 Rust tests pass).
 
 ## Baseline Protocol
 
@@ -58,30 +58,30 @@ Use [hyperfine](https://github.com/sharkdp/hyperfine) for accurate measurements:
 
 ```bash
 # Cold build (3 runs with cargo clean before each)
-hyperfine --runs 3 --prepare 'cargo clean --manifest-path src-tauri/Cargo.toml' \
-  'cargo build --manifest-path src-tauri/Cargo.toml'
+hyperfine --runs 3 --prepare 'cargo clean' \
+  'cargo build -p mt-tauri'
 
 # Incremental build (5 runs, 1 warmup)
-hyperfine --warmup 1 --runs 5 --prepare 'touch src-tauri/src/main.rs' \
-  'cargo build --manifest-path src-tauri/Cargo.toml'
+hyperfine --warmup 1 --runs 5 --prepare 'touch crates/mt-tauri/src/main.rs' \
+  'cargo build -p mt-tauri'
 
 # Build timing breakdown (HTML report)
-cargo build --manifest-path src-tauri/Cargo.toml --timings
-# Output: src-tauri/target/cargo-timings/cargo-timing.html
+cargo build -p mt-tauri --timings
+# Output: target/cargo-timings/cargo-timing.html
 ```
 
 ### Comparing Stable vs Nightly
 
 ```bash
 # Cold build comparison
-hyperfine --runs 3 --prepare 'cargo clean --manifest-path src-tauri/Cargo.toml' \
-  'cargo build --manifest-path src-tauri/Cargo.toml' \
-  'RUSTUP_TOOLCHAIN=nightly RUSTFLAGS="-Zthreads=16" cargo build --manifest-path src-tauri/Cargo.toml'
+hyperfine --runs 3 --prepare 'cargo clean' \
+  'cargo build -p mt-tauri' \
+  'RUSTUP_TOOLCHAIN=nightly RUSTFLAGS="-Zthreads=16" cargo build -p mt-tauri'
 
 # Incremental build comparison
-hyperfine --warmup 1 --runs 5 --prepare 'touch src-tauri/src/main.rs' \
-  'cargo build --manifest-path src-tauri/Cargo.toml' \
-  'RUSTUP_TOOLCHAIN=nightly RUSTFLAGS="-Zthreads=16" cargo build --manifest-path src-tauri/Cargo.toml'
+hyperfine --warmup 1 --runs 5 --prepare 'touch crates/mt-tauri/src/main.rs' \
+  'cargo build -p mt-tauri' \
+  'RUSTUP_TOOLCHAIN=nightly RUSTFLAGS="-Zthreads=16" cargo build -p mt-tauri'
 ```
 
 ### Environment Checklist
@@ -115,7 +115,7 @@ Ensure consistent power state (AC power, low power mode off).
 | lld | Alternative | Good fallback |
 
 ```toml
-# Linux config (src-tauri/.cargo/config.toml)
+# Linux config (crates/mt-tauri/.cargo/config.toml)
 [target.x86_64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 ```
@@ -128,7 +128,7 @@ rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 | link.exe | Alternative | Better for tiny incrementals |
 
 ```toml
-# Windows config (src-tauri/.cargo/config.toml)
+# Windows config (crates/mt-tauri/.cargo/config.toml)
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 ```
@@ -190,7 +190,7 @@ task tauri:dev
 RUSTUP_TOOLCHAIN=stable RUSTFLAGS="" task tauri:dev
 
 # Quick syntax check (no binary, faster than build)
-cargo check --manifest-path src-tauri/Cargo.toml
+cargo check -p mt-tauri
 
 # Run all tests
 task test
@@ -239,9 +239,8 @@ When Cranelift SIMD support matures (or if Tauri plugins stop using raw NEON int
 rustup component add rustc-codegen-cranelift-preview --toolchain nightly
 
 # Test build (expects failure currently)
-cd src-tauri
 RUSTUP_TOOLCHAIN=nightly CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift \
-  cargo build -Zcodegen-backend
+  cargo build -p mt-tauri -Zcodegen-backend
 ```
 
 ## References

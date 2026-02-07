@@ -22,12 +22,13 @@ Rust implementation of Last.fm API integration for mt desktop music player, prov
 The Last.fm integration is implemented as a modular Rust backend with the following components:
 
 ```
-src-tauri/src/
+crates/mt-tauri/src/
 ├── lastfm/
 │   ├── mod.rs              # Module exports
 │   ├── client.rs           # HTTP client with reqwest
-│   ├── config.rs            # API key configuration
+│   ├── config.rs           # API key configuration
 │   ├── signature.rs        # MD5 signature generation
+│   ├── signature_ffi.rs    # FFI wrapper for Zig signature generation
 │   ├── rate_limiter.rs     # Request rate limiting
 │   └── types.rs            # Request/response types
 └── commands/
@@ -127,7 +128,7 @@ Comprehensive type definitions for all API requests/responses using serde:
 
 ### `commands/lastfm.rs` - Tauri Commands
 
-Exposes 10 Tauri commands to frontend:
+Exposes 13 Tauri commands to frontend:
 
 **Settings:**
 - `lastfm_get_settings()` - Get current settings
@@ -148,6 +149,9 @@ Exposes 10 Tauri commands to frontend:
 
 **Import:**
 - `lastfm_import_loved_tracks()` - Import loved tracks
+- `lastfm_cache_loved_tracks()` - Cache loved tracks from Last.fm
+- `lastfm_match_loved_tracks()` - Match cached loved tracks to library
+- `lastfm_loved_stats()` - Get loved tracks import statistics
 
 ## OAuth 1.0a Authentication Flow
 
@@ -450,7 +454,7 @@ Favorites tracking in `library` table:
 
 ## Tauri Commands
 
-All commands are registered in `src-tauri/src/lib.rs`:
+All commands are registered in `crates/mt-tauri/src/lib.rs`:
 
 ```rust
 .invoke_handler(tauri::generate_handler![
@@ -465,6 +469,9 @@ All commands are registered in `src-tauri/src/lib.rs`:
     lastfm_queue_status,
     lastfm_queue_retry,
     lastfm_import_loved_tracks,
+    lastfm_cache_loved_tracks,
+    lastfm_match_loved_tracks,
+    lastfm_loved_stats,
 ])
 ```
 
@@ -863,15 +870,6 @@ cargo test test_should_scrobble_basic
 ⏳ **API Key Obfuscation**: HMAC-SHA256 salted hash for release builds
 
 ⏳ **E2E Tests**: Playwright tests for full authentication and scrobbling flows
-
-### Python Backend Removal
-
-Once Phase 8 (E2E testing) is complete, the Python FastAPI backend can be removed:
-
-- Remove `app/backend/routes/lastfm.py` (360 lines)
-- Remove `app/backend/services/lastfm.py`
-- Remove PEX sidecar build process
-- Remove Python dependencies: `pylast`, `requests`, etc.
 
 ## References
 

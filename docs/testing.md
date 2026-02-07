@@ -8,9 +8,9 @@ MT uses a three-tier testing strategy:
 
 | Layer | Framework | Tests | Purpose |
 |-------|-----------|-------|---------|
-| **Rust Backend** | `cargo test` | ~320 | Unit tests for audio, database, and IPC logic |
-| **Vitest Unit** | Vitest | ~210 | Frontend store logic (queue, player state) |
-| **Playwright E2E** | Playwright | ~413 | Integration and end-to-end user flows |
+| **Rust Backend** | `cargo test` | ~596 | Unit tests for audio, database, and IPC logic |
+| **Vitest Unit** | Vitest | ~246 | Frontend store logic (queue, player state) |
+| **Playwright E2E** | Playwright | ~633 | Integration and end-to-end user flows |
 
 ## Running Tests
 
@@ -25,7 +25,7 @@ task test:e2e
 task npm:test:e2e:ui
 ```
 
-See [AGENTS.md](../AGENTS.md#running-tests-task-commands) for the complete test command reference.
+See [CLAUDE.md](../CLAUDE.md#running-tests-task-commands) for the complete test command reference.
 
 ---
 
@@ -96,9 +96,9 @@ Tests are controlled by the `E2E_MODE` environment variable:
 
 | Mode | Browsers | @tauri tests | Tests | Duration |
 |------|----------|--------------|-------|----------|
-| `fast` (default) | WebKit only | Skipped | ~413 | ~1m |
-| `full` | All 3 | Skipped | ~1239 | ~3m |
-| `tauri` | All 3 | Included | ~1300+ | ~4m |
+| `fast` (default) | WebKit only | Skipped | ~633 | ~1m |
+| `full` | All 3 | Skipped | ~1899 | ~3m |
+| `tauri` | All 3 | Included | ~2000+ | ~4m |
 
 ```bash
 # Fast mode (default)
@@ -184,5 +184,5 @@ await page.screenshot({ path: '/tmp/mt-e2e-evidence/test-state.png' });
 ## References
 
 - [MCP Bridge Documentation](tauri-architecture.md#mcp-bridge-ai-agent-debugging) - Full MCP tool reference
-- [AGENTS.md Playwright Section](../AGENTS.md#playwright-e2e-testing) - Detailed test commands and patterns
+- [CLAUDE.md Playwright Section](../CLAUDE.md#playwright-e2e-testing) - Detailed test commands and patterns
 - [hypothesi/mcp-server-tauri](https://github.com/hypothesi/mcp-server-tauri) - MCP server documentation

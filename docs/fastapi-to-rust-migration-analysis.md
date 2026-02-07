@@ -1,8 +1,10 @@
 # FastAPI PEX Sidecar to Rust Backend Migration Analysis
 
+> **HISTORICAL**: This migration is complete. The Python/FastAPI backend has been fully removed. This document is preserved as historical context for the design decisions made during migration.
+
 **Date**: 2026-01-21
 **Task**: task-172
-**Status**: Analysis Complete
+**Status**: Migration Complete
 
 ## Executive Summary
 

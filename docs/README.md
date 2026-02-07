@@ -7,7 +7,7 @@ This directory contains documentation for the MT music player project.
 MT is a desktop music player built with:
 
 - **Frontend**: Tauri WebView with Alpine.js + Basecoat (Tailwind CSS)
-- **Backend**: Pure Rust (all 87 Tauri commands)
+- **Backend**: Pure Rust (all 91 Tauri commands)
 - **Audio**: Rodio/Symphonia for playback
 - **Database**: SQLite via rusqlite
 
