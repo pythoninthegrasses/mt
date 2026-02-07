@@ -88,6 +88,8 @@ export function createLibraryBrowser(Alpine) {
     // Type-to-jump state
     _typeBuffer: '',           // Accumulated typed characters
     _typeDebounceTimer: null,  // Timeout ID for clearing buffer
+    _cycleChar: '',            // Character being cycled (single letter repeat)
+    _cycleIndex: -1,           // Index into distinct matching artists for cycling
 
     containerWidth: 0,
     resizeObserver: null,
@@ -1593,10 +1595,25 @@ export function createLibraryBrowser(Alpine) {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key.length !== 1) return; // Only single printable chars
 
-      // Append to buffer
-      this._typeBuffer += event.key;
+      const ch = event.key.toLowerCase();
 
-      // Find and scroll to matching artist
+      // Detect repeated same-letter press (cycling mode)
+      // If buffer is all the same char and new char matches, cycle to next artist
+      if (
+        this._typeBuffer.length >= 1 &&
+        ch === this._typeBuffer[0].toLowerCase() &&
+        this._typeBuffer.split('').every((c) => c.toLowerCase() === ch)
+      ) {
+        this._typeBuffer += event.key;
+        this.cycleToNextArtist(ch);
+        this.resetTypeDebounce();
+        return;
+      }
+
+      // Normal mode: append to buffer and search
+      this._typeBuffer += event.key;
+      this._cycleChar = '';
+      this._cycleIndex = -1;
       this.jumpToMatchingArtist(this._typeBuffer);
 
       // Reset debounce timer
@@ -1669,6 +1686,50 @@ export function createLibraryBrowser(Alpine) {
     },
 
     /**
+     * Cycle to the next distinct artist matching the given single character.
+     * Builds a list of distinct matching artists from filteredTracks and advances
+     * through them, wrapping around at the end.
+     * @param {string} char - Single lowercase character to match
+     */
+    cycleToNextArtist(char) {
+      const tracks = this.library.filteredTracks;
+
+      // Build ordered list of distinct matching artists (first occurrence order)
+      const seen = new Set();
+      const matchingArtists = [];
+      for (const track of tracks) {
+        if (!track.artist) continue;
+        const artist = track.artist.toLowerCase();
+        const stripped = this.stripIgnoredPrefix(artist);
+        if (
+          (stripped.startsWith(char) || artist.startsWith(char)) &&
+          !seen.has(track.artist)
+        ) {
+          seen.add(track.artist);
+          matchingArtists.push(track.artist);
+        }
+      }
+
+      if (matchingArtists.length === 0) return;
+
+      // Advance cycle index (initialize on first cycle after a fresh letter press)
+      if (this._cycleChar !== char) {
+        this._cycleChar = char;
+        this._cycleIndex = 0; // First press already jumped to index 0
+      }
+      this._cycleIndex = (this._cycleIndex + 1) % matchingArtists.length;
+
+      // Find first track by the target artist and select it
+      const targetArtist = matchingArtists[this._cycleIndex];
+      const targetTrack = tracks.find((t) => t.artist === targetArtist);
+      if (targetTrack) {
+        this.selectedTracks.clear();
+        this.selectedTracks.add(targetTrack.id);
+        this.scrollToTrack(targetTrack.id);
+      }
+    },
+
+    /**
      * Reset the type-to-jump debounce timer
      */
     resetTypeDebounce() {
@@ -1677,6 +1738,8 @@ export function createLibraryBrowser(Alpine) {
       }
       this._typeDebounceTimer = setTimeout(() => {
         this._typeBuffer = '';
+        this._cycleChar = '';
+        this._cycleIndex = -1;
         this._typeDebounceTimer = null;
       }, 500); // 500ms matches existing debounce patterns in codebase
     },

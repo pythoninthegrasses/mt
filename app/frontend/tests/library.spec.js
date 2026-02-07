@@ -4208,4 +4208,77 @@ test.describe('Type-to-jump artist navigation (task-255)', () => {
     // "The La's" (stripped prefix: "la's") wins over "Lana Del Rey" (raw name: "lana del rey")
     expect(selectedArtist).toBe("The La's");
   });
+
+  test('should cycle to next artist on repeated same-letter press', async ({ page }) => {
+    // Press "e" to jump to first "E" artist
+    await page.keyboard.press('e');
+    await page.waitForTimeout(100);
+
+    const firstArtist = await page.evaluate(() => {
+      const browserEl = document.querySelector('[x-data="libraryBrowser"]');
+      if (!browserEl) return null;
+      const data = window.Alpine.$data(browserEl);
+      const selectedIds = Array.from(data.selectedTracks);
+      if (selectedIds.length === 0) return null;
+      const tracks = window.Alpine.store('library').filteredTracks;
+      return tracks.find((t) => t.id === selectedIds[0])?.artist;
+    });
+
+    // Press "e" again to cycle to next "E" artist
+    await page.keyboard.press('e');
+    await page.waitForTimeout(100);
+
+    const secondArtist = await page.evaluate(() => {
+      const browserEl = document.querySelector('[x-data="libraryBrowser"]');
+      if (!browserEl) return null;
+      const data = window.Alpine.$data(browserEl);
+      const selectedIds = Array.from(data.selectedTracks);
+      if (selectedIds.length === 0) return null;
+      const tracks = window.Alpine.store('library').filteredTracks;
+      return tracks.find((t) => t.id === selectedIds[0])?.artist;
+    });
+
+    // Both should be "E" artists but different ones
+    expect(firstArtist).toBeTruthy();
+    expect(secondArtist).toBeTruthy();
+    expect(firstArtist.toLowerCase().startsWith('e')).toBe(true);
+    expect(secondArtist.toLowerCase().startsWith('e')).toBe(true);
+    expect(secondArtist).not.toBe(firstArtist);
+  });
+
+  test('should wrap around when cycling past last matching artist', async ({ page }) => {
+    // Collect all distinct "E" artists
+    const eArtists = await page.evaluate(() => {
+      const tracks = window.Alpine.store('library').filteredTracks;
+      const seen = new Set();
+      return tracks
+        .filter((t) => t.artist?.toLowerCase().startsWith('e'))
+        .reduce((acc, t) => {
+          if (!seen.has(t.artist)) {
+            seen.add(t.artist);
+            acc.push(t.artist);
+          }
+          return acc;
+        }, []);
+    });
+
+    // Press "e" once for each distinct artist, then one more to wrap
+    for (let i = 0; i <= eArtists.length; i++) {
+      await page.keyboard.press('e');
+      await page.waitForTimeout(100);
+    }
+
+    // After wrapping, should be back to first "E" artist
+    const wrappedArtist = await page.evaluate(() => {
+      const browserEl = document.querySelector('[x-data="libraryBrowser"]');
+      if (!browserEl) return null;
+      const data = window.Alpine.$data(browserEl);
+      const selectedIds = Array.from(data.selectedTracks);
+      if (selectedIds.length === 0) return null;
+      const tracks = window.Alpine.store('library').filteredTracks;
+      return tracks.find((t) => t.id === selectedIds[0])?.artist;
+    });
+
+    expect(wrappedArtist).toBe(eArtists[0]);
+  });
 });
