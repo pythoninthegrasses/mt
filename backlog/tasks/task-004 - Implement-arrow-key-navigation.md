@@ -1,10 +1,10 @@
 ---
-id: task-004
+id: TASK-004
 title: Implement arrow key navigation
-status: To Do
+status: Done
 assignee: []
 created_date: '2025-09-17 04:10'
-updated_date: '2026-01-10 05:55'
+updated_date: '2026-02-07 04:21'
 labels: []
 dependencies: []
 ordinal: 11000

@@ -4,7 +4,7 @@ title: Implement code signing
 status: In Progress
 assignee: []
 created_date: '2025-09-17 04:11'
-updated_date: '2026-02-07 00:46'
+updated_date: '2026-02-07 03:40'
 labels:
   - signing
   - macos
@@ -29,10 +29,10 @@ Set up code signing for application packages and releases
 - [x] #4 Configure tauri.conf.json with signingIdentity, entitlements, and DMG settings
 - [x] #5 Set up notarization via App Store Connect API key
 
-- [ ] #6 Configure GitHub secrets for certificate and notarization
-- [ ] #7 Create release.yml GitHub Actions workflow with macOS ARM64 + x64 builds
+- [x] #6 Configure GitHub secrets for certificate and notarization
+- [x] #7 Create release.yml GitHub Actions workflow with macOS ARM64 + x64 builds
 - [ ] #8 Add Taskfile tasks for local signed builds
-- [ ] #9 Test signed + notarized DMG on macOS
+- [x] #9 Test signed + notarized DMG on macOS
 - [ ] #10 Set up Windows code signing certificates (future phase)
 - [ ] #11 Configure automated code signing in CI/CD for Windows (future phase)
 <!-- AC:END -->

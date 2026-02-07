@@ -1,9 +1,10 @@
 ---
-id: task-260
+id: TASK-260
 title: Fix keyboard shortcut collision with alphabetical artist navigation in library
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-06 23:13'
+updated_date: '2026-02-07 04:03'
 labels:
   - frontend
   - ux
@@ -12,6 +13,7 @@ labels:
 dependencies:
   - task-107
 priority: medium
+ordinal: 500
 ---
 
 ## Description
@@ -34,11 +36,35 @@ Both approaches should be evaluated during implementation planning. The chosen s
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Users can press letter keys (A-Z) to jump to artists starting with that letter in the library browser
-- [ ] #2 Keyboard shortcuts (shuffle, mute, loop, etc.) remain fully functional and accessible
-- [ ] #3 No ambiguity exists between alphabetical navigation and shortcut activation -- the system deterministically picks one behavior based on clear rules
-- [ ] #4 Existing shortcut behavior from task-107 is not broken (Space, arrow keys, Cmd+F, Cmd+D, Cmd+S, Escape, Delete)
-- [ ] #5 Focus state or modifier key requirement is clearly communicated to the user (e.g., visual focus ring on library, shortcut hints in settings)
-- [ ] #6 Alphabetical jump scrolls the library list to the first artist matching the pressed letter
-- [ ] #7 Pressing the same letter again cycles to the next artist starting with that letter
+- [x] #1 Users can press letter keys (A-Z) to jump to artists starting with that letter in the library browser
+- [x] #2 Keyboard shortcuts (shuffle, mute, loop, etc.) remain fully functional and accessible
+- [x] #3 No ambiguity exists between alphabetical navigation and shortcut activation -- the system deterministically picks one behavior based on clear rules
+- [x] #4 Existing shortcut behavior from task-107 is not broken (Space, arrow keys, Cmd+F, Cmd+D, Cmd+S, Escape, Delete)
+- [x] #5 Focus state or modifier key requirement is clearly communicated to the user (e.g., visual focus ring on library, shortcut hints in settings)
+- [x] #6 Alphabetical jump scrolls the library list to the first artist matching the pressed letter
+- [x] #7 Pressing the same letter again cycles to the next artist starting with that letter
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented Option A (modifier keys) to resolve the keyboard shortcut collision with alphabetical artist navigation.
+
+**Changes:**
+
+1. **shortcuts.js**: Moved single-letter shortcuts to modifier combos:
+   - Mute: `M` -> `Cmd/Ctrl+Shift+M` (avoids macOS Cmd+M minimize)
+   - Loop: `L` -> `Cmd/Ctrl+L`
+   - Shuffle: `S` -> `Cmd/Ctrl+Shift+S` (avoids Cmd+S "stop after current" collision)
+   - `Cmd/Ctrl+S` (stop after current) unchanged
+   - Updated SHORTCUT_DEFINITIONS for settings display
+
+2. **library-browser.js**: Added same-letter cycling for type-to-jump (AC#7):
+   - Pressing the same letter repeatedly cycles through distinct matching artists
+   - Wraps around after the last match
+   - Cycling state resets on debounce timeout or different character input
+
+3. **settings.html**: Added tip text explaining type-to-jump and cycling behavior
+
+4. **Tests**: 16 new Vitest unit tests for modifier shortcuts, 2 new Playwright E2E tests for cycling behavior. All 246 unit tests and 630 E2E tests pass.
+<!-- SECTION:FINAL_SUMMARY:END -->
