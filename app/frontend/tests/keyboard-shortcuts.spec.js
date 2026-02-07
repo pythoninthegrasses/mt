@@ -507,6 +507,50 @@ test.describe('Keyboard Shortcut Combinations', () => {
     expect(selectedCount).toBe(0);
   });
 
+  test('should not select all tracks when Cmd+A is pressed while search input is focused', async ({ page }) => {
+    // Focus the search input via Cmd+F
+    await page.keyboard.press('Meta+f');
+
+    // Verify search input is focused
+    const searchFocused = await page.evaluate(() =>
+      document.activeElement === document.querySelector('[data-testid="sidebar-search"]')
+    );
+    expect(searchFocused).toBe(true);
+
+    // Press Cmd+A while search is focused
+    await page.keyboard.press('Meta+a');
+
+    // Tracks should NOT be selected - Cmd+A should only affect the search input
+    const selectedCount = await page.evaluate(() => {
+      const component = window.Alpine.$data(document.querySelector('[x-data="libraryBrowser"]'));
+      return component.selectedTracks?.size || 0;
+    });
+    expect(selectedCount).toBe(0);
+  });
+
+  test('should not clear track selection when Escape is pressed while search input is focused', async ({ page }) => {
+    // First select a track
+    await page.locator('[data-track-id]').nth(0).click();
+
+    const selectedBefore = await page.evaluate(() => {
+      const component = window.Alpine.$data(document.querySelector('[x-data="libraryBrowser"]'));
+      return component.selectedTracks?.size || 0;
+    });
+    expect(selectedBefore).toBeGreaterThan(0);
+
+    // Focus the search input
+    await page.keyboard.press('Meta+f');
+
+    // Press Escape while search is focused - should blur search, not clear selection
+    await page.keyboard.press('Escape');
+
+    const selectedAfter = await page.evaluate(() => {
+      const component = window.Alpine.$data(document.querySelector('[x-data="libraryBrowser"]'));
+      return component.selectedTracks?.size || 0;
+    });
+    expect(selectedAfter).toBe(selectedBefore);
+  });
+
   test('should handle rapid keyboard shortcuts without crashing', async ({ page }) => {
     // Rapid key presses
     for (let i = 0; i < 5; i++) {

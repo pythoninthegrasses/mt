@@ -1749,12 +1749,8 @@ export function createLibraryBrowser(Alpine) {
      * @param {KeyboardEvent} event
      */
     handleKeydown(event) {
-      // Suppress destructive shortcuts when typing in inputs or when metadata modal is open
-      const isDestructiveKey = event.key === 'Delete' || event.key === 'Backspace';
-      if (
-        isDestructiveKey &&
-        (this.isTypingInInput(event) || this.$store.ui.modal?.type === 'editMetadata')
-      ) {
+      // Suppress all library shortcuts when typing in inputs or when metadata modal is open
+      if (this.isTypingInInput(event) || this.$store.ui.modal?.type === 'editMetadata') {
         return;
       }
 
@@ -1774,6 +1770,7 @@ export function createLibraryBrowser(Alpine) {
         this.playSelected();
       }
 
+      const isDestructiveKey = event.key === 'Delete' || event.key === 'Backspace';
       if (isDestructiveKey && this.selectedTracks.size > 0) {
         event.preventDefault();
         if (this.isInPlaylistView()) {
