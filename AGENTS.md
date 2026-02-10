@@ -1050,6 +1050,60 @@ cargo update
 - **rustfmt**: Code formatter: `cargo fmt`
 - **cargo-expand**: View macro expansions: `cargo expand`
 
+### Linux Remote Debugging
+
+**Running via SSH (headless):**
+
+```bash
+# Launch with debug logging on a remote Linux host
+ssh <HOST> "DISPLAY=:0 RUST_LOG=debug /usr/bin/mt-tauri"
+
+# For Wayland sessions, set WAYLAND_DISPLAY instead
+ssh <HOST> "WAYLAND_DISPLAY=wayland-0 RUST_LOG=debug /usr/bin/mt-tauri"
+```
+
+**Crash debugging workflow:**
+
+1. **Check systemd journal** for crash notifications:
+   ```bash
+   ssh <HOST> "journalctl --user --since '10 minutes ago' --no-pager | grep mt-tauri"
+   ```
+
+2. **Check `/var/crash/`** for Ubuntu apport crash reports:
+   ```bash
+   ssh <HOST> "ls -lt /var/crash/ | grep mt"
+   # Example: _usr_bin_mt-tauri.1000.crash
+   ```
+
+3. **Unpack and inspect** the crash report:
+   ```bash
+   ssh <HOST> "apport-unpack /var/crash/_usr_bin_mt-tauri.1000.crash /tmp/mt-crash"
+   ssh <HOST> "cat /tmp/mt-crash/Signal"       # Signal number (4=SIGILL, 11=SIGSEGV)
+   ssh <HOST> "cat /tmp/mt-crash/SignalName"    # Human-readable signal name
+   ssh <HOST> "cat /tmp/mt-crash/ProcStatus"    # Process state at crash
+   ```
+
+4. **Get a backtrace** from the coredump via gdb:
+   ```bash
+   ssh <HOST> "gdb /usr/bin/mt-tauri /tmp/mt-crash/CoreDump -batch \
+     -ex 'bt' -ex 'info registers' -ex 'x/5i \$rip'"
+   ```
+
+5. **For SIGILL crashes**, check CPU feature compatibility:
+   ```bash
+   # Check what the CPU supports
+   ssh <HOST> "grep -oP 'flags\s+:\s+\K.*' /proc/cpuinfo | head -1"
+
+   # Scan binary for instructions the CPU may not support
+   ssh <HOST> "objdump -d /usr/bin/mt-tauri | grep -c 'ymm'"      # AVX (256-bit)
+   ssh <HOST> "objdump -d /usr/bin/mt-tauri | grep -c 'shlx\|shrx\|sarx'"  # BMI2
+   ```
+
+**Common SIGILL causes:**
+- Binary compiled with AVX/BMI2 instructions on CI, deployed to older CPUs without those features
+- Zig libraries default to native CPU in release mode; fix with `-Dcpu=baseline`
+- C/C++ static libraries (TagLib) auto-vectorize for the build machine; fix with `-march=x86-64`
+
 ## Video Demo
 
 Convert screen recording (mp4) to AVIF for README using SVT-AV1 (fast, good quality):
