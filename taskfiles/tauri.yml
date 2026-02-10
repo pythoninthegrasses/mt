@@ -263,13 +263,20 @@ tasks:
       - deno run -A npm:@tauri-apps/cli info
 
   profile:
-    desc: "Show CPU/RAM usage for mt-tauri and related processes"
-    platforms: [linux]
+    desc: "Show CPU/RAM usage for mt processes (dev + release)"
+    platforms: [darwin, linux]
     cmds:
       - |
-        procs=$(ps aux --no-headers | grep -E 'mt-tauri|mt_tauri|WebKit' | grep -v grep)
+        case "{{OS}}" in
+          darwin)
+            procs=$(ps aux | grep -E '[m]t-tauri|/[m]t( |$)' || true)
+            ;;
+          linux)
+            procs=$(ps aux --no-headers | grep -E '[m]t-tauri|/[m]t( |$)|[W]ebKit' || true)
+            ;;
+        esac
         if [ -z "$procs" ]; then
-          echo "No mt-tauri processes found."
+          echo "No mt processes found."
           exit 0
         fi
         echo "$procs" | awk '
