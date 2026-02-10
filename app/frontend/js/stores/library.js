@@ -59,7 +59,7 @@ export function createLibraryStore(Alpine) {
     _saveCacheDebounce: null, // Debounce timer for cache persistence
     _watchedFolderListener: null,
     _lastLoadedSection: null, // Track which section the current data belongs to
-    _sectionCache: {}, // { sectionId: { tracks, totalTracks, totalDuration, timestamp } }
+    _sectionCache: {}, // { sectionId: { totalTracks, totalDuration, timestamp } } — summary only, no track arrays
     _backgroundRefreshing: false, // Prevent concurrent background refreshes
 
     /**
@@ -70,21 +70,19 @@ export function createLibraryStore(Alpine) {
       const hasCachedData = await this._loadCacheFromSettings();
 
       if (hasCachedData) {
-        // Show cached data for current section immediately
+        // Show cached summary stats immediately (sidebar totals)
         const cached = this._sectionCache[this.currentSection];
         if (cached) {
-          this.tracks = cached.tracks;
           this.totalTracks = cached.totalTracks;
           this.totalDuration = cached.totalDuration;
           this._lastLoadedSection = this.currentSection;
-          this.applyFilters();
-          console.log('[library] showing cached data on init:', {
+          console.log('[library] showing cached summary on init:', {
             section: this.currentSection,
-            trackCount: this.tracks.length,
+            totalTracks: cached.totalTracks,
           });
         }
-        // Background refresh to get fresh data (no spinner)
-        this._backgroundRefresh(this.currentSection);
+        // Fetch actual tracks from backend (spinner shows only if tracks truly empty)
+        await this.load({ forceReload: true });
       } else {
         // No cache - do a full load (will show spinner)
         await this.load({ forceReload: true });
@@ -114,10 +112,10 @@ export function createLibraryStore(Alpine) {
      * Update cache for a section with fresh data
      */
     _updateCache(section, data) {
+      const tracks = data.tracks || [];
       this._sectionCache[section] = {
-        tracks: data.tracks || [],
-        totalTracks: data.total || (data.tracks || []).length,
-        totalDuration: (data.tracks || []).reduce((sum, t) => sum + (t.duration || 0), 0),
+        totalTracks: data.total || tracks.length,
+        totalDuration: tracks.reduce((sum, t) => sum + (t.duration || 0), 0),
         timestamp: Date.now(),
       };
       // Persist cache to settings (non-blocking)
@@ -159,8 +157,10 @@ export function createLibraryStore(Alpine) {
           for (const [section, data] of Object.entries(cached)) {
             // Accept standard sections or playlist-* sections
             const isValidSection = validSections.includes(section) || section.startsWith('playlist-');
-            if (isValidSection && data?.tracks?.length > 0) {
-              this._sectionCache[section] = data;
+            if (isValidSection && data?.totalTracks > 0) {
+              // Strip any legacy tracks array from persisted cache to save memory
+              const { tracks: _tracks, ...summary } = data;
+              this._sectionCache[section] = summary;
               loadedCount++;
             }
           }
@@ -169,7 +169,7 @@ export function createLibraryStore(Alpine) {
             console.log('[library] loaded persistent cache:', {
               sections: Object.keys(this._sectionCache),
               totalTracks: Object.values(this._sectionCache).reduce(
-                (sum, s) => sum + (s.tracks?.length || 0),
+                (sum, s) => sum + (s.totalTracks || 0),
                 0
               ),
             });
@@ -285,24 +285,17 @@ export function createLibraryStore(Alpine) {
       const loadSection = this.currentSection;
       const cached = this._sectionCache[loadSection];
 
-      // Use cache if available and not forcing reload - NO spinner
+      // Show cached summary stats if available (previous tracks stay visible during fetch)
       if (cached && !forceReload) {
-        console.log('[library]', 'load_from_cache', {
+        console.log('[library]', 'load_with_cache_summary', {
           section: loadSection,
-          trackCount: cached.tracks.length,
+          totalTracks: cached.totalTracks,
           cacheAge: Math.round((Date.now() - cached.timestamp) / 1000) + 's',
         });
-
-        // Show cached data immediately
-        this.tracks = cached.tracks;
         this.totalTracks = cached.totalTracks;
         this.totalDuration = cached.totalDuration;
         this._lastLoadedSection = loadSection;
-        this.applyFilters();
-
-        // Background refresh (don't await, don't show spinner)
-        this._backgroundRefresh(loadSection);
-        return;
+        // Fall through to fetch below — tracks stay from previous section (no flash)
       }
 
       console.log('[library]', 'load', {
@@ -355,16 +348,12 @@ export function createLibraryStore(Alpine) {
       const section = 'liked';
       const cached = this._sectionCache[section];
 
-      // Use cache if available - NO spinner
+      // Show cached summary stats if available (previous tracks stay visible during fetch)
       if (cached) {
-        console.log('[library]', 'loadFavorites_from_cache', { trackCount: cached.tracks.length });
-        this.tracks = cached.tracks;
+        console.log('[library]', 'loadFavorites_with_cache_summary', { totalTracks: cached.totalTracks });
         this.totalTracks = cached.totalTracks;
         this.totalDuration = cached.totalDuration;
         this._lastLoadedSection = section;
-        this.applyFilters();
-        this._backgroundRefreshFavorites();
-        return;
       }
 
       this.loading = true;
@@ -409,15 +398,12 @@ export function createLibraryStore(Alpine) {
       const section = 'recent';
       const cached = this._sectionCache[section];
 
+      // Show cached summary stats if available (previous tracks stay visible during fetch)
       if (cached) {
-        console.log('[library]', 'loadRecentlyPlayed_from_cache', { trackCount: cached.tracks.length });
-        this.tracks = cached.tracks;
+        console.log('[library]', 'loadRecentlyPlayed_with_cache_summary', { totalTracks: cached.totalTracks });
         this.totalTracks = cached.totalTracks;
         this.totalDuration = cached.totalDuration;
         this._lastLoadedSection = section;
-        this.applyFilters();
-        this._backgroundRefreshRecentlyPlayed(days);
-        return;
       }
 
       this.loading = true;
@@ -462,15 +448,12 @@ export function createLibraryStore(Alpine) {
       const section = 'added';
       const cached = this._sectionCache[section];
 
+      // Show cached summary stats if available (previous tracks stay visible during fetch)
       if (cached) {
-        console.log('[library]', 'loadRecentlyAdded_from_cache', { trackCount: cached.tracks.length });
-        this.tracks = cached.tracks;
+        console.log('[library]', 'loadRecentlyAdded_with_cache_summary', { totalTracks: cached.totalTracks });
         this.totalTracks = cached.totalTracks;
         this.totalDuration = cached.totalDuration;
         this._lastLoadedSection = section;
-        this.applyFilters();
-        this._backgroundRefreshRecentlyAdded(days);
-        return;
       }
 
       this.loading = true;
@@ -515,15 +498,12 @@ export function createLibraryStore(Alpine) {
       const section = 'top25';
       const cached = this._sectionCache[section];
 
+      // Show cached summary stats if available (previous tracks stay visible during fetch)
       if (cached) {
-        console.log('[library]', 'loadTop25_from_cache', { trackCount: cached.tracks.length });
-        this.tracks = cached.tracks;
+        console.log('[library]', 'loadTop25_with_cache_summary', { totalTracks: cached.totalTracks });
         this.totalTracks = cached.totalTracks;
         this.totalDuration = cached.totalDuration;
         this._lastLoadedSection = section;
-        this.applyFilters();
-        this._backgroundRefreshTop25();
-        return;
       }
 
       this.loading = true;
@@ -568,19 +548,15 @@ export function createLibraryStore(Alpine) {
       const section = `playlist-${playlistId}`;
       const cached = this._sectionCache[section];
 
-      // Use cache if available - NO spinner
+      // Show cached summary stats if available (previous tracks stay visible during fetch)
       if (cached) {
-        console.log('[navigation]', 'load_playlist_from_cache', {
+        console.log('[navigation]', 'load_playlist_with_cache_summary', {
           playlistId,
-          trackCount: cached.tracks.length,
+          totalTracks: cached.totalTracks,
         });
-        this.tracks = cached.tracks;
         this.totalTracks = cached.totalTracks;
         this.totalDuration = cached.totalDuration;
         this._lastLoadedSection = section;
-        this.applyFilters();
-        this._backgroundRefreshPlaylist(playlistId);
-        return { tracks: cached.tracks, name: cached.playlistName };
       }
 
       console.log('[navigation]', 'load_playlist', {
@@ -596,9 +572,8 @@ export function createLibraryStore(Alpine) {
         this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
         this._lastLoadedSection = section;
 
-        // Cache playlist data
+        // Cache playlist summary (no track arrays — saves memory)
         this._sectionCache[section] = {
-          tracks: this.tracks,
           totalTracks: this.totalTracks,
           totalDuration: this.totalDuration,
           playlistName: data.name,
@@ -639,7 +614,6 @@ export function createLibraryStore(Alpine) {
           this.totalTracks = this.tracks.length;
           this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
           this._sectionCache[section] = {
-            tracks: this.tracks,
             totalTracks: this.totalTracks,
             totalDuration: this.totalDuration,
             playlistName: data.name,
