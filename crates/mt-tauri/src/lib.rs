@@ -50,8 +50,7 @@ use watcher::{
 use serde::Serialize;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
-use tauri::{Emitter, Manager, State};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+use tauri::{Manager, State};
 
 #[tauri::command]
 fn media_set_metadata(
@@ -138,63 +137,6 @@ async fn export_diagnostics(path: String) -> Result<(), String> {
         .await
         .map_err(|e| format!("Failed to write file: {}", e))?;
 
-    Ok(())
-}
-
-fn setup_global_shortcuts(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let app_handle = app.handle().clone();
-    
-    let play_pause = Shortcut::new(Some(Modifiers::empty()), Code::MediaPlayPause);
-    let next_track = Shortcut::new(Some(Modifiers::empty()), Code::MediaTrackNext);
-    let prev_track = Shortcut::new(Some(Modifiers::empty()), Code::MediaTrackPrevious);
-    let stop = Shortcut::new(Some(Modifiers::empty()), Code::MediaStop);
-
-    app.handle().plugin(
-        tauri_plugin_global_shortcut::Builder::new()
-            .with_handler(move |_app, shortcut, event| {
-                if event.state() != tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                    return;
-                }
-                
-                let event_name = if shortcut == &play_pause {
-                    println!("Media key: Play/Pause");
-                    Some("mediakey://toggle")
-                } else if shortcut == &next_track {
-                    println!("Media key: Next");
-                    Some("mediakey://next")
-                } else if shortcut == &prev_track {
-                    println!("Media key: Previous");
-                    Some("mediakey://previous")
-                } else if shortcut == &stop {
-                    println!("Media key: Stop");
-                    Some("mediakey://stop")
-                } else {
-                    None
-                };
-
-                if let Some(name) = event_name {
-                    let _ = app_handle.emit(name, ());
-                }
-            })
-            .build(),
-    )?;
-
-    let global_shortcut = app.global_shortcut();
-    
-    if let Err(e) = global_shortcut.register(play_pause) {
-        eprintln!("Failed to register MediaPlayPause: {}", e);
-    }
-    if let Err(e) = global_shortcut.register(next_track) {
-        eprintln!("Failed to register MediaTrackNext: {}", e);
-    }
-    if let Err(e) = global_shortcut.register(prev_track) {
-        eprintln!("Failed to register MediaTrackPrevious: {}", e);
-    }
-    if let Err(e) = global_shortcut.register(stop) {
-        eprintln!("Failed to register MediaStop: {}", e);
-    }
-
-    println!("Global media shortcuts registered");
     Ok(())
 }
 
@@ -357,10 +299,6 @@ pub fn run() {
                 Err(e) => {
                     eprintln!("Failed to initialize media keys: {}", e);
                 }
-            }
-
-            if let Err(e) = setup_global_shortcuts(app) {
-                eprintln!("Failed to setup global shortcuts: {}", e);
             }
 
             #[cfg(feature = "mcp")]

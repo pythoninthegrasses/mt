@@ -71,3 +71,26 @@ jobs:
         run: |
           security delete-keychain ci_signing.keychain || true
           rm -f /tmp/auth_key.p8
+
+  build-linux-amd64:
+    name: Build Linux (amd64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Tauri build environment
+        uses: ./.github/actions/setup-tauri-build
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'mt v__VERSION__'
+          releaseBody: 'See assets below to download and install.'
+          releaseDraft: true
+          prerelease: false
+          args: --target x86_64-unknown-linux-gnu --bundles deb
+          projectPath: './crates/mt-tauri'

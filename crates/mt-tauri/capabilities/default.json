@@ -16,7 +16,6 @@
     "shell:allow-open",
     "dialog:default",
     "dialog:allow-open",
-    "global-shortcut:default",
     "opener:default",
     "store:default"
   ]

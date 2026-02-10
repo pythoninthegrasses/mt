@@ -16,6 +16,8 @@ vars:
   TAURI_DIR: "{{.ROOT_DIR}}/crates/mt-tauri"
   MACOS_ARM64_TARGET: "aarch64-apple-darwin"
   MACOS_X64_TARGET: "x86_64-apple-darwin"
+  LINUX_AMD64_TARGET: "x86_64-unknown-linux-gnu"
+  LINUX_ARM64_TARGET: "aarch64-unknown-linux-gnu"
 
 tasks:
   info:
@@ -30,15 +32,16 @@ tasks:
           Tauri Directory: {{.TAURI_DIR}}
 
         Available targets:
-          - build:arm64     Build for Apple Silicon (arm64)
-          - build:x64       Build for Intel (x86_64)
-          - build           Build for current architecture
-          - dev             Run development mode
-          - icons           Generate app icons from logo
+          - build            Build for current platform/architecture
+          - build:arm64      Build for Apple Silicon (arm64) [macOS]
+          - build:x64        Build for Intel (x86_64) [macOS]
+          - dev              Run development mode
+          - icons            Generate app icons from logo
 
         Output locations:
-          - macOS app: {{.TAURI_DIR}}/target/*/release/bundle/macos/{{.APP_NAME}}.app
-          - DMG: {{.TAURI_DIR}}/target/*/release/bundle/dmg/{{.APP_NAME}}_*.dmg
+          macOS app: target/*/release/bundle/macos/{{.APP_NAME}}.app
+          macOS DMG: target/*/release/bundle/dmg/{{.APP_NAME}}_*.dmg
+          Linux deb: target/*/release/bundle/deb/{{.APP_NAME}}_*.deb
         EOF
     silent: true
 
@@ -53,10 +56,18 @@ tasks:
         deno run -A npm:@tauri-apps/cli build {{.TARGET_FLAG}}
 
   build:
-    desc: "Build Tauri app for current architecture"
+    desc: "Build Tauri app for current platform"
     deps: [":deno:install"]
     vars:
-      CURRENT_TARGET: '{{if eq ARCH "arm64"}}{{.MACOS_ARM64_TARGET}}{{else}}{{.MACOS_X64_TARGET}}{{end}}'
+      CURRENT_TARGET:
+        sh: |
+          case "{{OS}}/{{ARCH}}" in
+            darwin/arm64)  echo "aarch64-apple-darwin" ;;
+            darwin/amd64)  echo "x86_64-apple-darwin" ;;
+            linux/amd64)   echo "x86_64-unknown-linux-gnu" ;;
+            linux/arm64)   echo "aarch64-unknown-linux-gnu" ;;
+            *) echo "Unsupported platform: {{OS}}/{{ARCH}}" >&2; exit 1 ;;
+          esac
     cmds:
       - task: _build
         vars:
@@ -68,6 +79,7 @@ tasks:
 
   build:arm64:
     desc: "Build Tauri app for Apple Silicon (arm64)"
+    platforms: [darwin/arm64]
     deps: [":deno:install"]
     cmds:
       - task: _build
@@ -80,6 +92,7 @@ tasks:
 
   build:x64:
     desc: "Build Tauri app for Intel (x86_64)"
+    platforms: [darwin/amd64]
     deps: [":deno:install"]
     cmds:
       - task: _build
@@ -99,6 +112,7 @@ tasks:
 
   build:signed:
     desc: "Build signed macOS app (requires APPLE_SIGNING_IDENTITY)"
+    platforms: [darwin]
     deps: [":deno:install"]
     preconditions:
       - sh: '[ -n "$APPLE_SIGNING_IDENTITY" ]'
@@ -111,6 +125,7 @@ tasks:
 
   build:dmg:
     desc: "Build signed DMG installer (requires APPLE_SIGNING_IDENTITY)"
+    platforms: [darwin]
     deps: [":deno:install"]
     preconditions:
       - sh: '[ -n "$APPLE_SIGNING_IDENTITY" ]'
@@ -160,6 +175,7 @@ tasks:
 
   test-app:
     desc: "Launch the built macOS app"
+    platforms: [darwin]
     vars:
       APP_PATH: "{{.ROOT_DIR}}/target/{{.MACOS_ARM64_TARGET}}/release/bundle/macos/{{.APP_NAME}}.app"
     cmds:

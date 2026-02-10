@@ -71,6 +71,11 @@ mkdir -p "${BUILD_DIR}"
 
 # Configure with CMake
 echo "Configuring CMake..."
+CMAKE_EXTRA_ARGS=()
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    CMAKE_EXTRA_ARGS+=("-DCMAKE_OSX_ARCHITECTURES=${CMAKE_ARCH}")
+fi
+
 cmake -S "${SOURCE_DIR}" -B "${BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_SHARED_LIBS=OFF \
@@ -78,7 +83,7 @@ cmake -S "${SOURCE_DIR}" -B "${BUILD_DIR}" \
     -DBUILD_EXAMPLES=OFF \
     -DBUILD_BINDINGS=ON \
     -DCMAKE_INSTALL_PREFIX="${VENDOR_DIR}" \
-    -DCMAKE_OSX_ARCHITECTURES="${CMAKE_ARCH}" \
+    "${CMAKE_EXTRA_ARGS[@]}" \
     > /dev/null 2>&1
 
 # Build

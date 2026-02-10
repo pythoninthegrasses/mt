@@ -13,8 +13,18 @@ runs:
   using: 'composite'
   steps:
     - name: Add Homebrew to PATH
+      if: runner.os == 'macOS'
       shell: bash
       run: echo "/opt/homebrew/bin:/opt/homebrew/sbin" >> $GITHUB_PATH
+
+    - name: Install Linux system dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+          libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
+          cmake zlib1g-dev libgtk-3-dev
 
     - name: Setup Node.js
       uses: actions/setup-node@v6

@@ -19,7 +19,6 @@ mt-core = { path = "../mt-core" }
 # Tauri framework
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
-tauri-plugin-global-shortcut = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-store = "2"
