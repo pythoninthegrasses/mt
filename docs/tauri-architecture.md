@@ -250,13 +250,15 @@ mt/
 
 ## Performance
 
-| Metric | Achieved |
-|--------|----------|
-| Cold start | < 500ms |
-| Track switch | < 50ms |
-| Memory (idle) | < 100MB |
-| CPU (playing) | < 5% |
-| Binary size | ~30MB |
+| Metric | macOS | Linux ARM64 | Notes |
+|--------|-------|-------------|-------|
+| Cold start | < 500ms | < 1s | |
+| Track switch | < 50ms | < 50ms | |
+| Memory (idle) | ~115 MB | ~480 MB | WebKitGTK multi-process overhead on Linux |
+| CPU (playing) | < 5% | < 5% | |
+| Binary size | ~30 MB | ~30 MB | |
+
+See [builds.md](builds.md#runtime-memory-optimization) for memory optimization details.
 
 ## Development Tools
 

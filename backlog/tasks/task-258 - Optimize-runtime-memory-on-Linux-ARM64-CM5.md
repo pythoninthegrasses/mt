@@ -4,7 +4,7 @@ title: Optimize runtime memory on Linux ARM64 (CM5)
 status: In Progress
 assignee: []
 created_date: '2026-02-10 03:31'
-updated_date: '2026-02-10 06:16'
+updated_date: '2026-02-10 08:28'
 labels:
   - performance
   - linux
@@ -12,7 +12,7 @@ labels:
   - memory
 dependencies: []
 priority: high
-ordinal: 38250
+ordinal: 10125
 ---
 
 ## Description
@@ -88,3 +88,33 @@ The app uses ~896 MB RSS on Linux ARM64 (CM5 with 16 GB RAM) after loading a 2.6
 - [ ] #4 Artwork loading still works with reduced cache
 - [ ] #5 task tauri:profile confirms improvement on 1up
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Implementation Complete (2026-02-10)
+
+### Commits (7 total)
+1. `ad7fd13` — Remove unused reqwest `blocking` feature
+2. `907a378` — Reduce SQLite pool (10→4, min_idle 2→1), artwork cache (100→50)
+3. `64b55ae` — Switch zig-core to ReleaseSmall optimization
+4. `aad2d84` — glibc malloc arena tuning (Linux only, `MALLOC_ARENA_MAX=2`)
+5. `b720148` — Limit rayon thread pool to min(cpus, 4) with 2 MB stacks
+6. `c79a3f9` — Stop caching full track arrays in `_sectionCache` (summary-only)
+7. `843fccf` — Update Cargo.lock
+
+### Verification (macOS)
+- `cargo check`: pass
+- `task test` (Rust): 596 tests pass
+- `task npm:test` (Vitest): 246 tests pass
+- `task test:e2e` (Playwright): 631 pass, 2 pre-existing failures
+- MCP section switching: all 6 sections verified, no loading flash
+
+### Docs Updated
+- `docs/builds.md` — new "Runtime Memory Optimization" section
+- `docs/tauri-architecture.md` — updated performance table with per-platform metrics
+
+### Pending
+- Manual RSS measurement on 1up (Raspberry Pi CM5) after installing deb
+- Acceptance criterion #1 (RSS < 500 MB) to be validated on-device
+<!-- SECTION:NOTES:END -->

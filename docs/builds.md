@@ -449,6 +449,57 @@ sudo apt install pipewire-alsa
 sudo apt install libasound2-plugins
 ```
 
+## Runtime Memory Optimization
+
+The app includes several runtime memory optimizations, particularly important on resource-constrained platforms like Raspberry Pi (Linux ARM64).
+
+### Frontend: Summary-Only Section Cache
+
+The library store's `_sectionCache` stores only summary metadata (track count, total duration, timestamp) — never full track arrays. Section switching fetches tracks from the local SQLite backend. This prevents duplicate multi-MB track arrays from accumulating in the WebView's JS heap.
+
+- **File**: `app/frontend/js/stores/library.js`
+- **Impact**: ~200-400 MB reduction with large libraries
+
+### glibc Malloc Arena Tuning (Linux only)
+
+WebKitGTK spawns multiple processes and threads, each of which can create a glibc malloc arena (~64 MB virtual per arena). Two environment variables are set at Rust startup (before any threads spawn) and inherited by WebKit child processes:
+
+```rust
+#[cfg(target_os = "linux")]
+unsafe {
+    std::env::set_var("MALLOC_ARENA_MAX", "2");
+    std::env::set_var("MALLOC_TRIM_THRESHOLD_", "131072");
+}
+```
+
+- **File**: `crates/mt-tauri/src/lib.rs`
+- **Impact**: ~50-100 MB RSS reduction on Linux
+
+### Rayon Thread Pool Limits
+
+The global rayon thread pool is capped at 4 threads with 2 MB stacks (down from per-core threads with 8 MB stacks). Music scanning only needs a few parallel workers.
+
+- **File**: `crates/mt-tauri/src/lib.rs`
+- **Impact**: ~12 MB virtual reduction (cross-platform)
+
+### SQLite Connection Pool
+
+The r2d2 pool is sized for a desktop app workload: `max_size(4)`, `min_idle(1)`.
+
+- **File**: `crates/mt-tauri/src/db/mod.rs`
+
+### Artwork Cache
+
+The Zig FFI-backed LRU artwork cache is capped at 50 entries via `ArtworkCache::with_capacity(50)`.
+
+- **File**: `crates/mt-tauri/src/lib.rs`
+
+### Zig Build Optimization
+
+`zig-core` is built with `-Doptimize=ReleaseSmall` instead of `ReleaseFast` to minimize memory-mapped code pages. The artwork cache and Last.fm signature FFI are not hot paths.
+
+- **File**: `crates/mt-core/build.rs`
+
 ## References
 
 - [Cargo Build Performance](https://doc.rust-lang.org/cargo/guide/build-performance.html)
