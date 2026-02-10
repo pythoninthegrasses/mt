@@ -45,6 +45,52 @@ tasks:
         EOF
     silent: true
 
+  _install-linux-deps:
+    internal: true
+    desc: "Install Linux system dependencies for Tauri"
+    platforms: [linux]
+    env:
+      WEBKIT_VERSION: "4.1"
+      SOUP_VERSION: "3.0"
+    vars:
+      # pkg-config name : apt package name
+      LINUX_DEPS: >-
+        javascriptcoregtk-$WEBKIT_VERSION:libjavascriptcoregtk-$WEBKIT_VERSION-dev
+        webkit2gtk-$WEBKIT_VERSION:libwebkit2gtk-$WEBKIT_VERSION-dev
+        libsoup-$SOUP_VERSION:libsoup-$SOUP_VERSION-dev
+        alsa:libasound2-dev
+        dbus-1:libdbus-1-dev
+    cmds:
+      - |
+        if command -v apt-get &> /dev/null; then
+          pkgs=""
+          for entry in {{.LINUX_DEPS}}; do
+            pc="${entry%%:*}"
+            apt="${entry##*:}"
+            if ! pkg-config --exists "$pc" 2>/dev/null; then
+              pkgs="$pkgs $apt"
+            fi
+          done
+          if [ -n "$pkgs" ]; then
+            echo "Installing missing Tauri system deps:$pkgs"
+            sudo apt-get install -y $pkgs
+          fi
+        else
+          echo "Non-apt system detected — ensure the following dev packages are installed:"
+          for entry in {{.LINUX_DEPS}}; do
+            echo "  - ${entry%%:*}"
+          done
+        fi
+    preconditions:
+      - sh: command -v pkg-config &> /dev/null
+        msg: "pkg-config is required. Install it with: sudo apt-get install pkg-config"
+    status:
+      - pkg-config --exists javascriptcoregtk-$WEBKIT_VERSION
+      - pkg-config --exists webkit2gtk-$WEBKIT_VERSION
+      - pkg-config --exists libsoup-$SOUP_VERSION
+      - pkg-config --exists alsa
+      - pkg-config --exists dbus-1
+
   _build:
     internal: true
     desc: "Internal task to build Tauri app"
@@ -57,7 +103,7 @@ tasks:
 
   build:
     desc: "Build Tauri app for current platform"
-    deps: [":deno:install"]
+    deps: [":deno:install", "_install-linux-deps"]
     vars:
       CURRENT_TARGET:
         sh: |
