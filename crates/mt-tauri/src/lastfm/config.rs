@@ -2,8 +2,8 @@ use std::env;
 
 /// Last.fm API configuration
 ///
-/// In development builds: reads plaintext API keys from environment variables
-/// In release builds: uses salted hash for security (future implementation)
+/// Keys are embedded at compile time via `build.rs` and `option_env!()`.
+/// Runtime environment variables override embedded values (useful for development).
 pub struct ApiKeyConfig {
     pub api_key: Option<String>,
     pub api_secret: Option<String>,
@@ -12,33 +12,18 @@ pub struct ApiKeyConfig {
 impl ApiKeyConfig {
     /// Load API configuration
     ///
-    /// Development: Reads from LASTFM_API_KEY and LASTFM_API_SECRET env vars
-    /// Release: Uses salted hash verification (TODO: implement)
+    /// Priority: runtime env var > compile-time embedded value > None
     pub fn load() -> Self {
-        #[cfg(debug_assertions)]
-        {
-            // Development build: read from environment variables
-            let api_key = env::var("LASTFM_API_KEY").ok();
-            let api_secret = env::var("LASTFM_API_SECRET").ok();
+        let api_key = env::var("LASTFM_API_KEY")
+            .ok()
+            .or_else(|| option_env!("LASTFM_API_KEY").map(String::from));
+        let api_secret = env::var("LASTFM_API_SECRET")
+            .ok()
+            .or_else(|| option_env!("LASTFM_API_SECRET").map(String::from));
 
-            Self {
-                api_key,
-                api_secret,
-            }
-        }
-
-        #[cfg(not(debug_assertions))]
-        {
-            // Release build: use salted hash (TODO: implement)
-            // For now, fall back to environment variables
-            // Future: implement HMAC-SHA256 salted hash verification
-            let api_key = env::var("LASTFM_API_KEY").ok();
-            let api_secret = env::var("LASTFM_API_SECRET").ok();
-
-            Self {
-                api_key,
-                api_secret,
-            }
+        Self {
+            api_key,
+            api_secret,
         }
     }
 
@@ -60,37 +45,15 @@ impl ApiKeyConfig {
     }
 }
 
-// TODO: Implement salted hash for release builds
-//
-// Release build implementation should:
-// 1. Generate salt at build time or first run
-// 2. Store (salt, HMAC-SHA256(api_key, salt)) in settings database
-// 3. Verify API keys by comparing hashes
-// 4. Never store plaintext keys in binary
-//
-// Example structure:
-// ```rust
-// #[cfg(not(debug_assertions))]
-// pub struct ReleaseBuildConfig {
-//     pub salt: String,
-//     pub api_key_hash: String,
-//     pub api_secret_hash: String,
-// }
-// ```
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_config_load_missing_keys() {
-        // This test will pass even without keys set
-        // because ApiKeyConfig handles missing keys gracefully
-        let config = ApiKeyConfig::load();
-
-        // In test environment, keys may or may not be present
-        // Just verify the structure is created
-        assert!(config.api_key.is_none() || config.api_key.is_some());
+    fn test_config_load() {
+        // Keys may come from compile-time embedding or runtime env vars.
+        // Just verify the structure is created without panicking.
+        let _config = ApiKeyConfig::load();
     }
 
     #[test]

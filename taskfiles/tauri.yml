@@ -272,6 +272,8 @@ tasks:
         docker build \
           --platform linux/arm64 \
           -f docker/Dockerfile.linux-arm64 \
+          --build-arg LASTFM_API_KEY=${LASTFM_API_KEY:-} \
+          --build-arg LASTFM_API_SECRET=${LASTFM_API_SECRET:-} \
           --target artifacts \
           --output type=local,dest=dist/linux-arm64 \
           .

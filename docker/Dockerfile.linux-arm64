@@ -80,6 +80,12 @@ RUN curl -fsSL -L https://github.com/denoland/deno/releases/latest/download/deno
     && chmod +x /usr/local/bin/deno \
     && rm /tmp/deno.zip
 
+# -- Last.fm API keys (embedded at compile time via build.rs) --
+ARG LASTFM_API_KEY
+ARG LASTFM_API_SECRET
+ENV LASTFM_API_KEY=${LASTFM_API_KEY}
+ENV LASTFM_API_SECRET=${LASTFM_API_SECRET}
+
 # -- Build environment --
 ENV RUSTUP_TOOLCHAIN=nightly \
     RUSTFLAGS="-Zthreads=16"
