@@ -157,6 +157,18 @@ pub fn run() {
         }
     }
 
+    // Limit rayon thread pool: default creates 1 thread per core with 8 MB stacks.
+    // Music scanning only needs a few parallel workers; cap at 4 threads with 2 MB stacks.
+    let available_cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    let num_threads = available_cpus.min(4).max(2);
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .stack_size(2 * 1024 * 1024)
+        .build_global()
+        .ok();
+
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
 
