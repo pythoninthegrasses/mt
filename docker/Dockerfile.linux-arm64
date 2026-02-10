@@ -1,20 +1,6 @@
-# ==============================================================================
-# Docker cross-build for aarch64-unknown-linux-gnu (Raspberry Pi CM5)
-#
-# Runs natively on Apple Silicon — no QEMU overhead.
-# Base image matches target OS (Debian 13 trixie).
-#
-# Usage:
-#   task build:linux-arm64
-#   # or manually:
-#   docker build --platform linux/arm64 \
-#     -f docker/Dockerfile.linux-arm64 \
-#     --target artifacts --output type=local,dest=dist/linux-arm64 .
-# ==============================================================================
+# syntax=docker/dockerfile:1.17.1
+# check=skip=all
 
-# ------------------------------------------------------------------------------
-# Stage 1: Build environment
-# ------------------------------------------------------------------------------
 FROM debian:trixie-slim AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -132,9 +118,6 @@ RUN deno run -A npm:@tauri-apps/cli build \
     --target aarch64-unknown-linux-gnu \
     --bundles deb
 
-# ------------------------------------------------------------------------------
-# Stage 2: Artifact extraction
-# ------------------------------------------------------------------------------
 FROM scratch AS artifacts
 
 COPY --from=builder /build/target/aarch64-unknown-linux-gnu/release/bundle/deb/*.deb /

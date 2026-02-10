@@ -1,26 +1,10 @@
-# ==============================================================================
-# Docker cross-build for x86_64-unknown-linux-gnu
-#
-# On Apple Silicon, this uses QEMU emulation (--platform linux/amd64) —
-# slower than the native arm64 Docker build but functional.
-# Base image matches target OS (Debian 13 trixie).
-#
-# Usage:
-#   task build:linux-amd64
-#   # or manually:
-#   docker build --platform linux/amd64 \
-#     -f docker/Dockerfile.linux-amd64 \
-#     --target artifacts --output type=local,dest=dist/linux-amd64 .
-# ==============================================================================
+# syntax=docker/dockerfile:1.17.1
+# check=skip=all
 
-# ------------------------------------------------------------------------------
-# Stage 1: Build environment
-# ------------------------------------------------------------------------------
 FROM debian:trixie-slim AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# -- System packages: build tools --
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     pkg-config \
@@ -35,7 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# -- System packages: Tauri + audio dev libraries --
 ARG WEBKIT_VERSION=4.1
 ARG SOUP_VERSION=3.0
 
@@ -133,9 +116,6 @@ RUN deno run -A npm:@tauri-apps/cli build \
     --target x86_64-unknown-linux-gnu \
     --bundles deb
 
-# ------------------------------------------------------------------------------
-# Stage 2: Artifact extraction
-# ------------------------------------------------------------------------------
 FROM scratch AS artifacts
 
 COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb /
