@@ -37,7 +37,7 @@ task tauri:dev
 
 Same as [Setup](#setup) while in alpha.
 
-See [Build performance workflow](docs/build-performance.md) for optimizing dev build times.
+See [Builds](docs/builds.md) for build configuration, performance tuning, and signing.
 
 #### Features
 

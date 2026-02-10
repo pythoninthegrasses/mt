@@ -1,0 +1,426 @@
+# Builds
+
+Build configuration, performance tuning, signing, and distribution for mt.
+
+## Build Strategy
+
+| Platform | Architecture | Runner | Bundle |
+|----------|-------------|--------|--------|
+| macOS | ARM64 | Self-hosted `[macOS, ARM64]` | `.app`, `.dmg` |
+| Linux | amd64 | `ubuntu-latest` | `.deb` |
+| Linux | arm64 | Local (Raspberry Pi) | `.deb` |
+
+## Taskfile Commands
+
+All `task tauri:*` commands default to nightly with parallel codegen
+(`RUSTUP_TOOLCHAIN=nightly`, `RUSTFLAGS="-Zthreads=16"`).
+
+| Task | Description |
+|------|-------------|
+| `task tauri:dev` | Run development server |
+| `task tauri:dev:mcp` | Dev server with MCP bridge for AI agent debugging |
+| `task tauri:build` | Build for current platform (auto-detects `{{OS}}/{{ARCH}}`) |
+| `task tauri:build:arm64` | Build for Apple Silicon (macOS only) |
+| `task tauri:build:x64` | Build for Intel x86_64 (macOS only) |
+| `task tauri:build:signed` | Build signed + notarized `.app` and `.dmg` (macOS) |
+| `task tauri:build:dmg` | Build signed + notarized `.dmg` only (macOS) |
+| `task tauri:icons` | Generate app icons from `static/logo.png` |
+| `task tauri:clean` | Clean all build artifacts |
+| `task tauri:clean:rust` | Clean only Rust build artifacts |
+| `task tauri:doctor` | Run Tauri environment check |
+
+### Using Stable Toolchain
+
+Override the nightly default if needed:
+
+```bash
+# Single command
+RUSTUP_TOOLCHAIN=stable RUSTFLAGS="" task tauri:dev
+
+# Or export in shell
+export RUSTUP_TOOLCHAIN=stable
+export RUSTFLAGS=""
+task tauri:dev
+```
+
+### Updating Nightly
+
+```bash
+rustup update nightly
+```
+
+If a nightly update breaks the build, pin to a specific date:
+
+```bash
+rustup install nightly-2026-01-27
+# Then update taskfiles/tauri.yml:
+# RUSTUP_TOOLCHAIN: nightly-2026-01-27
+```
+
+## Performance
+
+### Dev Profile (`Cargo.toml` workspace root)
+
+```toml
+[profile.dev]
+split-debuginfo = "unpacked"  # macOS: faster incremental debug builds
+debug = "line-tables-only"    # Reduced debug info, still get line numbers in backtraces
+
+[profile.dev.build-override]
+opt-level = 3  # Optimize proc-macros and build scripts
+```
+
+For full debugging (variable inspection in debuggers), temporarily change to:
+
+```toml
+[profile.dev]
+debug = true  # or debug = 2 for maximum info
+```
+
+### Linker (`crates/mt-tauri/.cargo/config.toml`)
+
+Per-target linker configuration:
+
+```toml
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+[target.aarch64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+```
+
+### Linker Options by Platform
+
+#### macOS (ARM64)
+
+| Linker | Status | Notes |
+|--------|--------|-------|
+| **lld** | Recommended | Currently configured, fast and stable |
+| ld-prime | Alternative | Apple's default, similar performance |
+| sold | Avoid | Fastest but has codesign issues |
+
+#### Linux
+
+| Linker | Status | Notes |
+|--------|--------|-------|
+| **mold** | Recommended | Currently configured, fastest option |
+| lld | Alternative | Good fallback |
+
+#### Windows
+
+| Linker | Status | Notes |
+|--------|--------|-------|
+| rust-lld | Recommended | Fast for full builds |
+| link.exe | Alternative | Better for tiny incrementals |
+
+### Nightly Toolchain
+
+The `-Zthreads=N` flag enables parallel codegen, which significantly improves incremental build times. This is a nightly-only feature.
+
+### Benchmarks
+
+Measured on Apple M4 Max, macOS 15.7.1:
+
+#### Stable (Rust 1.92.0)
+
+| Scenario | Time | Notes |
+|----------|------|-------|
+| Cold build | ~50.2s | Full rebuild from clean |
+| Incremental build | ~1.06s | After touching `src/main.rs` |
+
+#### Nightly + `-Zthreads=16` (Rust 1.95.0-nightly)
+
+| Scenario | Time | Improvement | Notes |
+|----------|------|-------------|-------|
+| Cold build | ~50.1s | -0.3% | Negligible difference |
+| Incremental build | ~0.82s | **-23%** | Significant improvement |
+
+**Key finding**: Nightly with `-Zthreads=16` provides **23% faster incremental builds** with 50x better variance (σ=0.012s vs σ=0.588s), while maintaining full test compatibility (596 Rust tests pass).
+
+### Benchmark Protocol
+
+Use [hyperfine](https://github.com/sharkdp/hyperfine) for accurate measurements:
+
+```bash
+# Cold build (3 runs with cargo clean before each)
+hyperfine --runs 3 --prepare 'cargo clean' \
+  'cargo build -p mt-tauri'
+
+# Incremental build (5 runs, 1 warmup)
+hyperfine --warmup 1 --runs 5 --prepare 'touch crates/mt-tauri/src/main.rs' \
+  'cargo build -p mt-tauri'
+
+# Build timing breakdown (HTML report)
+cargo build -p mt-tauri --timings
+# Output: target/cargo-timings/cargo-timing.html
+```
+
+#### Comparing Stable vs Nightly
+
+```bash
+# Cold build comparison
+hyperfine --runs 3 --prepare 'cargo clean' \
+  'cargo build -p mt-tauri' \
+  'RUSTUP_TOOLCHAIN=nightly RUSTFLAGS="-Zthreads=16" cargo build -p mt-tauri'
+
+# Incremental build comparison
+hyperfine --warmup 1 --runs 5 --prepare 'touch crates/mt-tauri/src/main.rs' \
+  'cargo build -p mt-tauri' \
+  'RUSTUP_TOOLCHAIN=nightly RUSTFLAGS="-Zthreads=16" cargo build -p mt-tauri'
+```
+
+#### Environment Checklist
+
+Before benchmarking, verify:
+
+```bash
+rustc -Vv                        # Stable version
+RUSTUP_TOOLCHAIN=nightly rustc -Vv  # Nightly version
+env | grep RUSTFLAGS             # Check for conflicting flags
+env | grep RUSTC_WRAPPER         # Should be empty (no sccache)
+```
+
+Ensure consistent power state (AC power, low power mode off).
+
+### Cranelift Backend (Not Supported)
+
+[Cranelift](https://github.com/rust-lang/rustc_codegen_cranelift) is an experimental codegen backend for Rust that can dramatically improve debug build times. However, it is **not compatible with mt** due to SIMD limitations.
+
+Tested on 2026-01-28 with nightly-2026-01-27. Build fails with:
+
+```text
+llvm.aarch64.neon.sqdmulh.v2i32 is not yet supported.
+See https://github.com/rust-lang/rustc_codegen_cranelift/issues/171
+```
+
+This error occurs in multiple Tauri plugin build scripts that use SIMD intrinsics (`tauri-plugin-fs`, `tauri-plugin-store`, `tauri-plugin-shell`, `tauri-plugin-opener`, `tauri-plugin-global-shortcut`).
+
+Per [rustc_codegen_cranelift#171](https://github.com/rust-lang/rustc_codegen_cranelift/issues/171):
+
+- `std::simd` is fully supported
+- `std::arch` (platform-specific SIMD intrinsics) is only partially supported
+- ARM NEON intrinsics like `sqdmulh` are not yet implemented
+
+**Stick with nightly + `-Zthreads=16`** for now. When Cranelift SIMD support matures (or if Tauri plugins stop using raw NEON intrinsics), reconsider.
+
+```bash
+# Testing Cranelift (if revisiting)
+rustup component add rustc-codegen-cranelift-preview --toolchain nightly
+
+RUSTUP_TOOLCHAIN=nightly CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift \
+  cargo build -p mt-tauri -Zcodegen-backend
+```
+
+## Signing & Distribution
+
+### macOS
+
+mt is distributed as a direct download (not via the Mac App Store). This requires:
+
+1. **Code signing** with a Developer ID Application certificate
+2. **Notarization** via Apple's notary service (scans for malware, issues a trust ticket)
+3. **Stapling** the notarization ticket to the app bundle
+
+Without all three, macOS Gatekeeper blocks the app on users' machines.
+
+#### Prerequisites
+
+- Apple Developer Program membership
+- Developer ID Application certificate (created in Xcode or Apple Developer portal)
+- App Store Connect API key (for notarization)
+
+#### Environment Variables
+
+All signing secrets are stored in `.env` (loaded via Taskfile dotenv). See `.env.example` for the template.
+
+| Variable | Purpose |
+|----------|---------|
+| `APPLE_SIGNING_IDENTITY` | Full signing identity string, e.g. `Developer ID Application: Name (TEAMID)` |
+| `APPLE_CERTIFICATE` | Base64-encoded `.p12` certificate export |
+| `APPLE_CERTIFICATE_PASSWORD` | Password set during `.p12` export |
+| `APPLE_API_KEY` | App Store Connect API key ID (10-char alphanumeric) |
+| `APPLE_API_ISSUER` | App Store Connect API issuer UUID |
+| `APPLE_API_KEY_B64` | Base64-encoded `.p8` private key content |
+| `KEYCHAIN_PASSWORD` | CI-only: password for the temporary signing keychain |
+
+#### Entitlements
+
+`crates/mt-tauri/Entitlements.plist` declares hardened runtime entitlements:
+
+| Entitlement | Reason |
+|-------------|--------|
+| `com.apple.security.cs.allow-jit` | WebView/JS engine |
+| `com.apple.security.cs.allow-unsigned-executable-memory` | WebView/JS engine |
+| `com.apple.security.cs.allow-dyld-environment-variables` | Bundled dylibs (TagLib via Zig) |
+| `com.apple.security.network.client` | Last.fm API calls |
+| `com.apple.security.files.user-selected.read-write` | User-selected music directories |
+
+The app is **not sandboxed** — a music player needs broad filesystem access for library scanning.
+
+#### Local Signed Build
+
+```bash
+# Ensure .env is populated with signing secrets
+task tauri:build:signed
+```
+
+This will:
+
+1. Decode the base64 API key to `/tmp/auth_key.p8`
+2. Build the Tauri app for `aarch64-apple-darwin`
+3. Sign with the Developer ID certificate
+4. Submit to Apple's notary service and wait for approval
+5. Staple the notarization ticket
+6. Build the DMG installer
+
+#### Verification
+
+```bash
+# Verify code signature
+codesign --verify --deep --strict \
+  target/aarch64-apple-darwin/release/bundle/macos/mt.app
+
+# Verify Gatekeeper acceptance (requires notarization)
+spctl --assess --type execute --verbose \
+  target/aarch64-apple-darwin/release/bundle/macos/mt.app
+
+# Inspect applied entitlements
+codesign -d --entitlements - \
+  target/aarch64-apple-darwin/release/bundle/macos/mt.app
+```
+
+#### Certificate Management
+
+**Creating a new certificate:**
+
+1. Open Xcode > Settings > Accounts > Manage Certificates
+2. Click `+` > Developer ID Application
+3. Export as `.p12` from Keychain Access
+
+**Encoding for `.env`:**
+
+```bash
+# Certificate (.p12 -> base64)
+openssl base64 -A -in cert.p12 | pbcopy
+
+# API key (.p8 -> base64)
+openssl base64 -A -in AuthKey_XXXXXXXXXX.p8 | pbcopy
+```
+
+**Finding your signing identity:**
+
+```bash
+security find-identity -v -p codesigning
+```
+
+#### Tauri Configuration
+
+`crates/mt-tauri/tauri.conf.json` macOS bundle config:
+
+```json
+"macOS": {
+  "minimumSystemVersion": "10.15",
+  "entitlements": "./Entitlements.plist",
+  "dmg": {
+    "windowSize": { "width": 660, "height": 400 },
+    "appPosition": { "x": 180, "y": 170 },
+    "applicationFolderPosition": { "x": 480, "y": 170 }
+  }
+}
+```
+
+The signing identity is **not** hardcoded in config — Tauri reads `APPLE_SIGNING_IDENTITY` from the environment, so unsigned dev builds still work.
+
+### Linux (.deb)
+
+Linux builds produce `.deb` packages. The bundle target and dependencies are configured in `crates/mt-tauri/tauri.conf.json`:
+
+```json
+"bundle": {
+  "targets": ["app", "dmg", "deb"],
+  "linux": {
+    "deb": {
+      "depends": ["libwebkit2gtk-4.1-0", "libayatana-appindicator3-1", "libgtk-3-0"],
+      "section": "sound"
+    }
+  }
+}
+```
+
+Build locally:
+
+```bash
+task tauri:build
+```
+
+`task tauri:build` auto-detects the current platform via `{{OS}}/{{ARCH}}` and selects the correct Rust target triple.
+
+### Windows
+
+> Not yet implemented. Placeholder for future Windows code signing with Authenticode / EV certificates.
+
+Planned approach:
+
+- Sign with an EV code signing certificate (avoids SmartScreen warnings)
+- Use `signtool.exe` or Tauri's built-in Windows signing support
+- NSIS or WiX installer bundle
+- GitHub Actions runner: `windows-latest` or self-hosted
+
+## CI/CD
+
+The release pipeline (`.github/workflows/release.yml`) runs on version tags (`v*`) and manual `workflow_dispatch`.
+
+Two parallel jobs:
+
+### `build-macos` — macOS ARM64
+
+Runs on a self-hosted `[macOS, ARM64]` runner:
+
+1. Imports the certificate into a temporary CI keychain
+2. Decodes the `.p8` API key from `APPLE_API_KEY_B64` secret
+3. Builds with `tauri-action` which handles signing + notarization
+4. Creates a draft GitHub Release with the signed `.dmg`
+5. Cleans up the keychain and key file (runs in `always()` step)
+
+### `build-linux-amd64` — Linux amd64
+
+Runs on `ubuntu-latest`:
+
+1. Sets up the Tauri build environment via the shared composite action
+2. Builds with `tauri-action` targeting `x86_64-unknown-linux-gnu --bundles deb`
+3. Attaches the `.deb` to the same draft GitHub Release
+
+## Linux System Dependencies
+
+Tauri + TagLib on Ubuntu/Debian require these packages:
+
+```bash
+sudo apt install -y \
+  libwebkit2gtk-4.1-dev \
+  libayatana-appindicator3-dev \
+  libgtk-3-dev \
+  libssl-dev \
+  pkg-config \
+  cmake \
+  build-essential \
+  mold
+```
+
+The `mold` linker is configured in `.cargo/config.toml` for Linux targets. Install it or switch to `lld` if unavailable.
+
+## References
+
+- [Cargo Build Performance](https://doc.rust-lang.org/cargo/guide/build-performance.html)
+- [Rust Performance Book - Build Configuration](https://nnethercote.github.io/perf-book/build-configuration.html)
+- [Apple ld-prime (WWDC 2023)](https://developer.apple.com/videos/play/wwdc2023/10268/)
+- [Rust Unstable Book - threads flag](https://doc.rust-lang.org/unstable-book/compiler-flags/threads.html)
+- [Cranelift Codegen Backend](https://github.com/rust-lang/rustc_codegen_cranelift)
+- [Cranelift SIMD Tracking Issue](https://github.com/rust-lang/rustc_codegen_cranelift/issues/171)
+- [Tauri Bundle Configuration](https://v2.tauri.app/reference/config/#bundleconfig)
+- [Apple Developer - Code Signing](https://developer.apple.com/documentation/security/code-signing-services)
