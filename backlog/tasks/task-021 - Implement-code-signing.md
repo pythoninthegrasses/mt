@@ -1,10 +1,10 @@
 ---
 id: TASK-021
 title: Implement code signing
-status: In Progress
+status: To Do
 assignee: []
 created_date: '2025-09-17 04:11'
-updated_date: '2026-02-07 03:40'
+updated_date: '2026-02-10 06:20'
 labels:
   - signing
   - macos
@@ -12,7 +12,7 @@ labels:
   - distribution
 dependencies: []
 priority: high
-ordinal: 1000
+ordinal: 38500
 ---
 
 ## Description
