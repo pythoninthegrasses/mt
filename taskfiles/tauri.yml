@@ -262,42 +262,6 @@ tasks:
     cmds:
       - deno run -A npm:@tauri-apps/cli info
 
-  profile:
-    desc: "Show CPU/RAM usage for mt processes (dev + release)"
-    platforms: [darwin, linux]
-    cmds:
-      - |
-        case "{{OS}}" in
-          darwin)
-            procs=$(ps aux | grep -E '[m]t-tauri|/[m]t( |$)' || true)
-            ;;
-          linux)
-            procs=$(ps aux --no-headers | grep -E '[m]t-tauri|/[m]t( |$)|[W]ebKit' || true)
-            ;;
-        esac
-        if [ -z "$procs" ]; then
-          echo "No mt processes found."
-          exit 0
-        fi
-        echo "$procs" | awk '
-          BEGIN {
-            printf "%-8s %-25s %6s %6s %10s\n", "PID", "PROCESS", "CPU%", "MEM%", "RSS (MB)"
-            printf "%-8s %-25s %6s %6s %10s\n", "---", "-------", "----", "----", "--------"
-          }
-          {
-            pid=$2; cpu=$3; mem=$4; rss=$6/1024
-            cmd=$11; gsub(/.*\//, "", cmd)
-            printf "%-8s %-25s %6.1f %6.1f %10.1f\n", pid, cmd, cpu, mem, rss
-            tcpu+=cpu; tmem+=mem; trss+=rss
-          }
-          END {
-            printf "%-8s %-25s %6s %6s %10s\n", "---", "-------", "----", "----", "--------"
-            printf "%-8s %-25s %6.1f %6.1f %10.1f\n", "", "TOTAL", tcpu, tmem, trss
-          }
-        '
-
-  # --- Docker cross-compilation (Linux ARM64) ---
-
   build:linux-arm64:
     desc: "Build Linux ARM64 .deb via Docker (for Raspberry Pi)"
     cmds:
