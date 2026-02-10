@@ -23,7 +23,7 @@ fn main() {
 
     // Build Zig library
     let status = std::process::Command::new("zig")
-        .args(["build", "-Doptimize=ReleaseSmall"])
+        .args(["build", "-Doptimize=ReleaseSmall", "-Dcpu=baseline"])
         .current_dir(&zig_core_dir)
         .status()
         .expect("failed to build zig-core");

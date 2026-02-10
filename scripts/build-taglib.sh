@@ -76,6 +76,10 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     CMAKE_EXTRA_ARGS+=("-DCMAKE_OSX_ARCHITECTURES=${CMAKE_ARCH}")
 fi
 
+if [[ "${CMAKE_ARCH}" == "x86_64" ]]; then
+    CMAKE_EXTRA_ARGS+=("-DCMAKE_C_FLAGS=-march=x86-64" "-DCMAKE_CXX_FLAGS=-march=x86-64")
+fi
+
 cmake -S "${SOURCE_DIR}" -B "${BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
