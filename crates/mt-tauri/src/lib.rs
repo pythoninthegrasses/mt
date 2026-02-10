@@ -267,10 +267,10 @@ pub fn run() {
             println!("Database initialized at: {}", db_path.display());
 
             // Initialize artwork cache (Zig FFI-backed LRU cache)
-            let artwork_cache = scanner::artwork_cache::ArtworkCache::new()
+            let artwork_cache = scanner::artwork_cache::ArtworkCache::with_capacity(50)
                 .expect("Failed to initialize artwork cache");
             app.manage(artwork_cache);
-            println!("Artwork cache initialized (Zig LRU cache, size: 100)");
+            println!("Artwork cache initialized (Zig LRU cache, size: 50)");
 
             // Pass database clone to watcher manager
             let watcher = WatcherManager::new(app.handle().clone(), database_for_watcher);

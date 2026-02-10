@@ -70,8 +70,8 @@ impl Database {
     pub fn new<P: AsRef<Path>>(db_path: P) -> DbResult<Self> {
         let manager = SqliteConnectionManager::file(db_path);
         let pool = Pool::builder()
-            .max_size(10)
-            .min_idle(Some(2))
+            .max_size(4)
+            .min_idle(Some(1))
             .build(manager)?;
 
         let db = Self {
