@@ -309,6 +309,20 @@ aside button:hover svg {
   border-color: #404040 !important;
 }
 
+[data-theme-preset='metro-teal'] [data-testid='settings-view'] button.border-border:hover {
+  background-color: rgba(0, 183, 195, 0.15) !important;
+  border-color: rgba(0, 183, 195, 0.4) !important;
+}
+
+/* Metro-teal scrobbling toggle needs explicit colors (Tailwind bg-primary/bg-muted resolve transparent) */
+[data-theme-preset='metro-teal'] [data-testid='lastfm-toggle'].bg-muted {
+  background-color: hsl(0 0% 25%) !important;
+}
+
+[data-theme-preset='metro-teal'] [data-testid='lastfm-toggle'].bg-primary {
+  background-color: hsl(184 100% 38%) !important;
+}
+
 @layer components {
   /* Disable grid layout animations - instant column sizing at startup and view switch
    * This ensures columns snap to their widths immediately rather than animating.

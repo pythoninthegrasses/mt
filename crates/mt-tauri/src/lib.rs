@@ -22,7 +22,8 @@ use commands::{
     favorites_get_recently_added, favorites_get_recently_played, favorites_get_top25,
     favorites_remove, lastfm_auth_callback, lastfm_cache_loved_tracks, lastfm_disconnect,
     lastfm_get_auth_url, lastfm_get_settings, lastfm_import_loved_tracks, lastfm_loved_stats,
-    lastfm_match_loved_tracks, lastfm_now_playing, lastfm_queue_retry, lastfm_queue_status,
+    lastfm_match_loved_tracks, match_loved_tracks_impl, lastfm_now_playing, lastfm_queue_retry,
+    lastfm_queue_status,
     lastfm_scrobble, lastfm_update_settings, playlist_add_tracks, playlist_create, playlist_delete,
     playlist_generate_name, playlist_get, playlist_list, playlist_remove_track,
     playlist_reorder_tracks, playlist_update, playlists_reorder, queue_add, queue_add_files,
@@ -367,8 +368,13 @@ pub fn run() {
                             .unwrap_or(false);
 
                         if has_unmatched {
-                            match lastfm_match_loved_tracks(db.clone()) {
-                                Ok(response) => {
+                            let db_clone = db.inner().clone();
+                            match tokio::task::spawn_blocking(move || {
+                                match_loved_tracks_impl(&db_clone)
+                            })
+                            .await
+                            {
+                                Ok(Ok(response)) => {
                                     if response.new_favorites > 0 {
                                         println!(
                                             "[lastfm] Background match: {} new favorites",
@@ -376,8 +382,11 @@ pub fn run() {
                                         );
                                     }
                                 }
-                                Err(e) => {
+                                Ok(Err(e)) => {
                                     eprintln!("[lastfm] Background match failed: {}", e);
+                                }
+                                Err(e) => {
+                                    eprintln!("[lastfm] Background match task error: {}", e);
                                 }
                             }
                         }

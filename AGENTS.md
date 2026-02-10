@@ -394,6 +394,16 @@ driver_session({ action: "status" })
 driver_session({ action: "stop" })
 ```
 
+**View Navigation:**
+```javascript
+// Navigate to a view (library, settings, etc.)
+// IMPORTANT: Use $store.ui.view, NOT showSettings
+webview_execute_js({ script: "Alpine.store('ui').view = 'settings'" })
+
+// Navigate to a specific settings section
+webview_execute_js({ script: "(() => { Alpine.store('ui').view = 'settings'; Alpine.store('ui').settingsSection = 'lastfm'; return 'done'; })()" })
+```
+
 **Screenshots (preferred for visual state):**
 ```javascript
 // Capture current viewport

@@ -770,10 +770,10 @@
            </div>
          </div>
 
-         <div class="space-y-3">
+         <div class="inline-grid gap-3">
            <!-- Sync from Last.fm button -->
            <button
-             class="w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors disabled:opacity-50"
+             class="text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors disabled:opacity-50"
              :disabled="lastfm.isCachingLoved"
              @click="cacheLovedTracks()"
              data-testid="lastfm-cache-loved"
@@ -784,7 +784,7 @@
 
            <!-- Check for new matches button -->
            <button
-             class="w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors disabled:opacity-50"
+             class="text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors disabled:opacity-50"
              :disabled="lastfm.isMatchingLoved || lastfm.lovedStats.total_cached === 0"
              @click="matchLovedTracks()"
              data-testid="lastfm-match-loved"
@@ -795,7 +795,7 @@
 
            <!-- Legacy import button (direct API import) -->
            <button
-             class="w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors disabled:opacity-50"
+             class="text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors disabled:opacity-50"
              :disabled="lastfm.importInProgress"
              @click="importLovedTracks()"
              data-testid="lastfm-import-loved"
@@ -803,26 +803,26 @@
              <div class="font-medium text-sm" x-text="lastfm.importInProgress ? 'Importing...' : 'Direct Import'"></div>
              <div class="text-xs text-muted-foreground mt-0.5">Import loved tracks directly (for tracks already in library)</div>
            </button>
-         </div>
-       </div>
 
-       <!-- Queue Status -->
-       <div x-show="lastfm.authenticated && lastfm.enabled" class="mb-8">
-         <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Scrobble Queue</h4>
-         <div class="bg-muted/30 rounded-lg p-4">
-           <div class="flex items-center justify-between mb-2">
-             <span class="text-sm font-medium">Queued Scrobbles</span>
-             <button
-               x-show="lastfm.queueStatus.queued_scrobbles > 0"
-               class="px-3 py-1 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-               @click="retryQueuedScrobbles()"
-               data-testid="lastfm-retry-queue"
-             >
-               Retry All
-             </button>
-           </div>
-           <div class="text-sm text-muted-foreground">
-             <span x-text="lastfm.queueStatus.queued_scrobbles || 0"></span> scrobbles queued
+           <!-- Queue Status -->
+           <div x-show="lastfm.authenticated && lastfm.enabled">
+             <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3 mt-2">Scrobble Queue</h4>
+             <div class="rounded-lg p-4 border border-border">
+               <div class="flex items-center justify-between mb-2">
+                 <span class="text-sm font-medium">Queued Scrobbles</span>
+                 <button
+                   x-show="lastfm.queueStatus.queued_scrobbles > 0"
+                   class="px-3 py-1 text-xs rounded-md border border-border hover:bg-muted/50 transition-colors"
+                   @click="retryQueuedScrobbles()"
+                   data-testid="lastfm-retry-queue"
+                 >
+                   Retry All
+                 </button>
+               </div>
+               <div class="text-sm text-muted-foreground">
+                 <span x-text="lastfm.queueStatus.queued_scrobbles || 0"></span> scrobbles queued
+               </div>
+             </div>
            </div>
          </div>
        </div>

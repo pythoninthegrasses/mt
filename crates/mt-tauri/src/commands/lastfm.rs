@@ -869,12 +869,11 @@ pub async fn lastfm_cache_loved_tracks(
     })
 }
 
-/// Match cached loved tracks against the local library and add to favorites
+/// Synchronous implementation of loved tracks matching.
 ///
-/// This command doesn't make any API calls - it only matches existing cached
-/// loved tracks against the local library and adds matches to favorites.
-#[tauri::command]
-pub fn lastfm_match_loved_tracks(db: State<Database>) -> Result<MatchLovedTracksResponse, String> {
+/// Extracted so it can be called from both the Tauri command (via `spawn_blocking`)
+/// and from background tasks without going through the command system.
+pub fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksResponse, String> {
     use crate::db::library::LibraryQuery;
     use crate::db::{LibrarySortColumn, SortOrder};
 
@@ -987,6 +986,21 @@ pub fn lastfm_match_loved_tracks(db: State<Database>) -> Result<MatchLovedTracks
         new_favorites,
         message,
     })
+}
+
+/// Match cached loved tracks against the local library and add to favorites
+///
+/// This command doesn't make any API calls - it only matches existing cached
+/// loved tracks against the local library and adds matches to favorites.
+/// Runs on a blocking thread to avoid freezing the UI.
+#[tauri::command]
+pub async fn lastfm_match_loved_tracks(
+    db: State<'_, Database>,
+) -> Result<MatchLovedTracksResponse, String> {
+    let db = db.inner().clone();
+    tokio::task::spawn_blocking(move || match_loved_tracks_impl(&db))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
 }
 
 /// Get statistics about cached loved tracks
