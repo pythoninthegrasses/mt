@@ -261,3 +261,87 @@ tasks:
     desc: "Run Tauri doctor to check environment"
     cmds:
       - deno run -A npm:@tauri-apps/cli info
+
+  profile:
+    desc: "Show CPU/RAM usage for mt-tauri and related processes"
+    platforms: [linux]
+    cmds:
+      - |
+        procs=$(ps aux --no-headers | grep -E 'mt-tauri|mt_tauri|WebKit' | grep -v grep)
+        if [ -z "$procs" ]; then
+          echo "No mt-tauri processes found."
+          exit 0
+        fi
+        echo "$procs" | awk '
+          BEGIN {
+            printf "%-8s %-25s %6s %6s %10s\n", "PID", "PROCESS", "CPU%", "MEM%", "RSS (MB)"
+            printf "%-8s %-25s %6s %6s %10s\n", "---", "-------", "----", "----", "--------"
+          }
+          {
+            pid=$2; cpu=$3; mem=$4; rss=$6/1024
+            cmd=$11; gsub(/.*\//, "", cmd)
+            printf "%-8s %-25s %6.1f %6.1f %10.1f\n", pid, cmd, cpu, mem, rss
+            tcpu+=cpu; tmem+=mem; trss+=rss
+          }
+          END {
+            printf "%-8s %-25s %6s %6s %10s\n", "---", "-------", "----", "----", "--------"
+            printf "%-8s %-25s %6.1f %6.1f %10.1f\n", "", "TOTAL", tcpu, tmem, trss
+          }
+        '
+
+  # --- Docker cross-compilation (Linux ARM64) ---
+
+  build:linux-arm64:
+    desc: "Build Linux ARM64 .deb via Docker (for Raspberry Pi)"
+    cmds:
+      - |
+        echo "Building mt for aarch64-unknown-linux-gnu via Docker..."
+        mkdir -p dist/linux-arm64
+
+        docker build \
+          --platform linux/arm64 \
+          -f docker/Dockerfile.linux-arm64 \
+          --target artifacts \
+          --output type=local,dest=dist/linux-arm64 \
+          .
+
+        echo ""
+        echo "Build complete. Artifacts:"
+        ls -lh dist/linux-arm64/
+    sources:
+      - "{{.TAURI_DIR}}/src/**/*.rs"
+      - "{{.TAURI_DIR}}/Cargo.toml"
+      - "crates/mt-core/src/**/*.rs"
+      - "crates/mt-core/Cargo.toml"
+      - "zig-core/src/**/*.zig"
+      - "zig-core/build.zig"
+      - "app/frontend/js/**/*.js"
+      - "app/frontend/index.html"
+      - "docker/Dockerfile.linux-arm64"
+    generates:
+      - "dist/linux-arm64/*.deb"
+
+  build:linux-arm64:shell:
+    desc: "Open a shell in the Linux ARM64 build container (debugging)"
+    deps: ["build:linux-arm64:image"]
+    cmds:
+      - |
+        docker run --rm -it \
+          --platform linux/arm64 \
+          mt-builder:linux-arm64 \
+          /bin/bash
+    interactive: true
+
+  build:linux-arm64:image:
+    internal: true
+    desc: "Build the Docker builder image"
+    cmds:
+      - |
+        docker build \
+          --platform linux/arm64 \
+          -f docker/Dockerfile.linux-arm64 \
+          --target builder \
+          -t mt-builder:linux-arm64 \
+          .
+    status:
+      - docker image inspect mt-builder:linux-arm64 >/dev/null 2>&1

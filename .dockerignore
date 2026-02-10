@@ -1,0 +1,50 @@
+# Platform-specific build artifacts (would cause link failures in cross-build)
+vendor/
+target/
+.cache/
+zig-core/zig-out/
+zig-core/.zig-cache/
+
+# Dependencies (installed fresh inside container)
+node_modules/
+app/frontend/node_modules/
+app/frontend/dist/
+
+# Version control and CI
+.git/
+.github/
+
+# IDE and tooling
+.vscode/
+.serena/
+.sisyphus/
+.agents/
+.claude/
+.task/
+
+# Documentation and project management
+backlog/
+docs/
+
+# Test artifacts
+test-results/
+playwright-report/
+htmlcov/
+coverage/
+app/frontend/tests/
+app/frontend/playwright.config.js
+app/frontend/vitest.config.js
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# Secrets
+.env
+
+# Misc
+*.backup
+.DS_Store
+docker/
