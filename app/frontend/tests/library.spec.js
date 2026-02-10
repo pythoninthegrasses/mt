@@ -2024,6 +2024,8 @@ test.describe('Column Customization', () => {
     expect(albumIdxBefore).toBeLessThan(artistIdxBefore);
 
     // Open context menu and click Reset Columns to Defaults
+    page.on('dialog', dialog => dialog.accept());
+
     const headerRow = page.locator('[data-testid="library-header"]');
     await headerRow.click({ button: 'right' });
     await page.waitForSelector('.header-context-menu', { state: 'visible', timeout: 5000 });
