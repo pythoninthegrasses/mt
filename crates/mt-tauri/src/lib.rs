@@ -143,6 +143,20 @@ async fn export_diagnostics(path: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Reduce glibc malloc arena bloat in multi-process WebKitGTK.
+    // Each arena reserves ~64 MB virtual; WebKit spawns many threads.
+    // MALLOC_ARENA_MAX=2 limits per-process arenas.
+    // MALLOC_TRIM_THRESHOLD_=131072 returns freed memory to OS sooner.
+    // These env vars are inherited by WebKit child processes.
+    #[cfg(target_os = "linux")]
+    {
+        // SAFETY: called before any threads are spawned
+        unsafe {
+            std::env::set_var("MALLOC_ARENA_MAX", "2");
+            std::env::set_var("MALLOC_TRIM_THRESHOLD_", "131072");
+        }
+    }
+
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
 
