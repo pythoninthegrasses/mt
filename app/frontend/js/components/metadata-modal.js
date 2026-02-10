@@ -80,7 +80,7 @@ export function createMetadataModal(Alpine) {
 
     get navIndicator() {
       if (!this.navigationEnabled) return '';
-      if (this.currentBatchIndex < 0) return `${this._batchOrderedIds.length} tracks`;
+      if (this.isBatchEdit) return `${this.tracks.length} tracks`;
       return `${this.currentBatchIndex + 1} / ${this._batchOrderedIds.length}`;
     },
 
@@ -108,13 +108,10 @@ export function createMetadataModal(Alpine) {
       this.mixedFields = new Set();
 
       this._sessionId = data.sessionId || null;
-      this.navigationEnabled = this.tracks.length > 1;
+      this.navigationEnabled = this.libraryTracks.length > 1;
       this._batchTrackIds = this.tracks.map((t) => t.id);
 
-      const batchIdSet = new Set(this._batchTrackIds);
-      this._batchOrderedIds = this.libraryTracks
-        .filter((t) => batchIdSet.has(t.id))
-        .map((t) => t.id);
+      this._batchOrderedIds = this.libraryTracks.map((t) => t.id);
 
       this.currentTrackId = null;
 
@@ -122,7 +119,7 @@ export function createMetadataModal(Alpine) {
         await this.loadMetadata();
 
         // Initialize currentTrackId for navigation (use original selection order)
-        if (this.navigationEnabled && this._batchTrackIds.length > 0) {
+        if (this._batchTrackIds.length > 0) {
           this.currentTrackId = this._batchTrackIds[0];
         }
       } catch (error) {

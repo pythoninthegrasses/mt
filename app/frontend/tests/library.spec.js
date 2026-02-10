@@ -2944,7 +2944,7 @@ test.describe('Metadata Editor Navigation (task-166)', () => {
     await expect(indicator).toBeVisible();
   });
 
-  test('should NOT show navigation arrows for single track selection', async ({ page }) => {
+  test('should show navigation arrows for single track selection', async ({ page }) => {
     const firstTrack = page.locator('[data-track-id]').first();
     await firstTrack.click({ button: 'right' });
 
@@ -2956,20 +2956,17 @@ test.describe('Metadata Editor Navigation (task-166)', () => {
     await page.waitForSelector('[data-testid="metadata-modal"]', { state: 'visible', timeout: 5000 });
 
     const prevButton = page.locator('[data-testid="metadata-nav-prev"]');
-    await expect(prevButton).not.toBeVisible();
+    const nextButton = page.locator('[data-testid="metadata-nav-next"]');
+    const indicator = page.locator('[data-testid="metadata-nav-indicator"]');
+
+    await expect(prevButton).toBeVisible();
+    await expect(nextButton).toBeVisible();
+    await expect(indicator).toBeVisible();
   });
 
   test('should show track position indicator with correct format', async ({ page }) => {
-    const isMac = process.platform === 'darwin';
-    const modifier = isMac ? 'Meta' : 'Control';
-
-    await clickTrackRow(page, 0);
-    await page.keyboard.down(modifier);
-    await clickTrackRow(page, 1);
-    await page.keyboard.up(modifier);
-
-    const secondTrack = page.locator('[data-track-id]').nth(1);
-    await secondTrack.click({ button: 'right' });
+    const firstTrack = page.locator('[data-track-id]').first();
+    await firstTrack.click({ button: 'right' });
 
     await page.waitForSelector('[data-testid="track-context-menu"]', { state: 'visible' });
 
@@ -2985,14 +2982,6 @@ test.describe('Metadata Editor Navigation (task-166)', () => {
   });
 
   test('should navigate to next track with ArrowRight key', async ({ page }) => {
-    const isMac = process.platform === 'darwin';
-    const modifier = isMac ? 'Meta' : 'Control';
-
-    await clickTrackRow(page, 0);
-    await page.keyboard.down(modifier);
-    await clickTrackRow(page, 1);
-    await page.keyboard.up(modifier);
-
     const firstTrack = page.locator('[data-track-id]').first();
     await firstTrack.click({ button: 'right' });
 
@@ -3020,14 +3009,6 @@ test.describe('Metadata Editor Navigation (task-166)', () => {
   });
 
   test('should navigate to previous track with ArrowLeft key', async ({ page }) => {
-    const isMac = process.platform === 'darwin';
-    const modifier = isMac ? 'Meta' : 'Control';
-
-    await clickTrackRow(page, 0);
-    await page.keyboard.down(modifier);
-    await clickTrackRow(page, 1);
-    await page.keyboard.up(modifier);
-
     const secondTrack = page.locator('[data-track-id]').nth(1);
     await secondTrack.click({ button: 'right' });
 
@@ -3117,14 +3098,6 @@ test.describe('Metadata Editor Navigation (task-166)', () => {
   });
 
   test('should navigate using arrow buttons', async ({ page }) => {
-    const isMac = process.platform === 'darwin';
-    const modifier = isMac ? 'Meta' : 'Control';
-
-    await clickTrackRow(page, 0);
-    await page.keyboard.down(modifier);
-    await clickTrackRow(page, 1);
-    await page.keyboard.up(modifier);
-
     const firstTrack = page.locator('[data-track-id]').first();
     await firstTrack.click({ button: 'right' });
 
@@ -3151,15 +3124,6 @@ test.describe('Metadata Editor Navigation (task-166)', () => {
 
   test('should disable prev button at first track', async ({ page }) => {
     const firstTrack = page.locator('[data-track-id]').first();
-    await firstTrack.click();
-
-    const isMac = process.platform === 'darwin';
-    const modifier = isMac ? 'Meta' : 'Control';
-
-    await page.keyboard.down(modifier);
-    await clickTrackRow(page, 1);
-    await page.keyboard.up(modifier);
-
     await firstTrack.click({ button: 'right' });
 
     await page.waitForSelector('[data-testid="track-context-menu"]', { state: 'visible' });
@@ -3179,14 +3143,6 @@ test.describe('Metadata Editor Navigation (task-166)', () => {
   });
 
   test('arrow keys should work even when input is focused', async ({ page }) => {
-    const isMac = process.platform === 'darwin';
-    const modifier = isMac ? 'Meta' : 'Control';
-
-    await clickTrackRow(page, 0);
-    await page.keyboard.down(modifier);
-    await clickTrackRow(page, 1);
-    await page.keyboard.up(modifier);
-
     const firstTrack = page.locator('[data-track-id]').first();
     await firstTrack.click({ button: 'right' });
 
