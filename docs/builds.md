@@ -414,6 +414,41 @@ sudo apt install -y \
 
 The `mold` linker is configured in `.cargo/config.toml` for Linux targets. Install it or switch to `lld` if unavailable.
 
+## Linux Runtime Dependencies
+
+The packages above are **build-time** dependencies (headers, dev libraries, compilers). The `.deb` package also declares **runtime** dependencies in `crates/mt-tauri/tauri.conf.json` under `bundle.linux.deb.depends` — these are pulled in automatically when installing the `.deb` via `dpkg` or `apt`.
+
+### Audio: PipeWire ALSA bridge
+
+Debian 13 (trixie), Raspberry Pi OS (bookworm+), and most modern distros use PipeWire as the default audio stack. Applications that output audio via ALSA (like mt, which uses Rodio/Symphonia → ALSA) need `pipewire-alsa` to route audio through PipeWire.
+
+**Without `pipewire-alsa` installed**, ALSA cannot find any usable PCM device and logs errors like:
+
+```
+ALSA lib conf.c:XXX:parse_def Unknown PCM pipewire
+ALSA lib conf.c:XXX:parse_def Unknown PCM pulse
+ALSA lib conf.c:XXX:parse_def Unknown PCM jack
+ALSA lib conf.c:XXX:parse_def Unknown PCM oss
+```
+
+The app launches but produces no audio output.
+
+**Fix:** `pipewire-alsa` is declared in the `.deb` depends, so installing the package resolves this automatically:
+
+```bash
+sudo apt install ./mt_*.deb   # pulls in pipewire-alsa
+```
+
+For manual installs or non-deb distributions:
+
+```bash
+# PipeWire-based systems (Debian 13+, Fedora, Arch, etc.)
+sudo apt install pipewire-alsa
+
+# PulseAudio-based systems (older Ubuntu/Debian)
+sudo apt install libasound2-plugins
+```
+
 ## References
 
 - [Cargo Build Performance](https://doc.rust-lang.org/cargo/guide/build-performance.html)
