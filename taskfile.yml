@@ -97,6 +97,11 @@ tasks:
     cmds:
       - task: tauri:build:linux-arm64
 
+  build:linux-amd64:
+    desc: "Build Linux amd64 .deb via Docker"
+    cmds:
+      - task: tauri:build:linux-amd64
+
   build:timings:
     desc: "Analyze build performance bottlenecks"
     cmds:

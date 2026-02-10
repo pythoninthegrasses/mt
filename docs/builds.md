@@ -7,8 +7,8 @@ Build configuration, performance tuning, signing, and distribution for mt.
 | Platform | Architecture | Runner | Bundle |
 |----------|-------------|--------|--------|
 | macOS | ARM64 | Self-hosted `[macOS, ARM64]` | `.app`, `.dmg` |
-| Linux | amd64 | `ubuntu-latest` | `.deb` |
-| Linux | arm64 | Local (Raspberry Pi) | `.deb` |
+| Linux | amd64 | `ubuntu-latest` (CI) or Docker (`Dockerfile.linux-amd64`) | `.deb` |
+| Linux | arm64 | Docker (`Dockerfile.linux-arm64`) | `.deb` |
 
 ## Taskfile Commands
 
@@ -25,6 +25,8 @@ All `task tauri:*` commands default to nightly with parallel codegen
 | `task tauri:build:signed` | Build signed + notarized `.app` and `.dmg` (macOS) |
 | `task tauri:build:dmg` | Build signed + notarized `.dmg` only (macOS) |
 | `task tauri:icons` | Generate app icons from `static/logo.png` |
+| `task tauri:build:linux-amd64` | Build Linux amd64 `.deb` via Docker |
+| `task tauri:build:linux-arm64` | Build Linux arm64 `.deb` via Docker |
 | `task tauri:clean` | Clean all build artifacts |
 | `task tauri:clean:rust` | Clean only Rust build artifacts |
 | `task tauri:doctor` | Run Tauri environment check |
@@ -360,6 +362,35 @@ task tauri:build
 ```
 
 `task tauri:build` auto-detects the current platform via `{{OS}}/{{ARCH}}` and selects the correct Rust target triple.
+
+### Docker Builds (Linux .deb)
+
+Both Linux architectures can be built locally via Docker, which is useful for producing `.deb` packages from a macOS development machine.
+
+| Architecture | Task | Dockerfile | Notes |
+|-------------|------|------------|-------|
+| arm64 | `task build:linux-arm64` | `docker/Dockerfile.linux-arm64` | Native on Apple Silicon |
+| amd64 | `task build:linux-amd64` | `docker/Dockerfile.linux-amd64` | QEMU emulation on Apple Silicon |
+
+The arm64 build runs natively on Apple Silicon with no emulation overhead. The amd64 build uses `--platform linux/amd64` which triggers QEMU emulation — functional but slower.
+
+Artifacts are written to `dist/linux-{arm64,amd64}/`.
+
+```bash
+# Build amd64 .deb
+task build:linux-amd64
+
+# Build arm64 .deb
+task build:linux-arm64
+
+# Copy to target machine
+scp dist/linux-amd64/*.deb zima:~/Downloads/
+scp dist/linux-arm64/*.deb rpi:~/Downloads/
+
+# Debug shell (inspect build environment)
+task build:linux-amd64:shell
+task build:linux-arm64:shell
+```
 
 ### Windows
 

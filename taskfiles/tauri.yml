@@ -318,3 +318,60 @@ tasks:
           .
     status:
       - docker image inspect mt-builder:linux-arm64 >/dev/null 2>&1
+
+  build:linux-amd64:
+    desc: "Build Linux amd64 .deb via Docker"
+    cmds:
+      - |
+        echo "Building mt for x86_64-unknown-linux-gnu via Docker..."
+        mkdir -p dist/linux-amd64
+
+        docker build \
+          --platform linux/amd64 \
+          -f docker/Dockerfile.linux-amd64 \
+          --build-arg LASTFM_API_KEY=${LASTFM_API_KEY:-} \
+          --build-arg LASTFM_API_SECRET=${LASTFM_API_SECRET:-} \
+          --target artifacts \
+          --output type=local,dest=dist/linux-amd64 \
+          .
+
+        echo ""
+        echo "Build complete. Artifacts:"
+        ls -lh dist/linux-amd64/
+    sources:
+      - "{{.TAURI_DIR}}/src/**/*.rs"
+      - "{{.TAURI_DIR}}/Cargo.toml"
+      - "crates/mt-core/src/**/*.rs"
+      - "crates/mt-core/Cargo.toml"
+      - "zig-core/src/**/*.zig"
+      - "zig-core/build.zig"
+      - "app/frontend/js/**/*.js"
+      - "app/frontend/index.html"
+      - "docker/Dockerfile.linux-amd64"
+    generates:
+      - "dist/linux-amd64/*.deb"
+
+  build:linux-amd64:shell:
+    desc: "Open a shell in the Linux amd64 build container (debugging)"
+    deps: ["build:linux-amd64:image"]
+    cmds:
+      - |
+        docker run --rm -it \
+          --platform linux/amd64 \
+          mt-builder:linux-amd64 \
+          /bin/bash
+    interactive: true
+
+  build:linux-amd64:image:
+    internal: true
+    desc: "Build the Docker builder image (amd64)"
+    cmds:
+      - |
+        docker build \
+          --platform linux/amd64 \
+          -f docker/Dockerfile.linux-amd64 \
+          --target builder \
+          -t mt-builder:linux-amd64 \
+          .
+    status:
+      - docker image inspect mt-builder:linux-amd64 >/dev/null 2>&1
