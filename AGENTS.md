@@ -285,6 +285,7 @@ ls ~/Library/Caches/ms-playwright/
 Browser binaries are cached in `~/Library/Caches/ms-playwright/` (macOS). Each Playwright version requires specific browser builds (e.g., Playwright 1.57.0 requires webkit-2227).
 
 **Test counts by mode:**
+
 - `fast`: ~413 tests (webkit only, ~1m)
 - `full`: ~1239 tests (all 3 browsers, ~3m)
 - `tauri`: ~1300+ tests (all browsers + @tauri tagged tests, ~4m)
@@ -345,6 +346,7 @@ test.describe('My Test Suite', () => {
 ```
 
 Available mock fixtures:
+
 - `mock-library.js`: Library API (`/api/library`, track CRUD operations)
 - `mock-playlists.js`: Playlist API (`/api/playlists`, playlist CRUD operations)
 
@@ -360,6 +362,7 @@ When **drafting or debugging** Playwright E2E tests, you MUST use the MCP bridge
    ```
 
 2. **Capture required diagnostics** during test development:
+
    | Artifact | MCP Tool | Purpose |
    |----------|----------|---------|
    | Screenshots | `webview_screenshot` | Visual proof of UI state |
@@ -504,6 +507,7 @@ webview_wait_for({ type: "ipc-event", value: "queue:updated", timeout: 5000 })
 ```
 
 **Tools to AVOID:**
+
 - `webview_dom_snapshot` - Triggers accessibility tree traversal; DOM is 12k+ lines
 - `webview_find_element` - Reads DOM directly; prefer `webview_execute_js` with selectors
 - `list_devices` - Mobile only, not needed for desktop development
@@ -594,6 +598,7 @@ task npm:clean                # Clean npm cache and node_modules
 **Build Pipeline:**
 
 When running `task build`, the following happens automatically:
+
 1. `npm:install` - Install frontend dependencies
 2. `tauri:build` - Build Rust backend and bundle with frontend
 
@@ -736,7 +741,7 @@ wt remove feature -D
 - **Database**: SQLite via rusqlite
 - **Audio**: Rodio/Symphonia for playback
 
-```
+```text
 ┌─────────────┐
 │   Frontend  │
 │  (Tauri +   │
@@ -752,6 +757,7 @@ wt remove feature -D
 ```
 
 **Key Features:**
+
 - Fast startup (no interpreter initialization)
 - Low memory footprint (no Python runtime)
 - Single binary distribution
@@ -895,6 +901,7 @@ await expect(page).toHaveScreenshot('player-controls.png');
 ### Dependencies
 
 **Frontend:**
+
 - **Tauri**: Desktop application framework
 - **basecoat**: Design system built on Tailwind CSS
 - **Alpine.js**: Lightweight reactive JavaScript framework
@@ -903,6 +910,7 @@ await expect(page).toHaveScreenshot('player-controls.png');
 - **Vite**: Frontend build tool and dev server
 
 **Backend:**
+
 - **Rust/Cargo**: Backend language and package manager
 - **Tauri**: Native system integration
 - **Rodio/Symphonia**: Audio playback libraries
@@ -996,12 +1004,14 @@ cargo update
 ### Logging System
 
 **Frontend Logging:**
+
 - Console logging for development (`console.log`, `console.error`)
 - Browser DevTools for debugging and network inspection
 - Structured logging for user actions and events
 - Error boundaries for graceful error handling
 
 **Backend Logging:**
+
 - Rust `log` crate for structured logging
 - `env_logger` or `tracing` for log output
 - Log levels: trace, debug, info, warn, error
@@ -1062,6 +1072,50 @@ ssh <HOST> "DISPLAY=:0 RUST_LOG=debug /usr/bin/mt-tauri"
 ssh <HOST> "WAYLAND_DISPLAY=wayland-0 RUST_LOG=debug /usr/bin/mt-tauri"
 ```
 
+**Tauri MCP Bridge (DOM/JS/CSS inspection via AI agent tools):**
+
+The release .deb is built with the `mcp` Cargo feature by default, which enables the Tauri MCP Bridge plugin. This provides full webview inspection (JS execution, screenshots, IPC monitoring) over WebSocket — no browser DevTools needed.
+
+> **Note:** `WEBKIT_INSPECTOR_SERVER` does NOT work on release builds. WebKitGTK requires `enable-developer-extras` on the WebView, which Tauri only sets when the `devtools` Cargo feature is enabled. The `devtools` feature (CrabNebula DevTools) adds always-on instrumentation overhead and only provides Rust backend logs — no DOM/CSS inspection. The MCP bridge is idle until a client connects and provides full webview access.
+
+```bash
+# On the Linux host, launch normally (MCP bridge listens on port 9223)
+ssh <HOST> "DISPLAY=:0 /usr/bin/mt-tauri"
+
+# From your development machine, create an SSH tunnel
+ssh -L 9223:localhost:9223 <HOST>
+```
+
+Then connect via Tauri MCP tools:
+
+```javascript
+// Connect to the app
+driver_session({ action: "start", port: 9223 })
+
+// Execute JS with access to Alpine stores
+webview_execute_js({ script: "Alpine.store('library').tracks.length" })
+
+// Take screenshots
+webview_screenshot({ format: "png", filePath: "/tmp/debug.png" })
+
+// Monitor IPC traffic
+ipc_monitor({ action: "start" })
+ipc_get_captured({ filter: "queue" })
+
+// Read console logs
+read_logs({ source: "console", lines: 50 })
+```
+
+This provides:
+
+- **JS execution**: Full access to Alpine stores, DOM queries, computed styles
+- **Screenshots**: Capture webview viewport as PNG/JPEG
+- **IPC monitoring**: Inspect Tauri command invocations and responses
+- **Console logs**: Read JS console output (errors, warnings, debug)
+- **UI interaction**: Click, type, scroll, focus elements by CSS selector
+
+See the [Tauri MCP Tool Reference](#tauri-mcp-tool-reference) section for the complete tool list.
+
 **Crash debugging workflow:**
 
 1. **Check systemd journal** for crash notifications:
@@ -1100,6 +1154,7 @@ ssh <HOST> "WAYLAND_DISPLAY=wayland-0 RUST_LOG=debug /usr/bin/mt-tauri"
    ```
 
 **Common SIGILL causes:**
+
 - Binary compiled with AVX/BMI2 instructions on CI, deployed to older CPUs without those features
 - Zig libraries default to native CPU in release mode; fix with `-Dcpu=baseline`
 - C/C++ static libraries (TagLib) auto-vectorize for the build machine; fix with `-march=x86-64`
@@ -1138,16 +1193,17 @@ ffmpeg -i video.mp4 -vf "fps=15" -qscale:v 2 /tmp/frames/frame_%03d.jpg
 ```
 
 **Parameters:**
+
 - `fps=15` - Extract 15 frames per second (adjust based on video framerate)
 - `scale=-1:720` - Scale to 720p height, auto-calculate width
 - `-compression_level 0` - Fastest PNG encoding (larger files)
 - `-qscale:v 2` - JPEG quality (2=best, 31=worst)
 
 **Use cases:**
+
 - Debugging spinner/loading issues
 - Capturing exact UI state during animations
 - Documenting visual bugs for reports
-
 
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 
@@ -1164,6 +1220,7 @@ This project uses Backlog.md MCP for all task and project management.
 - **When to read it**: BEFORE creating tasks, or when you're unsure whether to track work
 
 The overview resource contains:
+
 - Decision framework for when to create tasks
 - Search-first workflow to avoid duplicates
 - Links to detailed guides for task creation, execution, and completion
