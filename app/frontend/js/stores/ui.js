@@ -154,7 +154,16 @@ export function createUIStore(Alpine) {
 
     setSettingsSection(section) {
       if (
-        ['general', 'library', 'appearance', 'columns', 'shortcuts', 'sorting', 'advanced', 'lastfm'].includes(
+        [
+          'general',
+          'library',
+          'appearance',
+          'columns',
+          'shortcuts',
+          'sorting',
+          'advanced',
+          'lastfm',
+        ].includes(
           section,
         )
       ) {

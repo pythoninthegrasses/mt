@@ -273,7 +273,8 @@ export function createQueueStore(Alpine) {
 
       // Append after any previously queued-next tracks (not before them)
       if (!this._playNextOffset) this._playNextOffset = 0;
-      const insertIndex = (this.currentIndex >= 0 ? this.currentIndex + 1 : 0) + this._playNextOffset;
+      const insertIndex = (this.currentIndex >= 0 ? this.currentIndex + 1 : 0) +
+        this._playNextOffset;
 
       console.log('[queue]', 'play_next_tracks', {
         count: tracksArray.length,

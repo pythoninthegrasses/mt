@@ -86,10 +86,10 @@ export function createLibraryBrowser(Alpine) {
     wasColumnDragging: false,
 
     // Type-to-jump state
-    _typeBuffer: '',           // Accumulated typed characters
-    _typeDebounceTimer: null,  // Timeout ID for clearing buffer
-    _cycleChar: '',            // Character being cycled (single letter repeat)
-    _cycleIndex: -1,           // Index into distinct matching artists for cycling
+    _typeBuffer: '', // Accumulated typed characters
+    _typeDebounceTimer: null, // Timeout ID for clearing buffer
+    _cycleChar: '', // Character being cycled (single letter repeat)
+    _cycleIndex: -1, // Index into distinct matching artists for cycling
 
     containerWidth: 0,
     resizeObserver: null,
@@ -1783,7 +1783,8 @@ export function createLibraryBrowser(Alpine) {
 
     isInPlaylistView() {
       // Check the library store directly for reliability (avoids event timing issues)
-      return this.$store.library.currentSection?.startsWith('playlist-') || this.currentPlaylistId !== null;
+      return this.$store.library.currentSection?.startsWith('playlist-') ||
+        this.currentPlaylistId !== null;
     },
 
     startPlaylistDrag(index, event) {
@@ -1916,7 +1917,9 @@ export function createLibraryBrowser(Alpine) {
       const wouldReorder = this.draggingIndex !== adjustedToPosition;
 
       // Show indicator ABOVE this row if dragOverIndex equals this row's index
-      if (wouldReorder && index === this.dragOverIndex && this.dragOverIndex !== this.draggingIndex) {
+      if (
+        wouldReorder && index === this.dragOverIndex && this.dragOverIndex !== this.draggingIndex
+      ) {
         classes.push('playlist-drop-indicator-above');
       }
       // Show indicator BELOW the last row if dragging to the end

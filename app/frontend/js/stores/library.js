@@ -156,7 +156,8 @@ export function createLibraryStore(Alpine) {
 
           for (const [section, data] of Object.entries(cached)) {
             // Accept standard sections or playlist-* sections
-            const isValidSection = validSections.includes(section) || section.startsWith('playlist-');
+            const isValidSection = validSections.includes(section) ||
+              section.startsWith('playlist-');
             if (isValidSection && data?.totalTracks > 0) {
               // Strip any legacy tracks array from persisted cache to save memory
               const { tracks: _tracks, ...summary } = data;
@@ -170,7 +171,7 @@ export function createLibraryStore(Alpine) {
               sections: Object.keys(this._sectionCache),
               totalTracks: Object.values(this._sectionCache).reduce(
                 (sum, s) => sum + (s.totalTracks || 0),
-                0
+                0,
               ),
             });
             return true;
@@ -350,7 +351,9 @@ export function createLibraryStore(Alpine) {
 
       // Show cached summary stats if available (previous tracks stay visible during fetch)
       if (cached) {
-        console.log('[library]', 'loadFavorites_with_cache_summary', { totalTracks: cached.totalTracks });
+        console.log('[library]', 'loadFavorites_with_cache_summary', {
+          totalTracks: cached.totalTracks,
+        });
         this.totalTracks = cached.totalTracks;
         this.totalDuration = cached.totalDuration;
         this._lastLoadedSection = section;
@@ -400,7 +403,9 @@ export function createLibraryStore(Alpine) {
 
       // Show cached summary stats if available (previous tracks stay visible during fetch)
       if (cached) {
-        console.log('[library]', 'loadRecentlyPlayed_with_cache_summary', { totalTracks: cached.totalTracks });
+        console.log('[library]', 'loadRecentlyPlayed_with_cache_summary', {
+          totalTracks: cached.totalTracks,
+        });
         this.totalTracks = cached.totalTracks;
         this.totalDuration = cached.totalDuration;
         this._lastLoadedSection = section;
@@ -450,7 +455,9 @@ export function createLibraryStore(Alpine) {
 
       // Show cached summary stats if available (previous tracks stay visible during fetch)
       if (cached) {
-        console.log('[library]', 'loadRecentlyAdded_with_cache_summary', { totalTracks: cached.totalTracks });
+        console.log('[library]', 'loadRecentlyAdded_with_cache_summary', {
+          totalTracks: cached.totalTracks,
+        });
         this.totalTracks = cached.totalTracks;
         this.totalDuration = cached.totalDuration;
         this._lastLoadedSection = section;
@@ -500,7 +507,9 @@ export function createLibraryStore(Alpine) {
 
       // Show cached summary stats if available (previous tracks stay visible during fetch)
       if (cached) {
-        console.log('[library]', 'loadTop25_with_cache_summary', { totalTracks: cached.totalTracks });
+        console.log('[library]', 'loadTop25_with_cache_summary', {
+          totalTracks: cached.totalTracks,
+        });
         this.totalTracks = cached.totalTracks;
         this.totalDuration = cached.totalDuration;
         this._lastLoadedSection = section;
@@ -768,8 +777,10 @@ export function createLibraryStore(Alpine) {
 
           // Tiebreaker 4: Artist (if not primary sort key)
           if (sortKey !== 'artist') {
-            const aArtist = this._stripIgnoredPrefix(a.album_artist || a.artist || '', ignoreWords).toLowerCase();
-            const bArtist = this._stripIgnoredPrefix(b.album_artist || b.artist || '', ignoreWords).toLowerCase();
+            const aArtist = this._stripIgnoredPrefix(a.album_artist || a.artist || '', ignoreWords)
+              .toLowerCase();
+            const bArtist = this._stripIgnoredPrefix(b.album_artist || b.artist || '', ignoreWords)
+              .toLowerCase();
             if (aArtist < bArtist) return -1;
             if (aArtist > bArtist) return 1;
           }

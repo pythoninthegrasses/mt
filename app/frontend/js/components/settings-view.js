@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { SHORTCUT_DEFINITIONS, modLabel } from '../shortcuts.js';
+import { modLabel, SHORTCUT_DEFINITIONS } from '../shortcuts.js';
 
 export function createSettingsView(Alpine) {
   Alpine.data('settingsView', () => ({
@@ -538,15 +538,36 @@ export function createSettingsView(Alpine) {
     loadColumnSettings() {
       // Default column order for comparison
       const defaultOrder = [
-        'status', 'index', 'title', 'artist', 'album', 'year', 'duration',
-        'lastPlayed', 'dateAdded', 'playCount', 'genre', 'trackTotal', 'discNumber',
+        'status',
+        'index',
+        'title',
+        'artist',
+        'album',
+        'year',
+        'duration',
+        'lastPlayed',
+        'dateAdded',
+        'playCount',
+        'genre',
+        'trackTotal',
+        'discNumber',
       ];
 
       // Default visibility
       const defaultVisibility = {
-        status: true, index: true, title: true, artist: true, album: true,
-        year: true, genre: false, trackTotal: false, discNumber: false,
-        lastPlayed: true, dateAdded: true, playCount: true, duration: true,
+        status: true,
+        index: true,
+        title: true,
+        artist: true,
+        album: true,
+        year: true,
+        genre: false,
+        trackTotal: false,
+        discNumber: false,
+        lastPlayed: true,
+        dateAdded: true,
+        playCount: true,
+        duration: true,
       };
 
       if (window.settings?.initialized) {
@@ -625,18 +646,49 @@ export function createSettingsView(Alpine) {
 
       // Default values for reset (must match DEFAULT_COLUMN_WIDTHS in library-browser.js)
       const defaultWidths = {
-        status: 24, index: 48, title: 320, artist: 431, album: 411, year: 70,
-        genre: 120, trackTotal: 60, discNumber: 60, lastPlayed: 120,
-        dateAdded: 120, playCount: 83, duration: 52,
+        status: 24,
+        index: 48,
+        title: 320,
+        artist: 431,
+        album: 411,
+        year: 70,
+        genre: 120,
+        trackTotal: 60,
+        discNumber: 60,
+        lastPlayed: 120,
+        dateAdded: 120,
+        playCount: 83,
+        duration: 52,
       };
       const defaultOrder = [
-        'status', 'index', 'title', 'artist', 'album', 'year', 'duration',
-        'lastPlayed', 'dateAdded', 'playCount', 'genre', 'trackTotal', 'discNumber',
+        'status',
+        'index',
+        'title',
+        'artist',
+        'album',
+        'year',
+        'duration',
+        'lastPlayed',
+        'dateAdded',
+        'playCount',
+        'genre',
+        'trackTotal',
+        'discNumber',
       ];
       const defaultVisibility = {
-        status: true, index: true, title: true, artist: true, album: true,
-        year: true, genre: false, trackTotal: false, discNumber: false,
-        lastPlayed: true, dateAdded: true, playCount: true, duration: true,
+        status: true,
+        index: true,
+        title: true,
+        artist: true,
+        album: true,
+        year: true,
+        genre: false,
+        trackTotal: false,
+        discNumber: false,
+        lastPlayed: true,
+        dateAdded: true,
+        playCount: true,
+        duration: true,
       };
 
       try {
@@ -685,11 +737,17 @@ export function createShortcutsSettings(Alpine) {
 
   Alpine.data('shortcutsSettings', () => ({
     playback: all.filter((s) =>
-      ['Play / Pause', 'Next track', 'Seek forward 5s', 'Previous track', 'Seek back 5s', 'Cycle loop mode', 'Toggle shuffle'].includes(s.action)
+      [
+        'Play / Pause',
+        'Next track',
+        'Seek forward 5s',
+        'Previous track',
+        'Seek back 5s',
+        'Cycle loop mode',
+        'Toggle shuffle',
+      ].includes(s.action)
     ),
-    volume: all.filter((s) =>
-      ['Volume up', 'Volume down', 'Mute / Unmute'].includes(s.action)
-    ),
+    volume: all.filter((s) => ['Volume up', 'Volume down', 'Mute / Unmute'].includes(s.action)),
     navigation: all.filter((s) =>
       ['Focus search', 'Clear search / Close dialogs', 'Toggle settings'].includes(s.action)
     ),
