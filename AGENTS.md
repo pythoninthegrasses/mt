@@ -91,14 +91,27 @@ This project uses Backlog.md MCP for all task and project management.
 - **Already familiar?** You should have the overview cached ("## Backlog.md Overview (MCP)")
 - **When to read it**: BEFORE creating tasks, or when you're unsure whether to track work
 
-The overview resource contains:
+### Key MCP Commands
 
-- Decision framework for when to create tasks
-- Search-first workflow to avoid duplicates
-- Links to detailed guides for task creation, execution, and completion
-- MCP tools reference
+| Command | Purpose |
+|---------|---------|
+| `task_create` | Create a new task (status defaults to "To Do") |
+| `task_edit` | Edit metadata, check ACs, update notes, change status |
+| `task_view` | View full task details |
+| `task_search` | Find tasks by keyword |
+| `task_list` | List tasks with optional filters |
+| `task_complete` | **Moves task to `backlog/completed/`** — only use for cleanup, not for marking done |
 
-You MUST read the overview resource to understand the complete workflow. The information is NOT summarized here.
+### Task Lifecycle
+
+1. **Create**: `task_create` — new task in `backlog/tasks/`
+2. **Start**: `task_edit(status: "In Progress")` — mark as active
+3. **Done**: `task_edit(status: "Done")` — mark finished, stays in `backlog/tasks/` (visible on kanban)
+4. **Archive**: `task_complete` — moves to `backlog/completed/` (use only when explicitly cleaning up)
+
+**IMPORTANT**: Use `task_edit(status: "Done")` to mark tasks as done. Do NOT use `task_complete` unless the user explicitly asks to archive/clean up — it removes the task from the kanban.
+
+The overview resource contains additional detail on decision frameworks, search-first workflow, and guides for task creation, execution, and completion.
 
 </CRITICAL_INSTRUCTION>
 
