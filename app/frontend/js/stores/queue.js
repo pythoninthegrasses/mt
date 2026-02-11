@@ -500,7 +500,15 @@ export function createQueueStore(Alpine) {
         this._repeatOnePending = false;
         // Loop state is session-only, no persistence needed
       }
-      await this._doSkipNext();
+      // Prevent QUEUE_STATE_CHANGED event from overwriting state during skip
+      this._updating = true;
+      try {
+        await this._doSkipNext();
+      } finally {
+        setTimeout(() => {
+          this._updating = false;
+        }, 200);
+      }
     },
 
     /**
@@ -513,7 +521,15 @@ export function createQueueStore(Alpine) {
         this._repeatOnePending = false;
         // Loop state is session-only, no persistence needed
       }
-      await this.playPrevious();
+      // Prevent QUEUE_STATE_CHANGED event from overwriting state during skip
+      this._updating = true;
+      try {
+        await this.playPrevious();
+      } finally {
+        setTimeout(() => {
+          this._updating = false;
+        }, 200);
+      }
     },
 
     async _doSkipNext() {
