@@ -72,7 +72,7 @@ md5 = "0.7"
 lru = "0.12"
 
 [features]
-default = []
+default = ["mcp"]
 devtools = ["dep:tauri-plugin-devtools", "tauri/devtools"]
 mcp = ["dep:tauri-plugin-mcp-bridge"]
 rust-lru-cache = []  # Legacy Rust LRU cache (Zig implementation is default)
