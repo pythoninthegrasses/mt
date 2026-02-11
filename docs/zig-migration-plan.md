@@ -24,7 +24,7 @@ This document outlines the plan to migrate business logic from Rust to Zig via F
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Frontend (unchanged)                     │
 │              AlpineJS + Basecoat + Vite                     │
@@ -60,7 +60,7 @@ This document outlines the plan to migrate business logic from Rust to Zig via F
 
 ## Directory Structure
 
-```
+```text
 mt/
 ├── Cargo.toml                   # Workspace root
 ├── crates/
@@ -204,6 +204,7 @@ These files stay in Rust permanently—they're thin dispatch or platform-specifi
 ### Workspace Structure
 
 The project uses a Cargo workspace with two crates:
+
 - `mt-core`: Builds Zig library and provides FFI bindings
 - `mt-tauri`: Tauri shell that depends on mt-core
 
@@ -355,6 +356,7 @@ Split single `mt` crate into Cargo workspace for 30-50% faster incremental build
 - [x] 539 Rust tests pass across workspace
 
 **Incremental Build Isolation:**
+
 - Changes to `mt-tauri/` → Only `mt-tauri` recompiles
 - Changes to `mt-core/` → Both crates recompile (correct dependency)
 
@@ -454,6 +456,7 @@ cd app/frontend && npm run test:e2e
 ```
 
 **Test Summary:**
+
 - Zig unit tests: ~50 tests
 - Rust backend: ~596 tests (mt-core + mt-tauri + integration)
 - Vitest unit: ~246 tests

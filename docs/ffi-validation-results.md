@@ -33,6 +33,7 @@ Generated small (1-second) test audio files with ffmpeg in `src-tauri/tests/fixt
 All 10 FFI integration tests passed successfully:
 
 #### 1. Metadata Extraction Tests (5 tests)
+
 - ✅ `test_extract_metadata_mp3` - Extracted MP3 metadata including title, artist, album, sample rate, bitrate, duration
 - ✅ `test_extract_metadata_flac` - Extracted FLAC metadata with correct high-quality audio properties
 - ✅ `test_extract_metadata_wav` - Extracted WAV audio properties (duration, sample rate, mono channel)
@@ -40,6 +41,7 @@ All 10 FFI integration tests passed successfully:
 - ✅ `test_extract_metadata_ogg` - Extracted OGG Vorbis metadata and verified compression properties
 
 #### 2. Fingerprinting Tests (1 test)
+
 - ✅ `test_fingerprint_real_files` - Verified file fingerprinting with real files:
   - MP3: size=17275 bytes, mtime captured correctly
   - FLAC: size=21917 bytes, mtime captured correctly
@@ -47,12 +49,14 @@ All 10 FFI integration tests passed successfully:
   - Confirmed same file matches itself on repeated calls
 
 #### 3. Batch Processing Test (1 test)
+
 - ✅ `test_batch_metadata_extraction` - Parallel extraction of 3 files simultaneously:
   - All 3 files processed successfully
   - Metadata correctly extracted for each format
   - Thread pool operation verified
 
 #### 4. Basic FFI Tests (3 tests)
+
 - ✅ `test_zig_version` - Verified version string "0.1.0"
 - ✅ `test_zig_is_audio_file` - Validated audio file extension detection
 - ✅ `test_zig_fingerprint_matches` - Verified fingerprint comparison logic
@@ -107,6 +111,7 @@ All formats rely on TagLib's C API for metadata extraction and should work corre
 ## Test Coverage
 
 ### What Was Tested
+
 - ✅ 5 common audio formats (MP3, FLAC, WAV, M4A, OGG)
 - ✅ Metadata extraction (tags and audio properties)
 - ✅ File fingerprinting for change detection
@@ -115,6 +120,7 @@ All formats rely on TagLib's C API for metadata extraction and should work corre
 - ✅ Extension validation
 
 ### What Was Not Tested (Future Work)
+
 - ⏸️ AAC, WMA, OPUS, APE, AIFF formats (supported but not validated)
 - ⏸️ Very large files (>100MB)
 - ⏸️ Corrupted/malformed audio files
