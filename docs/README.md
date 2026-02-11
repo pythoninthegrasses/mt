@@ -13,16 +13,21 @@ MT is a desktop music player built with:
 
 ## Documentation
 
+- [**Development Guide**](development.md) - Commands, tooling, dependencies, and workflows
 - [**Testing Guide**](testing.md) - Testing strategy, E2E workflows, and MCP-based test authoring
+- [**Git Workflow**](git-workflow.md) - Atomic commits, interactive staging, and worktree management
 - [**Tauri Architecture**](tauri-architecture.md) - System architecture and component design
+- [**MCP Tool Reference**](mcp-reference.md) - Tauri MCP bridge tools for debugging and testing
+- [**Debugging Guide**](debugging.md) - Remote debugging, crash analysis, and SIGILL troubleshooting
 - [**Last.fm Integration**](lastfm.md) - Rust implementation of Last.fm scrobbling and authentication
-- [**FastAPI Migration Analysis**](fastapi-to-rust-migration-analysis.md) - Historical reference for the Python-to-Rust migration
+- [**Build Configuration**](builds.md) - Cross-platform builds, signing, and CI/CD
+
+### Historical Reference
+
+- [**FastAPI Migration Analysis**](fastapi-to-rust-migration-analysis.md) - Python-to-Rust migration record
+- [**Zig Migration Plan**](zig-migration-plan.md) - Zig FFI migration record
+- [**FFI Validation Results**](ffi-validation-results.md) - Zig FFI test results
 
 ## Development Context
 
-For comprehensive development guidance, see the root [`CLAUDE.md`](../CLAUDE.md) which covers:
-
-- Development commands and workflows
-- Testing strategy (Rust, Vitest, Playwright)
-- Architecture overview
-- Code style and patterns
+For agent-specific guidance (LLM behavior rules, Context7 libraries, backlog workflow), see the root [`AGENTS.md`](../AGENTS.md).

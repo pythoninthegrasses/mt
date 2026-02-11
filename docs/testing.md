@@ -25,7 +25,7 @@ task test:e2e
 task npm:test:e2e:ui
 ```
 
-See [CLAUDE.md](../CLAUDE.md#running-tests-task-commands) for the complete test command reference.
+See the [Development Guide](development.md) for the complete test command reference.
 
 ---
 
@@ -181,8 +181,25 @@ await page.screenshot({ path: '/tmp/mt-e2e-evidence/test-state.png' });
 
 ---
 
+## Playwright Test Tools
+
+- **Test Generator**: `npx playwright codegen` — generate test code interactively
+- **UI Mode**: `task npm:test:e2e:ui` — interactive debugging
+- **Trace Viewer**: `npx playwright show-trace trace.zip` — detailed execution analysis
+- **Inspector**: `npx playwright test --debug` — step through tests
+- **Screenshots**: Automatic failure screenshots in `test-results/`
+- **Video Recording**: Enable in Playwright config for test videos
+
+## After Any Frontend Change
+
+1. Identify what changed
+2. Write or update Playwright tests for the changed functionality
+3. Run `task test:e2e` to verify
+4. Use `task npm:test:e2e:ui` for interactive debugging if needed
+5. Check browser console logs for errors
+
 ## References
 
-- [MCP Bridge Documentation](tauri-architecture.md#mcp-bridge-ai-agent-debugging) - Full MCP tool reference
-- [CLAUDE.md Playwright Section](../CLAUDE.md#playwright-e2e-testing) - Detailed test commands and patterns
-- [hypothesi/mcp-server-tauri](https://github.com/hypothesi/mcp-server-tauri) - MCP server documentation
+- [MCP Tool Reference](mcp-reference.md) — Full tool list for test authoring
+- [MCP Bridge Architecture](tauri-architecture.md#mcp-bridge-ai-agent-debugging) — Bridge design docs
+- [hypothesi/mcp-server-tauri](https://github.com/hypothesi/mcp-server-tauri) — MCP server documentation
