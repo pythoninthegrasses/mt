@@ -102,8 +102,8 @@
     <!-- Track list - no scroll, parent handles both -->
     <div class="track-list flex-1 min-h-0 w-full">
       <!-- Loading state -->
+      <template x-if="library.loading && library.tracks.length === 0">
       <div
-        x-show="library.loading && library.tracks.length === 0"
         class="flex items-center justify-center py-12"
       >
         <div class="text-center">
@@ -131,6 +131,7 @@
           <p class="text-muted-foreground">Loading library...</p>
         </div>
       </div>
+      </template>
 
       <!-- Empty state -->
       <div

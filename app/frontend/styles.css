@@ -336,18 +336,16 @@ aside button:hover svg {
     transition-timing-function: ease;
   }
 
+  .track-list {
+    contain: layout style;
+  }
+
   .track-list > .grid {
-    transition-property:
-      background-color,
-      border-color,
-      color,
-      fill,
-      stroke,
-      opacity,
-      box-shadow,
-      transform;
+    transition-property: transform;
     transition-duration: 0.15s;
     transition-timing-function: ease-out;
+    content-visibility: auto;
+    contain-intrinsic-block-size: 34px;
   }
 
   /* Custom scrollbar for vertical scroll container */
