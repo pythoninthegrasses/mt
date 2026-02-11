@@ -4,7 +4,7 @@ title: Optimize runtime memory on Linux ARM64 (CM5)
 status: In Progress
 assignee: []
 created_date: '2026-02-10 03:31'
-updated_date: '2026-02-10 15:35'
+updated_date: '2026-02-11 03:04'
 labels:
   - performance
   - linux
@@ -84,8 +84,8 @@ The app uses ~896 MB RSS on Linux ARM64 (CM5 with 16 GB RAM) after loading a 2.6
 <!-- AC:BEGIN -->
 - [ ] #1 RSS with loaded library is under 500 MB on Linux ARM64 (currently 896 MB)
 - [x] #2 No regressions on macOS (task test + task test:e2e pass)
-- [ ] #3 Library browsing and section switching still work correctly
-- [ ] #4 Artwork loading still works with reduced cache
+- [x] #3 Library browsing and section switching still work correctly
+- [x] #4 Artwork loading still works with reduced cache
 - [ ] #5 task tauri:profile confirms improvement on 1up
 <!-- AC:END -->
 
