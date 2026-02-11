@@ -1,10 +1,10 @@
 ---
 id: TASK-108
 title: 'P5: Add Linux platform support'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-01-12 04:09'
-updated_date: '2026-02-10 06:18'
+updated_date: '2026-02-11 06:51'
 labels:
   - linux
   - platform
@@ -48,9 +48,9 @@ cargo tauri build --target x86_64-unknown-linux-gnu
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 App launches on Debian 13+
-- [ ] #2 App launches on Ubuntu 25.04+
-- [ ] #3 Audio playback works (FLAC, MP3, M4A)
-- [ ] #4 Basic functionality matches macOS
+- [x] #2 App launches on Ubuntu 25.04+
+- [x] #3 Audio playback works (FLAC, MP3, M4A)
+- [x] #4 Basic functionality matches macOS
 <!-- AC:END -->
 
 ## Implementation Notes
