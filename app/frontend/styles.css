@@ -35,6 +35,15 @@
   background-color: #1e1e1e;
 }
 
+/* Linux uses GTK HeaderBar — hide overlay drag region and remove top padding */
+[data-platform='linux'] .titlebar-drag-region {
+  display: none;
+}
+
+[data-platform='linux'] body > .flex > .pt-7 {
+  padding-top: 0;
+}
+
 .track-row-even {
   background-color: var(--itunes-row-alt);
 }

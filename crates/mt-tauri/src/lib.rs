@@ -8,6 +8,7 @@ pub mod library;
 pub mod media_keys;
 pub mod metadata;
 pub mod scanner;
+pub mod titlebar;
 pub mod watcher;
 
 // Re-export FFI from mt-core for backward compatibility
@@ -48,6 +49,7 @@ use watcher::{
     watched_folders_add, watched_folders_get, watched_folders_list, watched_folders_remove,
     watched_folders_rescan, watched_folders_status, watched_folders_update, WatcherManager,
 };
+use titlebar::set_titlebar_color;
 use serde::Serialize;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
@@ -274,6 +276,7 @@ pub fn run() {
             settings_set,
             settings_update,
             settings_reset,
+            set_titlebar_color,
         ])
         .setup(|app| {
             // Initialize database
@@ -325,6 +328,16 @@ pub fn run() {
                 }
                 Err(e) => {
                     eprintln!("Failed to initialize media keys: {}", e);
+                }
+            }
+
+            // Set GTK HeaderBar as CSD titlebar on Linux (before window.show())
+            #[cfg(target_os = "linux")]
+            {
+                if let Some(window) = app.get_webview_window("main") {
+                    if let Err(e) = titlebar::setup_headerbar(&window) {
+                        eprintln!("Failed to setup GTK HeaderBar: {}", e);
+                    }
                 }
             }
 

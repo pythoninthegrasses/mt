@@ -225,6 +225,11 @@ async function initApp() {
   // which can cause the sidebar to briefly render with wrong theme colors.
   applyInitialTheme();
 
+  // Set platform attribute for CSS (Linux uses GTK HeaderBar, no overlay titlebar)
+  if (navigator.platform?.startsWith('Linux')) {
+    document.documentElement.dataset.platform = 'linux';
+  }
+
   // Disable the default browser/webview context menu globally
   // App-specific context menus (tracks, headers, playlists) handle their own rendering
   document.addEventListener('contextmenu', (e) => e.preventDefault());

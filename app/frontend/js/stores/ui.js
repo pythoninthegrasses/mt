@@ -213,6 +213,40 @@ export function createUIStore(Alpine) {
       } catch (e) {
         console.warn('[ui] Failed to set Tauri window theme:', e);
       }
+
+      // Sync GTK HeaderBar color on Linux
+      this._syncTitlebarColor();
+    },
+
+    /**
+     * Send the computed bg-background color to the GTK HeaderBar (Linux only).
+     * No-op on other platforms.
+     */
+    async _syncTitlebarColor() {
+      if (!window.__TAURI__) return;
+
+      try {
+        // Wait a frame for CSS variables to settle after theme switch
+        await new Promise((r) => requestAnimationFrame(r));
+
+        // Convert any CSS color (oklch, hsl, etc.) to rgb() for GTK3 CSS
+        const raw = getComputedStyle(document.body).backgroundColor;
+        if (!raw) return;
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = raw;
+        ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+        const color = `rgb(${r}, ${g}, ${b})`;
+
+        await window.__TAURI__.core.invoke('set_titlebar_color', { color });
+        console.log('[ui] Set titlebar color:', color);
+      } catch (e) {
+        // Expected to silently succeed on non-Linux (no-op command)
+        console.warn('[ui] Failed to set titlebar color:', e);
+      }
     },
 
     applyTheme() {

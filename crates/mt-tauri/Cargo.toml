@@ -77,6 +77,9 @@ devtools = ["dep:tauri-plugin-devtools", "tauri/devtools"]
 mcp = ["dep:tauri-plugin-mcp-bridge"]
 rust-lru-cache = []  # Legacy Rust LRU cache (Zig implementation is default)
 
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+
 [dev-dependencies]
 tempfile = "3"
 proptest = "1.5"
