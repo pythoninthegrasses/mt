@@ -205,130 +205,139 @@
         </template>
       </div>
 
-      <!-- Track rows (CSS Grid matching header) -->
-      <template x-for="(track, index) in library.filteredTracks" :key="track.id">
-        <div
-          class="grid border-b border-border/30 text-sm cursor-default transition-colors select-none"
-          :style="`grid-template-columns: ${getGridTemplateColumns()};` + (isDraggingTrack(index) ? ` transform: ${getTrackDragTransform(index)}; transition: none;` : '')"
-          :class="[
-          isSelected(track.id) ? 'track-row-selected' : (index % 2 === 0 ? 'track-row-even' : 'track-row-odd'),
-          isPlaying(track.id) && !isSelected(track.id) ? 'track-row-playing' : '',
-          !isSelected(track.id) && !isPlaying(track.id) ? 'hover:bg-muted/50' : '',
-          isDraggingTrack(index) ? 'bg-card shadow-lg z-10 relative' : '',
-          isOtherTrackDragging(index) ? 'opacity-50' : '',
-          getDragOverClass(index)
-        ]"
-          :data-track-id="track.id"
-          draggable="true"
-          @dragstart="handleTrackDragStart($event, track)"
-          @dragend="handleTrackDragEnd($event)"
-          @click="handleRowClick($event, track, index)"
-          @dblclick="handleDoubleClick(track, index)"
-          @contextmenu="handleContextMenu($event, track, index)"
-        >
-          <template x-for="col in columns" :key="col.key">
+      <!-- Track rows (CSS Grid matching header) - Virtual scroll -->
+      <div
+        x-show="library.filteredTracks.length > 0"
+        :style="`height: ${totalContentHeight}px; position: relative;`"
+      >
+        <div :style="`transform: translateY(${offsetY}px); will-change: transform;`">
+          <template x-for="item in visibleTracks" :key="item.track.id">
             <div
+              class="grid border-b border-border/30 text-sm cursor-default select-none"
+              :style="`grid-template-columns: ${getGridTemplateColumns()};` + (isDraggingTrack(item.globalIndex) ? ` transform: ${getTrackDragTransform(item.globalIndex)}; transition: none;` : '')"
               :class="[
-              'py-1.5 overflow-hidden text-ellipsis whitespace-nowrap',
-              col.key === 'status' ? 'px-1' : (col.key === 'index' ? 'px-2' : (col.key === 'duration' ? 'pl-[3px] pr-[10px]' : 'px-4')),
-              col.key !== 'title' && col.key !== 'status' && !isSelected(track.id) ? 'text-muted-foreground' : ''
+              isSelected(item.track.id) ? 'track-row-selected' : (item.globalIndex % 2 === 0 ? 'track-row-even' : 'track-row-odd'),
+              isPlaying(item.track.id) && !isSelected(item.track.id) ? 'track-row-playing' : '',
+              !isSelected(item.track.id) && !isPlaying(item.track.id) ? 'hover:bg-muted/50' : '',
+              isDraggingTrack(item.globalIndex) ? 'bg-card shadow-lg z-10 relative' : '',
+              isOtherTrackDragging(item.globalIndex) ? 'opacity-50' : '',
+              getDragOverClass(item.globalIndex)
             ]"
-              :data-column="col.key"
+              :data-track-id="item.track.id"
+              draggable="true"
+              @dragstart="handleTrackDragStart($event, item.track)"
+              @dragend="handleTrackDragEnd($event)"
+              @click="handleRowClick($event, item.track, item.globalIndex)"
+              @dblclick="handleDoubleClick(item.track, item.globalIndex)"
+              @contextmenu="handleContextMenu($event, item.track, item.globalIndex)"
             >
-              <template x-if="col.key === 'status'">
-                <span class="flex items-center justify-center w-full h-full">
-                  <!-- In playlist view: show drag handle -->
-                  <span
-                    x-show="isInPlaylistView() && !track.missing && !isPlaying(track.id)"
-                    class="drag-handle cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-foreground/70"
-                    @mousedown.prevent.stop="startPlaylistDrag(index, $event)"
-                    @touchstart.prevent.stop="startPlaylistDrag(index, $event)"
-                    @dblclick.stop
-                  >⠿</span>
-                  <!-- Now playing indicator (shows pause when playing, play when paused) -->
-                  <template x-if="isPlaying(track.id) && !track.missing">
-                    <span class="text-primary" data-testid="now-playing-indicator">
-                      <template x-if="$store.player.isPlaying">
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
-                        </svg>
+              <template x-for="col in columns" :key="col.key">
+                <div
+                  :class="[
+                  'py-1.5 overflow-hidden text-ellipsis whitespace-nowrap',
+                  col.key === 'status' ? 'px-1' : (col.key === 'index' ? 'px-2' : (col.key === 'duration' ? 'pl-[3px] pr-[10px]' : 'px-4')),
+                  col.key !== 'title' && col.key !== 'status' && !isSelected(item.track.id) ? 'text-muted-foreground' : ''
+                ]"
+                  :data-column="col.key"
+                >
+                  <template x-if="col.key === 'status'">
+                    <span class="flex items-center justify-center w-full h-full">
+                      <!-- In playlist view: show drag handle -->
+                      <span
+                        x-show="isInPlaylistView() && !item.track.missing && !isPlaying(item.track.id)"
+                        class="drag-handle cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-foreground/70"
+                        @mousedown.prevent.stop="startPlaylistDrag(item.globalIndex, $event)"
+                        @touchstart.prevent.stop="startPlaylistDrag(item.globalIndex, $event)"
+                        @dblclick.stop
+                      >⠿</span>
+                      <!-- Now playing indicator (shows pause when playing, play when paused) -->
+                      <template x-if="isPlaying(item.track.id) && !item.track.missing">
+                        <span class="text-primary" data-testid="now-playing-indicator">
+                          <template x-if="$store.player.isPlaying">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
+                            </svg>
+                          </template>
+                          <template x-if="!$store.player.isPlaying">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z"></path>
+                            </svg>
+                          </template>
+                        </span>
                       </template>
-                      <template x-if="!$store.player.isPlaying">
-                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z"></path>
+                      <!-- Missing track indicator (takes priority) -->
+                      <button
+                        x-show="item.track.missing"
+                        @click.stop="$store.ui.openMissingTrackPopover(item.track, $event)"
+                        class="text-warning hover:text-warning/80 cursor-pointer p-0.5 rounded hover:bg-muted/50"
+                        data-testid="missing-track-icon"
+                        title="File not found - click for details"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          class="w-4 h-4"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="16" x2="12" y2="12" />
+                          <line x1="12" y1="8" x2="12.01" y2="8" />
                         </svg>
-                      </template>
+                      </button>
                     </span>
                   </template>
-                  <!-- Missing track indicator (takes priority) -->
-                  <button
-                    x-show="track.missing"
-                    @click.stop="$store.ui.openMissingTrackPopover(track, $event)"
-                    class="text-warning hover:text-warning/80 cursor-pointer p-0.5 rounded hover:bg-muted/50"
-                    data-testid="missing-track-icon"
-                    title="File not found - click for details"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      class="w-4 h-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="16" x2="12" y2="12" />
-                      <line x1="12" y1="8" x2="12.01" y2="8" />
-                    </svg>
-                  </button>
-                </span>
-              </template>
-              <template x-if="col.key === 'index'">
-                <span x-text="isInPlaylistView() ? (index + 1) : (track.track_number || '')"></span>
-              </template>
-              <template x-if="col.key === 'title'">
-                <span
-                  class="truncate"
-                  :class="track.missing ? 'text-muted-foreground/70 italic' : ''"
-                  x-text="track.title || track.filename || 'Unknown'"
-                ></span>
-              </template>
-              <template x-if="col.key === 'artist'">
-                <span x-text="track.artist || 'Unknown Artist'"></span>
-              </template>
-              <template x-if="col.key === 'album'">
-                <span x-text="track.album || ''"></span>
-              </template>
-              <template x-if="col.key === 'lastPlayed'">
-                <span x-text="formatRelativeTime(track.last_played)"></span>
-              </template>
-              <template x-if="col.key === 'dateAdded'">
-                <span x-text="formatRelativeTime(track.added_date)"></span>
-              </template>
-              <template x-if="col.key === 'playCount'">
-                <span x-text="track.play_count || 0"></span>
-              </template>
-              <template x-if="col.key === 'duration'">
-                <span x-text="formatDuration(track.duration)"></span>
-              </template>
-              <template x-if="col.key === 'year'">
-                <span x-text="track.date || ''"></span>
-              </template>
-              <template x-if="col.key === 'genre'">
-                <span x-text="track.genre || ''"></span>
-              </template>
-              <template x-if="col.key === 'trackTotal'">
-                <span x-text="track.track_total || ''"></span>
-              </template>
-              <template x-if="col.key === 'discNumber'">
-                <span x-text="track.disc_number || ''"></span>
+                  <template x-if="col.key === 'index'">
+                    <span
+                      x-text="isInPlaylistView() ? (item.globalIndex + 1) : (item.track.track_number || '')"
+                    ></span>
+                  </template>
+                  <template x-if="col.key === 'title'">
+                    <span
+                      class="truncate"
+                      :class="item.track.missing ? 'text-muted-foreground/70 italic' : ''"
+                      x-text="item.track.title || item.track.filename || 'Unknown'"
+                    ></span>
+                  </template>
+                  <template x-if="col.key === 'artist'">
+                    <span x-text="item.track.artist || 'Unknown Artist'"></span>
+                  </template>
+                  <template x-if="col.key === 'album'">
+                    <span x-text="item.track.album || ''"></span>
+                  </template>
+                  <template x-if="col.key === 'lastPlayed'">
+                    <span x-text="formatRelativeTime(item.track.last_played)"></span>
+                  </template>
+                  <template x-if="col.key === 'dateAdded'">
+                    <span x-text="formatRelativeTime(item.track.added_date)"></span>
+                  </template>
+                  <template x-if="col.key === 'playCount'">
+                    <span x-text="item.track.play_count || 0"></span>
+                  </template>
+                  <template x-if="col.key === 'duration'">
+                    <span x-text="formatDuration(item.track.duration)"></span>
+                  </template>
+                  <template x-if="col.key === 'year'">
+                    <span x-text="item.track.date || ''"></span>
+                  </template>
+                  <template x-if="col.key === 'genre'">
+                    <span x-text="item.track.genre || ''"></span>
+                  </template>
+                  <template x-if="col.key === 'trackTotal'">
+                    <span x-text="item.track.track_total || ''"></span>
+                  </template>
+                  <template x-if="col.key === 'discNumber'">
+                    <span x-text="item.track.disc_number || ''"></span>
+                  </template>
+                </div>
               </template>
             </div>
           </template>
         </div>
-      </template>
+      </div>
     </div>
   </div>
 

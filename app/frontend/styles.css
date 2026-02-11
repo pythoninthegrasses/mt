@@ -340,7 +340,7 @@ aside button:hover svg {
     contain: layout style;
   }
 
-  .track-list > .grid {
+  .track-list .grid {
     transition-property: transform;
     transition-duration: 0.15s;
     transition-timing-function: ease-out;

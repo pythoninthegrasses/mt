@@ -91,6 +91,13 @@ export function createLibraryBrowser(Alpine) {
     _cycleChar: '', // Character being cycled (single letter repeat)
     _cycleIndex: -1, // Index into distinct matching artists for cycling
 
+    // Virtual scroll state
+    _rowHeight: 34,
+    _scrollTop: 0,
+    _containerHeight: 0,
+    _bufferRows: 15,
+    _rafId: null,
+
     containerWidth: 0,
     resizeObserver: null,
 
@@ -390,11 +397,16 @@ export function createLibraryBrowser(Alpine) {
               // Use requestAnimationFrame to batch DOM reads/writes
               requestAnimationFrame(() => {
                 this.containerWidth = container.clientWidth;
+                this._containerHeight = container.clientHeight;
                 this.distributeExtraWidth();
               });
             }, 100);
           });
           this.resizeObserver.observe(container);
+
+          // Virtual scroll: track scroll position and container height
+          this._containerHeight = container.clientHeight;
+          container.addEventListener('scroll', () => this._onScroll(), { passive: true });
         }
       });
 
@@ -453,6 +465,11 @@ export function createLibraryBrowser(Alpine) {
 
       window.addEventListener('mt:section-change', (e) => {
         this.clearSelection();
+        const container = this.$refs.scrollContainer;
+        if (container) {
+          container.scrollTop = 0;
+          this._scrollTop = 0;
+        }
         const section = e.detail?.section || '';
         if (section.startsWith('playlist-')) {
           this.currentPlaylistId = parseInt(section.replace('playlist-', ''), 10);
@@ -976,13 +993,65 @@ export function createLibraryBrowser(Alpine) {
       }
     },
 
-    scrollToTrack(trackId) {
-      this.$nextTick(() => {
-        const trackRow = document.querySelector(`[data-track-id="${trackId}"]`);
-        if (trackRow) {
-          trackRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    _onScroll() {
+      if (this._rafId) return;
+      this._rafId = requestAnimationFrame(() => {
+        const container = this.$refs.scrollContainer;
+        if (container) {
+          this._scrollTop = container.scrollTop;
+          this._containerHeight = container.clientHeight;
         }
+        this._rafId = null;
       });
+    },
+
+    scrollToTrack(trackId) {
+      const idx = this.library.filteredTracks.findIndex((t) => t.id === trackId);
+      if (idx === -1) return;
+      const container = this.$refs.scrollContainer;
+      if (!container) return;
+      const trackTop = idx * this._rowHeight;
+      const headerEl = container.querySelector('[data-testid="library-header"]');
+      const headerHeight = headerEl ? headerEl.offsetHeight : 0;
+      const visibleHeight = container.clientHeight - headerHeight;
+      const targetScroll = trackTop - visibleHeight / 2 + this._rowHeight / 2;
+      container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+    },
+
+    get startIndex() {
+      const trackCount = this.library.filteredTracks.length;
+      if (trackCount === 0) return 0;
+      const scrollTop = Math.min(this._scrollTop, trackCount * this._rowHeight);
+      return Math.max(0, Math.floor(scrollTop / this._rowHeight) - this._bufferRows);
+    },
+
+    get endIndex() {
+      const trackCount = this.library.filteredTracks.length;
+      if (trackCount === 0) return 0;
+      const scrollTop = Math.min(this._scrollTop, trackCount * this._rowHeight);
+      const visibleRows = Math.ceil(this._containerHeight / this._rowHeight);
+      return Math.min(
+        trackCount,
+        Math.floor(scrollTop / this._rowHeight) + visibleRows + this._bufferRows,
+      );
+    },
+
+    get visibleTracks() {
+      const tracks = this.library.filteredTracks;
+      const end = Math.min(this.endIndex, tracks.length);
+      const result = [];
+      for (let i = this.startIndex; i < end; i++) {
+        result.push({ track: tracks[i], globalIndex: i });
+      }
+      return result;
+    },
+
+    get totalContentHeight() {
+      return this.library.filteredTracks.length * this._rowHeight;
+    },
+
+    get offsetY() {
+      return this.startIndex * this._rowHeight;
     },
 
     /**
@@ -1823,25 +1892,18 @@ export function createLibraryBrowser(Alpine) {
     },
 
     updatePlaylistDragTarget(y) {
-      const rows = document.querySelectorAll('[data-track-id]');
-      let newOverIdx = null;
-
-      for (let i = 0; i < rows.length; i++) {
-        if (i === this.draggingIndex) continue;
-        const rect = rows[i].getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
-        if (y < midY) {
-          newOverIdx = i;
-          break;
-        }
-      }
-
-      if (newOverIdx === null) {
-        newOverIdx = this.library.filteredTracks.length;
-      }
+      const container = this.$refs.scrollContainer;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const headerEl = container.querySelector('[data-testid="library-header"]');
+      const headerHeight = headerEl ? headerEl.offsetHeight : 0;
+      const relativeY = y - rect.top - headerHeight + container.scrollTop;
+      const trackCount = this.library.filteredTracks.length;
+      let newOverIdx = Math.floor(relativeY / this._rowHeight);
+      newOverIdx = Math.max(0, Math.min(newOverIdx, trackCount));
 
       if (newOverIdx > this.draggingIndex) {
-        newOverIdx = Math.min(newOverIdx, this.library.filteredTracks.length);
+        newOverIdx = Math.min(newOverIdx, trackCount);
       }
 
       this.dragOverIndex = newOverIdx;

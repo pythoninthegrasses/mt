@@ -37,8 +37,10 @@ test.describe('Library Keyboard Shortcuts', () => {
       );
       expect(initialSelected).toBe(0);
 
-      // Get total track count
-      const trackCount = await page.locator('[data-track-id]').count();
+      // Get total track count (from store, not DOM - virtual scrolling renders subset)
+      const trackCount = await page.evaluate(() =>
+        window.Alpine.store('library').filteredTracks.length
+      );
 
       // Press Cmd+A (Meta key on Mac)
       await page.keyboard.press('Meta+a');
@@ -53,8 +55,10 @@ test.describe('Library Keyboard Shortcuts', () => {
     });
 
     test('should select all tracks when pressing Ctrl+A (Windows/Linux)', async ({ page }) => {
-      // Get total track count
-      const trackCount = await page.locator('[data-track-id]').count();
+      // Get total track count (from store, not DOM - virtual scrolling renders subset)
+      const trackCount = await page.evaluate(() =>
+        window.Alpine.store('library').filteredTracks.length
+      );
 
       // Press Ctrl+A
       await page.keyboard.press('Control+a');
@@ -69,7 +73,9 @@ test.describe('Library Keyboard Shortcuts', () => {
     });
 
     test('should toggle between select all and deselect all on repeated Cmd+A', async ({ page }) => {
-      const trackCount = await page.locator('[data-track-id]').count();
+      const trackCount = await page.evaluate(() =>
+        window.Alpine.store('library').filteredTracks.length
+      );
 
       // First Cmd+A - select all
       await page.keyboard.press('Meta+a');
@@ -486,7 +492,9 @@ test.describe('Keyboard Shortcut Combinations', () => {
   });
 
   test('should handle Cmd+A followed by Escape (select all then clear)', async ({ page }) => {
-    const trackCount = await page.locator('[data-track-id]').count();
+    const trackCount = await page.evaluate(() =>
+      window.Alpine.store('library').filteredTracks.length
+    );
 
     // Cmd+A to select all
     await page.keyboard.press('Meta+a');
