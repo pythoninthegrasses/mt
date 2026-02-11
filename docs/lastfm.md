@@ -21,7 +21,7 @@ Rust implementation of Last.fm API integration for mt desktop music player, prov
 
 The Last.fm integration is implemented as a modular Rust backend with the following components:
 
-```
+```text
 crates/mt-tauri/src/
 ├── lastfm/
 │   ├── mod.rs              # Module exports
@@ -131,23 +131,28 @@ Comprehensive type definitions for all API requests/responses using serde:
 Exposes 13 Tauri commands to frontend:
 
 **Settings:**
+
 - `lastfm_get_settings()` - Get current settings
 - `lastfm_update_settings()` - Update enabled/threshold
 
 **Authentication:**
+
 - `lastfm_get_auth_url()` - Get OAuth URL
 - `lastfm_auth_callback()` - Complete OAuth
 - `lastfm_disconnect()` - Disconnect account
 
 **Scrobbling:**
+
 - `lastfm_now_playing()` - Update now playing
 - `lastfm_scrobble()` - Scrobble track
 
 **Queue:**
+
 - `lastfm_queue_status()` - Get queue count
 - `lastfm_queue_retry()` - Retry failed scrobbles
 
 **Import:**
+
 - `lastfm_import_loved_tracks()` - Import loved tracks
 - `lastfm_cache_loved_tracks()` - Cache loved tracks from Last.fm
 - `lastfm_match_loved_tracks()` - Match cached loved tracks to library
@@ -195,6 +200,7 @@ pub async fn lastfm_auth_callback(
 4. Emit `lastfm:auth` event with status `"authenticated"`
 
 **Security Note:** Session keys are stored **plaintext** in local database because:
+
 - Database is on user's local machine
 - Session key must be reversible to make API calls
 - If attacker has database access, they already own the machine
@@ -228,7 +234,7 @@ fn sign_params(params: &BTreeMap<String, String>, api_secret: &str) -> String {
 ### Example
 
 Request parameters:
-```
+```text
 api_key: "abc123"
 method: "track.scrobble"
 artist: "Test Artist"
@@ -238,7 +244,7 @@ sk: "session_key_123"
 ```
 
 Signature string (sorted, format excluded):
-```
+```text
 api_keyabc123artistTest Artistmethodtrack.scrobbleskSession_key_123timestampTest Track1234567890test_secret
 ```
 
@@ -755,22 +761,26 @@ try {
 Comprehensive unit tests cover all modules:
 
 **Signature tests** (`lastfm/signature.rs`):
+
 - Basic signature generation
 - Format parameter exclusion
 - Sorted parameter order
 - Session key handling
 
 **Rate limiter tests** (`lastfm/rate_limiter.rs`):
+
 - Allows initial requests
 - Enforces per-second limit
 - Cleans expired requests
 
 **Config tests** (`lastfm/config.rs`):
+
 - Missing keys handling
 - Partial config detection
 - Full config validation
 
 **Command helper tests** (`commands/lastfm.rs`):
+
 - `is_setting_truthy()` - Boolean parsing
 - `parse_threshold()` - Range clamping (25-100)
 - `should_scrobble()` - Threshold logic (minimum time, percentage, max cap)
@@ -804,11 +814,13 @@ cargo test test_should_scrobble_basic
 ### API Key Storage
 
 **Current (Development):**
+
 - API keys stored in `.env` file
 - Read from environment variables at runtime
 - ⚠️ Keys visible in memory and process environment
 
 **Future (Release Builds):**
+
 - Keys embedded in binary with HMAC-SHA256 obfuscation
 - Salted hash verification at runtime
 - Not true security (decompilation possible) but adds barrier
@@ -817,6 +829,7 @@ cargo test test_should_scrobble_basic
 ### Session Key Storage
 
 **Database Storage (Plaintext):**
+
 - Session keys stored **unencrypted** in local SQLite database
 - ✅ This is correct and secure because:
   - Database is on user's local machine only
@@ -828,11 +841,13 @@ cargo test test_should_scrobble_basic
 ### Network Security
 
 **HTTPS Only:**
+
 - All API calls use HTTPS (`https://ws.audioscrobbler.com/2.0/`)
 - No HTTP fallback
 - Certificates verified by reqwest
 
 **Signature Security:**
+
 - MD5 signatures prevent request tampering
 - API secret never transmitted over network
 - Each request signed individually
@@ -840,11 +855,13 @@ cargo test test_should_scrobble_basic
 ### Rate Limiting
 
 **Protection Against:**
+
 - Accidental abuse (runaway scripts)
 - API key revocation due to excessive requests
 - Service degradation
 
 **Implementation:**
+
 - Client-side rate limiting enforced before requests
 - Server-side limits still apply (defense in depth)
 

@@ -64,11 +64,12 @@ While developing tests, capture diagnostics to understand and verify app behavio
 
 Save diagnostic artifacts during test development:
 
-```
+```text
 /tmp/mt-e2e-evidence/<test-name>-<timestamp>/
 ```
 
 **Platform-specific paths:**
+
 - **macOS/Linux**: `/tmp/mt-e2e-evidence/`
 - **Windows**: `%TEMP%\mt-e2e-evidence\`
 
@@ -136,6 +137,7 @@ test.describe('My Test Suite', () => {
 ```
 
 Available fixtures:
+
 - `mock-library.js`: Library API (`/api/library`, track CRUD)
 - `mock-playlists.js`: Playlist API (`/api/playlists`, playlist CRUD)
 
@@ -144,18 +146,21 @@ Available fixtures:
 ## Best Practices
 
 ### Viewport Size
+
 Always set the desktop viewport:
 ```javascript
 await page.setViewportSize({ width: 1624, height: 1057 });
 ```
 
 ### Selectors
+
 Use `data-testid` attributes for stable selectors:
 ```javascript
 await page.click('[data-testid="play-button"]');
 ```
 
 ### Waiting for IPC
+
 When testing Tauri-specific behavior:
 ```javascript
 await page.waitForResponse(r => 
@@ -164,6 +169,7 @@ await page.waitForResponse(r =>
 ```
 
 ### Screenshots
+
 Capture screenshots for visual verification:
 ```javascript
 await page.screenshot({ path: '/tmp/mt-e2e-evidence/test-state.png' });

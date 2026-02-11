@@ -16,7 +16,7 @@ MT uses a modern pure-Rust architecture:
 
 ## Architecture Diagram
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           Tauri Application                             │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -86,6 +86,7 @@ Native audio playback:
 | **cpal** | Cross-platform audio I/O |
 
 **Audio State:**
+
 - Current position (milliseconds)
 - Duration
 - Volume (0.0 - 1.0)
@@ -114,6 +115,7 @@ Modern web UI:
 | **Vite** | Fast development builds, HMR |
 
 **UI Components:**
+
 - Library browser (virtual scrolling)
 - Queue view (drag-and-drop reordering)
 - Player controls (play/pause, seek, volume)
@@ -161,7 +163,7 @@ listen('track-ended', () => {
 
 ### Communication Flow Example
 
-```
+```text
 User clicks "Add Music" button
          │
          ▼
@@ -212,7 +214,7 @@ User clicks "Add Music" button
 
 The project uses a Cargo workspace with two crates, plus a Zig FFI core library:
 
-```
+```text
 mt/
 ├── Cargo.toml              # Workspace root (members: mt-core, mt-tauri)
 ├── crates/

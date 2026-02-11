@@ -13,6 +13,7 @@ This document analyzes the current FastAPI PEX sidecar implementation and provid
 ### Current Architecture
 
 The mt music player currently uses a hybrid architecture:
+
 - **Frontend**: Tauri webview with basecoat/Alpine.js
 - **Backend**: Python FastAPI sidecar packaged as PEX executable
 - **Audio**: Rust Tauri backend for playback
@@ -31,7 +32,7 @@ The mt music player currently uses a hybrid architecture:
 
 ### Backend Structure (1,347 total lines)
 
-```
+```text
 backend/
 ├── main.py (120 lines) - FastAPI app initialization
 ├── models/ (8 files) - Pydantic models for API types
@@ -261,6 +262,7 @@ backend/
 **Effort**: 2-3 weeks
 
 **Rust Crates for Metadata**:
+
 - `symphonia` - Pure Rust audio decoding and metadata (recommended)
   - Supports: MP3, FLAC, OGG, WAV, AAC, Opus
   - Active development, good performance
@@ -271,6 +273,7 @@ backend/
 - `id3` - ID3 tag parsing for MP3
 
 **Recommended Approach**:
+
 1. Use `lofty` as primary metadata extractor (simple, comprehensive)
 2. Fall back to `symphonia` for formats `lofty` doesn't support
 3. Implement parallel scanning with `rayon` or `tokio`
@@ -278,6 +281,7 @@ backend/
 5. Emit progress events via Tauri for UI feedback
 
 **Artwork Extraction**:
+
 - `lofty` supports extracting embedded artwork
 - Use `image` crate for format conversion if needed
 - Search folder for common artwork filenames
@@ -315,6 +319,7 @@ backend/
 **Replacement**: **Tauri Event System** (RECOMMENDED)
 
 Tauri has a built-in event system that **eliminates the need for WebSocket**:
+
 - Use `app.emit()` to send events from Rust backend
 - Frontend listens with `await appWindow.listen('event-name', handler)`
 - Typed events with `serde` serialization
@@ -339,6 +344,7 @@ appWindow.listen('library:updated', (event) => {
 ```
 
 **Benefits**:
+
 - No WebSocket server to manage
 - Type-safe events with Rust → JavaScript serialization
 - Automatic connection management
@@ -359,22 +365,26 @@ appWindow.listen('library:updated', (event) => {
 #### Current Implementation
 
 **Authentication**:
+
 - OAuth 1.0a flow (token request → user authorizes → session key)
 - Endpoints: `/lastfm/auth-url`, `/lastfm/auth-callback`, `/lastfm/disconnect`
 - Stores: session_key, username in settings table
 
 **Scrobbling**:
+
 - Now playing updates: `/lastfm/now-playing`
 - Scrobble submission: `/lastfm/scrobble`
 - Offline queue for failed scrobbles (retry logic)
 - Settings: enabled, scrobble_threshold (25-100%)
 
 **Loved Tracks Import**:
+
 - Fetch user's loved tracks from Last.fm API (paginated)
 - Match to library tracks (case-insensitive artist/title)
 - Add to favorites and mark as Last.fm loved
 
 **Queue Management**:
+
 - `/lastfm/queue/status` - Count queued scrobbles
 - `/lastfm/queue/retry` - Manual retry
 
@@ -384,18 +394,21 @@ appWindow.listen('library:updated', (event) => {
 **Effort**: 2-3 weeks
 
 **Rust Crates**:
+
 - `reqwest` - HTTP client for API calls
 - `oauth1` - OAuth 1.0a implementation
 - `sha256` - API signature generation
 - `serde_json` - JSON parsing
 
 **Complexity Factors**:
+
 - OAuth 1.0a signature generation (requires careful implementation)
 - API rate limiting (Last.fm has strict limits)
 - Retry logic for failed scrobbles
 - Paginated API responses (loved tracks can be 1000+)
 
 **Recommended Approach**:
+
 1. Implement Last.fm API client as separate module
 2. Use `tokio` for async HTTP requests
 3. Implement exponential backoff for retries
@@ -450,10 +463,12 @@ appWindow.listen('library:updated', (event) => {
 **Effort**: 1-2 weeks
 
 **Rust Crates**:
+
 - `notify` - Cross-platform filesystem watcher
 - `tokio::time` - Periodic scanning with async timers
 
 **Implementation Notes**:
+
 - Use `notify` for real-time file system events (more efficient than polling)
 - Background scanning with `tokio::spawn` for concurrent operation
 - Emit events for scan progress and completion
@@ -484,6 +499,7 @@ appWindow.listen('library:updated', (event) => {
 **Goal**: Establish Rust database layer with full parity
 
 **Tasks**:
+
 1. Set up Rust project structure and dependencies
 2. Implement SQLite connection pooling with `rusqlite` + `r2d2`
 3. Create database schema with migrations (`refinery` or `sqlx`)
@@ -493,6 +509,7 @@ appWindow.listen('library:updated', (event) => {
 7. Verify database file format compatibility
 
 **Deliverables**:
+
 - `src-tauri/src/db/` module with full database functionality
 - Integration tests covering all CRUD operations
 - Migration scripts for schema updates
@@ -506,6 +523,7 @@ appWindow.listen('library:updated', (event) => {
 **Goal**: Migrate library browsing, queue management, and metadata extraction
 
 **Tasks**:
+
 1. **Metadata Extraction** (Week 1-2):
    - Integrate `lofty` and `symphonia` crates
    - Implement parallel scanning with progress events
@@ -531,6 +549,7 @@ appWindow.listen('library:updated', (event) => {
    - Remove WebSocket connection management code
 
 **Deliverables**:
+
 - Functional library browsing and scanning in Rust
 - Queue management fully migrated
 - Real-time UI updates via Tauri events
@@ -545,6 +564,7 @@ appWindow.listen('library:updated', (event) => {
 **Goal**: Migrate playlists, favorites, settings, and watched folders
 
 **Tasks**:
+
 1. **Playlists** (Week 1):
    - Implement playlist CRUD operations
    - Implement track management within playlists
@@ -564,6 +584,7 @@ appWindow.listen('library:updated', (event) => {
    - Implement periodic scanning with `tokio::time`
 
 **Deliverables**:
+
 - Playlists fully functional in Rust
 - Favorites fully functional in Rust
 - Settings management migrated
@@ -579,6 +600,7 @@ appWindow.listen('library:updated', (event) => {
 **Goal**: Migrate Last.fm integration (if desired)
 
 **Tasks**:
+
 1. Implement Last.fm API client with OAuth 1.0a
 2. Implement scrobbling with offline queue
 3. Implement now playing updates
@@ -587,6 +609,7 @@ appWindow.listen('library:updated', (event) => {
 6. Test scrobble retry logic
 
 **Deliverables**:
+
 - Last.fm integration fully migrated to Rust
 - Remove FastAPI lastfm routes
 - **Remove entire Python backend and PEX build system**
@@ -602,6 +625,7 @@ appWindow.listen('library:updated', (event) => {
 **Goal**: Remove Python backend entirely and optimize Rust implementation
 
 **Tasks**:
+
 1. Remove all FastAPI code and dependencies
 2. Remove PEX build system (`taskfiles/pex.yml`)
 3. Update `tauri.conf.json` to remove sidecar binary
@@ -612,6 +636,7 @@ appWindow.listen('library:updated', (event) => {
 8. Add comprehensive error handling and logging
 
 **Deliverables**:
+
 - Python-free codebase
 - Simplified build system
 - Performance benchmarks
@@ -624,21 +649,25 @@ appWindow.listen('library:updated', (event) => {
 ## Testing Strategy
 
 ### Unit Tests
+
 - Rust unit tests for all database operations
 - Rust unit tests for metadata extraction
 - Rust unit tests for business logic
 
 ### Integration Tests
+
 - End-to-end tests for each API endpoint
 - Database migration tests
 - Filesystem scanning tests with test fixtures
 
 ### Regression Tests
+
 - Compare Rust and Python implementations side-by-side
 - Verify identical behavior for all operations
 - Test with real-world music library
 
 ### Performance Tests
+
 - Benchmark library scanning (10k, 50k, 100k+ tracks)
 - Benchmark queue operations
 - Benchmark metadata extraction
@@ -649,17 +678,20 @@ appWindow.listen('library:updated', (event) => {
 ## Dependency Analysis
 
 ### Critical Dependencies (Phase 1-2)
+
 - Database implementation blocks everything
 - Metadata extraction blocks library scanning
 - Library API blocks queue management
 
 ### Soft Dependencies (Phase 3-4)
+
 - Playlists independent of other features
 - Favorites independent of other features
 - Settings independent of other features
 - Last.fm independent of core functionality
 
 ### Frontend Dependencies
+
 - Frontend must be updated to use Tauri commands instead of HTTP API
 - WebSocket event listeners must be converted to Tauri events
 - API URL configuration must be removed
@@ -754,6 +786,7 @@ The migration from FastAPI PEX sidecar to Rust backend is **feasible and highly 
 **Total Estimated Effort**: 10-14 weeks
 
 **Key Success Factors**:
+
 - Comprehensive testing at each phase
 - Maintain backward compatibility with existing databases
 - Leverage Tauri's built-in event system (no WebSocket needed)

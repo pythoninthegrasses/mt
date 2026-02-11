@@ -455,7 +455,7 @@ Debian 13 (trixie), Raspberry Pi OS (bookworm+), and most modern distros use Pip
 
 **Without `pipewire-alsa` installed**, ALSA cannot find any usable PCM device and logs errors like:
 
-```
+```text
 ALSA lib conf.c:XXX:parse_def Unknown PCM pipewire
 ALSA lib conf.c:XXX:parse_def Unknown PCM pulse
 ALSA lib conf.c:XXX:parse_def Unknown PCM jack
