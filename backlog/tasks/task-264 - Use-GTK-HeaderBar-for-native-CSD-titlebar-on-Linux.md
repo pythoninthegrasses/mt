@@ -1,10 +1,10 @@
 ---
 id: task-264
 title: Use GTK HeaderBar for native CSD titlebar on Linux
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-11 07:07'
-updated_date: '2026-02-11 07:12'
+updated_date: '2026-02-11 16:43'
 labels:
   - enhancement
   - frontend
@@ -60,10 +60,16 @@ Use Tauri's `window.gtk_window()` API to access the underlying `gtk::Application
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 On Linux/GNOME, the window uses a GTK HeaderBar instead of the standard window manager titlebar
-- [ ] #2 The HeaderBar background color matches the active theme (dark, light, metro teal, etc.) — not hardcoded to a single color
-- [ ] #3 HeaderBar updates dynamically when the user switches themes
-- [ ] #4 Native window controls (close/minimize/maximize) are present and functional
+- [x] #1 On Linux/GNOME, the window uses a GTK HeaderBar instead of the standard window manager titlebar
+- [x] #2 The HeaderBar background color matches the active theme (dark, light, metro teal, etc.) — not hardcoded to a single color
+- [x] #3 HeaderBar updates dynamically when the user switches themes
+- [x] #4 Native window controls (close/minimize/maximize) are present and functional
 
-- [ ] #5 macOS titlebar behavior (Overlay + hiddenTitle) is unaffected
+- [x] #5 macOS titlebar behavior (Overlay + hiddenTitle) is unaffected
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implemented GTK HeaderBar for Linux with dynamic theme color synchronization. Tested on RPi CM5 (Debian Trixie, GNOME/X11) via Tauri MCP. Commit: bae124c
+<!-- SECTION:NOTES:END -->
