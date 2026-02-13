@@ -17,6 +17,11 @@ runs:
       shell: bash
       run: echo "/opt/homebrew/bin:/opt/homebrew/sbin" >> $GITHUB_PATH
 
+    - name: Install macOS system dependencies
+      if: runner.os == 'macOS'
+      shell: bash
+      run: brew install cmake
+
     - name: Install Linux system dependencies
       if: runner.os == 'Linux'
       shell: bash
