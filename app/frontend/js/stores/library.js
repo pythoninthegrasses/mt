@@ -141,7 +141,7 @@ export function createLibraryStore(Alpine) {
      * Load cached section data from persistent settings
      * Called during init() to show cached data immediately
      */
-    async _loadCacheFromSettings() {
+    _loadCacheFromSettings() {
       if (!window.settings?.initialized) {
         console.log('[library] settings not initialized, skipping cache load');
         return false;
@@ -210,7 +210,7 @@ export function createLibraryStore(Alpine) {
     /**
      * Fetch library data from backend API
      */
-    async _fetchLibraryData() {
+    _fetchLibraryData() {
       // Map frontend sort keys to backend column names
       const sortKeyMap = {
         default: 'album',
