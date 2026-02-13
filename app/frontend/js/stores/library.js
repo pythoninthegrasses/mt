@@ -849,7 +849,6 @@ export function createLibraryStore(Alpine) {
           throw new Error('Tauri not available');
         }
 
-        // Use Rust command instead of JS plugin API for better reliability
         const { invoke } = window.__TAURI__.core;
         const paths = await invoke('open_add_music_dialog');
 

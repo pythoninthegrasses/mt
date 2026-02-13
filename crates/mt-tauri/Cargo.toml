@@ -77,6 +77,12 @@ devtools = ["dep:tauri-plugin-devtools", "tauri/devtools"]
 mcp = ["dep:tauri-plugin-mcp-bridge"]
 rust-lru-cache = []  # Legacy Rust LRU cache (Zig implementation is default)
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSOpenPanel", "NSSavePanel", "NSApplication", "NSRunningApplication"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSURL", "NSEnumerator"] }
+dispatch2 = "0.3"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
 

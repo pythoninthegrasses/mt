@@ -60,6 +60,42 @@ impl From<&ScanResult2Phase> for ScanResultResponse {
     }
 }
 
+/// Filter DB fingerprints to only include entries within the scan scope.
+///
+/// A fingerprint is in-scope if it exactly matches a provided file path, or
+/// lives under a provided directory path.  This prevents the inventory's
+/// deletion logic from treating out-of-scope tracks as deleted.
+fn scope_fingerprints_to_paths(
+    all: &HashMap<String, FileFingerprint>,
+    scan_paths: &[String],
+) -> HashMap<String, FileFingerprint> {
+    use std::path::Path;
+
+    // Separate file paths from directory paths.
+    let mut dirs: Vec<&str> = Vec::new();
+    let mut files: Vec<&str> = Vec::new();
+    for p in scan_paths {
+        let path = Path::new(p);
+        if path.is_dir() {
+            dirs.push(p.as_str());
+        } else {
+            files.push(p.as_str());
+        }
+    }
+
+    all.iter()
+        .filter(|(filepath, _)| {
+            // Exact file match
+            files.iter().any(|f| filepath.as_str() == *f)
+                // Or under one of the scanned directories
+                || dirs.iter().any(|d| {
+                    filepath.starts_with(d) && filepath.as_bytes().get(d.len()) == Some(&b'/')
+                })
+        })
+        .map(|(k, v)| (k.clone(), *v))
+        .collect()
+}
+
 /// Get fingerprints from the database for comparison
 fn get_db_fingerprints(db: &Database) -> Result<HashMap<String, FileFingerprint>, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -94,8 +130,13 @@ pub async fn scan_paths_to_library(
     let job_id = generate_job_id();
     let start_time = Instant::now();
 
-    // Get current fingerprints from DB
-    let db_fingerprints = get_db_fingerprints(&db)?;
+    // Get DB fingerprints scoped to the scan paths only.
+    // Without scoping, scanning a single file would mark every other track in the
+    // library as "deleted" because the inventory phase only walks the provided paths.
+    let db_fingerprints = {
+        let all = get_db_fingerprints(&db)?;
+        scope_fingerprints_to_paths(&all, &paths)
+    };
 
     // Create progress callback that emits standardized Tauri events
     let app_handle = app.clone();
