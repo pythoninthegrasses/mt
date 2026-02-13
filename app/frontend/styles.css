@@ -35,7 +35,8 @@
   background-color: #1e1e1e;
 }
 
-/* Linux uses GTK HeaderBar — hide overlay drag region and remove top padding */
+/* Linux: system WM provides the titlebar — hide the macOS overlay drag region
+   and remove its corresponding content padding */
 [data-platform='linux'] .titlebar-drag-region {
   display: none;
 }

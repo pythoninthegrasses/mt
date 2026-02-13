@@ -225,7 +225,7 @@ async function initApp() {
   // which can cause the sidebar to briefly render with wrong theme colors.
   applyInitialTheme();
 
-  // Set platform attribute for CSS (Linux uses GTK HeaderBar, no overlay titlebar)
+  // Set platform attribute for Linux-specific CSS (hide macOS overlay titlebar gap)
   if (navigator.platform?.startsWith('Linux')) {
     document.documentElement.dataset.platform = 'linux';
   }
