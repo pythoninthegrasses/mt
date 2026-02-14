@@ -210,7 +210,7 @@ export function createLibraryStore(Alpine) {
     /**
      * Fetch library data from backend API
      */
-    _fetchLibraryData() {
+    async _fetchLibraryData() {
       // Map frontend sort keys to backend column names
       const sortKeyMap = {
         default: 'album',
