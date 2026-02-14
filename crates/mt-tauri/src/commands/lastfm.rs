@@ -771,7 +771,7 @@ pub async fn lastfm_cache_loved_tracks(
     // For incremental updates, get the most recent loved_at timestamp
     let incremental = incremental.unwrap_or(false);
     let since_timestamp = if incremental {
-        db.with_conn(|conn| lastfm_loved::get_most_recent_loved_at(conn))
+        db.with_conn(lastfm_loved::get_most_recent_loved_at)
             .map_err(|e| format!("Database error: {}", e))?
     } else {
         None
@@ -795,16 +795,14 @@ pub async fn lastfm_cache_loved_tracks(
 
                 // For incremental updates, check if we've reached tracks older than our last fetch
                 for track in tracks {
-                    if let Some(since_ts) = since_timestamp {
-                        if let Some(date) = &track.date {
-                            if let Some(ts) = date.timestamp() {
-                                if ts <= since_ts {
-                                    // We've reached tracks we already have
-                                    stop_fetching = true;
-                                    break;
-                                }
-                            }
-                        }
+                    if let Some(since_ts) = since_timestamp
+                        && let Some(date) = &track.date
+                        && let Some(ts) = date.timestamp()
+                        && ts <= since_ts
+                    {
+                        // We've reached tracks we already have
+                        stop_fetching = true;
+                        break;
                     }
                     all_loved_tracks.push(track);
                 }
@@ -1007,11 +1005,11 @@ pub async fn lastfm_match_loved_tracks(
 #[tauri::command]
 pub fn lastfm_loved_stats(db: State<Database>) -> Result<LovedTracksStatsResponse, String> {
     let stats = db
-        .with_conn(|conn| lastfm_loved::get_loved_stats(conn))
+        .with_conn(lastfm_loved::get_loved_stats)
         .map_err(|e| format!("Failed to get loved stats: {}", e))?;
 
     let most_recent_loved = db
-        .with_conn(|conn| lastfm_loved::get_most_recent_loved_at(conn))
+        .with_conn(lastfm_loved::get_most_recent_loved_at)
         .map_err(|e| format!("Failed to get most recent loved: {}", e))?;
 
     Ok(LovedTracksStatsResponse {

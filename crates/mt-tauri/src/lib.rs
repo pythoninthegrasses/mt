@@ -162,7 +162,7 @@ pub fn run() {
     let available_cpus = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let num_threads = available_cpus.min(4).max(2);
+    let num_threads = available_cpus.clamp(2, 4);
     rayon::ThreadPoolBuilder::new()
         .num_threads(num_threads)
         .stack_size(2 * 1024 * 1024)

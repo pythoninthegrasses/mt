@@ -173,20 +173,20 @@ pub async fn scan_paths_to_library(
 
             // Auto-favorite tracks that match cached Last.fm loved tracks
             let new_filepaths: Vec<String> = truly_new.iter().map(|(fp, _)| fp.clone()).collect();
-            if let Ok(new_track_ids) = library::get_track_ids_by_filepaths(&conn, &new_filepaths) {
-                if !new_track_ids.is_empty() {
-                    match match_new_tracks_against_loved(&conn, &new_track_ids) {
-                        Ok(favorited) if favorited > 0 => {
-                            println!(
-                                "[scanner] Auto-favorited {} tracks from Last.fm loved cache",
-                                favorited
-                            );
-                        }
-                        Err(e) => {
-                            eprintln!("[scanner] Failed to auto-favorite from loved cache: {}", e);
-                        }
-                        _ => {}
+            if let Ok(new_track_ids) = library::get_track_ids_by_filepaths(&conn, &new_filepaths)
+                && !new_track_ids.is_empty()
+            {
+                match match_new_tracks_against_loved(&conn, &new_track_ids) {
+                    Ok(favorited) if favorited > 0 => {
+                        println!(
+                            "[scanner] Auto-favorited {} tracks from Last.fm loved cache",
+                            favorited
+                        );
                     }
+                    Err(e) => {
+                        eprintln!("[scanner] Failed to auto-favorite from loved cache: {}", e);
+                    }
+                    _ => {}
                 }
             }
         }
