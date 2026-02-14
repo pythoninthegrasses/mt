@@ -210,7 +210,7 @@ export function createLibraryStore(Alpine) {
     /**
      * Fetch library data from backend API
      */
-    async _fetchLibraryData() {
+    _fetchLibraryData() {
       // Map frontend sort keys to backend column names
       const sortKeyMap = {
         default: 'album',
@@ -849,7 +849,6 @@ export function createLibraryStore(Alpine) {
           throw new Error('Tauri not available');
         }
 
-        // Use Rust command instead of JS plugin API for better reliability
         const { invoke } = window.__TAURI__.core;
         const paths = await invoke('open_add_music_dialog');
 
