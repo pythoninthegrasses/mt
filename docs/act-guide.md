@@ -6,11 +6,30 @@
 # Run lint checks (fastest, fully compatible)
 act -W .github/workflows/test-local.yml -j lint
 
+# Debug build issues (runs natively on your machine)
+act -j build -W .github/workflows/test.yml 2>&1 | tee /tmp/act-build.log
+
 # List all available workflows and jobs
 act -l
 
 # Run specific workflow
 act -W .github/workflows/test-local.yml
+```
+
+## Debugging with act
+
+act is invaluable for debugging CI failures:
+
+1. **Reproduce errors locally** - Run the exact same steps as CI
+2. **Iterate quickly** - No need to push/wait for CI
+3. **See full output** - All logs captured (even what's hidden in CI)
+4. **Native execution** - Self-hosted runners run on your machine with all your tools
+
+**Example**: We used act to find the cmake error in `build-taglib.sh`:
+```bash
+act -j build 2>&1 | tee /tmp/act-build.log
+grep -i "cmake error" /tmp/act-build.log
+# Found: CMake Error: The source directory "/tmp/taglib-2.0.2" does not appear to contain CMakeLists.txt.
 ```
 
 ## Why test-local.yml?

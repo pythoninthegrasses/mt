@@ -60,9 +60,16 @@ if [[ ! -f "${SOURCE_TAR}" ]]; then
         -o "${SOURCE_TAR}"
 fi
 
-if [[ ! -d "${SOURCE_DIR}" ]]; then
-    echo "Extracting source..."
-    tar xzf "${SOURCE_TAR}" -C /tmp
+# Always re-extract to ensure complete source tree
+echo "Extracting source..."
+rm -rf "${SOURCE_DIR}"
+tar xzf "${SOURCE_TAR}" -C /tmp
+
+# Verify CMakeLists.txt exists
+if [[ ! -f "${SOURCE_DIR}/CMakeLists.txt" ]]; then
+    echo "ERROR: CMakeLists.txt not found after extraction" >&2
+    echo "Expected at: ${SOURCE_DIR}/CMakeLists.txt" >&2
+    exit 1
 fi
 
 # Clean previous build
