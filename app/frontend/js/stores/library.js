@@ -67,7 +67,7 @@ export function createLibraryStore(Alpine) {
      */
     async init() {
       // Load persistent cache first - shows cached data immediately (no spinner)
-      const hasCachedData = await this._loadCacheFromSettings();
+      const hasCachedData = this._loadCacheFromSettings();
 
       if (hasCachedData) {
         // Show cached summary stats immediately (sidebar totals)
@@ -141,7 +141,7 @@ export function createLibraryStore(Alpine) {
      * Load cached section data from persistent settings
      * Called during init() to show cached data immediately
      */
-    async _loadCacheFromSettings() {
+    _loadCacheFromSettings() {
       if (!window.settings?.initialized) {
         console.log('[library] settings not initialized, skipping cache load');
         return false;
@@ -224,7 +224,7 @@ export function createLibraryStore(Alpine) {
         discNumber: 'disc_number',
       };
 
-      return api.library.getTracks({
+      return await api.library.getTracks({
         search: this.searchQuery.trim() || null,
         sort: sortKeyMap[this.sortBy] || this.sortBy,
         order: this.sortOrder,
