@@ -3,8 +3,11 @@
 ## Quick Reference
 
 ```bash
-# Run lint checks (fastest, fully compatible)
+# Run lint checks (fastest, Docker-based)
 act -W .github/workflows/test-local.yml -j lint
+
+# Run Playwright E2E tests (runs natively on your machine)
+act -W .github/workflows/test-local.yml -j playwright
 
 # Debug build issues (runs natively on your machine)
 act -j build -W .github/workflows/test.yml 2>&1 | tee /tmp/act-build.log
@@ -12,7 +15,7 @@ act -j build -W .github/workflows/test.yml 2>&1 | tee /tmp/act-build.log
 # List all available workflows and jobs
 act -l
 
-# Run specific workflow
+# Run all local tests
 act -W .github/workflows/test-local.yml
 ```
 
@@ -65,6 +68,27 @@ The `.actrc` file handles platform mappings:
 ```
 
 ## Common Issues
+
+### Flaky Playwright Tests
+
+The Playwright E2E tests in CI can be **flaky** - they sometimes fail in CI but pass locally. If you see accessibility test failures in CI:
+
+1. **Run locally first** to verify they pass:
+   ```bash
+   cd app/frontend
+   npx playwright test tests/accessibility.spec.js
+   ```
+
+2. **Run via act** for CI-like environment:
+   ```bash
+   act -W .github/workflows/test-local.yml -j playwright
+   ```
+
+3. **Known flaky tests**:
+   - `can navigate to player controls via Tab`
+   - `can navigate sidebar sections with Tab`
+
+These tests pass consistently locally but occasionally fail in CI due to timing issues.
 
 ### Node24 Runtime Error
 

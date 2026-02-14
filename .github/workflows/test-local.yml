@@ -68,3 +68,29 @@ jobs:
 
       - name: Run Clippy
         run: cargo clippy --workspace
+
+  # Playwright E2E tests (runs natively on your machine via act's -self-hosted)
+  playwright:
+    name: Playwright E2E Tests
+    runs-on: macOS  # Mapped to -self-hosted in .actrc, runs natively
+
+    steps:
+      - name: Checkout code
+        run: |
+          # act copies workdir automatically for -self-hosted runners
+          echo "Working directory: $(pwd)"
+          echo "Node version: $(node --version)"
+
+      - name: Install frontend dependencies
+        working-directory: ./app/frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: ./app/frontend
+        run: npx playwright install webkit
+
+      - name: Run Playwright tests
+        working-directory: ./app/frontend
+        run: npx playwright test
+        env:
+          CI: true
