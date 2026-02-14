@@ -184,7 +184,8 @@ jobs:
   # Build verification
   build:
     name: Build Verification
-    runs-on: [macOS, ARM64]
+    # runs-on: [macOS, ARM64] # TODO: fix mini cmake error
+    runs-on: studio
     timeout-minutes: 5
     env:
       CARGO_INCREMENTAL: 1  # Enable incremental compilation on self-hosted (reuses artifacts)
