@@ -38,6 +38,7 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 |-------|-------|
 | Commands, tooling, dependencies | [Development Guide](docs/development.md) |
 | Testing strategy, E2E, coverage | [Testing Guide](docs/testing.md) |
+| Local GitHub Actions testing | [act Guide](docs/act-guide.md) |
 | Atomic commits, worktrees | [Git Workflow](docs/git-workflow.md) |
 | System architecture, components | [Tauri Architecture](docs/tauri-architecture.md) |
 | MCP bridge tools | [MCP Tool Reference](docs/mcp-reference.md) |
