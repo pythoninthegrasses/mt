@@ -1,0 +1,19 @@
+# act configuration for local GitHub Actions testing
+# Ref: https://nektosact.com/
+
+# Map custom self-hosted runners to run natively (no Docker)
+-P macOS=-self-hosted
+-P ARM64=-self-hosted
+-P studio=-self-hosted
+
+# Use smaller images for Ubuntu jobs to avoid Docker Hub rate limits
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+
+# Set architecture to match host (Apple Silicon)
+--container-architecture=linux/arm64
+
+# Reuse containers for faster subsequent runs
+--reuse
+
+# Show verbose output for debugging
+--verbose
