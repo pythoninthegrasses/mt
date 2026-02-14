@@ -1,11 +1,11 @@
 name: Test Suite (Local)
 
 # Simplified workflow for local testing with act
+# This workflow is designed ONLY for local testing - it will never run in GitHub Actions
 # Use: act -W .github/workflows/test-local.yml -j lint
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:  # Manual trigger only (prevents automatic GHA runs)
 
 jobs:
   # Linting and code quality (act-compatible, no setup actions)

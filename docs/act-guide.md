@@ -34,8 +34,9 @@ grep -i "cmake error" /tmp/act-build.log
 
 ## Why test-local.yml?
 
-The `test-local.yml` workflow is designed for act compatibility:
+The `test-local.yml` workflow is designed **exclusively for local testing**:
 
+- ✅ **Never runs in GitHub Actions** (uses `workflow_dispatch:` trigger)
 - ✅ No node24 runtime issues (skips problematic GitHub Actions)
 - ✅ Installs tools directly (Deno, etc.)
 - ✅ Fast feedback loop
