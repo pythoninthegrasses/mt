@@ -361,8 +361,11 @@ impl WatcherManager {
                 }
             };
 
+            // Only load fingerprints for tracks within this watched folder
+            // to avoid marking tracks in other folders as deleted
+            let prefix = format!("{}/", folder.path.trim_end_matches('/'));
             let mut stmt = match conn
-                .prepare("SELECT filepath, file_mtime_ns, file_size FROM library")
+                .prepare("SELECT filepath, file_mtime_ns, file_size FROM library WHERE filepath LIKE ?1 || '%'")
             {
                 Ok(s) => s,
                 Err(e) => {
@@ -371,7 +374,7 @@ impl WatcherManager {
                 }
             };
 
-            stmt.query_map([], |row| {
+            stmt.query_map([&prefix], |row| {
                 let filepath: String = row.get(0)?;
                 let mtime_ns: Option<i64> = row.get(1)?;
                 let size: i64 = row.get(2)?;

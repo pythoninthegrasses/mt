@@ -6,6 +6,7 @@
  */
 
 import { api } from '../api.js';
+import { promptWatchedFolderConfirmation } from '../utils/watched-folders.js';
 
 const { listen } = window.__TAURI__?.event ?? { listen: () => Promise.resolve(() => {}) };
 
@@ -863,6 +864,7 @@ export function createLibraryStore(Alpine) {
               `Added ${result.added} track${result.added === 1 ? '' : 's'} to library`,
               'success',
             );
+            promptWatchedFolderConfirmation(pathArray);
           } else if (result.skipped > 0) {
             ui.toast(
               `All ${result.skipped} track${result.skipped === 1 ? '' : 's'} already in library`,

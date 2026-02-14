@@ -457,6 +457,25 @@ export function createUIStore(Alpine) {
       }
       this.missingTrackModal = null;
     },
+
+    // Watched folder confirmation dialog
+    watchedFolderConfirm: null,
+    _watchedFolderResolve: null,
+
+    showWatchedFolderConfirm(directories) {
+      return new Promise((resolve) => {
+        this._watchedFolderResolve = resolve;
+        this.watchedFolderConfirm = { directories };
+      });
+    },
+
+    closeWatchedFolderConfirm(selectedPaths = []) {
+      if (this._watchedFolderResolve) {
+        this._watchedFolderResolve(selectedPaths);
+        this._watchedFolderResolve = null;
+      }
+      this.watchedFolderConfirm = null;
+    },
   });
 
   // Setup watchers to sync store changes to backend settings

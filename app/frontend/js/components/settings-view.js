@@ -54,6 +54,10 @@ export function createSettingsView(Alpine) {
       await this.loadWatchedFolders();
       await this.loadLastfmSettings();
       this.loadColumnSettings();
+
+      window.addEventListener('mt:watched-folders-updated', () => {
+        this.loadWatchedFolders();
+      });
     },
 
     async loadAppInfo() {
