@@ -88,8 +88,7 @@ cmake -S "${SOURCE_DIR}" -B "${BUILD_DIR}" \
     -DBUILD_EXAMPLES=OFF \
     -DBUILD_BINDINGS=ON \
     -DCMAKE_INSTALL_PREFIX="${VENDOR_DIR}" \
-    "${CMAKE_EXTRA_ARGS[@]}" \
-    > /dev/null 2>&1
+    "${CMAKE_EXTRA_ARGS[@]}"
 
 # Build
 echo "Compiling..."
@@ -98,7 +97,7 @@ cmake --build "${BUILD_DIR}" --parallel "$(sysctl -n hw.ncpu 2>/dev/null || npro
 # Install to vendor directory
 echo "Installing to ${VENDOR_DIR}/"
 rm -rf "${VENDOR_DIR}"
-cmake --install "${BUILD_DIR}" > /dev/null 2>&1
+cmake --install "${BUILD_DIR}"
 
 # Verify
 if [[ -f "${VENDOR_DIR}/lib/libtag.a" && -f "${VENDOR_DIR}/lib/libtag_c.a" ]]; then
