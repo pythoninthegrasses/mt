@@ -24,8 +24,6 @@ tasks:
     desc: "Clean deno artifacts"
     cmds:
       - rm -rf {{.ROOT_DIR}}/node_modules
-      - rm -rf {{.ROOT_DIR}}/deno.lock
-      - rm -rf {{.ROOT_DIR}}/{{.FRONTEND_DIR}}/deno.lock
     silent: true
 
   outdated:
