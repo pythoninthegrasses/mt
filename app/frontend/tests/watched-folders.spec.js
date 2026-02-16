@@ -461,3 +461,182 @@ test.describe('Watched Folders Rescan', () => {
     await expect(spinIcon).toBeVisible();
   });
 });
+
+/**
+ * Watched Folders Utility Functions
+ *
+ * Tests for the watched-folders.js utility module functions.
+ * These tests verify the core logic for extracting parent directories,
+ * filtering already-watched paths, and prompting users.
+ */
+test.describe('Watched Folders Utility Functions', () => {
+  test.beforeEach(async ({ page }) => {
+    // Mock __TAURI__ with comprehensive watched folders support
+    await page.addInitScript(() => {
+      window.__tauriDialogCalls = [];
+      window.__tauriInvokeCalls = [];
+      window.__mockWatchedFolders = [];
+
+      window.__TAURI__ = {
+        core: {
+          invoke: async (cmd, args) => {
+            window.__tauriInvokeCalls.push({ cmd, args });
+
+            if (cmd === 'watched_folders_list') {
+              return window.__mockWatchedFolders || [];
+            }
+            if (cmd === 'watched_folders_add') {
+              const newFolder = {
+                id: Date.now(),
+                path: args.request.path,
+                mode: args.request.mode || 'continuous',
+                cadence_minutes: args.request.cadence_minutes || 10,
+                enabled: args.request.enabled !== false,
+              };
+              window.__mockWatchedFolders = window.__mockWatchedFolders || [];
+              window.__mockWatchedFolders.push(newFolder);
+              return newFolder;
+            }
+            return null;
+          }
+        },
+        dialog: {
+          confirm: async (message, options) => {
+            window.__tauriDialogCalls.push({ type: 'confirm', message, options });
+            // Return true by default (user confirms)
+            return window.__mockDialogConfirmResult !== undefined
+              ? window.__mockDialogConfirmResult
+              : true;
+          },
+          open: async () => null
+        },
+        event: {
+          listen: async () => () => {}
+        }
+      };
+    });
+
+    await page.goto('/');
+    await waitForAlpine(page);
+  });
+
+  test('should extract parent directories from file paths', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { extractParentDirectories } = await import('/js/utils/watched-folders.js');
+      return extractParentDirectories([
+        '/Users/test/Music/Rock/song1.mp3',
+        '/Users/test/Music/Rock/song2.mp3',
+        '/Users/test/Music/Jazz/track.flac'
+      ]);
+    });
+
+    expect(result).toContain('/Users/test/Music/Rock');
+    expect(result).toContain('/Users/test/Music/Jazz');
+    expect(result.length).toBe(2); // Deduplicated
+  });
+
+  test('should treat directory paths as-is (not extract parent)', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { extractParentDirectories } = await import('/js/utils/watched-folders.js');
+      return extractParentDirectories(['/Users/test/Music/NewAlbum']);
+    });
+
+    expect(result).toContain('/Users/test/Music/NewAlbum');
+    expect(result.length).toBe(1);
+  });
+
+  test('should prompt and add directories when confirmed', async ({ page }) => {
+    await page.evaluate(async () => {
+      const { promptToAddWatchedFolders } = await import('/js/utils/watched-folders.js');
+      await promptToAddWatchedFolders(['/Users/test/Music/Rock/song1.mp3']);
+    });
+
+    await page.waitForTimeout(300);
+
+    // Verify dialog was shown
+    const dialogCalls = await page.evaluate(() => window.__tauriDialogCalls);
+    const confirmCall = dialogCalls.find(c => c.type === 'confirm');
+
+    expect(confirmCall).toBeTruthy();
+    expect(confirmCall.message).toContain('watched folders');
+    expect(confirmCall.message).toContain('/Users/test/Music/Rock');
+
+    // Verify directory was added
+    const invokeCalls = await page.evaluate(() => window.__tauriInvokeCalls);
+    const addCall = invokeCalls.find(c => c.cmd === 'watched_folders_add');
+
+    expect(addCall).toBeTruthy();
+    expect(addCall.args.request.path).toBe('/Users/test/Music/Rock');
+    expect(addCall.args.request.mode).toBe('continuous');
+  });
+
+  test('should not prompt for already-watched directories', async ({ page }) => {
+    await page.evaluate(() => {
+      window.__mockWatchedFolders = [
+        { id: 1, path: '/Users/test/Music/Rock', mode: 'continuous', cadence_minutes: 10, enabled: true }
+      ];
+    });
+
+    await page.evaluate(async () => {
+      const { promptToAddWatchedFolders } = await import('/js/utils/watched-folders.js');
+      await promptToAddWatchedFolders(['/Users/test/Music/Rock/song.mp3']);
+    });
+
+    await page.waitForTimeout(300);
+
+    // Verify NO dialog was shown
+    const dialogCalls = await page.evaluate(() => window.__tauriDialogCalls);
+    expect(dialogCalls.length).toBe(0);
+  });
+
+  test('should handle user declining confirmation', async ({ page }) => {
+    await page.evaluate(() => {
+      window.__mockDialogConfirmResult = false;
+    });
+
+    await page.evaluate(async () => {
+      const { promptToAddWatchedFolders } = await import('/js/utils/watched-folders.js');
+      await promptToAddWatchedFolders(['/Users/test/Music/Classical/symphony.mp3']);
+    });
+
+    await page.waitForTimeout(300);
+
+    // Dialog was shown
+    const dialogCalls = await page.evaluate(() => window.__tauriDialogCalls);
+    expect(dialogCalls.length).toBe(1);
+
+    // But directory was NOT added
+    const invokeCalls = await page.evaluate(() => window.__tauriInvokeCalls);
+    const addCall = invokeCalls.find(c => c.cmd === 'watched_folders_add');
+
+    expect(addCall).toBeFalsy();
+  });
+
+  test('should handle multiple unique parent directories', async ({ page }) => {
+    await page.evaluate(async () => {
+      const { promptToAddWatchedFolders } = await import('/js/utils/watched-folders.js');
+      await promptToAddWatchedFolders([
+        '/Users/test/Music/Rock/song1.mp3',
+        '/Users/test/Music/Jazz/song2.mp3',
+        '/Users/test/Music/Classical/song3.mp3'
+      ]);
+    });
+
+    await page.waitForTimeout(500);
+
+    // Verify dialog lists all unique directories
+    const dialogCalls = await page.evaluate(() => window.__tauriDialogCalls);
+    const confirmCall = dialogCalls[0];
+
+    expect(confirmCall.message).toContain('/Users/test/Music/Rock');
+    expect(confirmCall.message).toContain('/Users/test/Music/Jazz');
+    expect(confirmCall.message).toContain('/Users/test/Music/Classical');
+    expect(confirmCall.message).toContain('directories'); // Plural
+
+    // Verify all directories were added
+    const invokeCalls = await page.evaluate(() => window.__tauriInvokeCalls);
+    const addCalls = invokeCalls.filter(c => c.cmd === 'watched_folders_add');
+
+    expect(addCalls.length).toBe(3);
+  });
+});

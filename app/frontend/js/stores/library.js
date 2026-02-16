@@ -6,6 +6,7 @@
  */
 
 import { api } from '../api.js';
+import { promptToAddWatchedFolders } from '../utils/watched-folders.js';
 
 const { listen } = window.__TAURI__?.event ?? { listen: () => Promise.resolve(() => {}) };
 
@@ -871,6 +872,15 @@ export function createLibraryStore(Alpine) {
           } else {
             ui.toast('No audio files found', 'info');
           }
+
+          // Prompt to add parent directories to watched folders
+          try {
+            await promptToAddWatchedFolders(pathArray);
+          } catch (error) {
+            console.error('[library] Failed to add watched folders:', error);
+            // Don't block - scan already succeeded
+          }
+
           return result;
         } else {
           console.log('[library] dialog cancelled or no paths selected');

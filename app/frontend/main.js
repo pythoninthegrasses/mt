@@ -8,6 +8,7 @@ import { initKeyboardShortcuts } from './js/shortcuts.js';
 import api from './js/api.js';
 import { formatTime, formatDuration, formatBytes } from './js/utils/formatting.js';
 import { settings } from './js/services/settings.js';
+import { promptToAddWatchedFolders } from './js/utils/watched-folders.js';
 import './styles.css';
 
 // Register Alpine plugins
@@ -100,6 +101,14 @@ async function initTauriDragDrop() {
               ui.toast(`All ${result.skipped} track${result.skipped === 1 ? '' : 's'} already in library`, 'info');
             } else {
               ui.toast('No audio files found', 'info');
+            }
+
+            // Prompt to add parent directories to watched folders
+            try {
+              await promptToAddWatchedFolders(paths);
+            } catch (error) {
+              console.error('[main] Failed to add watched folders:', error);
+              // Don't block - scan already succeeded
             }
           } catch (error) {
             console.error('[main] Failed to process dropped files:', error);
