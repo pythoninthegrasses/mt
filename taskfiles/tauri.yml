@@ -2,13 +2,6 @@ version: "3.0"
 
 set: ['e', 'u', 'pipefail']
 shopt: ['globstar']
-env:
-  CARGO_HOME: "{{.ROOT_DIR}}/.cache/cargo"
-  CARGO_TARGET_DIR: "{{.ROOT_DIR}}/target"
-  RUSTUP_TOOLCHAIN: nightly
-  RUSTC_WRAPPER: sccache
-  RUSTFLAGS: "-Zthreads=16"
-  APPLE_API_KEY_PATH: /tmp/auth_key.p8
 
 vars:
   APP_NAME: '{{.APP_NAME | default "mt"}}'
@@ -19,6 +12,17 @@ vars:
   MACOS_X64_TARGET: "x86_64-apple-darwin"
   LINUX_AMD64_TARGET: "x86_64-unknown-linux-gnu"
   LINUX_ARM64_TARGET: "aarch64-unknown-linux-gnu"
+  # Reserve 2 cores for system, minimum 1 job
+  BUILD_JOBS: '{{if gt (sub numCPU 2) 0}}{{sub numCPU 2}}{{else}}1{{end}}'
+
+env:
+  CARGO_HOME: "{{.ROOT_DIR}}/.cache/cargo"
+  CARGO_TARGET_DIR: "{{.ROOT_DIR}}/target"
+  RUSTUP_TOOLCHAIN: nightly
+  RUSTC_WRAPPER: sccache
+  RUSTFLAGS: "-Zthreads={{.BUILD_JOBS}}"
+  CARGO_BUILD_JOBS: "{{.BUILD_JOBS}}"
+  APPLE_API_KEY_PATH: /tmp/auth_key.p8
 
 tasks:
   info:
