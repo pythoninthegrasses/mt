@@ -1,17 +1,17 @@
 ---
-id: task-268
+id: TASK-268
 title: Add audio output device selection
-status: In Progress
+status: To Do
 assignee: []
 created_date: '2026-02-16 15:08'
-updated_date: '2026-02-16 16:13'
+updated_date: '2026-02-16 21:10'
 labels:
   - audio
   - feature
   - musicat-comparison
 dependencies: []
 priority: low
-ordinal: 22000
+ordinal: 43500
 ---
 
 ## Description

@@ -1,17 +1,17 @@
 ---
-id: task-270
+id: TASK-270
 title: Implement smart queries (dynamic filter-based playlists)
-status: In Progress
+status: To Do
 assignee: []
 created_date: '2026-02-16 15:08'
-updated_date: '2026-02-16 16:13'
+updated_date: '2026-02-16 21:10'
 labels:
   - feature
   - library
   - musicat-comparison
 dependencies: []
 priority: low
-ordinal: 22500
+ordinal: 42500
 ---
 
 ## Description

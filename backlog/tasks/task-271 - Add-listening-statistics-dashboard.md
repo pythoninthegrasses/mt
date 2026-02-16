@@ -1,17 +1,17 @@
 ---
-id: task-271
+id: TASK-271
 title: Add listening statistics dashboard
-status: In Progress
+status: To Do
 assignee: []
 created_date: '2026-02-16 16:12'
-updated_date: '2026-02-16 16:13'
+updated_date: '2026-02-16 21:10'
 labels:
   - feature
   - ui
   - musicat-comparison
 dependencies: []
 priority: medium
-ordinal: 21500
+ordinal: 44500
 ---
 
 ## Description
