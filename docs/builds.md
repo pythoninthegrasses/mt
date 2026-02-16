@@ -12,8 +12,8 @@ Build configuration, performance tuning, signing, and distribution for mt.
 
 ## Taskfile Commands
 
-All `task tauri:*` commands default to nightly with parallel codegen
-(`RUSTUP_TOOLCHAIN=nightly`, `RUSTFLAGS="-Zthreads=16"`).
+All `task tauri:*` commands default to nightly with parallel codegen and sccache
+(`RUSTUP_TOOLCHAIN=nightly`, `RUSTFLAGS="-Zthreads=16"`, `RUSTC_WRAPPER=sccache`).
 
 | Task | Description |
 |------|-------------|
@@ -60,6 +60,20 @@ rustup install nightly-2026-01-27
 ```
 
 ## Performance
+
+### sccache (`taskfiles/tauri.yml`)
+
+All Tauri build tasks use [sccache](https://github.com/mozilla/sccache) as the Rust compiler wrapper (`RUSTC_WRAPPER=sccache`). sccache caches compiled crate artifacts globally, so new worktrees and clean builds reuse previously compiled objects.
+
+```bash
+# Check cache hit rates
+sccache --show-stats
+
+# Clear the cache (if needed)
+sccache --zero-stats
+```
+
+First build populates the cache; subsequent workspaces benefit from cache hits on unchanged crates. This is especially useful with Conductor workspaces where each workspace starts with an empty `target/` directory.
 
 ### Dev Profile (`Cargo.toml` workspace root)
 
@@ -185,7 +199,7 @@ Before benchmarking, verify:
 rustc -Vv                        # Stable version
 RUSTUP_TOOLCHAIN=nightly rustc -Vv  # Nightly version
 env | grep RUSTFLAGS             # Check for conflicting flags
-env | grep RUSTC_WRAPPER         # Should be empty (no sccache)
+env | grep RUSTC_WRAPPER         # Should show sccache (disable with `unset RUSTC_WRAPPER` for raw benchmarks)
 ```
 
 Ensure consistent power state (AC power, low power mode off).

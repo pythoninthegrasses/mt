@@ -6,6 +6,7 @@ env:
   CARGO_HOME: "{{.ROOT_DIR}}/.cache/cargo"
   CARGO_TARGET_DIR: "{{.ROOT_DIR}}/target"
   RUSTUP_TOOLCHAIN: nightly
+  RUSTC_WRAPPER: sccache
   RUSTFLAGS: "-Zthreads=16"
   APPLE_API_KEY_PATH: /tmp/auth_key.p8
 
