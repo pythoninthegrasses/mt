@@ -54,6 +54,7 @@ MT uses a pure Rust + Tauri architecture:
 - **Backend**: Native Rust (91 Tauri commands)
 - **Audio**: Rodio/Symphonia
 - **Database**: SQLite via rusqlite
+- **Build Cache**: sccache (shared across worktrees/workspaces)
 
 See [Tauri Architecture](docs/tauri-architecture.md) for full details.
 
