@@ -14,8 +14,11 @@ vars:
   LINUX_ARM64_TARGET: "aarch64-unknown-linux-gnu"
   # Reserve 2 cores for system, minimum 1 job
   BUILD_JOBS: '{{if gt (sub numCPU 2) 0}}{{sub numCPU 2}}{{else}}1{{end}}'
-
 env:
+  # Strip IDE extension paths (e.g. VS Code globalStorage) from PATH so
+  # IDE-bundled tools don't shadow project-pinned versions during builds
+  PATH:
+    sh: 'echo "$PATH" | tr ":" "\n" | grep -v "globalStorage" | paste -sd ":" -'
   CARGO_HOME: "{{.ROOT_DIR}}/.cache/cargo"
   CARGO_TARGET_DIR: "{{.ROOT_DIR}}/target"
   RUSTUP_TOOLCHAIN: nightly
@@ -49,6 +52,15 @@ tasks:
           Linux deb: target/*/release/bundle/deb/{{.APP_NAME}}_*.deb
         EOF
     silent: true
+
+  _install-macos-deps:
+    internal: true
+    desc: "Install macOS system dependencies for Tauri"
+    platforms: [darwin]
+    cmds:
+      - brew install sccache
+    status:
+      - command -v sccache &> /dev/null
 
   _install-linux-deps:
     internal: true
@@ -108,7 +120,7 @@ tasks:
 
   build:
     desc: "Build Tauri app for current platform"
-    deps: [":deno:install", "_install-linux-deps"]
+    deps: [":deno:install", "_install-macos-deps", "_install-linux-deps"]
     vars:
       CURRENT_TARGET:
         sh: |
@@ -131,7 +143,7 @@ tasks:
   build:arm64:
     desc: "Build Tauri app for Apple Silicon (arm64)"
     platforms: [darwin/arm64]
-    deps: [":deno:install"]
+    deps: [":deno:install", "_install-macos-deps"]
     cmds:
       - task: _build
         vars:
@@ -144,7 +156,7 @@ tasks:
   build:x64:
     desc: "Build Tauri app for Intel (x86_64)"
     platforms: [darwin/amd64]
-    deps: [":deno:install"]
+    deps: [":deno:install", "_install-macos-deps"]
     cmds:
       - task: _build
         vars:
@@ -164,7 +176,7 @@ tasks:
   build:signed:
     desc: "Build signed macOS app (requires APPLE_SIGNING_IDENTITY)"
     platforms: [darwin]
-    deps: [":deno:install"]
+    deps: [":deno:install", "_install-macos-deps"]
     preconditions:
       - sh: '[ -n "$APPLE_SIGNING_IDENTITY" ]'
         msg: "APPLE_SIGNING_IDENTITY env var is required"
@@ -177,7 +189,7 @@ tasks:
   build:dmg:
     desc: "Build signed DMG installer (requires APPLE_SIGNING_IDENTITY)"
     platforms: [darwin]
-    deps: [":deno:install"]
+    deps: [":deno:install", "_install-macos-deps"]
     preconditions:
       - sh: '[ -n "$APPLE_SIGNING_IDENTITY" ]'
         msg: "APPLE_SIGNING_IDENTITY env var is required"
@@ -187,7 +199,7 @@ tasks:
 
   dev:
     desc: "Run Tauri in development mode"
-    deps: [":deno:install"]
+    deps: [":deno:install", "_install-macos-deps"]
     cmds:
       - deno run -A npm:@tauri-apps/cli dev
     interactive: true
@@ -195,7 +207,7 @@ tasks:
 
   dev:mcp:
     desc: "Run Tauri in development mode with MCP bridge for AI agent debugging"
-    deps: [":deno:install"]
+    deps: [":deno:install", "_install-macos-deps"]
     cmds:
       - deno run -A npm:@tauri-apps/cli dev -- --features mcp
     interactive: true
