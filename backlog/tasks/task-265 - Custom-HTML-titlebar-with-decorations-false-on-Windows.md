@@ -4,6 +4,7 @@ title: 'Custom HTML titlebar with decorations:false on Windows'
 status: To Do
 assignee: []
 created_date: '2026-02-11 07:09'
+updated_date: '2026-02-16 16:13'
 labels:
   - enhancement
   - frontend
@@ -11,6 +12,7 @@ labels:
   - titlebar
 dependencies: []
 priority: medium
+ordinal: 39500
 ---
 
 ## Description
