@@ -84,7 +84,7 @@ export function createUIStore(Alpine) {
     },
 
     setView(view) {
-      const validViews = ['library', 'queue', 'nowPlaying', 'settings'];
+      const validViews = ['library', 'queue', 'nowPlaying', 'settings', 'artists', 'albums'];
       if (validViews.includes(view) && view !== this.view) {
         console.log('[navigation]', 'switch_view', {
           previousView: this.view,
