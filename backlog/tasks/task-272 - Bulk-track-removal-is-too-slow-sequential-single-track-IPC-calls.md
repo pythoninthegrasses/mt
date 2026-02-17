@@ -1,10 +1,10 @@
 ---
 id: TASK-272
 title: Bulk track removal is too slow (sequential single-track IPC calls)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-16 21:05'
-updated_date: '2026-02-17 17:54'
+updated_date: '2026-02-17 21:41'
 labels:
   - performance
   - ux
@@ -51,7 +51,7 @@ A `delete_tracks_bulk()` function already exists in the database layer (`db/libr
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Removing 239 tracks completes in under 1 second
+- [x] #1 Removing 239 tracks completes in under 1 second
 - [x] #2 A bulk delete Tauri command exists that accepts multiple track IDs
 - [x] #3 Bulk deletion is wrapped in a single SQLite transaction
 - [x] #4 Only one library_updated event is emitted per bulk operation (not per track)
@@ -60,13 +60,14 @@ A `delete_tracks_bulk()` function already exists in the database layer (`db/libr
 - [x] #7 Existing single-track delete_track() and its behavior are not broken
 - [x] #8 E2E test verifies removing multiple tracks from the library browser completes without error
 
-- [ ] #9 Deleting all tracks from a 13k+ library completes in under 2 seconds without UI freeze
-- [ ] #10 Scanning/adding 13k+ files does not freeze the UI (debounced library refreshes)
-- [ ] #11 App startup with 13k+ tracks in the library is responsive within 3 seconds
-- [ ] #12 Loading library views (Music, Liked Songs, Recently Played, Recently Added, Top 25) with 13k+ tracks does not freeze
-- [ ] #13 Empty library state message is centered in the viewport across all views
-- [ ] #14 Watched folder auto-removal after delete-all updates the Settings UI without requiring manual removal
-- [ ] #15 No duplicate tracks inserted when scanner runs (UNIQUE constraint or INSERT OR IGNORE on filepath)
+- [x] #9 Deleting all tracks from a 13k+ library completes in under 2 seconds without UI freeze
+- [x] #10 Scanning/adding 13k+ files does not freeze the UI (debounced library refreshes)
+- [x] #11 App startup with 13k+ tracks in the library is responsive within 3 seconds
+- [x] #12 Loading library views (Music, Liked Songs, Recently Played, Recently Added, Top 25) with 13k+ tracks does not freeze
+- [x] #13 Empty library state message is centered in the viewport across all views
+- [x] #14 Watched folder auto-removal after delete-all updates the Settings UI without requiring manual removal
+- [x] #15 No duplicate tracks inserted when scanner runs (UNIQUE constraint or INSERT OR IGNORE on filepath)
+- [x] #16 FCP (First Contentful Paint) is 1.8 seconds or less with a 10k-track library (measured via web-vitals)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -212,3 +213,15 @@ MT_LOG=debug task tauri:dev
 - Background task logging confirmed: scrobble retry (5min) and loved tracks matcher (30min) intervals logged
 - Log file grew to ~14MB during scan due to lofty crate DEBUG output; consider filtering with `MT_LOG=info,lofty=warn` for production
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Bulk operations for 7-13k track libraries no longer soft-lock the app.
+
+**Backend**: Scan DB writes wrapped in transactions (chunked 1k inserts). Content hashing deferred outside transaction to avoid holding SQLite write lock during SHA-256 I/O. Batch reconciliation via pre-fetched HashMaps (O(1) vs per-file queries). Queue adds transaction-wrapped. O(n^2) correlated subquery in artist sort replaced with per-row COALESCE + composite index.
+
+**Frontend**: Double-click playback is instant — plays clicked track immediately, builds full queue in background with generation-based cancellation. Default sort changed from album to artist. Sort comparator normalizes leading non-alphanumeric characters and adds artist tiebreaker for album sort. Memoized album/artist browser getters via version tracking. `removeTracksLocally()` filters directly (O(n)) instead of re-sorting (O(n log n)).
+
+**Measured**: First double-click 15ms (was 5-8s). Second double-click 546ms (audio engine). Sort change 345ms. 551/551 cargo tests pass.
+<!-- SECTION:FINAL_SUMMARY:END -->
