@@ -27,11 +27,29 @@ export function createAlbumsBrowser(Alpine) {
     // Scroll position preservation
     _gridScrollTop: 0,
 
+    // All library tracks (loaded independently of library store's active section)
+    _allTracks: [],
+
     // Context menu
     contextMenu: null,
+    playlists: [],
+    showPlaylistSubmenu: false,
+    submenuOnLeft: false,
+    submenuY: 0,
+    submenuCloseTimeout: null,
 
     init() {
       this._setupLazyLoading();
+      this._loadPlaylists();
+      this._loadAllTracks();
+      window.addEventListener('mt:playlists-updated', () => this._loadPlaylists());
+
+      // Reset to grid view when navigating back to albums
+      this.$watch('$store.ui.view', (view) => {
+        if (view === 'albums' && this.subView === 'detail') {
+          this.backToGrid();
+        }
+      });
     },
 
     destroy() {
@@ -61,8 +79,22 @@ export function createAlbumsBrowser(Alpine) {
     /**
      * Get album data enriched with metadata from first track
      */
+    async _loadAllTracks() {
+      try {
+        const data = await api.library.getTracks({ limit: 999999, offset: 0 });
+        this._allTracks = data.tracks || [];
+      } catch {
+        this._allTracks = [];
+      }
+    },
+
     get albumList() {
-      const tracksByAlbum = this.library.tracksByAlbum;
+      const tracksByAlbum = {};
+      for (const track of this._allTracks) {
+        const album = track.album || 'Unknown Album';
+        if (!tracksByAlbum[album]) tracksByAlbum[album] = [];
+        tracksByAlbum[album].push(track);
+      }
       const albums = [];
 
       for (const [albumName, tracks] of Object.entries(tracksByAlbum)) {
@@ -172,14 +204,28 @@ export function createAlbumsBrowser(Alpine) {
     // --- Album Detail ---
 
     _getAlbumTracks(albumName) {
-      const tracks = this.library.tracksByAlbum[albumName] || [];
+      const tracks = this._allTracks.filter((t) => (t.album || 'Unknown Album') === albumName);
+      // Find dominant disc number for tracks missing disc metadata
+      const discCounts = {};
+      for (const t of tracks) {
+        if (t.disc_number != null) {
+          const d = parseInt(String(t.disc_number).split('/')[0], 10) || 1;
+          discCounts[d] = (discCounts[d] || 0) + 1;
+        }
+      }
+      const dominantDisc = Number(
+        Object.entries(discCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 1,
+      );
       return [...tracks].sort((a, b) => {
-        // Sort by disc number then track number
-        const discA = a.disc_number || 1;
-        const discB = b.disc_number || 1;
+        const discA = a.disc_number != null
+          ? (parseInt(String(a.disc_number).split('/')[0], 10) || 1)
+          : dominantDisc;
+        const discB = b.disc_number != null
+          ? (parseInt(String(b.disc_number).split('/')[0], 10) || 1)
+          : dominantDisc;
         if (discA !== discB) return discA - discB;
-        const trackA = a.track_number || 0;
-        const trackB = b.track_number || 0;
+        const trackA = parseInt(a.track_number, 10) || 0;
+        const trackB = parseInt(b.track_number, 10) || 0;
         return trackA - trackB;
       });
     },
@@ -285,16 +331,28 @@ export function createAlbumsBrowser(Alpine) {
           label: 'Play Next',
           action: () => this.playAlbumNext(album),
         },
+        { type: 'separator' },
+        {
+          label: 'Add to Playlist',
+          hasSubmenu: true,
+          action: () => {
+            this.showPlaylistSubmenu = !this.showPlaylistSubmenu;
+          },
+        },
       ];
 
+      const tracks = this._getAlbumTracks(album.name);
       let x = event.clientX;
       let y = event.clientY;
       const menuWidth = 200;
+      const submenuWidth = 200;
       const menuHeight = items.length * 36;
       if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
       if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
 
-      this.contextMenu = { x, y, items };
+      this.contextMenu = { x, y, items, tracks };
+      this.showPlaylistSubmenu = false;
+      this.submenuOnLeft = (x + menuWidth + 45 + submenuWidth) > window.innerWidth;
     },
 
     showTrackContextMenu(event, track, index) {
@@ -312,7 +370,7 @@ export function createAlbumsBrowser(Alpine) {
           action: async () => {
             await this.queue.addTracks([track]);
             this.ui.toast('Added to queue', 'success');
-            this.contextMenu = null;
+            this.closeContextMenu();
           },
         },
         {
@@ -320,19 +378,99 @@ export function createAlbumsBrowser(Alpine) {
           label: 'Play Next',
           action: async () => {
             await this.queue.playNextTracks([track]);
-            this.contextMenu = null;
+            this.closeContextMenu();
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Add to Playlist',
+          hasSubmenu: true,
+          action: () => {
+            this.showPlaylistSubmenu = !this.showPlaylistSubmenu;
           },
         },
       ];
 
       let x = event.clientX;
       let y = event.clientY;
-      const menuWidth = 180;
+      const menuWidth = 200;
+      const submenuWidth = 200;
       const menuHeight = items.length * 36;
       if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
       if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 10;
 
-      this.contextMenu = { x, y, items };
+      this.contextMenu = { x, y, items, tracks: [track] };
+      this.showPlaylistSubmenu = false;
+      this.submenuOnLeft = (x + menuWidth + 45 + submenuWidth) > window.innerWidth;
+    },
+
+    // --- Playlist ---
+
+    closeContextMenu() {
+      this.contextMenu = null;
+      this.showPlaylistSubmenu = false;
+    },
+
+    async _loadPlaylists() {
+      try {
+        const playlists = await api.playlists.getAll();
+        this.playlists = playlists.map((p) => ({ id: p.id, name: p.name }));
+      } catch {
+        this.playlists = [];
+      }
+    },
+
+    async addToPlaylist(playlistId) {
+      const tracks = this.contextMenu?.tracks || [];
+      this.closeContextMenu();
+      if (tracks.length === 0) return;
+
+      try {
+        const trackIds = tracks.map((t) => t.id);
+        const result = await api.playlists.addTracks(playlistId, trackIds);
+        const playlist = this.playlists.find((p) => p.id === playlistId);
+        const playlistName = playlist?.name || 'playlist';
+
+        if (result.added > 0) {
+          this.ui.toast(
+            `Added ${result.added} track${result.added > 1 ? 's' : ''} to "${playlistName}"`,
+            'success',
+          );
+        } else {
+          this.ui.toast(
+            `Track${tracks.length > 1 ? 's' : ''} already in "${playlistName}"`,
+            'info',
+          );
+        }
+
+        window.dispatchEvent(new CustomEvent('mt:playlists-updated'));
+      } catch {
+        this.ui.toast('Failed to add to playlist', 'error');
+      }
+    },
+
+    createPlaylistWithTracks() {
+      const tracks = this.contextMenu?.tracks || [];
+      this.closeContextMenu();
+      if (tracks.length === 0) return;
+
+      const trackIds = tracks.map((t) => t.id);
+      window.dispatchEvent(
+        new CustomEvent('mt:create-playlist-with-tracks', { detail: { trackIds } }),
+      );
+    },
+
+    handleSubmenuEnter() {
+      if (this.submenuCloseTimeout) {
+        clearTimeout(this.submenuCloseTimeout);
+        this.submenuCloseTimeout = null;
+      }
+    },
+
+    handleSubmenuLeave() {
+      this.submenuCloseTimeout = setTimeout(() => {
+        this.showPlaylistSubmenu = false;
+      }, 200);
     },
   }));
 }

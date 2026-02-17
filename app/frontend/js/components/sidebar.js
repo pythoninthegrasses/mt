@@ -46,6 +46,10 @@ export function createSidebar(Alpine) {
       } else {
         this.loadSection(this.activeSection);
       }
+
+      window.addEventListener('mt:create-playlist-with-tracks', async (e) => {
+        await this.createPlaylistWithTracks(e.detail?.trackIds || []);
+      });
     },
 
     /**
@@ -256,6 +260,28 @@ export function createSidebar(Alpine) {
         }
       } catch (error) {
         console.error('Failed to create playlist:', error);
+        this.ui.toast('Failed to create playlist', 'error');
+      }
+    },
+
+    async createPlaylistWithTracks(trackIds) {
+      try {
+        const { name: uniqueName } = await api.playlists.generateName();
+        const playlist = await api.playlists.create(uniqueName);
+
+        if (trackIds.length > 0) {
+          await api.playlists.addTracks(playlist.id, trackIds);
+        }
+
+        await this.loadPlaylists();
+        window.dispatchEvent(new CustomEvent('mt:playlists-updated'));
+
+        const newPlaylist = this.playlists.find((p) => p.playlistId === playlist.id);
+        if (newPlaylist) {
+          this.startInlineRename(newPlaylist, true);
+        }
+      } catch (error) {
+        console.error('Failed to create playlist with tracks:', error);
         this.ui.toast('Failed to create playlist', 'error');
       }
     },

@@ -12,7 +12,14 @@ export function createArtistsBrowser(Alpine) {
     submenuY: 0,
     submenuCloseTimeout: null,
 
+    // All library tracks (loaded independently of library store's active section)
+    _allTracks: [],
+
     init() {
+      this._loadAllTracks();
+      this._loadPlaylists();
+      window.addEventListener('mt:playlists-updated', () => this._loadPlaylists());
+
       // Auto-select first artist when view becomes active
       this.$watch('$store.ui.view', (view) => {
         if (view === 'artists' && !this.selectedArtist && this.artists.length > 0) {
@@ -24,9 +31,6 @@ export function createArtistsBrowser(Alpine) {
       if (this.$store.ui.view === 'artists' && this.artists.length > 0) {
         this.selectedArtist = this.artists[0];
       }
-
-      this._loadPlaylists();
-      window.addEventListener('mt:playlists-updated', () => this._loadPlaylists());
     },
 
     get library() {
@@ -51,7 +55,7 @@ export function createArtistsBrowser(Alpine) {
      */
     get _canonicalArtistMap() {
       const map = new Map();
-      for (const track of this.library.tracks) {
+      for (const track of this._allTracks) {
         const album = track.album || '';
         const artist = (track.album_artist || track.artist || '').replace(/;+$/, '').trim();
         if (!artist) continue;
@@ -144,7 +148,7 @@ export function createArtistsBrowser(Alpine) {
           matchingAlbums.add(album);
         }
       }
-      return this.library.tracks
+      return this._allTracks
         .filter((t) => matchingAlbums.has(t.album || ''))
         .sort((a, b) => {
           const albumCmp = (a.album || '').localeCompare(b.album || '');
@@ -297,6 +301,15 @@ export function createArtistsBrowser(Alpine) {
       }
     },
 
+    async _loadAllTracks() {
+      try {
+        const data = await api.library.getTracks({ limit: 999999, offset: 0 });
+        this._allTracks = data.tracks || [];
+      } catch {
+        this._allTracks = [];
+      }
+    },
+
     async _loadPlaylists() {
       try {
         const playlists = await api.playlists.getAll();
@@ -388,14 +401,29 @@ export function createArtistsBrowser(Alpine) {
 
       try {
         const result = await api.playlists.addTracks(playlistId, [track.id]);
+        const playlist = this.playlists.find((p) => p.id === playlistId);
+        const playlistName = playlist?.name || 'playlist';
+
         if (result.added > 0) {
-          this.$store.ui.toast('Added to playlist', 'success');
+          this.$store.ui.toast(`Added to "${playlistName}"`, 'success');
         } else {
-          this.$store.ui.toast('Already in playlist', 'info');
+          this.$store.ui.toast(`Already in "${playlistName}"`, 'info');
         }
+
+        window.dispatchEvent(new CustomEvent('mt:playlists-updated'));
       } catch {
         this.$store.ui.toast('Failed to add to playlist', 'error');
       }
+    },
+
+    createPlaylistWithTracks() {
+      const track = this.contextMenu?.track;
+      this.closeContextMenu();
+      if (!track) return;
+
+      window.dispatchEvent(
+        new CustomEvent('mt:create-playlist-with-tracks', { detail: { trackIds: [track.id] } }),
+      );
     },
 
     async _showInFinder(track) {

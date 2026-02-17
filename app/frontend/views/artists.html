@@ -192,6 +192,14 @@
     @mouseenter="handleSubmenuEnter()"
     @mouseleave="handleSubmenuLeave()"
   >
+    <div
+      class="context-menu-item"
+      @click="createPlaylistWithTracks()"
+    >
+      <span class="w-4 text-center">+</span>
+      <span>New Playlist...</span>
+    </div>
+    <div class="context-menu-separator" x-show="playlists.length > 0"></div>
     <template x-for="playlist in playlists" :key="playlist.id">
       <div
         class="context-menu-item"

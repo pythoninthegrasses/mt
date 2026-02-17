@@ -254,29 +254,69 @@
   <div
     x-show="contextMenu"
     x-cloak
-    class="fixed z-100 min-w-[180px] border border-border rounded-lg shadow-lg p-1 bg-card"
+    class="context-menu track-context-menu bg-card"
+    data-testid="albums-context-menu"
     :style="contextMenu ? `left: ${contextMenu.x}px; top: ${contextMenu.y}px` : ''"
-    @click.outside="contextMenu = null"
+    @click.outside="closeContextMenu()"
   >
     <template x-if="contextMenu">
       <div>
         <template x-for="(item, idx) in contextMenu.items" :key="idx">
           <div>
             <template x-if="item.type === 'separator'">
-              <div class="my-1 border-t border-border"></div>
+              <div class="context-menu-separator"></div>
             </template>
             <template x-if="item.type !== 'separator'">
               <div
-                class="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md cursor-pointer hover:bg-muted"
-                @click="item.action()"
+                class="context-menu-item relative"
+                @click="if (!item.hasSubmenu) { item.action(); closeContextMenu(); } else { item.action(); }"
+                @mouseenter="if (item.hasSubmenu) { showPlaylistSubmenu = true; submenuY = $el.getBoundingClientRect().top; handleSubmenuEnter(); } else { showPlaylistSubmenu = false; }"
+                @mouseleave="if (item.hasSubmenu) { handleSubmenuLeave(); }"
               >
-                <span x-text="item.icon" class="w-4 text-center text-xs"></span>
-                <span x-text="item.label"></span>
+                <span x-text="item.icon || ''" class="w-4 text-center text-xs"></span>
+                <span x-text="item.label" class="flex-1"></span>
+                <span
+                  x-show="item.hasSubmenu"
+                  class="text-muted-foreground"
+                  x-text="submenuOnLeft ? '&#9664;' : '&#9654;'"
+                ></span>
               </div>
             </template>
           </div>
         </template>
       </div>
     </template>
+  </div>
+
+  <!-- Add to Playlist submenu -->
+  <div
+    x-show="contextMenu && showPlaylistSubmenu"
+    x-cloak
+    class="context-menu bg-card"
+    data-testid="albums-playlist-submenu"
+    :style="contextMenu ? `left: ${submenuOnLeft ? contextMenu.x - 180 : contextMenu.x + 180 + 45}px; top: ${submenuY}px; max-height: ${window.innerHeight - submenuY - 10}px; overflow-y: auto` : ''"
+    @mouseenter="handleSubmenuEnter()"
+    @mouseleave="handleSubmenuLeave()"
+  >
+    <div
+      class="context-menu-item"
+      @click="createPlaylistWithTracks()"
+    >
+      <span class="w-4 text-center">+</span>
+      <span>New Playlist...</span>
+    </div>
+    <div class="context-menu-separator" x-show="playlists.length > 0"></div>
+    <template x-for="playlist in playlists" :key="playlist.id">
+      <div
+        class="context-menu-item"
+        @click="addToPlaylist(playlist.id)"
+      >
+        <span class="w-4 text-center"></span>
+        <span x-text="playlist.name" class="truncate"></span>
+      </div>
+    </template>
+    <div x-show="playlists.length === 0" class="px-3 py-2 text-sm text-muted-foreground">
+      No playlists yet
+    </div>
   </div>
 </div>

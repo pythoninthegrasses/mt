@@ -1435,34 +1435,16 @@ export function createLibraryBrowser(Alpine) {
       this.showPlaylistSubmenu = false;
     },
 
-    async createPlaylistWithTracks() {
+    createPlaylistWithTracks() {
       const tracks = this.getSelectedTracks();
-      if (tracks.length === 0) return;
-
-      const name = prompt('Enter playlist name:');
-      if (!name || !name.trim()) {
-        this.contextMenu = null;
-        this.showPlaylistSubmenu = false;
-        return;
-      }
-
-      try {
-        const playlist = await api.playlists.create(name.trim());
-        const trackIds = tracks.map((t) => t.id);
-        await api.playlists.addTracks(playlist.id, trackIds);
-
-        this.$store.ui.toast(
-          `Created "${name.trim()}" with ${tracks.length} track${tracks.length > 1 ? 's' : ''}`,
-          'success',
-        );
-        window.dispatchEvent(new CustomEvent('mt:playlists-updated'));
-      } catch (error) {
-        console.error('Failed to create playlist:', error);
-        this.$store.ui.toast('Failed to create playlist', 'error');
-      }
-
       this.contextMenu = null;
       this.showPlaylistSubmenu = false;
+      if (tracks.length === 0) return;
+
+      const trackIds = tracks.map((t) => t.id);
+      window.dispatchEvent(
+        new CustomEvent('mt:create-playlist-with-tracks', { detail: { trackIds } }),
+      );
     },
 
     async removeFromPlaylist() {
