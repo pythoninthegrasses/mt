@@ -1,10 +1,10 @@
 ---
 id: TASK-273.03
 title: Implement Albums browsing view (grid + album detail)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-16 21:13'
-updated_date: '2026-02-17 01:31'
+updated_date: '2026-02-17 03:06'
 labels:
   - feature
   - ux
@@ -71,15 +71,15 @@ When user clicks an album card, navigate to a detail view:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Album grid displays responsive cards with artwork, album title, and artist name
-- [ ] #2 Hovering an album card reveals Play and context menu action buttons overlaid on artwork
-- [ ] #3 Albums without artwork show a placeholder image
-- [ ] #4 Clicking an album card navigates to the album detail view
-- [ ] #5 Album detail shows large artwork, album title, artist name, genre, year
-- [ ] #6 Album detail has Play and Shuffle buttons that queue the album tracks
-- [ ] #7 Album detail shows track listing with track numbers, titles, and durations
-- [ ] #8 Back button in album detail returns to the album grid preserving scroll position
-- [ ] #9 Artist name in album detail is clickable and navigates to that artist in the Artists view
-- [ ] #10 Double-clicking a track in album detail starts playback
-- [ ] #11 Performance is acceptable for libraries with 200+ albums (lazy artwork loading)
+- [x] #1 Album grid displays responsive cards with artwork, album title, and artist name
+- [x] #2 Hovering an album card reveals Play and context menu action buttons overlaid on artwork
+- [x] #3 Albums without artwork show a placeholder image
+- [x] #4 Clicking an album card navigates to the album detail view
+- [x] #5 Album detail shows large artwork, album title, artist name, genre, year
+- [x] #6 Album detail has Play and Shuffle buttons that queue the album tracks
+- [x] #7 Album detail shows track listing with track numbers, titles, and durations
+- [x] #8 Back button in album detail returns to the album grid preserving scroll position
+- [x] #9 Artist name in album detail is clickable and navigates to that artist in the Artists view
+- [x] #10 Double-clicking a track in album detail starts playback
+- [x] #11 Performance is acceptable for libraries with 200+ albums (lazy artwork loading)
 <!-- AC:END -->

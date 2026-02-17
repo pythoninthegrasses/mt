@@ -1,10 +1,10 @@
 ---
 id: TASK-273
 title: Artist and Album browsing views (iTunes/Apple Music style)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-16 21:12'
-updated_date: '2026-02-17 01:31'
+updated_date: '2026-02-17 03:08'
 labels:
   - feature
   - ux
