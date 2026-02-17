@@ -1,10 +1,10 @@
 ---
 id: TASK-273.01
 title: Add Artists and Albums sidebar navigation items with view routing
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-16 21:13'
-updated_date: '2026-02-17 01:31'
+updated_date: '2026-02-17 01:46'
 labels:
   - feature
   - ux
@@ -51,10 +51,10 @@ The sidebar (`app/frontend/js/components/sidebar.js` lines 23-30) has hardcoded 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Artists and Albums items appear in the sidebar below Music
-- [ ] #2 Clicking Artists switches the main content area to the artists view
-- [ ] #3 Clicking Albums switches the main content area to the albums view
-- [ ] #4 Music remains the default view on app launch
-- [ ] #5 Active sidebar item is visually highlighted for Artists and Albums
-- [ ] #6 Placeholder content renders for both new views (to be replaced by subtasks 2 and 3)
+- [x] #1 Artists and Albums items appear in the sidebar below Music
+- [x] #2 Clicking Artists switches the main content area to the artists view
+- [x] #3 Clicking Albums switches the main content area to the albums view
+- [x] #4 Music remains the default view on app launch
+- [x] #5 Active sidebar item is visually highlighted for Artists and Albums
+- [x] #6 Placeholder content renders for both new views (to be replaced by subtasks 2 and 3)
 <!-- AC:END -->

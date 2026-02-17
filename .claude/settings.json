@@ -9,6 +9,7 @@
       "Bash(fd:*)",
       "Bash(git add:*)",
       "Bash(git bisect:*)",
+      "Bash(git cherry-pick:*)",
       "Bash(git commit:*)",
       "Bash(git log:*)",
       "Bash(git show:*)",
