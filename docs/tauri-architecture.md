@@ -117,6 +117,8 @@ Modern web UI:
 **UI Components:**
 
 - Library browser (virtual scrolling)
+- Artists browser (split-pane: artist list + album/track detail)
+- Albums browser (grid layout with album artwork)
 - Queue view (drag-and-drop reordering)
 - Player controls (play/pause, seek, volume)
 - Search bar (instant filtering)
