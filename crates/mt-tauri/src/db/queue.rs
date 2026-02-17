@@ -80,43 +80,48 @@ pub fn add_to_queue(conn: &Connection, track_ids: &[i64], position: Option<i64>)
 
     let track_map: std::collections::HashMap<i64, String> = tracks.into_iter().collect();
 
+    let tx = conn.unchecked_transaction()?;
+
     if let Some(pos) = position {
         // Get current queue
-        let mut stmt = conn.prepare("SELECT id, filepath FROM queue ORDER BY id")?;
+        let mut stmt = tx.prepare("SELECT id, filepath FROM queue ORDER BY id")?;
         let current_queue: Vec<(i64, String)> = stmt
             .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
             .filter_map(|r| r.ok())
             .collect();
+        drop(stmt);
 
         // Clear and rebuild queue
-        conn.execute("DELETE FROM queue", [])?;
+        tx.execute("DELETE FROM queue", [])?;
 
         let pos = pos as usize;
 
         // Insert items before position
         for (_, filepath) in current_queue.iter().take(pos) {
-            conn.execute("INSERT INTO queue (filepath) VALUES (?)", [filepath])?;
+            tx.execute("INSERT INTO queue (filepath) VALUES (?)", [filepath])?;
         }
 
         // Insert new items
         for track_id in track_ids {
             if let Some(filepath) = track_map.get(track_id) {
-                conn.execute("INSERT INTO queue (filepath) VALUES (?)", [filepath])?;
+                tx.execute("INSERT INTO queue (filepath) VALUES (?)", [filepath])?;
             }
         }
 
         // Insert items after position
         for (_, filepath) in current_queue.iter().skip(pos) {
-            conn.execute("INSERT INTO queue (filepath) VALUES (?)", [filepath])?;
+            tx.execute("INSERT INTO queue (filepath) VALUES (?)", [filepath])?;
         }
     } else {
         // Append to end
         for track_id in track_ids {
             if let Some(filepath) = track_map.get(track_id) {
-                conn.execute("INSERT INTO queue (filepath) VALUES (?)", [filepath])?;
+                tx.execute("INSERT INTO queue (filepath) VALUES (?)", [filepath])?;
             }
         }
     }
+
+    tx.commit()?;
 
     Ok(track_ids
         .iter()
