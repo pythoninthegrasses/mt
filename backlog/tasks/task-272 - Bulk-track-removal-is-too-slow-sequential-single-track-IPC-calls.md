@@ -4,7 +4,7 @@ title: Bulk track removal is too slow (sequential single-track IPC calls)
 status: In Progress
 assignee: []
 created_date: '2026-02-16 21:05'
-updated_date: '2026-02-17 01:34'
+updated_date: '2026-02-17 07:41'
 labels:
   - performance
   - ux
@@ -57,6 +57,14 @@ A `delete_tracks_bulk()` function already exists in the database layer (`db/libr
 - [x] #6 Unit tests exist for the bulk delete Tauri command covering: empty list, valid IDs, mixed valid/invalid IDs, and referential cleanup (favorites, playlist_items)
 - [x] #7 Existing single-track delete_track() and its behavior are not broken
 - [x] #8 E2E test verifies removing multiple tracks from the library browser completes without error
+
+- [ ] #9 Deleting all tracks from a 13k+ library completes in under 2 seconds without UI freeze
+- [ ] #10 Scanning/adding 13k+ files does not freeze the UI (debounced library refreshes)
+- [ ] #11 App startup with 13k+ tracks in the library is responsive within 3 seconds
+- [ ] #12 Loading library views (Music, Liked Songs, Recently Played, Recently Added, Top 25) with 13k+ tracks does not freeze
+- [ ] #13 Empty library state message is centered in the viewport across all views
+- [ ] #14 Watched folder auto-removal after delete-all updates the Settings UI without requiring manual removal
+- [ ] #15 No duplicate tracks inserted when scanner runs (UNIQUE constraint or INSERT OR IGNORE on filepath)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -103,4 +111,24 @@ While testing bulk deletion, a deterministic SIGBUS crash at `0x161746164` was d
 
 ### Note: Instant track deletion from library still not functional
 The UI-level instant deletion (removing tracks from the visible library list immediately on delete) is **blocked by the Zig FFI removal** (task-274). The `library_updated` event triggers a full library reload which re-invokes the Zig scanner. Once task-274 lands and the Zig FFI layer is fully removed, the instant deletion UX can be finalized.
+
+## Session 2: Performance & UX Fixes for Large Libraries (13k+ tracks)
+
+### Backend Changes
+- **`library_delete_all` command** (`commands.rs`): Single IPC call to wipe entire library (DELETE FROM favorites, playlist_items, library)
+- **`library_delete_tracks` batch command** (`commands.rs`): Accepts `Vec<i64>`, deletes by ID array in one call
+- **`delete_tracks_by_ids()` and `delete_all_tracks()`** added to `db/library.rs`
+- Registered both new commands in `lib.rs`
+
+### Frontend Changes
+- **`library-browser.js` `removeSelected()`**: Rewritten to use `library_delete_all` (full wipe) or `library_delete_tracks` (batch by IDs) — single IPC call instead of 13k parallel calls
+- **`library.js` `removeTracksLocally()`**: Added fast path — when deleting all tracks, directly sets empty arrays instead of filtering 13k items through Alpine's reactive proxy
+- **`events.js`**: Added 500ms debounce on `fetchTracks()` for `library-updated` events during scanning — prevents overlapping full library reloads that froze the WebView
+- **`settings-view.js` `removeWatchedFolder()`**: Made resilient to "not found" errors — after delete-all auto-removes folders, manual X click no longer shows error toast
+- **`library.html`**: Fixed empty state centering using `absolute inset-0` positioning within `min-h-full relative` track-list container (avoids breaking virtual scroll)
+
+### Known Issues
+- **Duplicate tracks**: Scanner can insert duplicates if it runs twice (no UNIQUE constraint on filepath in library table). Needs schema migration.
+- **Startup performance**: 13k+ track libraries still show slow initial load
+- **Virtual scroll + empty state**: CSS centering approach (`min-h-full` + `absolute inset-0`) needs confirmation
 <!-- SECTION:NOTES:END -->
