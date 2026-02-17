@@ -1,10 +1,10 @@
 ---
 id: TASK-273.02
 title: 'Implement Artists browsing view (split pane: artist list + detail)'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-16 21:13'
-updated_date: '2026-02-17 01:31'
+updated_date: '2026-02-17 02:25'
 labels:
   - feature
   - ux
@@ -64,13 +64,13 @@ A split-pane layout:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Left panel displays a scrollable list of all artists sorted alphabetically
-- [ ] #2 Selecting an artist in the left panel shows their albums and tracks in the right panel
-- [ ] #3 Right panel shows artist name header with album and song counts
-- [ ] #4 Each album section shows album artwork, title, genre, year, and track listing
-- [ ] #5 Tracks within an album show track number, title, and duration
-- [ ] #6 Double-clicking or pressing play on a track starts playback
-- [ ] #7 Context menu actions work on tracks (add to queue, add to playlist, etc.)
-- [ ] #8 View handles empty states (no artists, artist with no albums)
-- [ ] #9 Performance is acceptable for libraries with 500+ artists
+- [x] #1 Left panel displays a scrollable list of all artists sorted alphabetically
+- [x] #2 Selecting an artist in the left panel shows their albums and tracks in the right panel
+- [x] #3 Right panel shows artist name header with album and song counts
+- [x] #4 Each album section shows album artwork, title, genre, year, and track listing
+- [x] #5 Tracks within an album show track number, title, and duration
+- [x] #6 Double-clicking or pressing play on a track starts playback
+- [x] #7 Context menu actions work on tracks (add to queue, add to playlist, etc.)
+- [x] #8 View handles empty states (no artists, artist with no albums)
+- [x] #9 Performance is acceptable for libraries with 500+ artists
 <!-- AC:END -->
