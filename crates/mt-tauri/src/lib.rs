@@ -36,10 +36,11 @@ use scanner::commands::{
     scan_paths_to_library,
 };
 use library::commands::{
-    library_check_status, library_delete_track, library_get_all, library_get_artwork,
-    library_get_artwork_url, library_get_missing, library_get_stats, library_get_track,
-    library_locate_track, library_mark_missing, library_mark_present, library_reconcile_scan,
-    library_rescan_track, library_update_play_count,
+    library_check_status, library_delete_all, library_delete_track, library_delete_tracks,
+    library_get_all,
+    library_get_artwork, library_get_artwork_url, library_get_missing, library_get_stats,
+    library_get_track, library_locate_track, library_mark_missing, library_mark_present,
+    library_purge_missing, library_reconcile_scan, library_rescan_track, library_update_play_count,
 };
 use watcher::{
     watched_folders_add, watched_folders_get, watched_folders_list, watched_folders_remove,
@@ -216,7 +217,10 @@ pub fn run() {
             library_get_track,
             library_get_artwork,
             library_get_artwork_url,
+            library_delete_all,
             library_delete_track,
+            library_delete_tracks,
+            library_purge_missing,
             library_rescan_track,
             library_update_play_count,
             library_get_missing,

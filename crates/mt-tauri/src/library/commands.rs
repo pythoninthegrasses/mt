@@ -151,6 +151,42 @@ pub fn library_delete_track(
     Ok(deleted)
 }
 
+/// Purge all tracks marked as missing from the database
+#[tauri::command]
+pub fn library_purge_missing(
+    db: State<'_, Database>,
+) -> Result<usize, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    let deleted = library::delete_missing_tracks(&conn).map_err(|e| e.to_string())?;
+    if deleted > 0 {
+        println!("[library] Purged {} missing tracks from database", deleted);
+    }
+    Ok(deleted)
+}
+
+/// Delete multiple tracks by ID in a single transaction
+#[tauri::command]
+pub fn library_delete_tracks(
+    db: State<'_, Database>,
+    track_ids: Vec<i64>,
+) -> Result<usize, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    let deleted = library::delete_tracks_by_ids(&conn, &track_ids).map_err(|e| e.to_string())?;
+    println!("[library] Batch deleted {} tracks", deleted);
+    Ok(deleted)
+}
+
+/// Delete ALL tracks from the library (favorites, playlist_items, library rows)
+#[tauri::command]
+pub fn library_delete_all(
+    db: State<'_, Database>,
+) -> Result<usize, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    let deleted = library::delete_all_tracks(&conn).map_err(|e| e.to_string())?;
+    println!("[library] Deleted all {} tracks from library", deleted);
+    Ok(deleted)
+}
+
 /// Rescan a track's metadata from its file
 #[tauri::command]
 pub fn library_rescan_track(

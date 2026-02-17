@@ -401,6 +401,59 @@ pub fn delete_track(conn: &Connection, track_id: i64) -> DbResult<bool> {
     Ok(deleted > 0)
 }
 
+/// Hard-delete all tracks marked as missing, including their favorites and playlist_items.
+pub fn delete_missing_tracks(conn: &Connection) -> DbResult<usize> {
+    conn.execute(
+        "DELETE FROM favorites WHERE track_id IN (SELECT id FROM library WHERE missing = 1)",
+        [],
+    )?;
+    conn.execute(
+        "DELETE FROM playlist_items WHERE track_id IN (SELECT id FROM library WHERE missing = 1)",
+        [],
+    )?;
+    let deleted = conn.execute("DELETE FROM library WHERE missing = 1", [])?;
+    Ok(deleted)
+}
+
+/// Delete multiple tracks by ID, including their favorites and playlist_items.
+/// Returns the number of library rows deleted.
+pub fn delete_tracks_by_ids(conn: &Connection, track_ids: &[i64]) -> DbResult<usize> {
+    if track_ids.is_empty() {
+        return Ok(0);
+    }
+
+    let placeholders = track_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let params: Vec<&dyn rusqlite::ToSql> = track_ids
+        .iter()
+        .map(|id| id as &dyn rusqlite::ToSql)
+        .collect();
+
+    let sql = format!(
+        "DELETE FROM favorites WHERE track_id IN ({})",
+        placeholders
+    );
+    conn.execute(&sql, params.as_slice())?;
+
+    let sql = format!(
+        "DELETE FROM playlist_items WHERE track_id IN ({})",
+        placeholders
+    );
+    conn.execute(&sql, params.as_slice())?;
+
+    let sql = format!("DELETE FROM library WHERE id IN ({})", placeholders);
+    let deleted = conn.execute(&sql, params.as_slice())?;
+    Ok(deleted)
+}
+
+/// Delete ALL tracks from the library, including their favorites and playlist_items.
+/// Returns the number of library rows deleted.
+pub fn delete_all_tracks(conn: &Connection) -> DbResult<usize> {
+    conn.execute("DELETE FROM favorites", [])?;
+    conn.execute("DELETE FROM playlist_items", [])?;
+    let deleted = conn.execute("DELETE FROM library", [])?;
+    Ok(deleted)
+}
+
 /// Update track metadata by ID
 pub fn update_track_metadata(
     conn: &Connection,
