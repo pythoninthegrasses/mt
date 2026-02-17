@@ -332,6 +332,18 @@ pub fn run_migrations(conn: &Connection) -> DbResult<()> {
         info!("genre column added");
     }
 
+    // Migration: Add composite index for artist sort (canonical album_artist subquery)
+    // and the default secondary sort. Without this, ORDER BY with the correlated
+    // CANONICAL_ALBUM_ARTIST subquery does a full table scan per row — O(n^2).
+    if !index_exists(conn, "idx_library_album_artist_sort")? {
+        info!("Creating album/artist sort index on library table");
+        conn.execute(
+            "CREATE INDEX idx_library_album_artist_sort ON library(album, album_artist, artist, missing)",
+            [],
+        )?;
+        info!("album/artist sort index created");
+    }
+
     Ok(())
 }
 
