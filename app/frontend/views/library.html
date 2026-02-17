@@ -100,7 +100,7 @@
     </div>
 
     <!-- Track list - no scroll, parent handles both -->
-    <div class="track-list flex-1 min-h-0 w-full">
+    <div class="track-list min-h-full w-full relative">
       <!-- Loading state -->
       <template x-if="library.loading && library.tracks.length === 0">
       <div
@@ -136,7 +136,7 @@
       <!-- Empty state -->
       <div
         x-show="!library.loading && library.filteredTracks.length === 0"
-        class="flex items-center justify-center h-full"
+        class="absolute inset-0 flex items-center justify-center"
       >
         <!-- Liked Songs empty state -->
         <template x-if="library.currentSection === 'liked' && !library.searchQuery">

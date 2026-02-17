@@ -2,7 +2,6 @@ pub mod client;
 pub mod config;
 pub mod rate_limiter;
 pub mod signature;
-pub mod signature_ffi;
 pub mod types;
 
 // Re-export commonly used types

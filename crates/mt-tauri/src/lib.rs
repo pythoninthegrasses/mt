@@ -5,13 +5,11 @@ pub mod dialog;
 pub mod events;
 pub mod lastfm;
 pub mod library;
+pub mod logging;
 pub mod media_keys;
 pub mod metadata;
 pub mod scanner;
 pub mod watcher;
-
-// Re-export FFI from mt-core for backward compatibility
-pub use mt_core::ffi;
 
 #[cfg(test)]
 mod concurrency_test;
@@ -39,11 +37,13 @@ use scanner::commands::{
     scan_paths_to_library,
 };
 use library::commands::{
-    library_check_status, library_delete_track, library_get_all, library_get_artwork,
-    library_get_artwork_url, library_get_missing, library_get_stats, library_get_track,
-    library_locate_track, library_mark_missing, library_mark_present, library_reconcile_scan,
-    library_rescan_track, library_update_play_count,
+    library_check_status, library_delete_all, library_delete_track, library_delete_tracks,
+    library_get_all,
+    library_get_artwork, library_get_artwork_url, library_get_missing, library_get_stats,
+    library_get_track, library_locate_track, library_mark_missing, library_mark_present,
+    library_purge_missing, library_reconcile_scan, library_rescan_track, library_update_play_count,
 };
+use tracing::{debug, error, info, warn};
 use watcher::{
     watched_folders_add, watched_folders_get, watched_folders_list, watched_folders_remove,
     watched_folders_rescan, watched_folders_status, watched_folders_update, WatcherManager,
@@ -53,6 +53,7 @@ use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tauri::{Manager, State};
 
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 fn media_set_metadata(
     title: Option<String>,
@@ -71,16 +72,19 @@ fn media_set_metadata(
     })
 }
 
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 fn media_set_playing(progress_ms: Option<u64>, state: State<MediaKeyManager>) -> Result<(), String> {
     state.set_playing(progress_ms.map(Duration::from_millis))
 }
 
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 fn media_set_paused(progress_ms: Option<u64>, state: State<MediaKeyManager>) -> Result<(), String> {
     state.set_paused(progress_ms.map(Duration::from_millis))
 }
 
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 fn media_set_stopped(state: State<MediaKeyManager>) -> Result<(), String> {
     state.set_stopped()
@@ -93,6 +97,19 @@ struct AppInfo {
     platform: String,
 }
 
+/// Route a frontend log message into the tracing subscriber.
+#[tracing::instrument(level = "debug")]
+#[tauri::command]
+fn log_frontend_error(level: String, message: String, context: Option<String>) {
+    match level.as_str() {
+        "error" => tracing::error!(target: "mt::frontend", ?context, "{}", message),
+        "warn" => tracing::warn!(target: "mt::frontend", ?context, "{}", message),
+        "info" => tracing::info!(target: "mt::frontend", ?context, "{}", message),
+        _ => tracing::debug!(target: "mt::frontend", ?context, "{}", message),
+    }
+}
+
+#[tracing::instrument]
 #[tauri::command]
 fn app_get_info() -> AppInfo {
     let version = env!("CARGO_PKG_VERSION").to_string();
@@ -112,6 +129,7 @@ fn app_get_info() -> AppInfo {
     }
 }
 
+#[tracing::instrument]
 #[tauri::command]
 async fn export_diagnostics(path: String) -> Result<(), String> {
     let mut content = String::new();
@@ -131,6 +149,52 @@ async fn export_diagnostics(path: String) -> Result<(), String> {
         content.push_str(&format!("Working directory: {}\n", cwd.display()));
     }
 
+    // Append runtime logs from the log directory
+    if let Some(log_dir) = logging::log_dir_path() {
+        content.push_str(&format!("\nLog directory: {}\n", log_dir.display()));
+        content.push_str("\n=== Runtime Logs ===\n\n");
+
+        // Collect and sort log files by name (newest first via reverse sort)
+        let mut log_files: Vec<_> = std::fs::read_dir(log_dir)
+            .ok()
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("mt.log")
+            })
+            .collect();
+        log_files.sort_by_key(|e| std::cmp::Reverse(e.file_name()));
+
+        // Include up to 3 most recent files, capped at 5 MB total
+        const MAX_BYTES: usize = 5 * 1024 * 1024;
+        let mut total_bytes = 0;
+        for entry in log_files.iter().take(3) {
+            let remaining = MAX_BYTES.saturating_sub(total_bytes);
+            if remaining == 0 {
+                break;
+            }
+            let file_content = match std::fs::read_to_string(entry.path()) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            let truncated = if file_content.len() > remaining {
+                &file_content[..remaining]
+            } else {
+                &file_content
+            };
+            content.push_str(&format!(
+                "--- {} ---\n",
+                entry.file_name().to_string_lossy()
+            ));
+            content.push_str(truncated);
+            content.push('\n');
+            total_bytes += truncated.len();
+        }
+    }
+
     let mut file = tokio::fs::File::create(&path)
         .await
         .map_err(|e| format!("Failed to create file: {}", e))?;
@@ -143,6 +207,12 @@ async fn export_diagnostics(path: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize structured logging before anything else.
+    // The WorkerGuard must live until run() returns to flush file output.
+    let log_dir = logging::compute_log_dir("com.mt.desktop");
+    let _log_guard = logging::init_tracing(&log_dir);
+    tracing::info!(log_dir = %log_dir.display(), "Tracing initialized");
+
     // Reduce glibc malloc arena bloat in multi-process WebKitGTK.
     // Each arena reserves ~64 MB virtual; WebKit spawns many threads.
     // MALLOC_ARENA_MAX=2 limits per-process arenas.
@@ -200,6 +270,7 @@ pub fn run() {
             media_set_stopped,
             app_get_info,
             export_diagnostics,
+            log_frontend_error,
             get_track_metadata,
             save_track_metadata,
             watched_folders_list,
@@ -219,7 +290,10 @@ pub fn run() {
             library_get_track,
             library_get_artwork,
             library_get_artwork_url,
+            library_delete_all,
             library_delete_track,
+            library_delete_tracks,
+            library_purge_missing,
             library_rescan_track,
             library_update_play_count,
             library_get_missing,
@@ -290,48 +364,47 @@ pub fn run() {
                 .expect("Failed to initialize database");
             let database_for_watcher = database.clone();
             app.manage(database);
-            println!("Database initialized at: {}", db_path.display());
+            info!(path = %db_path.display(), "Database initialized");
 
-            // Initialize artwork cache (Zig FFI-backed LRU cache)
-            let artwork_cache = scanner::artwork_cache::ArtworkCache::with_capacity(50)
-                .expect("Failed to initialize artwork cache");
+            // Initialize artwork cache (Rust LRU cache)
+            let artwork_cache = scanner::artwork_cache::ArtworkCache::with_capacity(50);
             app.manage(artwork_cache);
-            println!("Artwork cache initialized (Zig LRU cache, size: 50)");
+            debug!("Artwork cache initialized (LRU, capacity: 50)");
 
             // Pass database clone to watcher manager
             let watcher = WatcherManager::new(app.handle().clone(), database_for_watcher);
             app.manage(watcher);
-            println!("Watcher manager initialized (using native Rust)");
+            debug!("Watcher manager initialized");
 
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 if let Some(watcher) = app_handle.try_state::<WatcherManager>() {
                     if let Err(e) = watcher.start().await {
-                        eprintln!("Failed to start watched folder watchers: {}", e);
+                        error!(error = %e, "Failed to start watched folder watchers");
                     } else {
-                        println!("Watched folder watchers started ({} active)", watcher.active_watcher_count());
+                        info!(active = watcher.active_watcher_count(), "Watched folder watchers started");
                     }
                 }
             });
 
             app.manage(AudioState::new(app.handle().clone()));
-            println!("Audio engine initialized");
+            info!("Audio engine initialized");
 
             match MediaKeyManager::new(app.handle().clone()) {
                 Ok(media_keys) => {
                     app.manage(media_keys);
-                    println!("Media keys (Now Playing) initialized");
+                    info!("Media keys (Now Playing) initialized");
                 }
                 Err(e) => {
-                    eprintln!("Failed to initialize media keys: {}", e);
+                    warn!(error = %e, "Failed to initialize media keys");
                 }
             }
 
             #[cfg(feature = "mcp")]
             {
                 app.handle().plugin(tauri_plugin_mcp_bridge::init())?;
-                println!("MCP bridge initialized (WebSocket port 9223)");
+                info!("MCP bridge initialized (WebSocket port 9223)");
             }
 
             // Start Last.fm scrobble retry background task
@@ -341,7 +414,7 @@ pub fn run() {
 
                 // Wait 30 seconds before starting background retries
                 tokio::time::sleep(Duration::from_secs(30)).await;
-                println!("Last.fm scrobble retry task started (5-minute interval)");
+                info!("Last.fm scrobble retry task started (5-minute interval)");
 
                 loop {
                     // Wait 5 minutes between retry attempts
@@ -360,10 +433,10 @@ pub fn run() {
                             // Trigger retry
                             match lastfm_queue_retry(app_handle_lastfm.clone(), db.clone()).await {
                                 Ok(response) => {
-                                    println!("[lastfm] Background retry: {}", response.status);
+                                    debug!(status = %response.status, "Background scrobble retry");
                                 }
                                 Err(e) => {
-                                    eprintln!("[lastfm] Background retry failed: {}", e);
+                                    warn!(error = %e, "Background scrobble retry failed");
                                 }
                             }
                         }
@@ -378,7 +451,7 @@ pub fn run() {
 
                 // Wait 60 seconds before starting background matching
                 tokio::time::sleep(Duration::from_secs(60)).await;
-                println!("Last.fm loved tracks matcher started (30-minute interval)");
+                info!("Last.fm loved tracks matcher started (30-minute interval)");
 
                 loop {
                     // Wait 30 minutes between match attempts
@@ -402,17 +475,17 @@ pub fn run() {
                             {
                                 Ok(Ok(response)) => {
                                     if response.new_favorites > 0 {
-                                        println!(
-                                            "[lastfm] Background match: {} new favorites",
-                                            response.new_favorites
+                                        info!(
+                                            new_favorites = response.new_favorites,
+                                            "Background loved track match"
                                         );
                                     }
                                 }
                                 Ok(Err(e)) => {
-                                    eprintln!("[lastfm] Background match failed: {}", e);
+                                    warn!(error = %e, "Background loved track match failed");
                                 }
                                 Err(e) => {
-                                    eprintln!("[lastfm] Background match task error: {}", e);
+                                    error!(error = %e, "Background loved track match task panicked");
                                 }
                             }
                         }

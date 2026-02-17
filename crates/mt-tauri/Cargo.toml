@@ -13,9 +13,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# Workspace dependencies
-mt-core = { path = "../mt-core" }
-
 # Tauri framework
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
@@ -71,11 +68,16 @@ md5 = "0.7"
 # LRU cache for artwork
 lru = "0.12"
 
+# Structured logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2"
+dirs = "6"
+
 [features]
 default = ["mcp"]
 devtools = ["dep:tauri-plugin-devtools", "tauri/devtools"]
 mcp = ["dep:tauri-plugin-mcp-bridge"]
-rust-lru-cache = []  # Legacy Rust LRU cache (Zig implementation is default)
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

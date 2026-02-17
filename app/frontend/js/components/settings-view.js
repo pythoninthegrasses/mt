@@ -128,12 +128,16 @@ export function createSettingsView(Alpine) {
       try {
         const { invoke } = window.__TAURI__.core;
         await invoke('watched_folders_remove', { id });
-        this.watchedFolders = this.watchedFolders.filter((f) => f.id !== id);
-        Alpine.store('ui').toast('Folder removed from watch list', 'success');
       } catch (error) {
-        console.error('[settings] Failed to remove watched folder:', error);
-        Alpine.store('ui').toast('Failed to remove folder', 'error');
+        // If the folder was already removed (e.g. by delete-all), just clean up the UI
+        if (!error?.toString().includes('not found')) {
+          console.error('[settings] Failed to remove watched folder:', error);
+          Alpine.store('ui').toast('Failed to remove folder', 'error');
+          return;
+        }
       }
+      this.watchedFolders = this.watchedFolders.filter((f) => f.id !== id);
+      Alpine.store('ui').toast('Folder removed from watch list', 'success');
     },
 
     async updateWatchedFolder(id, updates) {

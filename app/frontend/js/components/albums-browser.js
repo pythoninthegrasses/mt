@@ -27,8 +27,9 @@ export function createAlbumsBrowser(Alpine) {
     // Scroll position preservation
     _gridScrollTop: 0,
 
-    // All library tracks (loaded independently of library store's active section)
-    _allTracks: [],
+    // Memoization cache for albumList getter
+    _albumListVersion: -1,
+    _cachedAlbumList: [],
 
     // Context menu
     contextMenu: null,
@@ -41,7 +42,6 @@ export function createAlbumsBrowser(Alpine) {
     init() {
       this._setupLazyLoading();
       this._loadPlaylists();
-      this._loadAllTracks();
       window.addEventListener('mt:playlists-updated', () => this._loadPlaylists());
 
       // Reset to grid view when navigating back to albums
@@ -57,6 +57,10 @@ export function createAlbumsBrowser(Alpine) {
         this._observer.disconnect();
         this._observer = null;
       }
+    },
+
+    get _allTracks() {
+      return this.$store.library.allTracks;
     },
 
     get library() {
@@ -76,19 +80,10 @@ export function createAlbumsBrowser(Alpine) {
       return this.player.currentTrack?.id === trackId;
     },
 
-    /**
-     * Get album data enriched with metadata from first track
-     */
-    async _loadAllTracks() {
-      try {
-        const data = await api.library.getTracks({ limit: 999999, offset: 0 });
-        this._allTracks = data.tracks || [];
-      } catch {
-        this._allTracks = [];
-      }
-    },
-
     get albumList() {
+      const v = this.$store.library._dataVersion;
+      if (this._albumListVersion === v) return this._cachedAlbumList;
+
       const tracksByAlbum = {};
       for (const track of this._allTracks) {
         const album = track.album || 'Unknown Album';
@@ -111,6 +106,8 @@ export function createAlbumsBrowser(Alpine) {
       }
 
       albums.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      this._cachedAlbumList = albums;
+      this._albumListVersion = v;
       return albums;
     },
 

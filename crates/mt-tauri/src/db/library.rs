@@ -401,6 +401,59 @@ pub fn delete_track(conn: &Connection, track_id: i64) -> DbResult<bool> {
     Ok(deleted > 0)
 }
 
+/// Hard-delete all tracks marked as missing, including their favorites and playlist_items.
+pub fn delete_missing_tracks(conn: &Connection) -> DbResult<usize> {
+    conn.execute(
+        "DELETE FROM favorites WHERE track_id IN (SELECT id FROM library WHERE missing = 1)",
+        [],
+    )?;
+    conn.execute(
+        "DELETE FROM playlist_items WHERE track_id IN (SELECT id FROM library WHERE missing = 1)",
+        [],
+    )?;
+    let deleted = conn.execute("DELETE FROM library WHERE missing = 1", [])?;
+    Ok(deleted)
+}
+
+/// Delete multiple tracks by ID, including their favorites and playlist_items.
+/// Returns the number of library rows deleted.
+pub fn delete_tracks_by_ids(conn: &Connection, track_ids: &[i64]) -> DbResult<usize> {
+    if track_ids.is_empty() {
+        return Ok(0);
+    }
+
+    let placeholders = track_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let params: Vec<&dyn rusqlite::ToSql> = track_ids
+        .iter()
+        .map(|id| id as &dyn rusqlite::ToSql)
+        .collect();
+
+    let sql = format!(
+        "DELETE FROM favorites WHERE track_id IN ({})",
+        placeholders
+    );
+    conn.execute(&sql, params.as_slice())?;
+
+    let sql = format!(
+        "DELETE FROM playlist_items WHERE track_id IN ({})",
+        placeholders
+    );
+    conn.execute(&sql, params.as_slice())?;
+
+    let sql = format!("DELETE FROM library WHERE id IN ({})", placeholders);
+    let deleted = conn.execute(&sql, params.as_slice())?;
+    Ok(deleted)
+}
+
+/// Delete ALL tracks from the library, including their favorites and playlist_items.
+/// Returns the number of library rows deleted.
+pub fn delete_all_tracks(conn: &Connection) -> DbResult<usize> {
+    conn.execute("DELETE FROM favorites", [])?;
+    conn.execute("DELETE FROM playlist_items", [])?;
+    let deleted = conn.execute("DELETE FROM library", [])?;
+    Ok(deleted)
+}
+
 /// Update track metadata by ID
 pub fn update_track_metadata(
     conn: &Connection,
@@ -585,6 +638,49 @@ pub fn update_track_filepath(conn: &Connection, track_id: i64, new_path: &str) -
         params![new_path, track_id],
     )?;
     Ok(updated > 0)
+}
+
+/// Get fingerprints (filepath, mtime, size) for tracks under the given paths.
+/// Scopes the query at SQL level instead of fetching all tracks and filtering in memory.
+/// Each path matches either as an exact filepath or as a directory prefix (path/).
+pub fn get_fingerprints_for_paths(
+    conn: &Connection,
+    scan_paths: &[String],
+) -> DbResult<Vec<(String, Option<i64>, i64)>> {
+    if scan_paths.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // For each scan path, match both exact filepath and directory prefix.
+    // This handles both file paths and directory paths without needing to check
+    // the filesystem (which fails in tests with synthetic paths).
+    let mut conditions: Vec<String> = Vec::new();
+    for p in scan_paths {
+        let escaped = p.replace('\'', "''");
+        // Exact file match
+        conditions.push(format!("filepath = '{}'", escaped));
+        // Directory prefix match (path + '/')
+        let prefix = if escaped.ends_with('/') {
+            escaped
+        } else {
+            format!("{}/", escaped)
+        };
+        conditions.push(format!("filepath LIKE '{}%'", prefix));
+    }
+
+    let where_clause = conditions.join(" OR ");
+    let sql = format!(
+        "SELECT filepath, file_mtime_ns, file_size FROM library WHERE {}",
+        where_clause
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows: Vec<(String, Option<i64>, i64)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(rows)
 }
 
 /// Get all missing tracks
@@ -2121,5 +2217,109 @@ mod tests {
         assert!(debug_str.contains("TrackForBackfill"));
         assert!(debug_str.contains("42"));
         assert!(debug_str.contains("backfill.mp3"));
+    }
+
+    #[test]
+    fn test_bulk_delete_cleans_all_tables() {
+        let conn = setup_test_db();
+
+        // Insert tracks
+        let metadata = TrackMetadata {
+            title: Some("Song".to_string()),
+            ..Default::default()
+        };
+        let id1 = add_track(&conn, "/music/a.mp3", &metadata).unwrap();
+        let id2 = add_track(&conn, "/music/b.mp3", &metadata).unwrap();
+        let id3 = add_track(&conn, "/music/c.mp3", &metadata).unwrap();
+
+        // Add favorites for id1 and id2
+        use crate::db::favorites;
+        favorites::add_favorite(&conn, id1).unwrap();
+        favorites::add_favorite(&conn, id2).unwrap();
+
+        // Create playlist and add id1 and id3
+        use crate::db::playlists;
+        let playlist = playlists::create_playlist(&conn, "Test Playlist").unwrap().unwrap();
+        playlists::add_tracks_to_playlist(&conn, playlist.id, &[id1, id3], None).unwrap();
+
+        // Delete id1 and id2
+        let deleted = delete_tracks_by_ids(&conn, &[id1, id2]).unwrap();
+        assert_eq!(deleted, 2);
+
+        // Verify library rows removed
+        assert!(get_track_by_id(&conn, id1).unwrap().is_none());
+        assert!(get_track_by_id(&conn, id2).unwrap().is_none());
+        assert!(get_track_by_id(&conn, id3).unwrap().is_some());
+
+        // Verify favorites cleaned up
+        let fav_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM favorites", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(fav_count, 0, "favorites should be cleaned up");
+
+        // Verify playlist_items cleaned up for deleted tracks
+        let pi_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM playlist_items WHERE track_id IN (?1, ?2)",
+                [id1, id2],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(pi_count, 0, "playlist_items for deleted tracks should be removed");
+
+        // id3's playlist entry should still exist
+        let id3_pi: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM playlist_items WHERE track_id = ?1",
+                [id3],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(id3_pi, 1, "id3 playlist item should still exist");
+    }
+
+    #[test]
+    fn test_get_fingerprints_for_paths() {
+        let conn = setup_test_db();
+
+        let metadata = TrackMetadata {
+            file_mtime_ns: Some(1000),
+            file_size: Some(5000),
+            ..Default::default()
+        };
+
+        // Tracks under different directories
+        add_track(&conn, "/music/rock/a.mp3", &metadata).unwrap();
+        add_track(&conn, "/music/rock/b.mp3", &metadata).unwrap();
+        add_track(&conn, "/music/jazz/c.mp3", &metadata).unwrap();
+        add_track(&conn, "/other/d.mp3", &metadata).unwrap();
+
+        // Scope to /music/rock/
+        let results = get_fingerprints_for_paths(
+            &conn,
+            &["/music/rock".to_string()],
+        )
+        .unwrap();
+        assert_eq!(results.len(), 2);
+
+        // Scope to both directories
+        let results = get_fingerprints_for_paths(
+            &conn,
+            &["/music/rock".to_string(), "/music/jazz".to_string()],
+        )
+        .unwrap();
+        assert_eq!(results.len(), 3);
+
+        // Scope to a specific file
+        let results = get_fingerprints_for_paths(
+            &conn,
+            &["/other/d.mp3".to_string()],
+        )
+        .unwrap();
+        assert_eq!(results.len(), 1);
+
+        // Empty paths returns empty
+        let results = get_fingerprints_for_paths(&conn, &[]).unwrap();
+        assert_eq!(results.len(), 0);
     }
 }

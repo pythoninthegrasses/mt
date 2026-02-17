@@ -273,7 +273,7 @@ All signing secrets are stored in `.env` (loaded via Taskfile dotenv). See `.env
 |-------------|--------|
 | `com.apple.security.cs.allow-jit` | WebView/JS engine |
 | `com.apple.security.cs.allow-unsigned-executable-memory` | WebView/JS engine |
-| `com.apple.security.cs.allow-dyld-environment-variables` | Bundled dylibs (TagLib via Zig) |
+| `com.apple.security.cs.allow-dyld-environment-variables` | Bundled dylibs |
 | `com.apple.security.network.client` | Last.fm API calls |
 | `com.apple.security.files.user-selected.read-write` | User-selected music directories |
 
@@ -535,15 +535,9 @@ The r2d2 pool is sized for a desktop app workload: `max_size(4)`, `min_idle(1)`.
 
 ### Artwork Cache
 
-The Zig FFI-backed LRU artwork cache is capped at 50 entries via `ArtworkCache::with_capacity(50)`.
+The LRU artwork cache (pure Rust, `lru` + `parking_lot`) is capped at 50 entries via `ArtworkCache::with_capacity(50)`.
 
 - **File**: `crates/mt-tauri/src/lib.rs`
-
-### Zig Build Optimization
-
-`zig-core` is built with `-Doptimize=ReleaseSmall` instead of `ReleaseFast` to minimize memory-mapped code pages. The artwork cache and Last.fm signature FFI are not hot paths.
-
-- **File**: `crates/mt-core/build.rs`
 
 ## References
 

@@ -214,17 +214,13 @@ User clicks "Add Music" button
 
 ## Directory Structure
 
-The project uses a Cargo workspace with two crates, plus a Zig FFI core library:
+The project uses a Cargo workspace with a single crate:
 
 ```text
 mt/
-├── Cargo.toml              # Workspace root (members: mt-core, mt-tauri)
+├── Cargo.toml              # Workspace root (members: mt-tauri)
 ├── crates/
-│   ├── mt-core/            # Zig FFI bindings + pure logic
-│   │   ├── build.rs        # Builds Zig, links libmtcore.a
-│   │   └── src/
-│   │       └── ffi.rs      # FFI declarations
-│   └── mt-tauri/           # Tauri shell (depends on mt-core)
+│   └── mt-tauri/           # Tauri app (all backend logic)
 │       ├── src/
 │       │   ├── main.rs     # Entry point
 │       │   ├── audio/      # Audio engine module
@@ -235,12 +231,6 @@ mt/
 │       │   └── watcher/    # File system monitoring
 │       ├── Cargo.toml
 │       └── tauri.conf.json
-├── zig-core/               # Zig business logic (C ABI)
-│   ├── build.zig
-│   └── src/
-│       ├── scanner/        # Metadata, fingerprinting, inventory
-│       ├── db/             # Models, queries, settings
-│       └── lastfm/         # Client, signature, types
 ├── app/frontend/           # Frontend source
 │   ├── index.html
 │   ├── js/
@@ -292,7 +282,6 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["json"] }
-mt-core = { path = "../mt-core" }
 
 [dependencies.tauri-plugin-global-shortcut]
 version = "2"

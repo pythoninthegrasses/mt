@@ -28,7 +28,6 @@ crates/mt-tauri/src/
 │   ├── client.rs           # HTTP client with reqwest
 │   ├── config.rs           # API key configuration
 │   ├── signature.rs        # MD5 signature generation
-│   ├── signature_ffi.rs    # FFI wrapper for Zig signature generation
 │   ├── rate_limiter.rs     # Request rate limiting
 │   └── types.rs            # Request/response types
 └── commands/

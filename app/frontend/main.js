@@ -9,7 +9,11 @@ import api from './js/api.js';
 import { formatTime, formatDuration, formatBytes } from './js/utils/formatting.js';
 import { settings } from './js/services/settings.js';
 import { promptToAddWatchedFolders } from './js/utils/watched-folders.js';
+import { installGlobalErrorHandlers } from './js/utils/error-reporter.js';
 import './styles.css';
+
+// Install global error handlers early so unhandled errors reach the backend log
+installGlobalErrorHandlers();
 
 // Register Alpine plugins
 Alpine.plugin(persist);

@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, State};
+use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::commands::match_new_tracks_against_loved;
@@ -60,66 +61,24 @@ impl From<&ScanResult2Phase> for ScanResultResponse {
     }
 }
 
-/// Filter DB fingerprints to only include entries within the scan scope.
-///
-/// A fingerprint is in-scope if it exactly matches a provided file path, or
-/// lives under a provided directory path.  This prevents the inventory's
-/// deletion logic from treating out-of-scope tracks as deleted.
-fn scope_fingerprints_to_paths(
-    all: &HashMap<String, FileFingerprint>,
+/// Get fingerprints scoped to the given scan paths at the SQL level.
+/// Avoids loading the entire library into memory when scanning a single folder.
+fn get_scoped_fingerprints(
+    db: &Database,
     scan_paths: &[String],
-) -> HashMap<String, FileFingerprint> {
-    use std::path::Path;
-
-    // Separate file paths from directory paths.
-    let mut dirs: Vec<&str> = Vec::new();
-    let mut files: Vec<&str> = Vec::new();
-    for p in scan_paths {
-        let path = Path::new(p);
-        if path.is_dir() {
-            dirs.push(p.as_str());
-        } else {
-            files.push(p.as_str());
-        }
-    }
-
-    all.iter()
-        .filter(|(filepath, _)| {
-            // Exact file match
-            files.iter().any(|f| filepath.as_str() == *f)
-                // Or under one of the scanned directories
-                || dirs.iter().any(|d| {
-                    filepath.starts_with(d) && filepath.as_bytes().get(d.len()) == Some(&b'/')
-                })
-        })
-        .map(|(k, v)| (k.clone(), *v))
-        .collect()
-}
-
-/// Get fingerprints from the database for comparison
-fn get_db_fingerprints(db: &Database) -> Result<HashMap<String, FileFingerprint>, String> {
+) -> Result<HashMap<String, FileFingerprint>, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
+    let rows =
+        library::get_fingerprints_for_paths(&conn, scan_paths).map_err(|e| e.to_string())?;
 
-    // Get all tracks with their fingerprints
-    let mut stmt = conn
-        .prepare("SELECT filepath, file_mtime_ns, file_size FROM library")
-        .map_err(|e| e.to_string())?;
-
-    let fingerprints: HashMap<String, FileFingerprint> = stmt
-        .query_map([], |row| {
-            let filepath: String = row.get(0)?;
-            let mtime_ns: Option<i64> = row.get(1)?;
-            let size: i64 = row.get(2)?;
-            Ok((filepath, FileFingerprint::from_db(mtime_ns, size)))
-        })
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
-
-    Ok(fingerprints)
+    Ok(rows
+        .into_iter()
+        .map(|(filepath, mtime_ns, size)| (filepath, FileFingerprint::from_db(mtime_ns, size)))
+        .collect())
 }
 
 /// Scan paths and add/update tracks in the database
+#[tracing::instrument(skip(app, db, paths))]
 #[tauri::command]
 pub async fn scan_paths_to_library(
     app: AppHandle,
@@ -133,10 +92,9 @@ pub async fn scan_paths_to_library(
     // Get DB fingerprints scoped to the scan paths only.
     // Without scoping, scanning a single file would mark every other track in the
     // library as "deleted" because the inventory phase only walks the provided paths.
-    let db_fingerprints = {
-        let all = get_db_fingerprints(&db)?;
-        scope_fingerprints_to_paths(&all, &paths)
-    };
+    // Scope fingerprint query at SQL level — for a 13k-track library scanning 1 folder,
+    // this avoids loading 13k rows and filtering in memory.
+    let db_fingerprints = get_scoped_fingerprints(&db, &paths)?;
 
     // Create progress callback that emits standardized Tauri events
     let app_handle = app.clone();
@@ -156,103 +114,158 @@ pub async fn scan_paths_to_library(
     let scan_result = scan_2phase(&paths, &db_fingerprints, recursive, Some(&progress_callback))
         .map_err(|e| e.to_string())?;
 
-    // Get database connection for updates
-    let conn = db.conn().map_err(|e| e.to_string())?;
-
-    let mut added_count = 0;
-    let mut reconciled_count = 0;
+    // Transaction 1: reconciliation and updates (mark missing, reconcile moves, update modified,
+    // mark present). These are interdependent and need atomicity.
     let modified_count = scan_result.modified.len();
+    let (truly_new, reconciled_count, recovered_count) = db
+        .transaction(|conn| {
+            let mut reconciled_count = 0;
 
-    // IMPORTANT: Mark deleted tracks as missing FIRST
-    // This is required because reconciliation of "added" tracks looks for tracks
-    // where missing=1. If a file is moved (delete + add in same scan), we need to
-    // mark the old path as missing before we can reconcile it with the new path.
-    for filepath in &scan_result.deleted {
-        let _ = library::mark_track_missing_by_filepath(&conn, filepath);
-    }
+            // IMPORTANT: Mark deleted tracks as missing FIRST
+            // This is required because reconciliation of "added" tracks looks for tracks
+            // where missing=1. If a file is moved (delete + add in same scan), we need to
+            // mark the old path as missing before we can reconcile it with the new path.
+            for filepath in &scan_result.deleted {
+                let _ = library::mark_track_missing_by_filepath(conn, filepath);
+            }
 
-    // Process "added" tracks - check for moves first, then add truly new tracks
-    // Now that deleted tracks are marked missing, reconciliation by inode/hash will work
-    if !scan_result.added.is_empty() {
-        let mut truly_new: Vec<(String, crate::db::TrackMetadata)> = Vec::new();
+            // Process "added" tracks - check for moves first, collect truly new tracks
+            // Now that deleted tracks are marked missing, reconciliation by inode/hash will work
+            let mut truly_new: Vec<(String, crate::db::TrackMetadata)> = Vec::new();
 
-        for m in &scan_result.added {
-            let mut was_reconciled = false;
+            if !scan_result.added.is_empty() {
+                // Pre-fetch all missing tracks once for O(1) lookups instead of per-file queries
+                let missing_tracks = library::get_missing_tracks(conn).unwrap_or_default();
+                let by_inode: HashMap<i64, &crate::db::Track> = missing_tracks
+                    .iter()
+                    .filter_map(|t| t.file_inode.map(|i| (i, t)))
+                    .collect();
+                let by_hash: HashMap<&str, &crate::db::Track> = missing_tracks
+                    .iter()
+                    .filter_map(|t| t.content_hash.as_deref().map(|h| (h, t)))
+                    .collect();
 
-            if let Some(inode) = m.file_inode {
-                let track_result = library::find_missing_track_by_inode(&conn, inode);
-                if let Ok(Some(track)) = track_result {
-                    let reconcile_result = library::reconcile_moved_track(&conn, track.id, &m.filepath, Some(inode));
-                    if reconcile_result.is_ok() {
+                for m in &scan_result.added {
+                    let mut was_reconciled = false;
+                    let mut computed_hash: Option<String> = None;
+
+                    // O(1) inode lookup instead of per-file DB query
+                    if let Some(inode) = m.file_inode
+                        && let Some(track) = by_inode.get(&(inode as i64))
+                        && library::reconcile_moved_track(
+                            conn,
+                            track.id,
+                            &m.filepath,
+                            Some(inode),
+                        )
+                        .is_ok()
+                    {
                         reconciled_count += 1;
                         was_reconciled = true;
                     }
-                }
-            }
 
-            if !was_reconciled
-                && let Ok(hash) = compute_content_hash(std::path::Path::new(&m.filepath)) {
-                    let track_result = library::find_missing_track_by_content_hash(&conn, &hash);
-                    if let Ok(Some(track)) = track_result {
-                        let reconcile_result = library::reconcile_moved_track(&conn, track.id, &m.filepath, m.file_inode);
-                        if reconcile_result.is_ok() {
-                            reconciled_count += 1;
-                            was_reconciled = true;
+                    // O(1) hash lookup instead of per-file DB query
+                    if !was_reconciled
+                        && let Ok(hash) =
+                            compute_content_hash(std::path::Path::new(&m.filepath))
+                    {
+                        if let Some(track) = by_hash.get(hash.as_str()) {
+                            let reconcile_result = library::reconcile_moved_track(
+                                conn,
+                                track.id,
+                                &m.filepath,
+                                m.file_inode,
+                            );
+                            if reconcile_result.is_ok() {
+                                reconciled_count += 1;
+                                was_reconciled = true;
+                            }
+                        }
+                        // Preserve the hash so to_db_metadata doesn't recompute it
+                        if !was_reconciled {
+                            computed_hash = Some(hash);
                         }
                     }
-                }
 
-            if !was_reconciled {
-                truly_new.push((m.filepath.clone(), to_db_metadata(m)));
+                    if !was_reconciled {
+                        truly_new.push((
+                            m.filepath.clone(),
+                            to_db_metadata_with_hash(m, computed_hash),
+                        ));
+                    }
+                }
             }
+
+            // Update modified tracks
+            if !scan_result.modified.is_empty() {
+                let updates: Vec<(String, crate::db::TrackMetadata)> = scan_result
+                    .modified
+                    .iter()
+                    .map(|m| (m.filepath.clone(), to_db_metadata(m)))
+                    .collect();
+
+                library::update_tracks_bulk(conn, &updates)?;
+            }
+
+            // Clear missing flag for unchanged files that were previously missing but have reappeared
+            // This handles the case where a file is moved out and then moved back to the same location
+            let mut recovered_count = 0;
+            if !scan_result.unchanged.is_empty()
+                && let Ok(count) =
+                    library::mark_tracks_present_by_filepaths(conn, &scan_result.unchanged)
+            {
+                recovered_count = count;
+            }
+
+            Ok((truly_new, reconciled_count, recovered_count))
+        })
+        .map_err(|e| e.to_string())?;
+
+    // Transaction 2+: chunked bulk inserts. Committing every ~500 tracks releases the write
+    // lock between chunks, allowing concurrent reads (playback, UI queries).
+    let added_count = truly_new.len();
+    if !truly_new.is_empty() {
+        const CHUNK_SIZE: usize = 500;
+        for chunk in truly_new.chunks(CHUNK_SIZE) {
+            db.transaction(|conn| library::add_tracks_bulk(conn, chunk))
+                .map_err(|e| e.to_string())?;
         }
 
-        // Add truly new tracks to database
-        if !truly_new.is_empty() {
-            added_count = truly_new.len();
-            library::add_tracks_bulk(&conn, &truly_new).map_err(|e| e.to_string())?;
-
-            // Auto-favorite tracks that match cached Last.fm loved tracks
-            let new_filepaths: Vec<String> = truly_new.iter().map(|(fp, _)| fp.clone()).collect();
-            if let Ok(new_track_ids) = library::get_track_ids_by_filepaths(&conn, &new_filepaths)
+        // Auto-favorite tracks that match cached Last.fm loved tracks
+        db.transaction(|conn| {
+            let new_filepaths: Vec<String> =
+                truly_new.iter().map(|(fp, _)| fp.clone()).collect();
+            if let Ok(new_track_ids) = library::get_track_ids_by_filepaths(conn, &new_filepaths)
                 && !new_track_ids.is_empty()
             {
-                match match_new_tracks_against_loved(&conn, &new_track_ids) {
+                match match_new_tracks_against_loved(conn, &new_track_ids) {
                     Ok(favorited) if favorited > 0 => {
-                        println!(
-                            "[scanner] Auto-favorited {} tracks from Last.fm loved cache",
-                            favorited
-                        );
+                        info!(count = favorited, "Auto-favorited tracks from Last.fm loved cache");
                     }
                     Err(e) => {
-                        eprintln!("[scanner] Failed to auto-favorite from loved cache: {}", e);
+                        error!(error = %e, "Failed to auto-favorite from loved cache");
                     }
                     _ => {}
                 }
             }
-        }
+            Ok(())
+        })
+        .map_err(|e| e.to_string())?;
     }
-
-    // Update modified tracks
-    if !scan_result.modified.is_empty() {
-        let updates: Vec<(String, crate::db::TrackMetadata)> = scan_result
-            .modified
-            .iter()
-            .map(|m| (m.filepath.clone(), to_db_metadata(m)))
-            .collect();
-
-        library::update_tracks_bulk(&conn, &updates).map_err(|e| e.to_string())?;
-    }
-
-    // Clear missing flag for unchanged files that were previously missing but have reappeared
-    // This handles the case where a file is moved out and then moved back to the same location
-    let mut recovered_count = 0;
-    if !scan_result.unchanged.is_empty()
-        && let Ok(count) = library::mark_tracks_present_by_filepaths(&conn, &scan_result.unchanged) {
-            recovered_count = count;
-        }
 
     let duration_ms = start_time.elapsed().as_millis() as u64;
+    info!(
+        duration_ms,
+        added = added_count,
+        modified = modified_count,
+        reconciled = reconciled_count,
+        recovered = recovered_count,
+        unchanged = scan_result.unchanged.len(),
+        deleted = scan_result.deleted.len(),
+        errors = scan_result.stats.errors,
+        "Scan complete"
+    );
+    crate::logging::log_slow_command("scan_paths_to_library", start_time);
 
     // Emit scan complete event
     let _ = app.emit_scan_complete(ScanCompleteEvent {
@@ -275,6 +288,7 @@ pub async fn scan_paths_to_library(
 }
 
 /// Scan a single path (file or directory) without database integration
+#[tracing::instrument(skip(app, paths))]
 #[tauri::command]
 pub async fn scan_paths_metadata(
     app: AppHandle,
@@ -305,26 +319,35 @@ pub async fn scan_paths_metadata(
 }
 
 /// Extract metadata from a single file
+#[tracing::instrument]
 #[tauri::command]
 pub fn extract_file_metadata(filepath: String) -> Result<ExtractedMetadata, String> {
     extract_metadata(&filepath).map_err(|e| e.to_string())
 }
 
 /// Get artwork for a track
+#[tracing::instrument]
 #[tauri::command]
 pub fn get_track_artwork(filepath: String) -> Option<Artwork> {
     get_artwork(&filepath)
 }
 
 /// Get artwork as a data URL for use in img src
+#[tracing::instrument]
 #[tauri::command]
 pub fn get_track_artwork_url(filepath: String) -> Option<String> {
     crate::scanner::artwork::get_artwork_data_url(&filepath)
 }
 
 /// Convert ExtractedMetadata to database TrackMetadata
-fn to_db_metadata(m: &ExtractedMetadata) -> crate::db::TrackMetadata {
-    let content_hash = compute_content_hash(std::path::Path::new(&m.filepath)).ok();
+/// Convert extracted metadata to DB metadata.
+/// If `precomputed_hash` is provided, it is used directly instead of re-hashing the file.
+fn to_db_metadata_with_hash(
+    m: &ExtractedMetadata,
+    precomputed_hash: Option<String>,
+) -> crate::db::TrackMetadata {
+    let content_hash =
+        precomputed_hash.or_else(|| compute_content_hash(std::path::Path::new(&m.filepath)).ok());
     crate::db::TrackMetadata {
         title: m.title.clone(),
         artist: m.artist.clone(),
@@ -342,4 +365,8 @@ fn to_db_metadata(m: &ExtractedMetadata) -> crate::db::TrackMetadata {
         file_inode: m.file_inode,
         content_hash,
     }
+}
+
+fn to_db_metadata(m: &ExtractedMetadata) -> crate::db::TrackMetadata {
+    to_db_metadata_with_hash(m, None)
 }

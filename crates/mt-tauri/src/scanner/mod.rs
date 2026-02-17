@@ -8,13 +8,11 @@
 
 pub mod artwork;
 pub mod artwork_cache;
-pub mod artwork_cache_ffi;
 #[cfg(test)]
 mod benchmarks;
 pub mod commands;
 pub mod fingerprint;
 pub mod inventory;
-pub mod inventory_ffi;
 pub mod metadata;
 pub mod scan;
 

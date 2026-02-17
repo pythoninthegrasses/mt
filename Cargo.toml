@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/mt-core", "crates/mt-tauri"]
+members = ["crates/mt-tauri"]
 
 # Shared profile settings for all workspace members
 [profile.dev]

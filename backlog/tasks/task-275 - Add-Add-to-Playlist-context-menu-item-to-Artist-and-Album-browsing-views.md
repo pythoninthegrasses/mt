@@ -1,10 +1,10 @@
 ---
 id: task-275
 title: Add "Add to Playlist" context menu item to Artist and Album browsing views
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-17 03:19'
-updated_date: '2026-02-17 03:27'
+updated_date: '2026-02-17 04:58'
 labels:
   - feature
   - ux
@@ -42,11 +42,11 @@ Playlists already exist in the app — this task is about wiring the existing pl
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Right-click context menu on albums includes 'Add to Playlist' option
-- [ ] #2 Right-click context menu on tracks in album detail includes 'Add to Playlist' option
-- [ ] #3 Right-click context menu on artists/tracks in artist view includes 'Add to Playlist' option
-- [ ] #4 Selecting 'Add to Playlist' shows a playlist picker (existing playlists)
-- [ ] #5 All tracks for the selected album/artist are added to the chosen playlist
+- [x] #1 Right-click context menu on albums includes 'Add to Playlist' option
+- [x] #2 Right-click context menu on tracks in album detail includes 'Add to Playlist' option
+- [x] #3 Right-click context menu on artists/tracks in artist view includes 'Add to Playlist' option
+- [x] #4 Selecting 'Add to Playlist' shows a playlist picker (existing playlists)
+- [x] #5 All tracks for the selected album/artist are added to the chosen playlist
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -66,4 +66,6 @@ Playlists already exist in the app — this task is about wiring the existing pl
 - Enhanced `addToPlaylist()` to show playlist name in toast and dispatch `mt:playlists-updated` event
 - Added `createPlaylistWithTracks()` method for creating new playlists from context menu
 - Added "New Playlist..." option to playlist submenu HTML (was missing, only showed existing playlists)
+
+Completed in commit c9a9726. Closed GitHub issue #3. Also fixed: browsing views loading only first 100 tracks (API default limit), and multi-disc album track sorting with null disc_number metadata using dominant disc fallback. Regression tests added in browsing-track-sorting.spec.js and add-to-playlist-browsing.spec.js.
 <!-- SECTION:NOTES:END -->

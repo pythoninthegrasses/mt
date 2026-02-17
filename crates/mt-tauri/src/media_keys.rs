@@ -2,6 +2,7 @@ use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, M
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+use tracing::debug;
 
 #[derive(Debug, Clone, Default)]
 pub struct NowPlayingInfo {
@@ -30,7 +31,7 @@ impl MediaKeyManager {
         let app_handle = app.clone();
         controls
             .attach(move |event: MediaControlEvent| {
-                println!("Media key event received: {:?}", event);
+                debug!(?event, "Media key event received");
                 let event_name = match event {
                     MediaControlEvent::Play => Some("mediakey://play"),
                     MediaControlEvent::Pause => Some("mediakey://pause"),
@@ -42,7 +43,7 @@ impl MediaKeyManager {
                 };
 
                 if let Some(name) = event_name {
-                    println!("Emitting event: {}", name);
+                    debug!(event = name, "Emitting media key event");
                     let _ = app_handle.emit(name, ());
                 }
             })

@@ -1,13 +1,10 @@
 name: 'Setup Tauri Build Environment'
-description: 'Install Node.js, Rust, Zig, TagLib (static), and frontend deps for Tauri builds'
+description: 'Install Node.js, Rust, TagLib (static), and frontend deps for Tauri builds'
 
 inputs:
   node-version:
     description: 'Node.js version'
     default: '20'
-  zig-version:
-    description: 'Zig version'
-    default: '0.14.0'
 
 runs:
   using: 'composite'
@@ -38,11 +35,6 @@ runs:
 
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
-
-    - name: Setup Zig
-      uses: mlugg/setup-zig@v1
-      with:
-        version: ${{ inputs.zig-version }}
 
     - name: Build TagLib (static)
       shell: bash
