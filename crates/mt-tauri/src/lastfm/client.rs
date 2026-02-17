@@ -1,6 +1,6 @@
 use super::config::ApiKeyConfig;
 use super::rate_limiter::RateLimiter;
-use super::signature_ffi;
+use super::signature;
 use super::types::*;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -61,7 +61,7 @@ impl LastFmClient {
             all_params.insert("sk".to_string(), sk.to_string());
         }
 
-        // Generate signature if session key is present (using Zig FFI)
+        // Generate signature if session key is present (pure Rust MD5)
         if session_key.is_some() {
             // Signature excludes 'format' parameter
             let params_for_signing: BTreeMap<String, String> = all_params
@@ -70,9 +70,8 @@ impl LastFmClient {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
 
-            let signature = signature_ffi::sign_params_ffi(&params_for_signing, self.config.api_secret())
-                .ok_or_else(|| LastFmError::ParseError("Failed to generate signature".to_string()))?;
-            all_params.insert("api_sig".to_string(), signature);
+            let sig = signature::sign_params(&params_for_signing, self.config.api_secret());
+            all_params.insert("api_sig".to_string(), sig);
         }
 
         // Make HTTP request
@@ -100,8 +99,8 @@ impl LastFmClient {
             .map_err(|e| LastFmError::NetworkError(e.to_string()))?;
 
         // Parse JSON response
-        let json: serde_json::Value = serde_json::from_str(&body)
-            .map_err(|e| LastFmError::ParseError(e.to_string()))?;
+        let json: serde_json::Value =
+            serde_json::from_str(&body).map_err(|e| LastFmError::ParseError(e.to_string()))?;
 
         // Check for Last.fm API errors
         if let Some(error_code) = json.get("error").and_then(|e| e.as_u64()) {
@@ -154,15 +153,13 @@ impl LastFmClient {
         let mut params = BTreeMap::new();
         params.insert("token".to_string(), token.to_string());
 
-        // Note: auth.getSession requires signature but no session key (using Zig FFI)
+        // Note: auth.getSession requires signature but no session key (pure Rust MD5)
         let mut params_for_signing = params.clone();
         params_for_signing.insert("method".to_string(), "auth.getSession".to_string());
         params_for_signing.insert("api_key".to_string(), self.config.api_key().to_string());
 
-        let signature = signature_ffi::sign_params_ffi(&params_for_signing, self.config.api_secret())
-            .ok_or_else(|| LastFmError::ParseError("Failed to generate signature".to_string()))?;
-
-        params.insert("api_sig".to_string(), signature);
+        let sig = signature::sign_params(&params_for_signing, self.config.api_secret());
+        params.insert("api_sig".to_string(), sig);
         params.insert("method".to_string(), "auth.getSession".to_string());
         params.insert("api_key".to_string(), self.config.api_key().to_string());
         params.insert("format".to_string(), "json".to_string());
@@ -203,8 +200,8 @@ impl LastFmClient {
             .api_call("user.getLovedTracks", params, None, false)
             .await?;
 
-        let loved_tracks: LovedTracksResponse = serde_json::from_value(response)
-            .map_err(|e| LastFmError::ParseError(e.to_string()))?;
+        let loved_tracks: LovedTracksResponse =
+            serde_json::from_value(response).map_err(|e| LastFmError::ParseError(e.to_string()))?;
 
         Ok(loved_tracks.lovedtracks.track)
     }
@@ -258,8 +255,8 @@ impl LastFmClient {
             .api_call("track.scrobble", params, Some(session_key), true)
             .await?;
 
-        let scrobble_response: ScrobbleApiResponse = serde_json::from_value(response)
-            .map_err(|e| LastFmError::ParseError(e.to_string()))?;
+        let scrobble_response: ScrobbleApiResponse =
+            serde_json::from_value(response).map_err(|e| LastFmError::ParseError(e.to_string()))?;
 
         Ok(scrobble_response.scrobbles.attr.accepted)
     }

@@ -200,7 +200,6 @@ jobs:
 
       - name: Verify build dependencies
         run: |
-          echo "Zig: $(zig version)"
           echo "TagLib: static (vendor/taglib/lib/)"
           ls -la vendor/taglib/lib/*.a
 

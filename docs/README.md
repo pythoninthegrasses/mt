@@ -25,8 +25,6 @@ MT is a desktop music player built with:
 ### Historical Reference
 
 - [**FastAPI Migration Analysis**](fastapi-to-rust-migration-analysis.md) - Python-to-Rust migration record
-- [**Zig Migration Plan**](zig-migration-plan.md) - Zig FFI migration record
-- [**FFI Validation Results**](ffi-validation-results.md) - Zig FFI test results
 
 ## Development Context
 

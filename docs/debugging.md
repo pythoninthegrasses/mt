@@ -84,5 +84,4 @@ ssh <HOST> "objdump -d /usr/bin/mt-tauri | grep -c 'shlx\|shrx\|sarx'"  # BMI2
 ### Common SIGILL Causes
 
 - Binary compiled with AVX/BMI2 on CI, deployed to older CPUs without those features
-- Zig libraries default to native CPU in release mode; fix with `-Dcpu=baseline`
 - C/C++ static libraries auto-vectorize for the build machine; fix with `-march=x86-64`

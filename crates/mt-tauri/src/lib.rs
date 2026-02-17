@@ -10,9 +10,6 @@ pub mod metadata;
 pub mod scanner;
 pub mod watcher;
 
-// Re-export FFI from mt-core for backward compatibility
-pub use mt_core::ffi;
-
 #[cfg(test)]
 mod concurrency_test;
 
@@ -292,11 +289,10 @@ pub fn run() {
             app.manage(database);
             println!("Database initialized at: {}", db_path.display());
 
-            // Initialize artwork cache (Zig FFI-backed LRU cache)
-            let artwork_cache = scanner::artwork_cache::ArtworkCache::with_capacity(50)
-                .expect("Failed to initialize artwork cache");
+            // Initialize artwork cache (Rust LRU cache)
+            let artwork_cache = scanner::artwork_cache::ArtworkCache::with_capacity(50);
             app.manage(artwork_cache);
-            println!("Artwork cache initialized (Zig LRU cache, size: 50)");
+            println!("Artwork cache initialized (Rust LRU cache, size: 50)");
 
             // Pass database clone to watcher manager
             let watcher = WatcherManager::new(app.handle().clone(), database_for_watcher);

@@ -101,4 +101,88 @@ mod tests {
         let expected = "c28d80ed34429217b843d790ea55d9ca";
         assert_eq!(signature, expected);
     }
+
+    #[test]
+    fn test_sign_params_empty_params() {
+        let params = BTreeMap::new();
+        let api_secret = "test_secret";
+        let signature = sign_params(&params, api_secret);
+
+        // md5("test_secret") - just the secret with no params
+        let expected = format!("{:x}", md5::compute(b"test_secret"));
+        assert_eq!(signature, expected);
+    }
+
+    #[test]
+    fn test_sign_params_empty_secret() {
+        let mut params = BTreeMap::new();
+        params.insert("api_key".to_string(), "key123".to_string());
+
+        let signature = sign_params(&params, "");
+
+        // md5("api_keykey123") - no secret appended
+        let expected = format!("{:x}", md5::compute(b"api_keykey123"));
+        assert_eq!(signature, expected);
+    }
+
+    #[test]
+    fn test_sign_params_unicode() {
+        let mut params = BTreeMap::new();
+        params.insert("artist".to_string(), "Björk".to_string());
+        params.insert("track".to_string(), "Jóga".to_string());
+        params.insert("method".to_string(), "track.scrobble".to_string());
+        params.insert("api_key".to_string(), "key".to_string());
+
+        let api_secret = "secret";
+        let signature = sign_params(&params, api_secret);
+
+        // Verify deterministic output with Unicode content
+        // md5("api_keykeyartistBjörkmethodtrack.scrobbletrackJógasecret")
+        let expected_input = "api_keykeyartistBjörkmethodtrack.scrobbletrackJógasecret";
+        let expected = format!("{:x}", md5::compute(expected_input.as_bytes()));
+        assert_eq!(signature, expected);
+        assert_eq!(signature.len(), 32);
+    }
+
+    #[test]
+    fn test_sign_params_single_param() {
+        let mut params = BTreeMap::new();
+        params.insert("method".to_string(), "auth.getToken".to_string());
+
+        let api_secret = "s";
+        let signature = sign_params(&params, api_secret);
+
+        // md5("methodauth.getTokens")
+        let expected = format!("{:x}", md5::compute(b"methodauth.getTokens"));
+        assert_eq!(signature, expected);
+    }
+
+    #[test]
+    fn test_sign_params_format_only_param() {
+        // If only a 'format' param is present, it's skipped, so result = md5(secret)
+        let mut params = BTreeMap::new();
+        params.insert("format".to_string(), "json".to_string());
+
+        let api_secret = "mysecret";
+        let signature = sign_params(&params, api_secret);
+
+        let expected = format!("{:x}", md5::compute(b"mysecret"));
+        assert_eq!(signature, expected);
+    }
+
+    #[test]
+    fn test_sign_params_returns_lowercase_hex() {
+        let mut params = BTreeMap::new();
+        params.insert("a".to_string(), "b".to_string());
+
+        let signature = sign_params(&params, "c");
+
+        // Verify all chars are lowercase hex
+        assert!(
+            signature
+                .chars()
+                .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+        );
+        assert_eq!(signature.len(), 32);
+    }
 }

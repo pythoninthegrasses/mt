@@ -4,8 +4,8 @@
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread;
 
     use crate::db::Database;
@@ -17,7 +17,7 @@ mod tests {
     fn test_artwork_cache_concurrent_len_operations() {
         use crate::scanner::artwork_cache::ArtworkCache;
 
-        let cache = Arc::new(ArtworkCache::new().expect("Failed to create cache"));
+        let cache = Arc::new(ArtworkCache::new());
         let operations = Arc::new(AtomicUsize::new(0));
 
         let handles: Vec<_> = (0..10)
@@ -50,7 +50,7 @@ mod tests {
     fn test_artwork_cache_no_deadlock_invalidate() {
         use crate::scanner::artwork_cache::ArtworkCache;
 
-        let cache = Arc::new(ArtworkCache::new().expect("Failed to create cache"));
+        let cache = Arc::new(ArtworkCache::new());
         let completed = Arc::new(AtomicUsize::new(0));
 
         let handles: Vec<_> = (0..20)
@@ -87,7 +87,7 @@ mod tests {
     fn test_artwork_cache_concurrent_clear() {
         use crate::scanner::artwork_cache::ArtworkCache;
 
-        let cache = Arc::new(ArtworkCache::new().expect("Failed to create cache"));
+        let cache = Arc::new(ArtworkCache::new());
         let completed = Arc::new(AtomicUsize::new(0));
 
         let handles: Vec<_> = (0..5)
@@ -113,6 +113,97 @@ mod tests {
             completed.load(Ordering::SeqCst),
             5,
             "Not all threads completed clearing cache"
+        );
+    }
+
+    /// Test artwork cache concurrent get_or_load with filesystem
+    #[test]
+    fn test_artwork_cache_concurrent_get_or_load() {
+        use crate::scanner::artwork_cache::ArtworkCache;
+
+        let cache = Arc::new(ArtworkCache::new());
+        let completed = Arc::new(AtomicUsize::new(0));
+
+        // Create a temp dir with cover art
+        let dir = tempfile::tempdir().unwrap();
+        let cover_path = dir.path().join("cover.jpg");
+        std::fs::write(&cover_path, &[0xFF, 0xD8, 0xFF, 0xE0]).unwrap();
+        let audio_path = dir.path().join("song.mp3");
+        std::fs::File::create(&audio_path).unwrap();
+        let audio_str = audio_path.to_str().unwrap().to_string();
+
+        let handles: Vec<_> = (0..10)
+            .map(|i| {
+                let cache = Arc::clone(&cache);
+                let counter = Arc::clone(&completed);
+                let path = audio_str.clone();
+
+                thread::spawn(move || {
+                    for j in 0..20 {
+                        let track_id = (i * 20 + j) as i64;
+                        let _ = cache.get_or_load(track_id, &path);
+                        let _ = cache.len();
+                    }
+                    counter.fetch_add(1, Ordering::SeqCst);
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            handle.join().expect("Thread panicked");
+        }
+
+        assert_eq!(
+            completed.load(Ordering::SeqCst),
+            10,
+            "Not all threads completed concurrent get_or_load"
+        );
+    }
+
+    /// Test artwork cache mixed operations from multiple threads
+    #[test]
+    fn test_artwork_cache_mixed_operations() {
+        use crate::scanner::artwork_cache::ArtworkCache;
+
+        let cache = Arc::new(ArtworkCache::new());
+        let completed = Arc::new(AtomicUsize::new(0));
+
+        let handles: Vec<_> = (0..10)
+            .map(|i| {
+                let cache = Arc::clone(&cache);
+                let counter = Arc::clone(&completed);
+
+                thread::spawn(move || {
+                    for j in 0..50 {
+                        let track_id = (j % 5) as i64;
+                        match i % 4 {
+                            0 => {
+                                let _ = cache.len();
+                            }
+                            1 => {
+                                cache.invalidate(track_id);
+                            }
+                            2 => {
+                                cache.clear();
+                            }
+                            _ => {
+                                let _ = cache.is_empty();
+                            }
+                        }
+                    }
+                    counter.fetch_add(1, Ordering::SeqCst);
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            handle.join().expect("Thread panicked or deadlocked");
+        }
+
+        assert_eq!(
+            completed.load(Ordering::SeqCst),
+            10,
+            "Not all threads completed mixed cache operations"
         );
     }
 
@@ -186,7 +277,11 @@ mod tests {
         // Verify all messages received
         let received: Vec<_> = rx.iter().collect();
 
-        assert_eq!(total_messages.load(Ordering::SeqCst), 1000, "Not all messages sent");
+        assert_eq!(
+            total_messages.load(Ordering::SeqCst),
+            1000,
+            "Not all messages sent"
+        );
         assert_eq!(received.len(), 1000, "Not all messages received");
     }
 
