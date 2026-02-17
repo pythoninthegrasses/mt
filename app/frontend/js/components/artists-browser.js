@@ -6,6 +6,12 @@ export function createArtistsBrowser(Alpine) {
     selectedArtist: null,
     artworkCache: {},
     contextMenu: null,
+
+    // Memoization cache
+    _artistsVersion: -1,
+    _cachedArtists: [],
+    _canonicalMapVersion: -1,
+    _cachedCanonicalMap: null,
     playlists: [],
     showPlaylistSubmenu: false,
     submenuOnLeft: false,
@@ -54,6 +60,9 @@ export function createArtistsBrowser(Alpine) {
      * tracks in that album). This keeps multi-artist albums grouped under one entry.
      */
     get _canonicalArtistMap() {
+      const v = this.$store.library._dataVersion;
+      if (this._canonicalMapVersion === v) return this._cachedCanonicalMap;
+
       const map = new Map();
       for (const track of this._allTracks) {
         const album = track.album || '';
@@ -64,6 +73,8 @@ export function createArtistsBrowser(Alpine) {
           map.set(album, artist);
         }
       }
+      this._cachedCanonicalMap = map;
+      this._canonicalMapVersion = v;
       return map;
     },
 
@@ -97,14 +108,20 @@ export function createArtistsBrowser(Alpine) {
     },
 
     get artists() {
+      const v = this.$store.library._dataVersion;
+      if (this._artistsVersion === v) return this._cachedArtists;
+
       const displayMap = this._artistDisplayNames;
       const artists = Array.from(displayMap.values());
       const ignoreWords = this._ignoreWords;
-      return artists.sort((a, b) => {
+      artists.sort((a, b) => {
         const aVal = this._stripIgnoredPrefix(a, ignoreWords).toLowerCase();
         const bVal = this._stripIgnoredPrefix(b, ignoreWords).toLowerCase();
         return aVal.localeCompare(bVal);
       });
+      this._cachedArtists = artists;
+      this._artistsVersion = v;
+      return artists;
     },
 
     get _ignoreWords() {

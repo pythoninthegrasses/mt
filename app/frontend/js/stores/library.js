@@ -63,6 +63,7 @@ export function createLibraryStore(Alpine) {
     _lastLoadedSection: null, // Track which section the current data belongs to
     _sectionCache: {}, // { sectionId: { totalTracks, totalDuration, timestamp } } — summary only, no track arrays
     _backgroundRefreshing: false, // Prevent concurrent background refreshes
+    _dataVersion: 0, // Monotonic counter incremented on any data mutation (used by browser memoization)
 
     /**
      * Initialize library from backend
@@ -263,6 +264,7 @@ export function createLibraryStore(Alpine) {
 
         // _fetchLibraryData always returns the full library
         this.allTracks = data.tracks || [];
+        this._dataVersion++;
 
         // Only update section-specific state if still on same section
         if (this.currentSection === section) {
@@ -346,6 +348,7 @@ export function createLibraryStore(Alpine) {
 
         // _fetchLibraryData always returns the full library, so keep allTracks in sync
         this.allTracks = this.tracks;
+        this._dataVersion++;
 
         this.applyFilters();
 
@@ -951,6 +954,7 @@ export function createLibraryStore(Alpine) {
       // Fast path: clearing the entire library — skip reactive filtering
       if (trackIds.length >= this.allTracks.length) {
         this.allTracks = [];
+        this._dataVersion++;
         this.tracks = [];
         this.filteredTracks = [];
         this.totalTracks = 0;
@@ -967,11 +971,14 @@ export function createLibraryStore(Alpine) {
 
       const idSet = new Set(trackIds);
       this.allTracks = this.allTracks.filter((t) => !idSet.has(t.id));
+      this._dataVersion++;
       this.tracks = this.tracks.filter((t) => !idSet.has(t.id));
       this.totalTracks = this.tracks.length;
       this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
       this._clearCache();
-      this.applyFilters();
+      // Filter filteredTracks directly — removing items from a sorted list preserves
+      // sort order, so re-running applyFilters() (O(n log n) sort) is unnecessary.
+      this.filteredTracks = this.filteredTracks.filter((t) => !idSet.has(t.id));
 
       // Remove from queue if present
       const queue = Alpine.store('queue');

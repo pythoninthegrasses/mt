@@ -80,6 +80,61 @@ mod tests {
     }
 
     #[test]
+    fn bench_bulk_track_insertion_transaction_wrapped() {
+        println!("\n=== Bulk Track Insertion (Transaction Wrapped) Benchmark ===");
+
+        let db = Database::new_in_memory().expect("Failed to create database");
+
+        for batch_size in [100, 500, 1000, 5000] {
+            let tracks: Vec<(String, TrackMetadata)> =
+                (0..batch_size).map(|i| create_test_track(i)).collect();
+
+            let start = Instant::now();
+            db.transaction(|conn| library::add_tracks_bulk(conn, &tracks))
+                .expect("Failed to insert tracks");
+            let elapsed = start.elapsed();
+
+            let tracks_per_sec = batch_size as f64 / elapsed.as_secs_f64();
+            println!(
+                "Transaction-wrapped: {} tracks in {:?} ({:.0} tracks/sec)",
+                batch_size, elapsed, tracks_per_sec
+            );
+
+            // Clear for next test
+            let conn = db.conn().unwrap();
+            conn.execute("DELETE FROM library", []).unwrap();
+        }
+    }
+
+    #[test]
+    fn bench_bulk_track_insertion_chunked() {
+        println!("\n=== Bulk Track Insertion (Chunked 500) Benchmark ===");
+
+        let db = Database::new_in_memory().expect("Failed to create database");
+
+        for batch_size in [1000, 5000] {
+            let tracks: Vec<(String, TrackMetadata)> =
+                (0..batch_size).map(|i| create_test_track(i)).collect();
+
+            let start = Instant::now();
+            for chunk in tracks.chunks(500) {
+                db.transaction(|conn| library::add_tracks_bulk(conn, chunk))
+                    .expect("Failed to insert chunk");
+            }
+            let elapsed = start.elapsed();
+
+            let tracks_per_sec = batch_size as f64 / elapsed.as_secs_f64();
+            println!(
+                "Chunked (500): {} tracks in {:?} ({:.0} tracks/sec)",
+                batch_size, elapsed, tracks_per_sec
+            );
+
+            let conn = db.conn().unwrap();
+            conn.execute("DELETE FROM library", []).unwrap();
+        }
+    }
+
+    #[test]
     fn bench_track_queries() {
         println!("\n=== Track Query Benchmark ===");
 

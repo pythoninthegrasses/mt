@@ -27,6 +27,10 @@ export function createAlbumsBrowser(Alpine) {
     // Scroll position preservation
     _gridScrollTop: 0,
 
+    // Memoization cache for albumList getter
+    _albumListVersion: -1,
+    _cachedAlbumList: [],
+
     // Context menu
     contextMenu: null,
     playlists: [],
@@ -77,6 +81,9 @@ export function createAlbumsBrowser(Alpine) {
     },
 
     get albumList() {
+      const v = this.$store.library._dataVersion;
+      if (this._albumListVersion === v) return this._cachedAlbumList;
+
       const tracksByAlbum = {};
       for (const track of this._allTracks) {
         const album = track.album || 'Unknown Album';
@@ -99,6 +106,8 @@ export function createAlbumsBrowser(Alpine) {
       }
 
       albums.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      this._cachedAlbumList = albums;
+      this._albumListVersion = v;
       return albums;
     },
 

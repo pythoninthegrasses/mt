@@ -4,12 +4,14 @@ title: Bulk track removal is too slow (sequential single-track IPC calls)
 status: In Progress
 assignee: []
 created_date: '2026-02-16 21:05'
-updated_date: '2026-02-17 07:41'
+updated_date: '2026-02-17 17:54'
 labels:
   - performance
   - ux
 dependencies:
-  - task-274
+  - TASK-272.01
+  - TASK-272.02
+  - TASK-272.03
 priority: high
 ordinal: 375
 ---
@@ -131,4 +133,82 @@ The UI-level instant deletion (removing tracks from the visible library list imm
 - **Duplicate tracks**: Scanner can insert duplicates if it runs twice (no UNIQUE constraint on filepath in library table). Needs schema migration.
 - **Startup performance**: 13k+ track libraries still show slow initial load
 - **Virtual scroll + empty state**: CSS centering approach (`min-h-full` + `absolute inset-0`) needs confirmation
+
+## Session 3: Bulk Operations Performance — Eliminating Soft-Locks at 7-13k Tracks
+
+All three subtasks (272.01, 272.02, 272.03) implemented and marked Done.
+
+### Summary of changes
+
+**Phase 1: Transaction wrapping + event emission** (272.01)
+- `scanner/commands.rs`: All scan DB writes wrapped in `db.transaction()`. Bulk inserts chunked into 500-track transactions.
+- `library/commands.rs`: `library_delete_tracks`, `library_delete_all`, `library_purge_missing` use `db.transaction()` and emit `LibraryUpdatedEvent::deleted(...)` on success.
+- Removed dead `scope_fingerprints_to_paths` and `get_db_fingerprints`.
+
+**Phase 2: Reduce frontend churn** (272.02)
+- `library.js`: `removeTracksLocally()` filters `filteredTracks` directly (O(n)) instead of `applyFilters()` (O(n log n)). Added `_dataVersion` counter.
+- `albums-browser.js`: `albumList` getter memoized via version tracking.
+- `artists-browser.js`: `_canonicalArtistMap` and `artists` getters memoized.
+
+**Phase 3: Scan pipeline optimization** (272.03)
+- `scanner/commands.rs`: Batch reconciliation via pre-fetched HashMaps (O(1) vs per-file DB queries). SQL-scoped fingerprint queries. Precomputed hash threading to avoid redundant SHA-256.
+- `db/library.rs`: New `get_fingerprints_for_paths()` for SQL-level scoping.
+
+**Tests**: 547 passed (+4 new), 0 failed, 0 warnings. New tests: `test_bulk_delete_cleans_all_tables`, `test_get_fingerprints_for_paths`, 2 benchmark variants.
+
+**Docs**: Updated `spacedrive-analysis-improvements.md` — fixed stale Zig FFI reference, added Status column to recommendations, updated appendix line numbers.
+
+### Remaining unchecked ACs on parent
+- #1 (239 tracks < 1s): Already done in session 1/2
+- #9 (13k delete < 2s): Needs manual testing with real library
+- #10 (scan 13k no freeze): Needs manual testing
+- #11 (startup 13k responsive): Needs manual testing
+- #12 (view loading 13k): Needs manual testing
+- #13 (empty state centering): Done in session 2, needs confirmation
+- #14 (watched folder auto-removal): Needs testing
+- #15 (no duplicate tracks): Needs schema migration (UNIQUE constraint on filepath)
+
+## Session 4: Observability for Performance Diagnosis
+
+With task-277 (tracing integration) complete, all bulk operations now have structured logging and timing instrumentation.
+
+### How to diagnose performance issues
+
+**Log file location**: `~/Library/Logs/com.mt.desktop/mt.log.YYYY-MM-DD`
+
+**Slow command detection**: Any IPC command exceeding 500ms is logged at WARN level:
+```
+WARN mt_lib::logging: Slow IPC command command="scan_paths_to_library" duration_ms=36110
+```
+
+Instrumented commands with `log_slow_command`:
+- `scan_paths_to_library` — full scan with add/modified/reconciled/recovered/deleted counts
+- `library_delete_tracks` — bulk delete by ID array
+- `library_delete_all` — full library wipe
+- `library_purge_missing` — purge missing tracks
+- `lastfm_import_loved_tracks`, `lastfm_cache_loved_tracks`, `lastfm_match_loved_tracks`, `lastfm_queue_retry`
+
+**Scan complete log** includes all counts and duration:
+```
+INFO mt_lib::scanner::commands: Scan complete duration_ms=36110 added=9809 modified=0 reconciled=0 recovered=0 unchanged=0 deleted=0 errors=34
+```
+
+**Override log level** with `MT_LOG` env var:
+```bash
+# Trace-level for scanner only
+MT_LOG=mt_tauri::scanner=trace task tauri:dev
+
+# Debug everything
+MT_LOG=debug task tauri:dev
+```
+
+**Export logs**: Settings > Export Logs now bundles up to 3 days of log files (5MB cap) with the static diagnostics.
+
+### Verification findings (9,809 track library scan)
+
+- Scan of ~/Music (9,809 tracks): 36.1 seconds, 34 errors (unsupported formats)
+- `log_slow_command` correctly flagged the scan at WARN level
+- Frontend error capture working: caught queue.js store initialization race condition
+- Background task logging confirmed: scrobble retry (5min) and loved tracks matcher (30min) intervals logged
+- Log file grew to ~14MB during scan due to lofty crate DEBUG output; consider filtering with `MT_LOG=info,lofty=warn` for production
 <!-- SECTION:NOTES:END -->
