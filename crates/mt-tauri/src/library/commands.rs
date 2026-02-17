@@ -46,6 +46,7 @@ pub fn library_get_all(
     limit: Option<i64>,
     offset: Option<i64>,
 ) -> Result<LibraryResponse, String> {
+    let start_time = std::time::Instant::now();
     let conn = db.conn().map_err(|e| e.to_string())?;
 
     // Update file sizes for tracks that have 0 (background operation)
@@ -74,13 +75,20 @@ pub fn library_get_all(
     };
 
     let result = library::get_all_tracks(&conn, &query).map_err(|e| e.to_string())?;
+    let track_count = result.items.len();
 
-    Ok(LibraryResponse {
+    let response = LibraryResponse {
         tracks: result.items,
         total: result.total,
         limit: query.limit,
         offset: query.offset,
-    })
+    };
+
+    let duration_ms = start_time.elapsed().as_millis() as u64;
+    info!(duration_ms, track_count, "library_get_all completed");
+    crate::logging::log_slow_command("library_get_all", start_time);
+
+    Ok(response)
 }
 
 /// Get library statistics

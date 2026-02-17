@@ -19,7 +19,8 @@
     "npm:tailwindcss@4": "4.1.18",
     "npm:vite-plugin-handlebars@2": "2.0.0",
     "npm:vite@6": "6.4.1_picomatch@4.0.3",
-    "npm:vitest@^4.0.17": "4.0.18_jsdom@27.4.0_vite@6.4.1__picomatch@4.0.3"
+    "npm:vitest@^4.0.17": "4.0.18_jsdom@27.4.0_vite@6.4.1__picomatch@4.0.3",
+    "npm:web-vitals@^5.1.0": "5.1.0"
   },
   "npm": {
     "@acemir/cssom@0.9.31": {
@@ -1476,6 +1477,9 @@
         "xml-name-validator"
       ]
     },
+    "web-vitals@5.1.0": {
+      "integrity": "sha512-ArI3kx5jI0atlTtmV0fWU3fjpLmq/nD3Zr1iFFlJLaqa5wLBkUSzINwBPySCX/8jRyjlmy1Volw1kz1g9XE4Jg=="
+    },
     "webidl-conversions@8.0.1": {
       "integrity": "sha512-BMhLD/Sw+GbJC21C/UgyaZX41nPt8bUTg+jWyDeg7e7YN4xOM05YPSIXceACnXVtqyEw/LMClUQMtMZ+PGGpqQ=="
     },
@@ -1535,7 +1539,8 @@
             "npm:tailwindcss@4",
             "npm:vite-plugin-handlebars@2",
             "npm:vite@6",
-            "npm:vitest@^4.0.17"
+            "npm:vitest@^4.0.17",
+            "npm:web-vitals@^5.1.0"
           ]
         }
       }

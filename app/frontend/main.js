@@ -10,10 +10,14 @@ import { formatTime, formatDuration, formatBytes } from './js/utils/formatting.j
 import { settings } from './js/services/settings.js';
 import { promptToAddWatchedFolders } from './js/utils/watched-folders.js';
 import { installGlobalErrorHandlers } from './js/utils/error-reporter.js';
+import { initWebVitals } from './js/utils/web-vitals.js';
 import './styles.css';
 
 // Install global error handlers early so unhandled errors reach the backend log
 installGlobalErrorHandlers();
+
+// Report Core Web Vitals to backend structured logs
+initWebVitals();
 
 // Register Alpine plugins
 Alpine.plugin(persist);
@@ -173,24 +177,13 @@ async function initTitlebarDrag() {
 }
 
 /**
- * Show the app window and reveal the UI.
- * Called after Alpine is initialized and initial data is loaded.
+ * Reveal the UI content.
+ * Window is already visible (shown early in initApp to avoid WebKit throttling).
+ * This just removes x-cloak so Alpine-rendered content becomes visible.
  */
-async function revealApp() {
-  // Remove x-cloak from body to reveal the UI via CSS
+function revealApp() {
   document.body.removeAttribute('x-cloak');
-
-  // Show the Tauri window (it starts hidden via visible: false in config)
-  if (window.__TAURI__) {
-    try {
-      const { getCurrentWindow } = window.__TAURI__.window;
-      const appWindow = getCurrentWindow();
-      await appWindow.show();
-      console.log('[main] App ready, window revealed');
-    } catch (error) {
-      console.error('[main] Failed to show window:', error);
-    }
-  }
+  console.log('[main] App ready, UI revealed');
 }
 
 /**
@@ -221,11 +214,15 @@ function applyInitialTheme() {
 
 // Initialize application
 async function initApp() {
+  const t = { start: performance.now() };
+  window._perfTimings = t;
+
   // Initialize settings service first (loads settings from backend)
   if (window.__TAURI__) {
     try {
       await settings.init();
-      console.log('[main] Settings service initialized');
+      t.settings = performance.now();
+      console.log('[perf] settings.init:', Math.round(t.settings - t.start), 'ms');
     } catch (error) {
       console.error('[main] Failed to initialize settings:', error);
     }
@@ -238,6 +235,20 @@ async function initApp() {
   // which can cause the sidebar to briefly render with wrong theme colors.
   applyInitialTheme();
 
+  // Show window early so WebKit doesn't throttle IPC callbacks.
+  // The body still has x-cloak (hiding content), but the window being visible
+  // prevents the WebView from deprioritizing async callback execution.
+  if (window.__TAURI__) {
+    try {
+      const { getCurrentWindow } = window.__TAURI__.window;
+      await getCurrentWindow().show();
+      t.windowShow = performance.now();
+      console.log('[perf] window.show:', Math.round(t.windowShow - t.start), 'ms');
+    } catch (error) {
+      console.error('[main] Failed to show window early:', error);
+    }
+  }
+
   // Set platform attribute for Linux-specific CSS (hide macOS overlay titlebar gap)
   if (navigator.platform?.startsWith('Linux')) {
     document.documentElement.dataset.platform = 'linux';
@@ -247,22 +258,41 @@ async function initApp() {
   // App-specific context menus (tracks, headers, playlists) handle their own rendering
   document.addEventListener('contextmenu', (e) => e.preventDefault());
 
+  // Control IPC measurement — small call to verify IPC latency at this point
+  if (window.__TAURI__) {
+    const ipcStart = performance.now();
+    await window.__TAURI__.core.invoke('library_get_stats');
+    t.controlIpc = performance.now();
+    console.log('[perf] control IPC (library_get_stats):', Math.round(t.controlIpc - ipcStart), 'ms');
+  }
+
   // Initialize stores and components
+  t.preStores = performance.now();
   initStores(Alpine);
+  t.stores = performance.now();
+  console.log('[perf] initStores:', Math.round(t.stores - t.preStores), 'ms');
+
   initComponents(Alpine);
+  t.components = performance.now();
+  console.log('[perf] initComponents:', Math.round(t.components - t.stores), 'ms');
+
   initTauriDragDrop();
   initGlobalKeyboardShortcuts();
   initTitlebarDrag();
 
   // Start Alpine
+  t.preAlpine = performance.now();
   Alpine.start();
-  console.log('[main] Alpine started with stores and components');
+  t.alpine = performance.now();
+  console.log('[perf] Alpine.start():', Math.round(t.alpine - t.preAlpine), 'ms');
+  console.log('[perf] total initApp (sync):', Math.round(t.alpine - t.start), 'ms');
   console.log('[main] Test dialog with: testDialog()');
 
   // Reveal the app after Alpine has initialized the DOM
   // Note: We use setTimeout instead of requestAnimationFrame because
   // RAF callbacks don't fire when the window is hidden (visible: false)
   setTimeout(() => {
+    console.log('[perf] revealApp at:', Math.round(performance.now() - t.start), 'ms');
     revealApp();
   }, 0);
 }
