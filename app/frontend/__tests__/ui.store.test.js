@@ -91,7 +91,7 @@ function createTestUIStore() {
     loadingMessage: '',
 
     setView(view) {
-      const validViews = ['library', 'queue', 'nowPlaying', 'settings'];
+      const validViews = ['library', 'queue', 'nowPlaying', 'settings', 'artists', 'albums'];
       if (validViews.includes(view) && view !== this.view) {
         if (this.view !== 'settings') {
           this._previousView = this.view;
@@ -199,7 +199,7 @@ describe('UI Store - View Navigation', () => {
   });
 
   it('should navigate to valid views', () => {
-    const validViews = ['library', 'queue', 'nowPlaying', 'settings'];
+    const validViews = ['library', 'queue', 'nowPlaying', 'settings', 'artists', 'albums'];
 
     validViews.forEach((view) => {
       store.setView(view);

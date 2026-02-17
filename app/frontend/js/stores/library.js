@@ -741,6 +741,31 @@ export function createLibraryStore(Alpine) {
           }
         }
 
+        // Build dominant disc per album so null disc_number tracks sort alongside
+        // their siblings instead of being forced to disc 1.
+        const dominantDiscMap = new Map();
+        for (const track of result) {
+          const album = track.album || '';
+          if (track.disc_number != null) {
+            const d = parseInt(String(track.disc_number).split('/')[0], 10) || 1;
+            const counts = dominantDiscMap.get(album) || new Map();
+            counts.set(d, (counts.get(d) || 0) + 1);
+            dominantDiscMap.set(album, counts);
+          }
+        }
+        // Resolve each album to its most common disc number
+        for (const [album, counts] of dominantDiscMap) {
+          let bestDisc = 1;
+          let bestCount = 0;
+          for (const [disc, count] of counts) {
+            if (count > bestCount) {
+              bestCount = count;
+              bestDisc = disc;
+            }
+          }
+          dominantDiscMap.set(album, bestDisc);
+        }
+
         result.sort((a, b) => {
           // Primary sort with ignore-words stripping
           // For artist sort, use canonical album artist to group albums together
@@ -764,9 +789,13 @@ export function createLibraryStore(Alpine) {
             if (aAlbum > bAlbum) return 1;
           }
 
-          // Tiebreaker 2: Disc Number
-          const aDisc = parseInt(String(a.disc_number || '0').split('/')[0], 10) || 0;
-          const bDisc = parseInt(String(b.disc_number || '0').split('/')[0], 10) || 0;
+          // Tiebreaker 2: Disc Number (null inherits album's dominant disc)
+          const aDisc = a.disc_number != null
+            ? (parseInt(String(a.disc_number).split('/')[0], 10) || 1)
+            : (dominantDiscMap.get(a.album || '') || 1);
+          const bDisc = b.disc_number != null
+            ? (parseInt(String(b.disc_number).split('/')[0], 10) || 1)
+            : (dominantDiscMap.get(b.album || '') || 1);
           if (aDisc < bDisc) return -1;
           if (aDisc > bDisc) return 1;
 

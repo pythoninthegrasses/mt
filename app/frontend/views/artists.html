@@ -1,15 +1,208 @@
-<!-- Artists browsing view -->
 <div
   x-show="$store.ui.view === 'artists'"
   x-cloak
-  class="h-full flex items-center justify-center"
+  x-data="artistsBrowser"
+  class="flex h-full"
   data-testid="artists-view"
 >
-  <div class="text-center text-foreground/50">
-    <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-    </svg>
-    <p class="text-lg font-medium">Artists</p>
-    <p class="text-sm mt-1">Artist browsing view coming soon</p>
+  <!-- Left panel: Artist list -->
+  <div class="w-56 shrink-0 border-r border-border flex flex-col overflow-hidden">
+    <div class="px-3 py-2 border-b border-border/50">
+      <h2 class="text-xs font-semibold text-foreground/40 uppercase tracking-wider">All Artists</h2>
+    </div>
+    <div class="flex-1 overflow-y-auto" data-testid="artists-list">
+      <template x-if="artists.length === 0">
+        <div class="px-3 py-8 text-center">
+          <p class="text-sm text-foreground/40">No artists found</p>
+          <p class="text-xs text-foreground/30 mt-1">Add music to your library to browse artists</p>
+        </div>
+      </template>
+      <ul class="py-1">
+        <template x-for="artist in artists" :key="artist">
+          <li>
+            <button
+              class="w-full text-left px-3 py-1.5 text-sm transition-colors truncate"
+              :class="isSelectedArtist(artist) ? 'bg-primary/15 text-primary font-medium' : 'text-foreground/80 hover:bg-muted/70'"
+              @click="selectArtist(artist)"
+              :data-testid="'artist-item-' + artist"
+              x-text="artist"
+            ></button>
+          </li>
+        </template>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Right panel: Artist detail -->
+  <div class="flex-1 min-w-0 overflow-y-auto" data-testid="artist-detail">
+    <!-- Empty state -->
+    <template x-if="!selectedArtist">
+      <div class="flex items-center justify-center h-full text-foreground/40">
+        <p class="text-sm">Select an artist to view their albums</p>
+      </div>
+    </template>
+
+    <!-- Artist detail content -->
+    <template x-if="selectedArtist">
+      <div class="p-6">
+        <!-- Artist header -->
+        <div class="mb-6">
+          <h1 class="text-2xl font-bold text-foreground" x-text="selectedArtist" data-testid="artist-name"></h1>
+          <p class="text-xs text-foreground/40 mt-1 uppercase tracking-wider">
+            <span x-text="selectedArtistAlbumCount"></span>
+            <span x-text="selectedArtistAlbumCount === 1 ? 'Album' : 'Albums'"></span>,
+            <span x-text="selectedArtistTrackCount"></span>
+            <span x-text="selectedArtistTrackCount === 1 ? 'Song' : 'Songs'"></span>
+          </p>
+        </div>
+
+        <!-- Albums -->
+        <div class="space-y-10">
+          <template x-for="album in selectedArtistAlbums" :key="album.name">
+            <div class="flex gap-5" :data-testid="'album-section-' + album.name">
+              <!-- Album artwork + summary -->
+              <div class="w-40 shrink-0">
+                <div class="w-40 h-40 rounded overflow-hidden bg-muted/50 shadow-sm">
+                  <img
+                    class="w-full h-full object-cover hidden"
+                    alt=""
+                    x-init="loadArtwork(album.representativeTrackId, $el)"
+                  >
+                  <!-- Placeholder -->
+                  <div class="w-full h-full flex items-center justify-center text-foreground/20">
+                    <svg class="w-14 h-14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                    </svg>
+                  </div>
+                </div>
+                <p class="text-xs text-foreground/30 mt-2 uppercase tracking-wider">
+                  <span x-text="album.tracks.length"></span>
+                  <span x-text="album.tracks.length === 1 ? 'Song' : 'Songs'"></span>,
+                  <span x-text="albumTotalDuration(album.tracks)"></span> Minutes
+                </p>
+              </div>
+
+              <!-- Album info + tracks -->
+              <div class="flex-1 min-w-0">
+                <!-- Album header -->
+                <div class="mb-3">
+                  <h3 class="text-xl font-bold text-foreground truncate" x-text="album.name"></h3>
+                  <p class="text-xs text-foreground/40 uppercase tracking-wider mt-0.5">
+                    <span x-show="album.genre" x-text="album.genre"></span>
+                    <span x-show="album.genre && album.year"> &middot; </span>
+                    <span x-show="album.year" x-text="album.year"></span>
+                  </p>
+                </div>
+
+                <!-- Track listing -->
+                <div>
+                  <template x-for="(track, tIdx) in album.tracks" :key="track.id">
+                    <div
+                      class="flex items-center gap-3 py-2 text-sm cursor-default group border-t border-border/40"
+                      :class="isPlaying(track.id) ? 'text-primary' : 'text-foreground/80 hover:bg-muted/30'"
+                      @dblclick="handleTrackDoubleClick(track, selectedArtistTracks, selectedArtistTracks.indexOf(track))"
+                      @contextmenu="handleContextMenu($event, track)"
+                      :data-testid="'artist-track-' + track.id"
+                    >
+                      <!-- Track number / playing indicator -->
+                      <span class="w-6 text-right text-xs shrink-0" :class="isPlaying(track.id) ? 'text-primary' : 'text-foreground/30'">
+                        <template x-if="isPlaying(track.id)">
+                          <svg class="w-3.5 h-3.5 inline text-primary" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z"></path>
+                          </svg>
+                        </template>
+                        <template x-if="!isPlaying(track.id)">
+                          <span x-text="track.track_number || ''"></span>
+                        </template>
+                      </span>
+                      <!-- Title -->
+                      <span class="flex-1 truncate" :class="isPlaying(track.id) ? 'font-medium' : ''" x-text="track.title || track.filename"></span>
+                      <!-- Duration -->
+                      <span class="text-xs text-foreground/30 shrink-0 tabular-nums" x-text="formatDuration(track.duration)"></span>
+                      <!-- More button -->
+                      <button
+                        class="w-5 h-5 flex items-center justify-center rounded text-foreground/30 hover:text-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                        @click.stop="handleContextMenu($event, track)"
+                        :data-testid="'artist-track-menu-' + track.id"
+                      >
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <circle cx="12" cy="6" r="1.5"></circle>
+                          <circle cx="12" cy="12" r="1.5"></circle>
+                          <circle cx="12" cy="18" r="1.5"></circle>
+                        </svg>
+                      </button>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- Context menu -->
+  <div
+    x-show="contextMenu"
+    x-trap="contextMenu"
+    x-cloak
+    class="context-menu track-context-menu bg-card"
+    data-testid="artists-track-context-menu"
+    :style="contextMenu ? `left: ${contextMenu.x}px; top: ${contextMenu.y}px` : ''"
+    @click.outside="closeContextMenu()"
+  >
+    <template x-if="contextMenu">
+      <div>
+        <template x-for="(item, idx) in contextMenu.items" :key="idx">
+          <div>
+            <template x-if="item.type === 'separator'">
+              <div class="context-menu-separator"></div>
+            </template>
+            <template x-if="item.type !== 'separator'">
+              <div
+                class="context-menu-item relative"
+                :class="{ 'disabled': item.disabled }"
+                @click="if (!item.disabled && !item.hasSubmenu) { item.action(); closeContextMenu(); } else if (!item.disabled) { item.action(); }"
+                @mouseenter="if (item.hasSubmenu) { showPlaylistSubmenu = true; submenuY = $el.getBoundingClientRect().top; handleSubmenuEnter(); } else { showPlaylistSubmenu = false; }"
+                @mouseleave="if (item.hasSubmenu) { handleSubmenuLeave(); }"
+              >
+                <span class="w-4 text-center"></span>
+                <span x-text="item.label" class="flex-1"></span>
+                <span
+                  x-show="item.hasSubmenu"
+                  class="text-muted-foreground"
+                  x-text="submenuOnLeft ? '&#9664;' : '&#9654;'"
+                ></span>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </template>
+  </div>
+
+  <!-- Add to Playlist submenu -->
+  <div
+    x-show="contextMenu && showPlaylistSubmenu"
+    x-cloak
+    class="context-menu bg-card"
+    data-testid="artists-playlist-submenu"
+    :style="contextMenu ? `left: ${submenuOnLeft ? contextMenu.x - 180 : contextMenu.x + 180 + 45}px; top: ${submenuY}px; max-height: ${window.innerHeight - submenuY - 10}px; overflow-y: auto` : ''"
+    @mouseenter="handleSubmenuEnter()"
+    @mouseleave="handleSubmenuLeave()"
+  >
+    <template x-for="playlist in playlists" :key="playlist.id">
+      <div
+        class="context-menu-item"
+        @click="addToPlaylist(playlist.id)"
+      >
+        <span class="w-4 text-center"></span>
+        <span x-text="playlist.name" class="truncate"></span>
+      </div>
+    </template>
+    <div x-show="playlists.length === 0" class="px-3 py-2 text-sm text-muted-foreground">
+      No playlists yet
+    </div>
   </div>
 </div>

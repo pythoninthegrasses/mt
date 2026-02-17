@@ -116,6 +116,10 @@ export function createSidebar(Alpine) {
           break;
         case 'artists':
           this.ui.setView('artists');
+          // Ensure library tracks are loaded for artist grouping
+          if (this.library.tracks.length === 0) {
+            await this.library.load();
+          }
           return;
         case 'albums':
           this.ui.setView('albums');
