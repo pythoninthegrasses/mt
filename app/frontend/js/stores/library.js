@@ -35,8 +35,9 @@ export function createLibraryStore(Alpine) {
 
   Alpine.store('library', {
     // Track data
-    tracks: [], // All tracks in library
+    tracks: [], // Tracks for current section view
     filteredTracks: [], // Tracks after search/filter
+    allTracks: [], // Complete library (source of truth for Artists/Albums browsers)
 
     // Search and filter state
     searchQuery: '',
@@ -121,6 +122,17 @@ export function createLibraryStore(Alpine) {
       };
       // Persist cache to settings (non-blocking)
       this._saveCacheToSettings();
+    },
+
+    /**
+     * Filter tracks to only those present in allTracks (the source of truth).
+     * Ensures optimistically-deleted tracks don't reappear when section
+     * loaders fetch from the backend before IPC deletes complete.
+     */
+    _filterByLibrary(tracks) {
+      if (this.allTracks.length === 0) return [];
+      const ids = new Set(this.allTracks.map((t) => t.id));
+      return tracks.filter((t) => ids.has(t.id));
     },
 
     /**
@@ -249,9 +261,12 @@ export function createLibraryStore(Alpine) {
         console.log('[library] background refresh starting for:', section);
         const data = await this._fetchLibraryData();
 
-        // Only update if still on same section
+        // _fetchLibraryData always returns the full library
+        this.allTracks = data.tracks || [];
+
+        // Only update section-specific state if still on same section
         if (this.currentSection === section) {
-          this.tracks = data.tracks || [];
+          this.tracks = this.allTracks;
           this.totalTracks = data.total || this.tracks.length;
           this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
           this._updateCache(section, data);
@@ -329,6 +344,9 @@ export function createLibraryStore(Alpine) {
         this._lastLoadedSection = loadSection;
         this._updateCache(loadSection, data);
 
+        // _fetchLibraryData always returns the full library, so keep allTracks in sync
+        this.allTracks = this.tracks;
+
         this.applyFilters();
 
         console.log('[library]', 'load_complete', {
@@ -364,7 +382,7 @@ export function createLibraryStore(Alpine) {
       // DON'T clear tracks - keep showing previous data while loading
       try {
         const data = await api.favorites.get({ limit: 1000 });
-        this.tracks = data.tracks || [];
+        this.tracks = this._filterByLibrary(data.tracks || []);
         this.totalTracks = this.tracks.length;
         this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
         this._lastLoadedSection = section;
@@ -385,7 +403,7 @@ export function createLibraryStore(Alpine) {
       try {
         const data = await api.favorites.get({ limit: 1000 });
         if (this.currentSection === 'liked' || this._lastLoadedSection === 'liked') {
-          this.tracks = data.tracks || [];
+          this.tracks = this._filterByLibrary(data.tracks || []);
           this.totalTracks = this.tracks.length;
           this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
           this._updateCache('liked', { tracks: this.tracks, total: this.totalTracks });
@@ -416,7 +434,7 @@ export function createLibraryStore(Alpine) {
       // DON'T clear tracks - keep showing previous data while loading
       try {
         const data = await api.favorites.getRecentlyPlayed({ days, limit: 100 });
-        this.tracks = data.tracks || [];
+        this.tracks = this._filterByLibrary(data.tracks || []);
         this.totalTracks = this.tracks.length;
         this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
         this._lastLoadedSection = section;
@@ -437,7 +455,7 @@ export function createLibraryStore(Alpine) {
       try {
         const data = await api.favorites.getRecentlyPlayed({ days, limit: 100 });
         if (this._lastLoadedSection === 'recent') {
-          this.tracks = data.tracks || [];
+          this.tracks = this._filterByLibrary(data.tracks || []);
           this.totalTracks = this.tracks.length;
           this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
           this._updateCache('recent', { tracks: this.tracks, total: this.totalTracks });
@@ -468,7 +486,7 @@ export function createLibraryStore(Alpine) {
       // DON'T clear tracks - keep showing previous data while loading
       try {
         const data = await api.favorites.getRecentlyAdded({ days, limit: 100 });
-        this.tracks = data.tracks || [];
+        this.tracks = this._filterByLibrary(data.tracks || []);
         this.totalTracks = this.tracks.length;
         this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
         this._lastLoadedSection = section;
@@ -489,7 +507,7 @@ export function createLibraryStore(Alpine) {
       try {
         const data = await api.favorites.getRecentlyAdded({ days, limit: 100 });
         if (this._lastLoadedSection === 'added') {
-          this.tracks = data.tracks || [];
+          this.tracks = this._filterByLibrary(data.tracks || []);
           this.totalTracks = this.tracks.length;
           this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
           this._updateCache('added', { tracks: this.tracks, total: this.totalTracks });
@@ -520,7 +538,7 @@ export function createLibraryStore(Alpine) {
       // DON'T clear tracks - keep showing previous data while loading
       try {
         const data = await api.favorites.getTop25();
-        this.tracks = data.tracks || [];
+        this.tracks = this._filterByLibrary(data.tracks || []);
         this.totalTracks = this.tracks.length;
         this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
         this._lastLoadedSection = section;
@@ -541,7 +559,7 @@ export function createLibraryStore(Alpine) {
       try {
         const data = await api.favorites.getTop25();
         if (this._lastLoadedSection === 'top25') {
-          this.tracks = data.tracks || [];
+          this.tracks = this._filterByLibrary(data.tracks || []);
           this.totalTracks = this.tracks.length;
           this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
           this._updateCache('top25', { tracks: this.tracks, total: this.totalTracks });
@@ -923,25 +941,73 @@ export function createLibraryStore(Alpine) {
     },
 
     /**
+     * Remove tracks from local state without IPC calls.
+     * Used by the event system and optimistic UI updates.
+     * @param {number[]} trackIds - Track IDs to remove
+     */
+    removeTracksLocally(trackIds) {
+      if (!trackIds || trackIds.length === 0) return;
+
+      // Fast path: clearing the entire library — skip reactive filtering
+      if (trackIds.length >= this.allTracks.length) {
+        this.allTracks = [];
+        this.tracks = [];
+        this.filteredTracks = [];
+        this.totalTracks = 0;
+        this.totalDuration = 0;
+        this._clearCache();
+
+        const queue = Alpine.store('queue');
+        queue.items = [];
+        queue._originalOrder = [];
+        queue.currentIndex = -1;
+        Alpine.store('player').stop();
+        return;
+      }
+
+      const idSet = new Set(trackIds);
+      this.allTracks = this.allTracks.filter((t) => !idSet.has(t.id));
+      this.tracks = this.tracks.filter((t) => !idSet.has(t.id));
+      this.totalTracks = this.tracks.length;
+      this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+      this._clearCache();
+      this.applyFilters();
+
+      // Remove from queue if present
+      const queue = Alpine.store('queue');
+      const indicesToRemove = [];
+      for (let i = queue.items.length - 1; i >= 0; i--) {
+        if (idSet.has(queue.items[i].id)) {
+          indicesToRemove.push(i);
+        }
+      }
+      // Remove in reverse order so indices stay valid
+      for (const idx of indicesToRemove) {
+        queue.items.splice(idx, 1);
+        if (idx < queue.currentIndex) {
+          queue.currentIndex--;
+        } else if (idx === queue.currentIndex) {
+          if (queue.items.length === 0) {
+            queue.currentIndex = -1;
+            Alpine.store('player').stop();
+          } else if (queue.currentIndex >= queue.items.length) {
+            queue.currentIndex = queue.items.length - 1;
+          }
+        }
+      }
+      if (queue._originalOrder) {
+        queue._originalOrder = queue._originalOrder.filter((t) => !idSet.has(t.id));
+      }
+    },
+
+    /**
      * Remove track from library
      * @param {string} trackId - Track ID to remove
      */
     async remove(trackId) {
       try {
         await api.library.deleteTrack(trackId);
-
-        // Update local state
-        this.tracks = this.tracks.filter((t) => t.id !== trackId);
-        this.totalTracks = this.tracks.length;
-        this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-        this.applyFilters();
-
-        // Also remove from queue if present
-        const queue = Alpine.store('queue');
-        const queueIndex = queue.items.findIndex((t) => t.id === trackId);
-        if (queueIndex >= 0) {
-          await queue.remove(queueIndex);
-        }
+        this.removeTracksLocally([trackId]);
       } catch (error) {
         console.error('Failed to remove track:', error);
         throw error;

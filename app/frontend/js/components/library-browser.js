@@ -1565,14 +1565,38 @@ export function createLibraryBrowser(Alpine) {
       }) ?? window.confirm(confirmMsg);
 
       if (confirmed) {
-        for (const track of tracks) {
-          await this.library.remove(track.id);
-        }
+        const trackIds = tracks.map((t) => t.id);
+        const isDeletingAll = trackIds.length === this.library.allTracks.length;
+
+        // Optimistic UI: remove from local state immediately
+        this.library.removeTracksLocally(trackIds);
         this.selectedTracks.clear();
         this.$store.ui.toast(
           `Removed ${tracks.length} track${tracks.length > 1 ? 's' : ''}`,
           'success',
         );
+
+        const { invoke } = window.__TAURI__.core;
+
+        try {
+          if (isDeletingAll) {
+            // Remove watched folders first so watcher can't re-add tracks
+            const folders = await invoke('watched_folders_list');
+            await Promise.allSettled(
+              (folders || []).map((f) => invoke('watched_folders_remove', { id: f.id })),
+            );
+            // Single SQL wipe of library, favorites, playlist_items
+            await invoke('library_delete_all');
+            console.log('[library-browser] Deleted all tracks and removed watched folders');
+          } else {
+            // Batch delete by IDs in a single IPC call
+            await invoke('library_delete_tracks', { trackIds });
+            console.log('[library-browser] Batch deleted', trackIds.length, 'tracks');
+          }
+        } catch (err) {
+          console.error('[library-browser] Delete failed:', err);
+          this.library.fetchTracks();
+        }
       }
     },
 
