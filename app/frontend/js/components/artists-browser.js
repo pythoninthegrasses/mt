@@ -6,6 +6,7 @@ export function createArtistsBrowser(Alpine) {
     selectedArtist: null,
     artworkCache: {},
     contextMenu: null,
+    _buildQueueGeneration: 0,
 
     // Memoization cache
     _artistsVersion: -1,
@@ -287,9 +288,13 @@ export function createArtistsBrowser(Alpine) {
 
     async handleTrackDoubleClick(track, allTracks, index) {
       this.queue._updating = true;
+      this._buildQueueGeneration++;
+      const generation = this._buildQueueGeneration;
+      let backgroundBuildStarted = false;
+
       try {
-        await this.queue.clear();
         if (this.queue.shuffle) {
+          await this.queue.clear();
           await this.queue.add(allTracks, false);
           if (index >= 0 && index < this.queue.items.length) {
             this.queue.currentIndex = index;
@@ -299,22 +304,58 @@ export function createArtistsBrowser(Alpine) {
           } else {
             await this.player.playTrack(track);
           }
-        } else {
-          if (index >= 0 && index < allTracks.length) {
-            await this.queue.add([track], false);
-            if (index + 1 < allTracks.length) {
-              const subsequentTracks = allTracks.slice(index + 1);
-              await this.queue.add(subsequentTracks, false);
+        } else if (index >= 0 && index < allTracks.length) {
+          backgroundBuildStarted = true;
+
+          this.queue.items.splice(0, this.queue.items.length, track);
+          this.queue._originalOrder.splice(0, this.queue._originalOrder.length, track);
+          this.queue.currentIndex = 0;
+          this.queue._playHistory = [];
+          this.queue._playNextOffset = 0;
+          await this.player.playTrack(track);
+
+          const self = this;
+          const buildQueue = async () => {
+            try {
+              await api.queue.clear();
+              if (self._buildQueueGeneration !== generation) return;
+
+              const subsequent = allTracks.slice(index);
+              const preceding = allTracks.slice(0, index);
+              const fullQueue = [...subsequent, ...preceding];
+
+              if (self._buildQueueGeneration !== generation) return;
+
+              self.queue.items.splice(0, self.queue.items.length, ...fullQueue);
+              self.queue._originalOrder.splice(0, self.queue._originalOrder.length, ...fullQueue);
+              self.queue.currentIndex = 0;
+
+              await api.queue.add(fullQueue.map((t) => t.id));
+              if (self._buildQueueGeneration !== generation) return;
+
+              await api.queue.setCurrentIndex(0);
+            } catch (err) {
+              if (self._buildQueueGeneration === generation) {
+                console.error('[artists-browser] Failed to build queue:', err);
+              }
+            } finally {
+              if (self._buildQueueGeneration === generation) {
+                setTimeout(() => {
+                  self.queue._updating = false;
+                }, 200);
+              }
             }
-            await this.queue.playIndex(0);
-          } else {
-            await this.player.playTrack(track);
-          }
+          };
+          buildQueue();
+        } else {
+          await this.player.playTrack(track);
         }
       } finally {
-        setTimeout(() => {
-          this.queue._updating = false;
-        }, 200);
+        if (!backgroundBuildStarted) {
+          setTimeout(() => {
+            this.queue._updating = false;
+          }, 200);
+        }
       }
     },
 
