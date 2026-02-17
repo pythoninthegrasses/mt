@@ -68,7 +68,20 @@ impl Database {
     /// # Returns
     /// A new Database instance with initialized schema
     pub fn new<P: AsRef<Path>>(db_path: P) -> DbResult<Self> {
-        let manager = SqliteConnectionManager::file(db_path);
+        let manager = SqliteConnectionManager::file(db_path).with_init(|conn| {
+            // Per-connection PRAGMAs: applied to every new connection from the pool.
+            // busy_timeout MUST be set so concurrent writers wait instead of
+            // getting an immediate SQLITE_BUSY, which can corrupt SQLite
+            // internal state when multiple tokio tasks write simultaneously.
+            conn.execute_batch(
+                "
+                PRAGMA busy_timeout = 5000;
+                PRAGMA synchronous = NORMAL;
+                PRAGMA foreign_keys = ON;
+                PRAGMA cache_size = -64000;
+                ",
+            )
+        });
         let pool = Pool::builder()
             .max_size(4)
             .min_idle(Some(1))
@@ -86,7 +99,16 @@ impl Database {
 
     /// Create an in-memory database (useful for testing)
     pub fn new_in_memory() -> DbResult<Self> {
-        let manager = SqliteConnectionManager::memory();
+        let manager = SqliteConnectionManager::memory().with_init(|conn| {
+            conn.execute_batch(
+                "
+                PRAGMA busy_timeout = 5000;
+                PRAGMA synchronous = NORMAL;
+                PRAGMA foreign_keys = ON;
+                PRAGMA cache_size = -64000;
+                ",
+            )
+        });
         let pool = Pool::builder().max_size(1).build(manager)?;
 
         let db = Self {
@@ -102,15 +124,8 @@ impl Database {
     fn init(&self) -> DbResult<()> {
         let conn = self.pool.get()?;
 
-        // Enable performance optimizations
-        conn.execute_batch(
-            "
-            PRAGMA journal_mode = WAL;
-            PRAGMA synchronous = NORMAL;
-            PRAGMA foreign_keys = ON;
-            PRAGMA cache_size = -64000;
-            ",
-        )?;
+        // Database-level PRAGMA (persists across connections once set)
+        conn.execute_batch("PRAGMA journal_mode = WAL;")?;
 
         // Create tables
         schema::create_tables(&conn)?;

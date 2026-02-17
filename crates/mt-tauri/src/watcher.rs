@@ -81,6 +81,10 @@ pub struct WatcherManager {
     app: AppHandle,
     db: Database,
     active_watchers: Arc<RwLock<HashMap<i64, WatcherHandle>>>,
+    /// Serializes rescan operations to prevent concurrent Zig FFI scanner
+    /// instances and concurrent SQLite writes, which cause heap corruption
+    /// (SIGBUS at 0x161746164) on startup with overlapping watched folders.
+    rescan_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
 struct WatcherHandle {
@@ -97,6 +101,7 @@ impl WatcherManager {
             app,
             db,
             active_watchers: Arc::new(RwLock::new(HashMap::new())),
+            rescan_semaphore: Arc::new(tokio::sync::Semaphore::new(1)),
         }
     }
 
@@ -142,6 +147,7 @@ impl WatcherManager {
 
         let app = self.app.clone();
         let db = self.db.clone();
+        let rescan_sem = self.rescan_semaphore.clone();
         let folder_id = folder.id;
         let mode = folder.mode.clone();
         let cadence_minutes = folder.cadence_minutes.unwrap_or(10) as u64;
@@ -168,9 +174,13 @@ impl WatcherManager {
 
         tokio::spawn(async move {
             if mode == "startup" {
+                let _permit = rescan_sem.acquire().await;
                 Self::trigger_rescan(&app, &db, folder_id).await;
             } else if mode == "continuous" {
-                Self::trigger_rescan(&app, &db, folder_id).await;
+                {
+                    let _permit = rescan_sem.acquire().await;
+                    Self::trigger_rescan(&app, &db, folder_id).await;
+                }
 
                 let mut interval =
                     tokio::time::interval(Duration::from_secs(cadence_minutes * 60));
@@ -179,6 +189,7 @@ impl WatcherManager {
                 loop {
                     tokio::select! {
                         _ = interval.tick() => {
+                            let _permit = rescan_sem.acquire().await;
                             Self::trigger_rescan(&app, &db, folder_id).await;
                         }
                         _ = cancel_rx.recv() => {
@@ -200,6 +211,7 @@ impl WatcherManager {
     ) -> Option<Debouncer<notify::RecommendedWatcher, RecommendedCache>> {
         let app = self.app.clone();
         let db = self.db.clone();
+        let rescan_sem = self.rescan_semaphore.clone();
         let path = PathBuf::from(folder_path);
 
         if !path.exists() {
@@ -268,7 +280,9 @@ impl WatcherManager {
 
                             let app_clone = app.clone();
                             let db_clone = db.clone();
+                            let sem_clone = rescan_sem.clone();
                             runtime_handle.spawn(async move {
+                                let _permit = sem_clone.acquire().await;
                                 Self::trigger_rescan(&app_clone, &db_clone, folder_id).await;
                             });
                         }
