@@ -123,6 +123,10 @@ export function createSidebar(Alpine) {
           return;
         case 'albums':
           this.ui.setView('albums');
+          // Ensure library tracks are loaded for album grouping
+          if (this.library.tracks.length === 0) {
+            await this.library.load();
+          }
           return;
         case 'nowPlaying':
           this.ui.setView('nowPlaying');

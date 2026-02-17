@@ -12,6 +12,7 @@ import { createNowPlayingView } from './now-playing-view.js';
 import { createSettingsView, createShortcutsSettings } from './settings-view.js';
 import { createMetadataModal } from './metadata-modal.js';
 import { createArtistsBrowser } from './artists-browser.js';
+import { createAlbumsBrowser } from './albums-browser.js';
 
 export function initComponents(Alpine) {
   createLibraryBrowser(Alpine);
@@ -22,6 +23,7 @@ export function initComponents(Alpine) {
   createShortcutsSettings(Alpine);
   createMetadataModal(Alpine);
   createArtistsBrowser(Alpine);
+  createAlbumsBrowser(Alpine);
 
   console.log('[components] All components registered');
 }

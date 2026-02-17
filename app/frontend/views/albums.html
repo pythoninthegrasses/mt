@@ -1,16 +1,282 @@
-<!-- Albums browsing view -->
+<!-- Albums View -->
 <div
   x-show="$store.ui.view === 'albums'"
   x-cloak
-  class="h-full flex items-center justify-center"
+  x-data="albumsBrowser"
+  class="h-full flex flex-col min-h-0"
   data-testid="albums-view"
 >
-  <div class="text-center text-foreground/50">
-    <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="10" stroke-width="1.5"></circle>
-      <circle cx="12" cy="12" r="3" stroke-width="1.5"></circle>
-    </svg>
-    <p class="text-lg font-medium">Albums</p>
-    <p class="text-sm mt-1">Album browsing view coming soon</p>
+  <!-- Album Grid View -->
+  <div x-show="subView === 'grid'" class="h-full flex flex-col min-h-0">
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-border shrink-0">
+      <h1 class="text-2xl font-bold">Albums</h1>
+      <p class="text-sm text-muted-foreground mt-1">
+        <span x-text="albumList.length"></span> albums
+      </p>
+    </div>
+
+    <!-- Grid -->
+    <div
+      x-ref="gridContainer"
+      class="flex-1 min-h-0 overflow-y-auto p-6"
+    >
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-6">
+        <template x-for="album in albumList" :key="album.name">
+          <div
+            class="group cursor-pointer"
+            x-init="$nextTick(() => observeCard($el, album.name, album.firstTrackId))"
+            @click="openAlbumDetail(album)"
+            @contextmenu="showAlbumContextMenu($event, album)"
+            data-testid="album-card"
+          >
+            <!-- Artwork -->
+            <div class="relative aspect-square bg-muted rounded-lg overflow-hidden shadow-sm">
+              <template x-if="getArtworkUrl(album.name)">
+                <img
+                  :src="getArtworkUrl(album.name)"
+                  :alt="album.name"
+                  class="w-full h-full object-cover"
+                  loading="lazy"
+                >
+              </template>
+              <template x-if="!getArtworkUrl(album.name)">
+                <div class="w-full h-full flex items-center justify-center">
+                  <svg class="w-12 h-12 text-muted-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                  </svg>
+                </div>
+              </template>
+
+              <!-- Hover overlay with action buttons -->
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                <button
+                  class="btn btn-sm bg-white text-black hover:bg-white/90 rounded-full w-10 h-10 p-0 flex items-center justify-center shadow-lg"
+                  @click.stop="playAlbum(album)"
+                  title="Play"
+                  data-testid="album-play-btn"
+                >
+                  <svg class="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                </button>
+                <button
+                  class="btn btn-sm bg-white/20 text-white hover:bg-white/30 rounded-full w-10 h-10 p-0 flex items-center justify-center backdrop-blur-sm"
+                  @click.stop="showAlbumContextMenu($event, album)"
+                  title="More"
+                  data-testid="album-more-btn"
+                >
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="5" r="1.5"/>
+                    <circle cx="12" cy="12" r="1.5"/>
+                    <circle cx="12" cy="19" r="1.5"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Album info -->
+            <div class="mt-2 px-0.5">
+              <p class="text-sm font-medium truncate" x-text="album.name"></p>
+              <p class="text-xs text-muted-foreground truncate" x-text="album.artist"></p>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Empty state -->
+      <div x-show="albumList.length === 0" class="flex flex-col items-center justify-center h-full text-muted-foreground">
+        <svg class="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+        </svg>
+        <p class="text-lg">No albums in library</p>
+        <p class="text-sm mt-1">Add music to see your albums here</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Album Detail View -->
+  <div x-show="subView === 'detail'" class="h-full flex flex-col min-h-0">
+    <!-- Back button header -->
+    <div class="px-6 py-3 border-b border-border shrink-0">
+      <button
+        class="btn btn-ghost btn-sm gap-1"
+        @click="backToGrid()"
+        data-testid="album-back-btn"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+        Albums
+      </button>
+    </div>
+
+    <!-- Detail content -->
+    <div class="flex-1 min-h-0 overflow-y-auto">
+      <template x-if="selectedAlbum">
+        <div class="p-6">
+          <!-- Album header: artwork + metadata -->
+          <div class="flex gap-8 mb-8">
+            <!-- Artwork -->
+            <div class="w-56 h-56 bg-muted rounded-lg overflow-hidden shadow-lg shrink-0">
+              <template x-if="selectedAlbumArtwork">
+                <img
+                  :src="selectedAlbumArtwork"
+                  :alt="selectedAlbum.name"
+                  class="w-full h-full object-cover"
+                  data-testid="album-detail-artwork"
+                >
+              </template>
+              <template x-if="!selectedAlbumArtwork">
+                <div class="w-full h-full flex items-center justify-center">
+                  <svg class="w-20 h-20 text-muted-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                  </svg>
+                </div>
+              </template>
+            </div>
+
+            <!-- Metadata -->
+            <div class="flex flex-col justify-end min-w-0">
+              <h1
+                class="text-3xl font-bold mb-2 break-words"
+                x-text="selectedAlbum.name"
+                data-testid="album-detail-title"
+              ></h1>
+              <p class="text-lg mb-1">
+                <span
+                  class="text-primary hover:underline cursor-pointer"
+                  x-text="selectedAlbum.artist"
+                  @click="navigateToArtist(selectedAlbum.artist)"
+                  data-testid="album-detail-artist"
+                ></span>
+              </p>
+              <p class="text-sm text-muted-foreground mb-4">
+                <span x-show="selectedAlbum.genre" x-text="selectedAlbum.genre"></span>
+                <span x-show="selectedAlbum.genre && selectedAlbum.year"> &middot; </span>
+                <span x-show="selectedAlbum.year" x-text="selectedAlbum.year"></span>
+              </p>
+
+              <!-- Action buttons -->
+              <div class="flex gap-3">
+                <button
+                  class="btn btn-sm gap-2"
+                  @click="playAlbum(selectedAlbum)"
+                  data-testid="album-detail-play-btn"
+                >
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                  Play
+                </button>
+                <button
+                  class="btn btn-sm btn-secondary gap-2"
+                  @click="shuffleAlbum(selectedAlbum)"
+                  data-testid="album-detail-shuffle-btn"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>
+                  </svg>
+                  Shuffle
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Track listing -->
+          <div class="border border-border rounded-lg overflow-hidden">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-border text-xs text-muted-foreground uppercase tracking-wider">
+                  <th class="w-12 py-2 px-3 text-right font-medium">#</th>
+                  <th class="py-2 px-3 text-left font-medium">Title</th>
+                  <th class="py-2 px-3 text-left font-medium hidden sm:table-cell">Artist</th>
+                  <th class="w-20 py-2 px-3 text-right font-medium">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(track, index) in selectedAlbumTracks" :key="track.id">
+                  <tr
+                    class="border-b border-border last:border-b-0 cursor-default group"
+                    :class="[
+                      isPlaying(track.id) ? 'track-row-playing' : 'hover:bg-muted/50'
+                    ]"
+                    @dblclick="playTrack(track, index)"
+                    @contextmenu="showTrackContextMenu($event, track, index)"
+                    data-testid="album-detail-track"
+                  >
+                    <td class="py-2 px-3 text-right text-sm tabular-nums">
+                      <template x-if="isPlaying(track.id)">
+                        <span class="flex items-center justify-end text-primary" data-testid="now-playing-indicator">
+                          <template x-if="$store.player.isPlaying">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
+                            </svg>
+                          </template>
+                          <template x-if="!$store.player.isPlaying">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z"></path>
+                            </svg>
+                          </template>
+                        </span>
+                      </template>
+                      <template x-if="!isPlaying(track.id)">
+                        <span class="text-muted-foreground" x-text="track.track_number || ''"></span>
+                      </template>
+                    </td>
+                    <td class="py-2 px-3 text-sm truncate max-w-0">
+                      <span x-text="track.title || 'Unknown'" class="truncate block"></span>
+                    </td>
+                    <td class="py-2 px-3 text-sm text-muted-foreground truncate max-w-0 hidden sm:table-cell">
+                      <span x-text="track.artist || ''" class="truncate block"></span>
+                    </td>
+                    <td class="py-2 px-3 text-sm text-muted-foreground text-right tabular-nums" x-text="formatTrackDuration(track.duration)"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Footer metadata -->
+          <div class="mt-4 text-xs text-muted-foreground">
+            <span x-show="selectedAlbum.year" x-text="selectedAlbum.year"></span>
+            <span x-show="selectedAlbum.year"> &middot; </span>
+            <span x-text="selectedAlbum.trackCount + ' ' + (selectedAlbum.trackCount === 1 ? 'song' : 'songs')"></span>
+            <span> &middot; </span>
+            <span x-text="formatTotalDuration(selectedAlbum.totalDuration)"></span>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- Context Menu -->
+  <div
+    x-show="contextMenu"
+    x-cloak
+    class="fixed z-100 min-w-[180px] border border-border rounded-lg shadow-lg p-1 bg-card"
+    :style="contextMenu ? `left: ${contextMenu.x}px; top: ${contextMenu.y}px` : ''"
+    @click.outside="contextMenu = null"
+  >
+    <template x-if="contextMenu">
+      <div>
+        <template x-for="(item, idx) in contextMenu.items" :key="idx">
+          <div>
+            <template x-if="item.type === 'separator'">
+              <div class="my-1 border-t border-border"></div>
+            </template>
+            <template x-if="item.type !== 'separator'">
+              <div
+                class="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md cursor-pointer hover:bg-muted"
+                @click="item.action()"
+              >
+                <span x-text="item.icon" class="w-4 text-center text-xs"></span>
+                <span x-text="item.label"></span>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </template>
   </div>
 </div>

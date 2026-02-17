@@ -77,8 +77,13 @@
 }
 
 .track-row-playing {
-  background-color: hsl(var(--primary) / 0.15);
-  box-shadow: inset 2px 0 0 0 hsl(var(--primary));
+  background-color: color-mix(in oklch, var(--itunes-red) 12%, transparent);
+  box-shadow: inset 2px 0 0 0 var(--itunes-red);
+  color: var(--itunes-red);
+}
+
+.track-row-playing .text-muted-foreground {
+  color: color-mix(in oklch, var(--itunes-red) 70%, currentColor);
 }
 
 /* Sidebar icon hover - accent color */
@@ -234,6 +239,11 @@ aside button:hover svg {
 
 [data-theme-preset='metro-teal'] .track-row-playing {
   background-color: hsl(var(--mt-playing-bg)) !important;
+  box-shadow: inset 2px 0 0 0 hsl(var(--mt-playing-fg)) !important;
+  color: hsl(var(--mt-playing-fg)) !important;
+}
+
+[data-theme-preset='metro-teal'] .track-row-playing .text-muted-foreground {
   color: hsl(var(--mt-playing-fg)) !important;
 }
 
