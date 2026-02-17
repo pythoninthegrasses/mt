@@ -12,11 +12,7 @@ export function createArtistsBrowser(Alpine) {
     submenuY: 0,
     submenuCloseTimeout: null,
 
-    // All library tracks (loaded independently of library store's active section)
-    _allTracks: [],
-
     init() {
-      this._loadAllTracks();
       this._loadPlaylists();
       window.addEventListener('mt:playlists-updated', () => this._loadPlaylists());
 
@@ -31,6 +27,10 @@ export function createArtistsBrowser(Alpine) {
       if (this.$store.ui.view === 'artists' && this.artists.length > 0) {
         this.selectedArtist = this.artists[0];
       }
+    },
+
+    get _allTracks() {
+      return this.$store.library.allTracks;
     },
 
     get library() {
@@ -298,15 +298,6 @@ export function createArtistsBrowser(Alpine) {
         setTimeout(() => {
           this.queue._updating = false;
         }, 200);
-      }
-    },
-
-    async _loadAllTracks() {
-      try {
-        const data = await api.library.getTracks({ limit: 999999, offset: 0 });
-        this._allTracks = data.tracks || [];
-      } catch {
-        this._allTracks = [];
       }
     },
 

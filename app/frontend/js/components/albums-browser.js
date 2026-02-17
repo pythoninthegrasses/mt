@@ -27,9 +27,6 @@ export function createAlbumsBrowser(Alpine) {
     // Scroll position preservation
     _gridScrollTop: 0,
 
-    // All library tracks (loaded independently of library store's active section)
-    _allTracks: [],
-
     // Context menu
     contextMenu: null,
     playlists: [],
@@ -41,7 +38,6 @@ export function createAlbumsBrowser(Alpine) {
     init() {
       this._setupLazyLoading();
       this._loadPlaylists();
-      this._loadAllTracks();
       window.addEventListener('mt:playlists-updated', () => this._loadPlaylists());
 
       // Reset to grid view when navigating back to albums
@@ -59,6 +55,10 @@ export function createAlbumsBrowser(Alpine) {
       }
     },
 
+    get _allTracks() {
+      return this.$store.library.allTracks;
+    },
+
     get library() {
       return this.$store.library;
     },
@@ -74,18 +74,6 @@ export function createAlbumsBrowser(Alpine) {
 
     isPlaying(trackId) {
       return this.player.currentTrack?.id === trackId;
-    },
-
-    /**
-     * Get album data enriched with metadata from first track
-     */
-    async _loadAllTracks() {
-      try {
-        const data = await api.library.getTracks({ limit: 999999, offset: 0 });
-        this._allTracks = data.tracks || [];
-      } catch {
-        this._allTracks = [];
-      }
     },
 
     get albumList() {
