@@ -4,17 +4,14 @@ title: Add Artists and Albums sidebar navigation items with view routing
 status: In Progress
 assignee: []
 created_date: '2026-02-16 21:13'
-updated_date: '2026-02-16 21:22'
+updated_date: '2026-02-17 01:31'
 labels:
   - feature
   - ux
 dependencies: []
-references:
-  - 'app/frontend/js/components/sidebar.js:23-30'
-  - app/frontend/views/sidebar.html
-  - app/frontend/js/stores/ui.js
 parent_task_id: TASK-273
 priority: medium
+ordinal: 44500
 ---
 
 ## Description

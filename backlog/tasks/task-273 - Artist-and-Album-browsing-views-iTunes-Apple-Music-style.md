@@ -4,24 +4,13 @@ title: Artist and Album browsing views (iTunes/Apple Music style)
 status: In Progress
 assignee: []
 created_date: '2026-02-16 21:12'
-updated_date: '2026-02-16 21:22'
+updated_date: '2026-02-17 01:31'
 labels:
   - feature
   - ux
 dependencies: []
-references:
-  - app/frontend/views/sidebar.html
-  - app/frontend/js/components/sidebar.js
-  - 'app/frontend/js/stores/library.js:972-1012'
-  - app/frontend/js/stores/ui.js
-  - app/frontend/views/library.html
-  - app/frontend/js/components/library-browser.js
-  - crates/mt-tauri/src/db/library.rs
-  - crates/mt-tauri/src/db/models.rs
-  - crates/mt-tauri/src/library/commands.rs
-documentation:
-  - docs/tauri-architecture.md
 priority: medium
+ordinal: 42500
 ---
 
 ## Description

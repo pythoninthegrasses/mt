@@ -4,19 +4,15 @@ title: 'Implement Artists browsing view (split pane: artist list + detail)'
 status: In Progress
 assignee: []
 created_date: '2026-02-16 21:13'
-updated_date: '2026-02-16 21:22'
+updated_date: '2026-02-17 01:31'
 labels:
   - feature
   - ux
 dependencies:
   - TASK-273.01
-references:
-  - 'app/frontend/js/stores/library.js:972-1012'
-  - crates/mt-tauri/src/db/library.rs
-  - crates/mt-tauri/src/library/commands.rs
-  - app/frontend/js/components/library-browser.js
 parent_task_id: TASK-273
 priority: medium
+ordinal: 45500
 ---
 
 ## Description
