@@ -28,11 +28,10 @@ act is invaluable for debugging CI failures:
 3. **See full output** - All logs captured (even what's hidden in CI)
 4. **Native execution** - Self-hosted runners run on your machine with all your tools
 
-**Example**: We used act to find the cmake error in `build-taglib.sh`:
+**Example**: Debug build failures by capturing full output:
 ```bash
 act -j build 2>&1 | tee /tmp/act-build.log
-grep -i "cmake error" /tmp/act-build.log
-# Found: CMake Error: The source directory "/tmp/taglib-2.0.2" does not appear to contain CMakeLists.txt.
+grep -i "error" /tmp/act-build.log
 ```
 
 ## Why test-local.yml?
