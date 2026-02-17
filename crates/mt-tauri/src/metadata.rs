@@ -40,6 +40,7 @@ pub struct MetadataUpdate {
     pub genre: Option<String>,
 }
 
+#[tracing::instrument]
 #[tauri::command]
 pub fn get_track_metadata(path: String) -> Result<TrackMetadata, String> {
     let file_path = Path::new(&path);
@@ -110,6 +111,7 @@ pub fn get_track_metadata(path: String) -> Result<TrackMetadata, String> {
     })
 }
 
+#[tracing::instrument(skip(update))]
 #[tauri::command]
 pub fn save_track_metadata(update: MetadataUpdate) -> Result<TrackMetadata, String> {
     let file_path = Path::new(&update.path);

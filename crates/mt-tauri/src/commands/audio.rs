@@ -4,6 +4,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tracing::{debug, error};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlaybackStatus {
@@ -60,7 +61,7 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
     let mut engine = match AudioEngine::new() {
         Ok(e) => e,
         Err(e) => {
-            eprintln!("Failed to create audio engine: {}", e);
+            error!(error = %e, "Failed to create audio engine");
             return;
         }
     };
@@ -160,7 +161,7 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                             let db = app_handle.state::<Database>();
                             if let Ok(conn) = db.conn() {
                                 let _ = library::update_play_count(&conn, track_id);
-                                println!("[audio] Play count updated for track_id={}", track_id);
+                                debug!(track_id, "Play count updated");
                             }
                         });
                         play_count_state.threshold_reached = true;
@@ -185,8 +186,8 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                             if let Ok(conn) = db.conn() {
                                 // Queue scrobble from audio thread
                                 match lastfm::scrobble_from_audio_thread(&app_handle, &conn, track_id) {
-                                    Ok(_) => println!("[audio] Scrobble queued for track_id={}", track_id),
-                                    Err(e) => eprintln!("[audio] Failed to queue scrobble: {}", e),
+                                    Ok(_) => debug!(track_id, "Scrobble queued"),
+                                    Err(e) => error!(track_id, error = %e, "Failed to queue scrobble"),
                                 }
                             }
                         });
@@ -202,6 +203,7 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
     }
 }
 
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 pub fn audio_load(path: String, track_id: Option<i64>, state: State<AudioState>) -> Result<TrackInfo, String> {
     let (tx, rx) = mpsc::channel();
@@ -209,6 +211,7 @@ pub fn audio_load(path: String, track_id: Option<i64>, state: State<AudioState>)
     rx.recv().map_err(|_| "Channel closed".to_string())?
 }
 
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 pub fn audio_play(state: State<AudioState>) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
@@ -216,6 +219,7 @@ pub fn audio_play(state: State<AudioState>) -> Result<(), String> {
     rx.recv().map_err(|_| "Channel closed".to_string())?
 }
 
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 pub fn audio_pause(state: State<AudioState>) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
@@ -223,6 +227,7 @@ pub fn audio_pause(state: State<AudioState>) -> Result<(), String> {
     rx.recv().map_err(|_| "Channel closed".to_string())?
 }
 
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 pub fn audio_stop(state: State<AudioState>) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
@@ -230,6 +235,7 @@ pub fn audio_stop(state: State<AudioState>) -> Result<(), String> {
     rx.recv().map_err(|_| "Channel closed".to_string())?
 }
 
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 pub fn audio_seek(position_ms: u64, state: State<AudioState>) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
@@ -237,6 +243,7 @@ pub fn audio_seek(position_ms: u64, state: State<AudioState>) -> Result<(), Stri
     rx.recv().map_err(|_| "Channel closed".to_string())?
 }
 
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 pub fn audio_set_volume(volume: f32, state: State<AudioState>) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
@@ -244,6 +251,7 @@ pub fn audio_set_volume(volume: f32, state: State<AudioState>) -> Result<(), Str
     rx.recv().map_err(|_| "Channel closed".to_string())?
 }
 
+#[tracing::instrument(level = "trace", skip(state))]
 #[tauri::command]
 pub fn audio_get_volume(state: State<AudioState>) -> f32 {
     let (tx, rx) = mpsc::channel();
@@ -251,6 +259,7 @@ pub fn audio_get_volume(state: State<AudioState>) -> f32 {
     rx.recv().unwrap_or(1.0)
 }
 
+#[tracing::instrument(level = "trace", skip(state))]
 #[tauri::command]
 pub fn audio_get_status(state: State<AudioState>) -> PlaybackStatus {
     let (tx, rx) = mpsc::channel();

@@ -1,6 +1,8 @@
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
+use tracing::debug;
 
+#[tracing::instrument(skip(app))]
 #[tauri::command]
 pub async fn open_file_dialog(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     let (tx, rx) = oneshot::channel();
@@ -24,10 +26,11 @@ pub async fn open_file_dialog(app: tauri::AppHandle) -> Result<Vec<String>, Stri
         });
 
     let paths = rx.await.map_err(|e| format!("Dialog error: {}", e))?;
-    println!("[dialog] open_file_dialog: {} files selected", paths.len());
+    debug!(count = paths.len(), "Files selected via open_file_dialog");
     Ok(paths)
 }
 
+#[tracing::instrument(skip(app))]
 #[tauri::command]
 pub async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     let (tx, rx) = oneshot::channel();
@@ -49,7 +52,7 @@ pub async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Vec<String>, St
         });
 
     let paths = rx.await.map_err(|e| format!("Dialog error: {}", e))?;
-    println!("[dialog] open_folder_dialog: {} folders selected", paths.len());
+    debug!(count = paths.len(), "Folders selected via open_folder_dialog");
     Ok(paths)
 }
 
@@ -57,16 +60,13 @@ pub async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Vec<String>, St
 ///
 /// - macOS: Uses NSOpenPanel with canChooseFiles + canChooseDirectories (native behavior).
 /// - Linux: Falls back to file-only selection since GTK does not support combined mode.
+#[tracing::instrument(skip(app))]
 #[tauri::command]
 pub async fn open_add_music_dialog(
     #[allow(unused_variables)] app: tauri::AppHandle,
 ) -> Result<Vec<String>, String> {
     let paths = open_add_music_dialog_impl(app).await?;
-    println!(
-        "[dialog] open_add_music_dialog: {} paths selected: {:?}",
-        paths.len(),
-        paths
-    );
+    debug!(count = paths.len(), ?paths, "Paths selected via open_add_music_dialog");
     Ok(paths)
 }
 

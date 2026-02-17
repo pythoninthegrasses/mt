@@ -5,6 +5,7 @@
 
 use std::path::Path;
 use tauri::{AppHandle, State};
+use tracing::{debug, info};
 
 use crate::db::{
     library, Database, LibraryStats, SortOrder, Track, TrackMetadata,
@@ -33,6 +34,7 @@ pub struct MissingTracksResponse {
 
 /// Get all tracks with filtering, sorting, and pagination
 #[allow(clippy::too_many_arguments)]
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn library_get_all(
     db: State<'_, Database>,
@@ -82,6 +84,7 @@ pub fn library_get_all(
 }
 
 /// Get library statistics
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn library_get_stats(db: State<'_, Database>) -> Result<LibraryStats, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -89,6 +92,7 @@ pub fn library_get_stats(db: State<'_, Database>) -> Result<LibraryStats, String
 }
 
 /// Get a single track by ID
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn library_get_track(db: State<'_, Database>, track_id: i64) -> Result<Option<Track>, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -96,6 +100,7 @@ pub fn library_get_track(db: State<'_, Database>, track_id: i64) -> Result<Optio
 }
 
 /// Get artwork for a track by ID (uses LRU cache)
+#[tracing::instrument(skip(db, cache))]
 #[tauri::command]
 pub fn library_get_artwork(
     db: State<'_, Database>,
@@ -113,6 +118,7 @@ pub fn library_get_artwork(
 }
 
 /// Get artwork data URL for a track by ID (for use in img src, uses LRU cache)
+#[tracing::instrument(skip(db, cache))]
 #[tauri::command]
 pub fn library_get_artwork_url(
     db: State<'_, Database>,
@@ -133,6 +139,7 @@ pub fn library_get_artwork_url(
 }
 
 /// Delete a track from the library
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn library_delete_track(
     app: AppHandle,
@@ -152,42 +159,65 @@ pub fn library_delete_track(
 }
 
 /// Purge all tracks marked as missing from the database
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn library_purge_missing(
+    app: AppHandle,
     db: State<'_, Database>,
 ) -> Result<usize, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let deleted = library::delete_missing_tracks(&conn).map_err(|e| e.to_string())?;
+    let start = std::time::Instant::now();
+    let deleted = db
+        .transaction(library::delete_missing_tracks)
+        .map_err(|e| e.to_string())?;
     if deleted > 0 {
-        println!("[library] Purged {} missing tracks from database", deleted);
+        info!(count = deleted, "Purged missing tracks from database");
+        let _ = app.emit_library_updated(LibraryUpdatedEvent::deleted(vec![]));
     }
+    crate::logging::log_slow_command("library_purge_missing", start);
     Ok(deleted)
 }
 
 /// Delete multiple tracks by ID in a single transaction
+#[tracing::instrument(skip(app, db, track_ids))]
 #[tauri::command]
 pub fn library_delete_tracks(
+    app: AppHandle,
     db: State<'_, Database>,
     track_ids: Vec<i64>,
 ) -> Result<usize, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let deleted = library::delete_tracks_by_ids(&conn, &track_ids).map_err(|e| e.to_string())?;
-    println!("[library] Batch deleted {} tracks", deleted);
+    let start = std::time::Instant::now();
+    let deleted = db
+        .transaction(|conn| library::delete_tracks_by_ids(conn, &track_ids))
+        .map_err(|e| e.to_string())?;
+    info!(count = deleted, "Batch deleted tracks");
+    crate::logging::log_slow_command("library_delete_tracks", start);
+    if deleted > 0 {
+        let _ = app.emit_library_updated(LibraryUpdatedEvent::deleted(track_ids));
+    }
     Ok(deleted)
 }
 
 /// Delete ALL tracks from the library (favorites, playlist_items, library rows)
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn library_delete_all(
+    app: AppHandle,
     db: State<'_, Database>,
 ) -> Result<usize, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let deleted = library::delete_all_tracks(&conn).map_err(|e| e.to_string())?;
-    println!("[library] Deleted all {} tracks from library", deleted);
+    let start = std::time::Instant::now();
+    let deleted = db
+        .transaction(library::delete_all_tracks)
+        .map_err(|e| e.to_string())?;
+    info!(count = deleted, "Deleted all tracks from library");
+    crate::logging::log_slow_command("library_delete_all", start);
+    if deleted > 0 {
+        let _ = app.emit_library_updated(LibraryUpdatedEvent::deleted(vec![]));
+    }
     Ok(deleted)
 }
 
 /// Rescan a track's metadata from its file
+#[tracing::instrument(skip(app, db, cache))]
 #[tauri::command]
 pub fn library_rescan_track(
     app: AppHandle,
@@ -243,6 +273,7 @@ pub fn library_rescan_track(
 }
 
 /// Increment play count for a track
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn library_update_play_count(
     app: AppHandle,
@@ -262,6 +293,7 @@ pub fn library_update_play_count(
 }
 
 /// Get all tracks marked as missing
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn library_get_missing(db: State<'_, Database>) -> Result<MissingTracksResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -275,6 +307,7 @@ pub fn library_get_missing(db: State<'_, Database>) -> Result<MissingTracksRespo
 /// Update a missing track's filepath after user locates the file
 /// If the new path already exists as another track (duplicate), the duplicate is removed
 /// and the original track's path is updated (preserving play history, favorites, etc.)
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn library_locate_track(
     app: AppHandle,
@@ -304,9 +337,11 @@ pub fn library_locate_track(
         && existing_track.id != track_id {
             // There's a duplicate track at this path - remove it
             // The original track (being located) takes precedence to preserve play history
-            println!(
-                "[locate] Removing duplicate track {} at path {} (keeping original track {})",
-                existing_track.id, new_path, track_id
+            debug!(
+                duplicate_id = existing_track.id,
+                path = %new_path,
+                kept_id = track_id,
+                "Removing duplicate track at path (keeping original)"
             );
             library::delete_track(&conn, existing_track.id).map_err(|e| e.to_string())?;
             deleted_duplicate_id = Some(existing_track.id);
@@ -332,6 +367,7 @@ pub fn library_locate_track(
 }
 
 /// Check if a track's file exists and update its missing status
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn library_check_status(
     app: AppHandle,
@@ -351,6 +387,7 @@ pub fn library_check_status(
 }
 
 /// Manually mark a track as missing
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn library_mark_missing(
     app: AppHandle,
@@ -376,6 +413,7 @@ pub fn library_mark_missing(
 }
 
 /// Manually mark a track as present (not missing)
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn library_mark_present(
     app: AppHandle,
@@ -407,6 +445,7 @@ pub struct ReconcileScanResult {
     pub errors: u32,
 }
 
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn library_reconcile_scan(
     app: AppHandle,

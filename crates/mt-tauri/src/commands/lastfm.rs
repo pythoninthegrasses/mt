@@ -12,6 +12,7 @@ use crate::lastfm::{
 };
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
+use tracing::{debug, error, info, warn};
 
 /// Helper to check if a setting is truthy
 fn is_setting_truthy(value: Option<String>) -> bool {
@@ -27,6 +28,7 @@ fn parse_threshold(value: Option<String>, default: u8) -> u8 {
 }
 
 /// Get Last.fm settings
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn lastfm_get_settings(db: State<Database>) -> Result<LastfmSettings, String> {
     let client = LastFmClient::new();
@@ -52,6 +54,7 @@ pub fn lastfm_get_settings(db: State<Database>) -> Result<LastfmSettings, String
 }
 
 /// Update Last.fm settings
+#[tracing::instrument(skip(db, settings_update))]
 #[tauri::command]
 pub fn lastfm_update_settings(
     db: State<Database>,
@@ -88,6 +91,7 @@ pub fn lastfm_update_settings(
 // ============================================
 
 /// Get Last.fm authentication URL and token
+#[tracing::instrument(skip(app))]
 #[tauri::command]
 pub async fn lastfm_get_auth_url(app: AppHandle) -> Result<AuthUrlResponse, String> {
     let client = LastFmClient::new();
@@ -112,6 +116,7 @@ pub async fn lastfm_get_auth_url(app: AppHandle) -> Result<AuthUrlResponse, Stri
 }
 
 /// Complete Last.fm authentication with token
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub async fn lastfm_auth_callback(
     app: AppHandle,
@@ -157,6 +162,7 @@ pub async fn lastfm_auth_callback(
 }
 
 /// Disconnect from Last.fm
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn lastfm_disconnect(
     app: AppHandle,
@@ -211,6 +217,7 @@ fn should_scrobble(duration: f64, played_time: f64, threshold_percent: u8) -> bo
 }
 
 /// Update "Now Playing" status on Last.fm
+#[tracing::instrument(skip(db, request))]
 #[tauri::command]
 pub async fn lastfm_now_playing(
     db: State<'_, Database>,
@@ -252,13 +259,14 @@ pub async fn lastfm_now_playing(
         Ok(_) => Ok(json!({ "status": "success" })),
         Err(e) => {
             // Now Playing updates are not critical, just log and return success
-            eprintln!("[lastfm] Now Playing update failed: {}", e);
+            warn!(error = %e, "Now Playing update failed");
             Ok(json!({ "status": "error", "message": e.to_string() }))
         }
     }
 }
 
 /// Scrobble a track to Last.fm
+#[tracing::instrument(skip(app, db, request))]
 #[tauri::command]
 pub async fn lastfm_scrobble(
     app: AppHandle,
@@ -449,6 +457,7 @@ pub(crate) fn scrobble_from_audio_thread(
 // ============================================
 
 /// Get status of scrobble queue
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn lastfm_queue_status(db: State<Database>) -> Result<QueueStatusResponse, String> {
     let queued_scrobbles = db
@@ -461,6 +470,7 @@ pub fn lastfm_queue_status(db: State<Database>) -> Result<QueueStatusResponse, S
 }
 
 /// Manually retry queued scrobbles
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub async fn lastfm_queue_retry(
     app: AppHandle,
@@ -468,6 +478,7 @@ pub async fn lastfm_queue_retry(
 ) -> Result<QueueRetryResponse, String> {
     use crate::events::LastfmQueueUpdatedEvent;
     use crate::lastfm::QueueRetryResponse;
+    let start = std::time::Instant::now();
 
     // Check if authenticated
     let session_key = db
@@ -507,7 +518,7 @@ pub async fn lastfm_queue_retry(
                     if let Err(e) = db.with_conn(|conn| {
                         scrobble::remove_queued_scrobble(conn, queued_scrobble.id)
                     }) {
-                        eprintln!("[lastfm] Failed to remove scrobble from queue: {}", e);
+                        error!(error = %e, "Failed to remove scrobble from queue");
                     }
 
                     // Emit success event
@@ -525,22 +536,24 @@ pub async fn lastfm_queue_retry(
                     if let Err(e) = db.with_conn(|conn| {
                         scrobble::increment_scrobble_retry(conn, queued_scrobble.id)
                     }) {
-                        eprintln!("[lastfm] Failed to increment retry count: {}", e);
+                        error!(error = %e, "Failed to increment retry count");
                     }
                     failed += 1;
                 }
             }
             Err(e) => {
-                eprintln!(
-                    "[lastfm] Retry failed for {}/{}: {}",
-                    queued_scrobble.artist, queued_scrobble.track, e
+                warn!(
+                    artist = %queued_scrobble.artist,
+                    track = %queued_scrobble.track,
+                    error = %e,
+                    "Retry failed for scrobble"
                 );
 
                 // Increment retry count
                 if let Err(e) = db
                     .with_conn(|conn| scrobble::increment_scrobble_retry(conn, queued_scrobble.id))
                 {
-                    eprintln!("[lastfm] Failed to increment retry count: {}", e);
+                    error!(error = %e, "Failed to increment retry count");
                 }
                 failed += 1;
             }
@@ -571,6 +584,8 @@ pub async fn lastfm_queue_retry(
         "No queued scrobbles to retry".to_string()
     };
 
+    crate::logging::log_slow_command("lastfm_queue_retry", start);
+
     Ok(QueueRetryResponse {
         status,
         remaining_queued,
@@ -582,12 +597,14 @@ pub async fn lastfm_queue_retry(
 // ============================================
 
 /// Import loved tracks from Last.fm and add them to favorites
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub async fn lastfm_import_loved_tracks(
     db: State<'_, Database>,
 ) -> Result<ImportLovedTracksResponse, String> {
     use crate::db::library::LibraryQuery;
     use crate::db::{LibrarySortColumn, SortOrder};
+    let start = std::time::Instant::now();
 
     // Check if authenticated
     let username = db
@@ -630,10 +647,7 @@ pub async fn lastfm_import_loved_tracks(
     }
 
     let total_loved = all_loved_tracks.len();
-    println!(
-        "[lastfm] Fetched {} loved tracks from Last.fm",
-        total_loved
-    );
+    info!(count = total_loved, "Fetched loved tracks from Last.fm (import)");
 
     // Match loved tracks against local library and add to favorites
     let mut imported = 0;
@@ -680,17 +694,17 @@ pub async fn lastfm_import_loved_tracks(
         // Check if we found any matches
         if search_results.items.is_empty() {
             not_in_library += 1;
-            println!(
-                "[lastfm] No match found for: {} - {}",
-                artist_name, track_name
-            );
+            debug!(artist = %artist_name, track = %track_name, "No match found for loved track");
             continue;
         }
 
         if let Some(first_track) = search_results.items.first() {
-            println!(
-                "[lastfm] Found match: {} - {} -> {} (ID: {})",
-                artist_name, track_name, first_track.filepath, first_track.id
+            debug!(
+                artist = %artist_name,
+                track = %track_name,
+                filepath = %first_track.filepath,
+                track_id = first_track.id,
+                "Found match for loved track"
             );
             // Check if already favorited
             let (is_fav, _) = db
@@ -711,9 +725,11 @@ pub async fn lastfm_import_loved_tracks(
                         already_favorited += 1;
                     }
                     Err(e) => {
-                        eprintln!(
-                            "[lastfm] Failed to add {} - {} to favorites: {}",
-                            artist_name, track_name, e
+                        error!(
+                            artist = %artist_name,
+                            track = %track_name,
+                            error = %e,
+                            "Failed to add to favorites"
                         );
                     }
                 }
@@ -728,7 +744,8 @@ pub async fn lastfm_import_loved_tracks(
         imported, already_favorited, not_in_library
     );
 
-    println!("[lastfm] {}", message);
+    info!(imported, already_favorited, not_in_library, "Import loved tracks complete");
+    crate::logging::log_slow_command("lastfm_import_loved_tracks", start);
 
     Ok(ImportLovedTracksResponse {
         status: "success".to_string(),
@@ -747,11 +764,14 @@ pub async fn lastfm_import_loved_tracks(
 /// This command fetches all loved tracks from Last.fm (or incrementally since last fetch)
 /// and stores them in the local cache. It does NOT automatically match against the library
 /// or add to favorites - use `lastfm_match_loved_tracks` for that.
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub async fn lastfm_cache_loved_tracks(
     db: State<'_, Database>,
     incremental: Option<bool>,
 ) -> Result<CacheLovedTracksResponse, String> {
+    let start = std::time::Instant::now();
+
     // Check if authenticated
     let username = db
         .with_conn(|conn| settings::get_setting(conn, "lastfm_username"))
@@ -777,10 +797,7 @@ pub async fn lastfm_cache_loved_tracks(
         None
     };
 
-    println!(
-        "[lastfm] Fetching loved tracks (incremental: {}, since: {:?})",
-        incremental, since_timestamp
-    );
+    info!(incremental, ?since_timestamp, "Fetching loved tracks for cache");
 
     // Fetch all loved tracks (paginated)
     let mut all_loved_tracks = Vec::new();
@@ -825,10 +842,7 @@ pub async fn lastfm_cache_loved_tracks(
     }
 
     let total_fetched = all_loved_tracks.len();
-    println!(
-        "[lastfm] Fetched {} loved tracks from Last.fm",
-        total_fetched
-    );
+    info!(count = total_fetched, "Fetched loved tracks from Last.fm (cache)");
 
     // Store in cache
     let tracks_to_cache: Vec<(String, String, Option<i64>)> = all_loved_tracks
@@ -857,7 +871,8 @@ pub async fn lastfm_cache_loved_tracks(
         )
     };
 
-    println!("[lastfm] {}", message);
+    info!(total_fetched, newly_cached, incremental, "Cache loved tracks complete");
+    crate::logging::log_slow_command("lastfm_cache_loved_tracks", start);
 
     Ok(CacheLovedTracksResponse {
         status: "success".to_string(),
@@ -881,7 +896,7 @@ pub fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksResponse
         .map_err(|e| format!("Failed to get unmatched tracks: {}", e))?;
 
     let total_unmatched = unmatched.len();
-    println!("[lastfm] Matching {} unmatched loved tracks", total_unmatched);
+    info!(count = total_unmatched, "Matching unmatched loved tracks");
 
     let mut matched = 0;
     let mut already_matched = 0;
@@ -949,9 +964,10 @@ pub fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksResponse
                 match db.with_conn(|conn| favorites::add_favorite(conn, library_track.id)) {
                     Ok(Some(_)) => {
                         new_favorites += 1;
-                        println!(
-                            "[lastfm] Added to favorites: {} - {}",
-                            loved_track.artist, loved_track.track
+                        debug!(
+                            artist = %loved_track.artist,
+                            track = %loved_track.track,
+                            "Added to favorites"
                         );
                     }
                     Ok(None) => {
@@ -959,9 +975,11 @@ pub fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksResponse
                         already_matched += 1;
                     }
                     Err(e) => {
-                        eprintln!(
-                            "[lastfm] Failed to add to favorites: {} - {}: {}",
-                            loved_track.artist, loved_track.track, e
+                        error!(
+                            artist = %loved_track.artist,
+                            track = %loved_track.track,
+                            error = %e,
+                            "Failed to add to favorites"
                         );
                     }
                 }
@@ -974,7 +992,7 @@ pub fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksResponse
         matched, new_favorites, already_matched, no_match
     );
 
-    println!("[lastfm] {}", message);
+    info!(matched, new_favorites, already_matched, no_match, "Match loved tracks complete");
 
     Ok(MatchLovedTracksResponse {
         status: "success".to_string(),
@@ -991,17 +1009,22 @@ pub fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksResponse
 /// This command doesn't make any API calls - it only matches existing cached
 /// loved tracks against the local library and adds matches to favorites.
 /// Runs on a blocking thread to avoid freezing the UI.
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub async fn lastfm_match_loved_tracks(
     db: State<'_, Database>,
 ) -> Result<MatchLovedTracksResponse, String> {
+    let start = std::time::Instant::now();
     let db = db.inner().clone();
-    tokio::task::spawn_blocking(move || match_loved_tracks_impl(&db))
+    let result = tokio::task::spawn_blocking(move || match_loved_tracks_impl(&db))
         .await
-        .map_err(|e| format!("Task join error: {}", e))?
+        .map_err(|e| format!("Task join error: {}", e))?;
+    crate::logging::log_slow_command("lastfm_match_loved_tracks", start);
+    result
 }
 
 /// Get statistics about cached loved tracks
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn lastfm_loved_stats(db: State<Database>) -> Result<LovedTracksStatsResponse, String> {
     let stats = db
@@ -1063,11 +1086,11 @@ pub fn match_new_tracks_against_loved(
 
             if artist_match && title_match {
                 // Found a match!
-                println!(
-                    "[lastfm] Auto-matched new track: {} - {} (ID: {})",
-                    track.artist.as_deref().unwrap_or("Unknown"),
-                    track.title.as_deref().unwrap_or("Unknown"),
-                    track_id
+                debug!(
+                    artist = track.artist.as_deref().unwrap_or("Unknown"),
+                    title = track.title.as_deref().unwrap_or("Unknown"),
+                    track_id,
+                    "Auto-matched new track against loved cache"
                 );
 
                 // Set the match
@@ -1078,17 +1101,17 @@ pub fn match_new_tracks_against_loved(
                 match favorites::add_favorite(conn, *track_id) {
                     Ok(Some(_)) => {
                         favorited += 1;
-                        println!(
-                            "[lastfm] Auto-favorited: {} - {}",
-                            track.artist.as_deref().unwrap_or("Unknown"),
-                            track.title.as_deref().unwrap_or("Unknown")
+                        debug!(
+                            artist = track.artist.as_deref().unwrap_or("Unknown"),
+                            title = track.title.as_deref().unwrap_or("Unknown"),
+                            "Auto-favorited"
                         );
                     }
                     Ok(None) => {
                         // Already favorited
                     }
                     Err(e) => {
-                        eprintln!("[lastfm] Failed to auto-favorite track {}: {}", track_id, e);
+                        error!(track_id, error = %e, "Failed to auto-favorite track");
                     }
                 }
 

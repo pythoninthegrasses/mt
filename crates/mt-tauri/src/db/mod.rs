@@ -25,6 +25,7 @@ use rusqlite::Connection;
 use std::path::Path;
 use std::sync::Arc;
 use thiserror::Error;
+use tracing::{error, info};
 
 pub use models::*;
 
@@ -68,6 +69,7 @@ impl Database {
     /// # Returns
     /// A new Database instance with initialized schema
     pub fn new<P: AsRef<Path>>(db_path: P) -> DbResult<Self> {
+        info!(path = %db_path.as_ref().display(), "Opening database");
         let manager = SqliteConnectionManager::file(db_path).with_init(|conn| {
             // Per-connection PRAGMAs: applied to every new connection from the pool.
             // busy_timeout MUST be set so concurrent writers wait instead of
@@ -122,6 +124,7 @@ impl Database {
 
     /// Initialize the database schema and run migrations
     fn init(&self) -> DbResult<()> {
+        info!("Running schema init and migrations");
         let conn = self.pool.get()?;
 
         // Database-level PRAGMA (persists across connections once set)
@@ -160,7 +163,13 @@ impl Database {
         conn.execute("PRAGMA foreign_keys = ON", [])?;
 
         let tx = conn.transaction()?;
-        let result = f(&tx)?;
+        let result = match f(&tx) {
+            Ok(val) => val,
+            Err(e) => {
+                error!(error = %e, "Transaction failed");
+                return Err(e);
+            }
+        };
         tx.commit()?;
 
         Ok(result)

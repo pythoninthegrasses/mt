@@ -40,6 +40,7 @@ pub struct QueueOperationResponse {
 }
 
 /// Get the current playback queue with track metadata
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn queue_get(db: State<'_, Database>) -> Result<QueueResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -50,6 +51,7 @@ pub fn queue_get(db: State<'_, Database>) -> Result<QueueResponse, String> {
 }
 
 /// Add tracks to the queue by track IDs
+#[tracing::instrument(skip(app, db, track_ids))]
 #[tauri::command]
 pub fn queue_add(
     app: AppHandle,
@@ -79,6 +81,7 @@ pub fn queue_add(
 }
 
 /// Add files directly to the queue (for drag-and-drop support)
+#[tracing::instrument(skip(app, db, filepaths))]
 #[tauri::command]
 pub fn queue_add_files(
     app: AppHandle,
@@ -110,6 +113,7 @@ pub fn queue_add_files(
 }
 
 /// Remove a track from the queue by position
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn queue_remove(
     app: AppHandle,
@@ -132,6 +136,7 @@ pub fn queue_remove(
 }
 
 /// Clear the entire queue
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn queue_clear(app: AppHandle, db: State<'_, Database>) -> Result<(), String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -144,6 +149,7 @@ pub fn queue_clear(app: AppHandle, db: State<'_, Database>) -> Result<(), String
 }
 
 /// Reorder tracks in the queue (move from one position to another)
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn queue_reorder(
     app: AppHandle,
@@ -171,6 +177,7 @@ pub fn queue_reorder(
 }
 
 /// Shuffle the queue using Fisher-Yates algorithm
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn queue_shuffle(
     app: AppHandle,
@@ -225,6 +232,7 @@ pub fn queue_shuffle(
 }
 
 /// Get queue playback state
+#[tracing::instrument(level = "trace", skip(db))]
 #[tauri::command]
 pub fn queue_get_playback_state(db: State<'_, Database>) -> Result<QueueState, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -233,6 +241,7 @@ pub fn queue_get_playback_state(db: State<'_, Database>) -> Result<QueueState, S
 }
 
 /// Set current index in queue playback state
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn queue_set_current_index(
     app: AppHandle,
@@ -254,6 +263,7 @@ pub fn queue_set_current_index(
 }
 
 /// Set shuffle enabled in queue playback state
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn queue_set_shuffle(
     app: AppHandle,
@@ -275,6 +285,7 @@ pub fn queue_set_shuffle(
 }
 
 /// Set loop mode in queue playback state
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn queue_set_loop(
     app: AppHandle,

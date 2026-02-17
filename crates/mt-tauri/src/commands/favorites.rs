@@ -45,6 +45,7 @@ pub struct RecentTracksResponse {
 }
 
 /// Get favorited tracks (Liked Songs) with pagination
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn favorites_get(
     db: State<'_, Database>,
@@ -67,6 +68,7 @@ pub fn favorites_get(
 }
 
 /// Check if a track is favorited
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn favorites_check(db: State<'_, Database>, track_id: i64) -> Result<FavoriteCheckResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -80,6 +82,7 @@ pub fn favorites_check(db: State<'_, Database>, track_id: i64) -> Result<Favorit
 }
 
 /// Add a track to favorites
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn favorites_add(
     app: AppHandle,
@@ -111,6 +114,7 @@ pub fn favorites_add(
 }
 
 /// Remove a track from favorites
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn favorites_remove(
     app: AppHandle,
@@ -131,6 +135,7 @@ pub fn favorites_remove(
 }
 
 /// Get top 25 most played tracks
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn favorites_get_top25(db: State<'_, Database>) -> Result<TracksResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -140,6 +145,7 @@ pub fn favorites_get_top25(db: State<'_, Database>) -> Result<TracksResponse, St
 }
 
 /// Get tracks played within the last N days
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn favorites_get_recently_played(
     db: State<'_, Database>,
@@ -156,6 +162,7 @@ pub fn favorites_get_recently_played(
 }
 
 /// Get tracks added within the last N days
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn favorites_get_recently_added(
     db: State<'_, Database>,
