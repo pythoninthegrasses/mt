@@ -2,6 +2,17 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - macos
+          - linux
+          - windows
   push:
     tags:
       - 'v*'
@@ -16,6 +27,7 @@ concurrency:
 jobs:
   build-macos:
     name: Build macOS (ARM64)
+    if: inputs.platform == 'all' || inputs.platform == 'macos' || inputs.platform == ''
     runs-on: [macOS, ARM64]
     timeout-minutes: 30
 
@@ -76,6 +88,7 @@ jobs:
 
   build-linux-amd64:
     name: Build Linux (amd64)
+    if: inputs.platform == 'all' || inputs.platform == 'linux' || inputs.platform == ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -101,6 +114,7 @@ jobs:
 
   build-windows:
     name: Build Windows (x64)
+    if: inputs.platform == 'all' || inputs.platform == 'windows' || inputs.platform == ''
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 45
 
