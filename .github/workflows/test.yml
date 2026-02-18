@@ -97,6 +97,9 @@ jobs:
         working-directory: ./app/frontend
         run: npx playwright install --with-deps webkit
 
+      - name: Kill stale dev server on port 5173
+        run: lsof -ti:5173 | xargs kill -9 2>/dev/null || true
+
       - name: Run Playwright tests
         working-directory: ./app/frontend
         run: npx playwright test
