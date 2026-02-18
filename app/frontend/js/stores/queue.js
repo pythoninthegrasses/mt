@@ -340,7 +340,7 @@ export function createQueueStore(Alpine) {
       this.items = [];
       this.currentIndex = -1;
       this._originalOrder = [];
-      this._playHistory = [];
+      // _playHistory intentionally preserved - persists across queue rebuilds
 
       Alpine.store('player').stop();
 
@@ -400,9 +400,9 @@ export function createQueueStore(Alpine) {
     async playIndex(index, fromNavigation = false) {
       if (index < 0 || index >= this.items.length) return;
 
-      // Clear history on manual jumps (not from prev/next navigation)
-      if (!fromNavigation) {
-        this._playHistory = [];
+      // Push current track to history on manual jumps (not from prev/next navigation)
+      if (!fromNavigation && this.currentIndex >= 0 && this.currentIndex !== index) {
+        this._pushToHistory(this.currentIndex);
       }
 
       // Reset play-next insertion offset when track changes
@@ -471,11 +471,13 @@ export function createQueueStore(Alpine) {
         return;
       }
 
-      // Try to use play history first
+      // Try to use play history first (tracks matched by ID, survives queue rebuilds)
       if (this._playHistory.length > 0) {
-        const historyEntry = this._popFromHistory();
-        await this.playIndex(historyEntry, true);
-        return;
+        const historyIndex = this._popFromHistory();
+        if (historyIndex >= 0) {
+          await this.playIndex(historyIndex, true);
+          return;
+        }
       }
 
       // Fallback: navigate backward in queue array
@@ -567,8 +569,7 @@ export function createQueueStore(Alpine) {
           if (this.currentIndex < 0) {
             this.currentIndex = this.items.length > 0 ? 0 : -1;
           }
-          // Clear history when disabling shuffle - old indices are now invalid
-          this._playHistory = [];
+          // History preserved - track objects are matched by ID, survives reorder
         }
 
         // Persist shuffle state and current index to backend
@@ -649,11 +650,13 @@ export function createQueueStore(Alpine) {
     },
 
     /**
-     * Push index to play history
-     * @param {number} index - Index to push to history
+     * Push track at index to play history (stores track object, not index)
+     * @param {number} index - Index of track to push to history
      */
     _pushToHistory(index) {
-      this._playHistory.push(index);
+      const track = this.items[index];
+      if (!track) return;
+      this._playHistory.push(track);
 
       // Limit history size to prevent memory issues
       if (this._playHistory.length > this._maxHistorySize) {
@@ -662,11 +665,18 @@ export function createQueueStore(Alpine) {
     },
 
     /**
-     * Pop index from play history
-     * @returns {number} Previous index from history
+     * Pop track from history and find its current index in the queue.
+     * Tracks are matched by ID so history survives queue rebuilds.
+     * @returns {number} Current index of the historical track, or -1 if not found
      */
     _popFromHistory() {
-      return this._playHistory.pop();
+      while (this._playHistory.length > 0) {
+        const track = this._playHistory.pop();
+        const idx = this.items.findIndex((t) => t.id === track.id);
+        if (idx >= 0) return idx;
+        // Track no longer in queue - keep draining until we find one that is
+      }
+      return -1;
     },
 
     async shuffleQueue() {
