@@ -1,5 +1,5 @@
 <!-- Queue View -->
-<div x-show="$store.ui.view === 'queue'" x-cloak class="h-full flex flex-col p-4">
+<div x-show="$store.ui.view === 'queue'" x-cloak class="h-full flex flex-col p-4" x-data="queueView">
   <div class="flex items-center justify-between mb-4">
     <h2 class="text-xl font-semibold">Queue</h2>
     <div class="flex gap-2">
@@ -22,23 +22,27 @@
     <span data-testid="queue-count" x-text="$store.queue.tracks.length"></span> tracks in queue
   </p>
 
-  <div class="flex-1 overflow-y-auto space-y-1">
-    <template x-for="(track, index) in $store.queue.tracks" :key="track.id + '-' + index">
-      <div
-        class="flex items-center gap-4 p-2 rounded hover:bg-muted cursor-default select-none"
-        :class="index === $store.queue.currentIndex ? 'bg-primary/10' : ''"
-        @dblclick="$store.queue.playIndex(index)"
-      >
-        <span class="text-xs text-muted-foreground w-6" x-text="index + 1"></span>
-        <span x-show="index === $store.queue.currentIndex" class="text-primary">▶</span>
-        <span class="text-sm font-medium flex-1 truncate" x-text="track.title || track.filename || 'Unknown'"></span>
-        <span class="text-sm text-muted-foreground truncate" x-text="track.artist || ''"></span>
-        <button
-          class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100"
-          @click.stop="$store.queue.remove(index)"
-        >×</button>
+  <div class="flex-1 overflow-y-auto" x-ref="queueScrollContainer">
+    <div x-show="$store.queue.tracks.length > 0" :style="`height: ${queueTotalHeight}px; position: relative;`">
+      <div :style="`transform: translateY(${queueOffsetY}px); will-change: transform;`">
+        <template x-for="item in visibleQueueTracks" :key="item.track.id + '-' + item.index">
+          <div
+            class="flex items-center gap-4 p-2 rounded hover:bg-muted cursor-default select-none"
+            :class="item.index === $store.queue.currentIndex ? 'bg-primary/10' : ''"
+            @dblclick="$store.queue.playIndex(item.index)"
+          >
+            <span class="text-xs text-muted-foreground w-6" x-text="item.index + 1"></span>
+            <span x-show="item.index === $store.queue.currentIndex" class="text-primary">&#9654;</span>
+            <span class="text-sm font-medium flex-1 truncate" x-text="item.track.title || item.track.filename || 'Unknown'"></span>
+            <span class="text-sm text-muted-foreground truncate" x-text="item.track.artist || ''"></span>
+            <button
+              class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100"
+              @click.stop="$store.queue.remove(item.index)"
+            >&times;</button>
+          </div>
+        </template>
       </div>
-    </template>
+    </div>
     <div x-show="$store.queue.tracks.length === 0" class="flex items-center justify-center py-12">
       <div class="text-center">
         <svg class="w-12 h-12 mx-auto mb-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">

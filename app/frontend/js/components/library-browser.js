@@ -1158,11 +1158,15 @@ export function createLibraryBrowser(Alpine) {
         } else if (index >= 0 && index < this.library.filteredTracks.length) {
           backgroundBuildStarted = true;
 
+          // Preserve current track in history before replacing queue
+          if (this.queue.currentIndex >= 0) {
+            this.queue._pushToHistory(this.queue.currentIndex);
+          }
+
           // Start playback immediately
           this.queue.items.splice(0, this.queue.items.length, track);
           this.queue._originalOrder.splice(0, this.queue._originalOrder.length, track);
           this.queue.currentIndex = 0;
-          this.queue._playHistory = [];
           this.queue._playNextOffset = 0;
           await this.player.playTrack(track);
 

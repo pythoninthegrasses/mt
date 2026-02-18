@@ -31,6 +31,52 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
     _originalOrder: [...initialItems],
     _repeatOnePending: false,
     _playNextOffset: 0,
+    _playHistory: [],
+    _maxHistorySize: 100,
+
+    _pushToHistory(index) {
+      const track = this.items[index];
+      if (!track) return;
+      this._playHistory.push(track);
+      if (this._playHistory.length > this._maxHistorySize) {
+        this._playHistory.shift();
+      }
+    },
+
+    _popFromHistory() {
+      while (this._playHistory.length > 0) {
+        const track = this._playHistory.pop();
+        const idx = this.items.findIndex((t) => t.id === track.id);
+        if (idx >= 0) return idx;
+      }
+      return -1;
+    },
+
+    skipNext() {
+      if (this.items.length === 0) return;
+      if (this.currentIndex >= 0) {
+        this._pushToHistory(this.currentIndex);
+      }
+      let nextIndex = this.currentIndex + 1;
+      if (nextIndex >= this.items.length) nextIndex = 0;
+      this.playIndex(nextIndex, true);
+    },
+
+    playPrevious() {
+      if (this.items.length === 0) return;
+      if (this._playHistory.length > 0) {
+        const historyIndex = this._popFromHistory();
+        if (historyIndex >= 0) {
+          this.playIndex(historyIndex, true);
+          return;
+        }
+      }
+      let prevIndex = this.currentIndex - 1;
+      if (prevIndex < 0) {
+        prevIndex = this.loop === 'all' ? this.items.length - 1 : 0;
+      }
+      this.playIndex(prevIndex, true);
+    },
 
     // --- Core operations (simplified, synchronous versions) ---
 
@@ -75,6 +121,7 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
       this.items = [];
       this.currentIndex = -1;
       this._originalOrder = [];
+      // History intentionally NOT cleared - persists across queue rebuilds
     },
 
     reorder(from, to) {
@@ -94,8 +141,11 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
       }
     },
 
-    playIndex(index) {
+    playIndex(index, fromNavigation = false) {
       if (index < 0 || index >= this.items.length) return;
+      if (!fromNavigation && this.currentIndex >= 0 && this.currentIndex !== index) {
+        this._pushToHistory(this.currentIndex);
+      }
       this._playNextOffset = 0;
       this.currentIndex = index;
     },
@@ -587,4 +637,139 @@ describe('Queue Store - Operation Sequence Invariants', () => {
       }
     }
   );
+});
+
+// -----------------------------------------------------------------------------
+// Deterministic Tests: Play History Preservation
+// -----------------------------------------------------------------------------
+
+describe('Queue Store - Play History Preservation', () => {
+  function makeTracks(names) {
+    return names.map((name, i) => ({
+      id: `history-track-${i}-${name}`,
+      title: name,
+      artist: 'Test',
+      album: 'Test',
+      duration: 180000,
+      filepath: `/music/${name}.mp3`,
+    }));
+  }
+
+  test('playIndex non-navigation pushes current track to history', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0); // currentIndex was -1, no push
+    store.playIndex(2); // currentIndex was 0, pushes A
+
+    expect(store._playHistory.length).toBe(1);
+    expect(store._playHistory[0].title).toBe('A');
+  });
+
+  test('playIndex non-navigation does not clear existing history', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.skipNext(); // A in history, playing B
+    store.playIndex(3); // B in history, playing D
+
+    expect(store._playHistory.length).toBe(2);
+    expect(store._playHistory[0].title).toBe('A');
+    expect(store._playHistory[1].title).toBe('B');
+  });
+
+  test('playPrevious goes back via history after manual jump', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.playIndex(2); // A in history
+
+    store.playPrevious();
+
+    expect(store.currentTrack.title).toBe('A');
+    expect(store._playHistory.length).toBe(0);
+  });
+
+  test('skipNext builds history in order', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.skipNext(); // A in history
+    store.skipNext(); // B in history
+
+    expect(store._playHistory[0].title).toBe('A');
+    expect(store._playHistory[1].title).toBe('B');
+    expect(store.currentTrack.title).toBe('C');
+  });
+
+  test('playPrevious navigates back through history in reverse order', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.skipNext();
+    store.skipNext();
+
+    store.playPrevious();
+    expect(store.currentTrack.title).toBe('B');
+
+    store.playPrevious();
+    expect(store.currentTrack.title).toBe('A');
+  });
+
+  test('clear does not wipe play history', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.skipNext(); // A in history
+
+    store.clear();
+
+    expect(store._playHistory.length).toBe(1);
+    expect(store._playHistory[0].title).toBe('A');
+  });
+
+  test('history survives queue rebuild - prev finds track by ID at new index', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.skipNext(); // A in history, playing B
+    store.skipNext(); // B in history, playing C
+
+    // Simulate queue rebuild (double-click D): new queue [D, E, A, B, C]
+    const newQueue = [
+      { id: 'history-track-3-D', title: 'D', artist: 'Test', album: 'Test', duration: 180000, filepath: '/music/D.mp3' },
+      { id: 'history-track-4-E', title: 'E', artist: 'Test', album: 'Test', duration: 180000, filepath: '/music/E.mp3' },
+      { id: 'history-track-0-A', title: 'A', artist: 'Test', album: 'Test', duration: 180000, filepath: '/music/A.mp3' },
+      { id: 'history-track-1-B', title: 'B', artist: 'Test', album: 'Test', duration: 180000, filepath: '/music/B.mp3' },
+      { id: 'history-track-2-C', title: 'C', artist: 'Test', album: 'Test', duration: 180000, filepath: '/music/C.mp3' },
+    ];
+    store.items = newQueue;
+    store.currentIndex = 0; // D is playing
+
+    // History has [A, B] - both exist in new queue at different indices
+    store.playPrevious();
+    expect(store.currentTrack.title).toBe('B'); // Most recent history entry
+
+    store.playPrevious();
+    expect(store.currentTrack.title).toBe('A');
+  });
+
+  test('prev skips history entries not in current queue', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.skipNext(); // A in history
+    store.skipNext(); // B in history
+
+    // Replace with entirely different tracks
+    store.items = [
+      { id: 'x', title: 'X', artist: 'T', album: 'T', duration: 1000, filepath: '/x.mp3' },
+      { id: 'y', title: 'Y', artist: 'T', album: 'T', duration: 1000, filepath: '/y.mp3' },
+    ];
+    store.currentIndex = 0;
+
+    // A and B are not in new queue - history exhausted, falls back to positional prev
+    store.playPrevious();
+    expect(store._playHistory.length).toBe(0);
+    expect(store.currentIndex).toBeGreaterThanOrEqual(0);
+  });
 });

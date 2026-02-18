@@ -15,8 +15,8 @@ pub mod watcher;
 mod concurrency_test;
 
 use commands::{
-    audio_get_status, audio_get_volume, audio_load, audio_pause, audio_play, audio_seek,
-    audio_set_volume, audio_stop, favorites_add, favorites_check, favorites_get,
+    audio_get_status, audio_get_volume, audio_load, audio_load_and_play, audio_pause, audio_play,
+    audio_seek, audio_set_volume, audio_stop, favorites_add, favorites_check, favorites_get,
     favorites_get_recently_added, favorites_get_recently_played, favorites_get_top25,
     favorites_remove, lastfm_auth_callback, lastfm_cache_loved_tracks, lastfm_disconnect,
     lastfm_get_auth_url, lastfm_get_settings, lastfm_import_loved_tracks, lastfm_loved_stats,
@@ -255,6 +255,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             audio_load,
+            audio_load_and_play,
             audio_play,
             audio_pause,
             audio_stop,
