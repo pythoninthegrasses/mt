@@ -17,7 +17,9 @@ runs:
     - name: Install macOS system dependencies
       if: runner.os == 'macOS'
       shell: bash
-      run: brew install cmake
+      run: |
+        export HOMEBREW_NO_AUTO_UPDATE=1
+        brew list cmake &>/dev/null && echo "cmake already installed" || brew install cmake
 
     - name: Install Linux system dependencies
       if: runner.os == 'Linux'
@@ -29,7 +31,7 @@ runs:
           cmake zlib1g-dev libgtk-3-dev
 
     - name: Setup Node.js
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@v4  # v5+ requires node24 runtime; act only supports up to node20
       with:
         node-version: ${{ inputs.node-version }}
 
