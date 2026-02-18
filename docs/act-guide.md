@@ -103,6 +103,20 @@ rm ~/.docker/config.json
 docker logout
 ```
 
+### Verbose `setupEnv` Debug Output
+
+If you see a wall of `[DEBUG] setupEnv` text with environment variables, stale containers from `--reuse` are caching old verbose state. Fix with:
+
+```bash
+act -j build -W .github/workflows/test.yml --rm
+```
+
+This forces fresh containers. For a one-time cleanup of all act containers:
+
+```bash
+docker rm -f $(docker ps -a -q --filter "label=act") 2>/dev/null
+```
+
 ### Self-Hosted Runner Warnings
 
 Jobs with `runs-on: [macOS, ARM64]` or `runs-on: studio` will run on your machine natively. This is expected behavior defined in `.actrc`.
