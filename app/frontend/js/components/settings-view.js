@@ -26,6 +26,7 @@ export function createSettingsView(Alpine) {
       lovedStats: { total_cached: 0, matched: 0, unmatched: 0 },
       isCachingLoved: false,
       isMatchingLoved: false,
+      isResettingLoved: false,
     },
 
     reconcileScan: {
@@ -497,6 +498,39 @@ export function createSettingsView(Alpine) {
         Alpine.store('ui').toast('Failed to match loved tracks', 'error');
       } finally {
         this.lastfm.isMatchingLoved = false;
+      }
+    },
+
+    async resetLovedCache() {
+      let confirmed = false;
+
+      if (window.__TAURI__?.dialog?.confirm) {
+        confirmed = await window.__TAURI__.dialog.confirm(
+          'This will clear the loved tracks cache and remove auto-favorited tracks (synced from Last.fm). Manually favorited tracks are kept.\n\nYou can re-sync from Last.fm afterward to rebuild the cache.',
+          { title: 'Reset Loved Tracks Cache', kind: 'warning' },
+        );
+      } else {
+        confirmed = confirm(
+          'This will clear the loved tracks cache and remove auto-favorited tracks (synced from Last.fm). Manually favorited tracks are kept.\n\nYou can re-sync from Last.fm afterward to rebuild the cache.',
+        );
+      }
+
+      if (!confirmed) return;
+
+      this.lastfm.isResettingLoved = true;
+      try {
+        const result = await api.lastfm.resetLovedCache();
+        const parts = [`Cleared ${result.cleared} cached tracks`];
+        if (result.unfavorited > 0) {
+          parts.push(`removed ${result.unfavorited} auto-favorited`);
+        }
+        Alpine.store('ui').toast(parts.join(', '), 'success');
+        await this.loadLovedStats();
+      } catch (error) {
+        console.error('[settings] Failed to reset loved cache:', error);
+        Alpine.store('ui').toast('Failed to reset loved cache', 'error');
+      } finally {
+        this.lastfm.isResettingLoved = false;
       }
     },
 

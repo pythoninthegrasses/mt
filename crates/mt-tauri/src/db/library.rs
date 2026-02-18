@@ -129,6 +129,46 @@ pub fn get_all_tracks(conn: &Connection, query: &LibraryQuery) -> DbResult<Pagin
     })
 }
 
+/// Find all library tracks matching a given artist and title.
+///
+/// Uses exact case-insensitive matching on title AND (artist OR album_artist).
+/// Returns all matches (e.g. same song on different albums) for disambiguation.
+pub fn find_tracks_by_artist_title(
+    conn: &Connection,
+    artist: &str,
+    title: &str,
+) -> DbResult<Vec<Track>> {
+    let sql = "SELECT id, filepath, title, artist, album, album_artist,
+            track_number, track_total, disc_number, disc_total, date, genre,
+            duration, file_size, play_count, last_played, added_date,
+            missing, last_seen_at, file_mtime_ns, file_inode, content_hash
+     FROM library
+     WHERE (missing = 0 OR missing IS NULL)
+       AND title = ? COLLATE NOCASE
+       AND (artist = ? COLLATE NOCASE OR album_artist = ? COLLATE NOCASE)";
+
+    let mut stmt = conn.prepare(sql)?;
+    let tracks: Vec<Track> = stmt
+        .query_map(params![title, artist, artist], row_to_track)?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(tracks)
+}
+
+/// Find a single library track matching a given artist and title.
+///
+/// Convenience wrapper around `find_tracks_by_artist_title` that returns the
+/// first match. Use `find_tracks_by_artist_title` when disambiguation is needed.
+pub fn find_track_by_artist_title(
+    conn: &Connection,
+    artist: &str,
+    title: &str,
+) -> DbResult<Option<Track>> {
+    let tracks = find_tracks_by_artist_title(conn, artist, title)?;
+    Ok(tracks.into_iter().next())
+}
+
 /// Get a single track by ID
 pub fn get_track_by_id(conn: &Connection, track_id: i64) -> DbResult<Option<Track>> {
     let mut stmt = conn.prepare(
@@ -1081,6 +1121,115 @@ mod tests {
         };
         let result = get_all_tracks(&conn, &query).unwrap();
         assert_eq!(result.total, 10);
+    }
+
+    #[test]
+    fn test_find_track_by_artist_title_exact_case_insensitive() {
+        let conn = setup_test_db();
+
+        let metadata = TrackMetadata {
+            title: Some("Yesterday".to_string()),
+            artist: Some("The Beatles".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/yesterday.mp3", &metadata).unwrap();
+
+        // Tier 1: case-insensitive exact match
+        let result = find_track_by_artist_title(&conn, "the beatles", "yesterday").unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().title, Some("Yesterday".to_string()));
+
+        // Non-match: wrong artist
+        let result = find_track_by_artist_title(&conn, "Rolling Stones", "Yesterday").unwrap();
+        assert!(result.is_none());
+
+        // Non-match: wrong title
+        let result = find_track_by_artist_title(&conn, "The Beatles", "Let It Be").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_tracks_no_substring_fallback() {
+        let conn = setup_test_db();
+
+        let metadata = TrackMetadata {
+            title: Some("Bastards Of Young".to_string()),
+            artist: Some("The Replacements".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/bastards.mp3", &metadata).unwrap();
+
+        // Substring "Replacements" does NOT match "The Replacements" (exact only)
+        let result =
+            find_track_by_artist_title(&conn, "Replacements", "Bastards Of Young").unwrap();
+        assert!(result.is_none());
+
+        // Exact match works
+        let result =
+            find_track_by_artist_title(&conn, "The Replacements", "Bastards Of Young").unwrap();
+        assert!(result.is_some());
+
+        // Short/common title with wrong artist must NOT match
+        let metadata2 = TrackMetadata {
+            title: Some("Plans".to_string()),
+            artist: Some("Death Cab for Cutie".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/plans.mp3", &metadata2).unwrap();
+
+        let result = find_track_by_artist_title(&conn, "The Submarines", "Plans").unwrap();
+        assert!(result.is_none());
+
+        // Substring "Death Cab" does NOT match "Death Cab for Cutie" (exact only)
+        let result = find_track_by_artist_title(&conn, "Death Cab", "Plans").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_tracks_returns_all_album_variants() {
+        let conn = setup_test_db();
+
+        // Same artist+title on two different albums
+        let metadata1 = TrackMetadata {
+            title: Some("Everlong".to_string()),
+            artist: Some("Foo Fighters".to_string()),
+            album: Some("The Colour and the Shape".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/everlong_studio.mp3", &metadata1).unwrap();
+
+        let metadata2 = TrackMetadata {
+            title: Some("Everlong".to_string()),
+            artist: Some("Foo Fighters".to_string()),
+            album: Some("Greatest Hits".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/everlong_hits.mp3", &metadata2).unwrap();
+
+        let results = find_tracks_by_artist_title(&conn, "Foo Fighters", "Everlong").unwrap();
+        assert_eq!(results.len(), 2);
+
+        let albums: Vec<_> = results.iter().map(|t| t.album.as_deref().unwrap()).collect();
+        assert!(albums.contains(&"The Colour and the Shape"));
+        assert!(albums.contains(&"Greatest Hits"));
+    }
+
+    #[test]
+    fn test_find_track_by_artist_title_checks_album_artist() {
+        let conn = setup_test_db();
+
+        // Track has album_artist but different artist (e.g. compilation)
+        let metadata = TrackMetadata {
+            title: Some("Black Dog".to_string()),
+            artist: Some("Led Zeppelin".to_string()),
+            album_artist: Some("Led Zeppelin".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/black_dog.mp3", &metadata).unwrap();
+
+        // Match via album_artist when artist field differs
+        let result = find_track_by_artist_title(&conn, "Led Zeppelin", "Black Dog").unwrap();
+        assert!(result.is_some());
     }
 
     // ===== Move Detection Tests (TDD) =====

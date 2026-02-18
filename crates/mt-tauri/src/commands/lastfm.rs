@@ -8,7 +8,7 @@ use crate::lastfm::{
     AuthCallbackResponse, AuthUrlResponse, CacheLovedTracksResponse, DisconnectResponse,
     ImportLovedTracksResponse, LastFmClient, LastfmSettings, LastfmSettingsUpdate,
     LovedTracksStatsResponse, MatchLovedTracksResponse, NowPlayingRequest, QueueRetryResponse,
-    QueueStatusResponse, ScrobbleRequest, ScrobbleResponse,
+    QueueStatusResponse, ResetLovedCacheResponse, ScrobbleRequest, ScrobbleResponse,
 };
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
@@ -602,8 +602,6 @@ pub async fn lastfm_queue_retry(
 pub async fn lastfm_import_loved_tracks(
     db: State<'_, Database>,
 ) -> Result<ImportLovedTracksResponse, String> {
-    use crate::db::library::LibraryQuery;
-    use crate::db::{LibrarySortColumn, SortOrder};
     let start = std::time::Instant::now();
 
     // Check if authenticated
@@ -658,84 +656,72 @@ pub async fn lastfm_import_loved_tracks(
         let artist_name = loved_track.artist.name();
         let track_name = &loved_track.name;
 
-        // Find matching track in library using separate artist and title filters
-        // This is more accurate than combining them into a single search string
-        let query = LibraryQuery {
-            search: Some(track_name.clone()),  // Search in title field
-            artist: Some(artist_name.to_string()),  // Exact artist filter
-            album: None,
-            sort_by: LibrarySortColumn::Title,
-            sort_order: SortOrder::Asc,
-            limit: 5,  // Get top 5 matches to find best one
-            offset: 0,
-        };
-
-        let mut search_results = db
-            .with_conn(|conn| library::get_all_tracks(conn, &query))
+        // Find matching tracks (exact match, may return multiple album variants)
+        let matched_tracks = db
+            .with_conn(|conn| library::find_tracks_by_artist_title(conn, artist_name, track_name))
             .map_err(|e: crate::db::DbError| format!("Library search error: {}", e))?;
 
-        // If no results with artist filter, try a more lenient search
-        if search_results.items.is_empty() {
-            let fallback_query = LibraryQuery {
-                search: Some(format!("{} {}", artist_name, track_name)),
-                artist: None,
-                album: None,
-                sort_by: LibrarySortColumn::Title,
-                sort_order: SortOrder::Asc,
-                limit: 5,
-                offset: 0,
-            };
-
-            search_results = db
-                .with_conn(|conn| library::get_all_tracks(conn, &fallback_query))
-                .map_err(|e: crate::db::DbError| format!("Library search error: {}", e))?;
-        }
-
-        // Check if we found any matches
-        if search_results.items.is_empty() {
+        if matched_tracks.is_empty() {
             not_in_library += 1;
             debug!(artist = %artist_name, track = %track_name, "No match found for loved track");
             continue;
         }
 
-        if let Some(first_track) = search_results.items.first() {
-            debug!(
-                artist = %artist_name,
-                track = %track_name,
-                filepath = %first_track.filepath,
-                track_id = first_track.id,
-                "Found match for loved track"
-            );
-            // Check if already favorited
-            let (is_fav, _) = db
-                .with_conn(|conn| favorites::is_favorite(conn, first_track.id))
-                .map_err(|e: crate::db::DbError| format!("Favorites check error: {}", e))?;
-
-            if is_fav {
-                already_favorited += 1;
+        // Disambiguate when multiple tracks match (same song on different albums)
+        let first_track = if matched_tracks.len() == 1 {
+            &matched_tracks[0]
+        } else {
+            // Call track.getInfo to get the album for disambiguation
+            let album = client.get_track_info(artist_name, track_name).await.ok().flatten();
+            if let Some(ref album_name) = album {
+                matched_tracks
+                    .iter()
+                    .find(|t| {
+                        t.album.as_deref().map(|a| a.eq_ignore_ascii_case(album_name)).unwrap_or(false)
+                    })
+                    .unwrap_or(&matched_tracks[0])
             } else {
-                // Add to favorites
-                let add_result = db.with_conn(|conn| favorites::add_favorite(conn, first_track.id));
-                match add_result {
-                    Ok(Some(_)) => {
-                        imported += 1;
-                    }
-                    Ok(None) => {
-                        // Race condition - already favorited
-                        already_favorited += 1;
-                    }
-                    Err(e) => {
-                        error!(
-                            artist = %artist_name,
-                            track = %track_name,
-                            error = %e,
-                            "Failed to add to favorites"
-                        );
-                    }
+                &matched_tracks[0]
+            }
+        };
+
+        debug!(
+            artist = %artist_name,
+            track = %track_name,
+            filepath = %first_track.filepath,
+            track_id = first_track.id,
+            matches = matched_tracks.len(),
+            "Found match for loved track"
+        );
+
+        // Check if already favorited
+        let (is_fav, _) = db
+            .with_conn(|conn| favorites::is_favorite(conn, first_track.id))
+            .map_err(|e: crate::db::DbError| format!("Favorites check error: {}", e))?;
+
+        if is_fav {
+            already_favorited += 1;
+        } else {
+            // Add to favorites
+            let track_id = first_track.id;
+            let add_result = db.with_conn(|conn| favorites::add_favorite(conn, track_id));
+            match add_result {
+                Ok(Some(_)) => {
+                    imported += 1;
+                }
+                Ok(None) => {
+                    // Race condition - already favorited
+                    already_favorited += 1;
+                }
+                Err(e) => {
+                    error!(
+                        artist = %artist_name,
+                        track = %track_name,
+                        error = %e,
+                        "Failed to add to favorites"
+                    );
                 }
             }
-        } else {
-            not_in_library += 1;
         }
     }
 
@@ -882,14 +868,11 @@ pub async fn lastfm_cache_loved_tracks(
     })
 }
 
-/// Synchronous implementation of loved tracks matching.
+/// Async implementation of loved tracks matching.
 ///
-/// Extracted so it can be called from both the Tauri command (via `spawn_blocking`)
-/// and from background tasks without going through the command system.
-pub fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksResponse, String> {
-    use crate::db::library::LibraryQuery;
-    use crate::db::{LibrarySortColumn, SortOrder};
-
+/// Extracted so it can be called from both the Tauri command and from
+/// background tasks without going through the command system.
+pub async fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksResponse, String> {
     // Get all unmatched loved tracks from cache
     let unmatched = db
         .with_conn(|conn| lastfm_loved::get_unmatched_loved_tracks(conn, None))
@@ -898,90 +881,82 @@ pub fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksResponse
     let total_unmatched = unmatched.len();
     info!(count = total_unmatched, "Matching unmatched loved tracks");
 
-    let mut matched = 0;
-    let mut already_matched = 0;
-    let mut no_match = 0;
-    let mut new_favorites = 0;
+    let client = LastFmClient::new();
+    let mut matched: usize = 0;
+    let mut already_matched: usize = 0;
+    let mut no_match: usize = 0;
+    let mut new_favorites: usize = 0;
 
     for loved_track in unmatched.iter() {
-        // Try to find in library with artist filter first
-        let query = LibraryQuery {
-            search: Some(loved_track.track.clone()),
-            artist: Some(loved_track.artist.clone()),
-            album: None,
-            sort_by: LibrarySortColumn::Title,
-            sort_order: SortOrder::Asc,
-            limit: 5,
-            offset: 0,
-        };
-
-        let mut search_results = db
-            .with_conn(|conn| library::get_all_tracks(conn, &query))
+        // Find matching tracks (exact match, may return multiple album variants)
+        let matched_tracks = db
+            .with_conn(|conn| {
+                library::find_tracks_by_artist_title(conn, &loved_track.artist, &loved_track.track)
+            })
             .map_err(|e| format!("Library search error: {}", e))?;
 
-        // Fallback to combined search if no results
-        if search_results.items.is_empty() {
-            let fallback_query = LibraryQuery {
-                search: Some(format!("{} {}", loved_track.artist, loved_track.track)),
-                artist: None,
-                album: None,
-                sort_by: LibrarySortColumn::Title,
-                sort_order: SortOrder::Asc,
-                limit: 5,
-                offset: 0,
-            };
-
-            search_results = db
-                .with_conn(|conn| library::get_all_tracks(conn, &fallback_query))
-                .map_err(|e| format!("Library search error: {}", e))?;
-        }
-
-        if search_results.items.is_empty() {
-            // Mark as checked even if not found
+        if matched_tracks.is_empty() {
             let _ = db.with_conn(|conn| lastfm_loved::mark_checked(conn, loved_track.id));
             no_match += 1;
             continue;
         }
 
-        if let Some(library_track) = search_results.items.first() {
-            // Set the match in the cache
-            db.with_conn(|conn| {
-                lastfm_loved::set_matched_track(conn, loved_track.id, library_track.id)
-            })
-            .map_err(|e| format!("Failed to set match: {}", e))?;
-
-            matched += 1;
-
-            // Check if already favorited
-            let (is_fav, _) = db
-                .with_conn(|conn| favorites::is_favorite(conn, library_track.id))
-                .map_err(|e| format!("Favorites check error: {}", e))?;
-
-            if is_fav {
-                already_matched += 1;
+        // Disambiguate when multiple tracks match (same song on different albums)
+        let library_track = if matched_tracks.len() == 1 {
+            &matched_tracks[0]
+        } else {
+            let album = client
+                .get_track_info(&loved_track.artist, &loved_track.track)
+                .await
+                .ok()
+                .flatten();
+            if let Some(ref album_name) = album {
+                matched_tracks
+                    .iter()
+                    .find(|t| {
+                        t.album
+                            .as_deref()
+                            .map(|a| a.eq_ignore_ascii_case(album_name))
+                            .unwrap_or(false)
+                    })
+                    .unwrap_or(&matched_tracks[0])
             } else {
-                // Add to favorites
-                match db.with_conn(|conn| favorites::add_favorite(conn, library_track.id)) {
-                    Ok(Some(_)) => {
-                        new_favorites += 1;
-                        debug!(
-                            artist = %loved_track.artist,
-                            track = %loved_track.track,
-                            "Added to favorites"
-                        );
-                    }
-                    Ok(None) => {
-                        // Race condition - already favorited
-                        already_matched += 1;
-                    }
-                    Err(e) => {
-                        error!(
-                            artist = %loved_track.artist,
-                            track = %loved_track.track,
-                            error = %e,
-                            "Failed to add to favorites"
-                        );
-                    }
+                &matched_tracks[0]
+            }
+        };
+
+        let library_track_id = library_track.id;
+        db.with_conn(|conn| lastfm_loved::set_matched_track(conn, loved_track.id, library_track_id))
+            .map_err(|e| format!("Failed to set match: {}", e))?;
+        matched += 1;
+
+        let (is_fav, _) = db
+            .with_conn(|conn| favorites::is_favorite(conn, library_track_id))
+            .map_err(|e| format!("Failed to check favorite: {}", e))?;
+
+        if is_fav {
+            already_matched += 1;
+        } else {
+            let add_result = db.with_conn(|conn| favorites::add_favorite(conn, library_track_id));
+            match add_result {
+                Ok(Some(_)) => {
+                    new_favorites += 1;
+                    debug!(
+                        artist = %loved_track.artist,
+                        track = %loved_track.track,
+                        "Added to favorites"
+                    );
+                }
+                Ok(None) => {
+                    already_matched += 1;
+                }
+                Err(e) => {
+                    error!(
+                        artist = %loved_track.artist,
+                        track = %loved_track.track,
+                        error = %e,
+                        "Failed to add to favorites"
+                    );
                 }
             }
         }
@@ -1016,7 +991,7 @@ pub async fn lastfm_match_loved_tracks(
 ) -> Result<MatchLovedTracksResponse, String> {
     let start = std::time::Instant::now();
     let db = db.inner().clone();
-    let result = tokio::task::spawn_blocking(move || match_loved_tracks_impl(&db))
+    let result = tokio::spawn(async move { match_loved_tracks_impl(&db).await })
         .await
         .map_err(|e| format!("Task join error: {}", e))?;
     crate::logging::log_slow_command("lastfm_match_loved_tracks", start);
@@ -1040,6 +1015,52 @@ pub fn lastfm_loved_stats(db: State<Database>) -> Result<LovedTracksStatsRespons
         matched: stats.matched_count,
         unmatched: stats.unmatched_count,
         most_recent_loved,
+    })
+}
+
+/// Reset the loved tracks cache
+///
+/// Removes auto-favorited tracks (those matched from Last.fm) from
+/// favorites, then clears the loved tracks cache. Manually favorited
+/// tracks are not affected.
+#[tracing::instrument(skip(db))]
+#[tauri::command]
+pub fn lastfm_reset_loved_cache(db: State<Database>) -> Result<ResetLovedCacheResponse, String> {
+    let (cleared, unfavorited) = db
+        .with_conn(|conn| {
+            // Get tracks auto-favorited by Last.fm sync before clearing
+            let matched_ids = lastfm_loved::get_matched_track_ids(conn)?;
+
+            // Unfavorite them
+            let mut unfavorited: i64 = 0;
+            for track_id in &matched_ids {
+                if favorites::remove_favorite(conn, *track_id)? {
+                    unfavorited += 1;
+                }
+            }
+
+            // Clear the cache
+            let cleared = lastfm_loved::clear_loved_cache(conn)?;
+            Ok((cleared, unfavorited))
+        })
+        .map_err(|e| format!("Failed to reset loved cache: {}", e))?;
+
+    let message = match (cleared, unfavorited) {
+        (0, _) => "Loved tracks cache was already empty.".to_string(),
+        (_, 0) => format!("Cleared {} cached loved tracks.", cleared),
+        _ => format!(
+            "Cleared {} cached loved tracks, removed {} auto-favorited tracks.",
+            cleared, unfavorited
+        ),
+    };
+
+    info!(cleared, unfavorited, "Reset loved tracks cache");
+
+    Ok(ResetLovedCacheResponse {
+        status: "success".to_string(),
+        cleared,
+        unfavorited,
+        message,
     })
 }
 
@@ -1071,6 +1092,7 @@ pub fn match_new_tracks_against_loved(
         };
 
         let track_artist = track.artist.as_deref().unwrap_or("").to_lowercase();
+        let track_album_artist = track.album_artist.as_deref().unwrap_or("").to_lowercase();
         let track_title = track.title.as_deref().unwrap_or("").to_lowercase();
 
         // Check against each unmatched loved track
@@ -1078,11 +1100,10 @@ pub fn match_new_tracks_against_loved(
             let loved_artist = loved.artist.to_lowercase();
             let loved_track = loved.track.to_lowercase();
 
-            // Simple fuzzy match - check if both artist and title contain the keywords
-            let artist_match = track_artist.contains(&loved_artist)
-                || loved_artist.contains(&track_artist);
-            let title_match =
-                track_title.contains(&loved_track) || loved_track.contains(&track_title);
+            // Exact case-insensitive match on artist (or album_artist) and title
+            let artist_match = track_artist == loved_artist
+                || (!track_album_artist.is_empty() && track_album_artist == loved_artist);
+            let title_match = track_title == loved_track;
 
             if artist_match && title_match {
                 // Found a match!
@@ -1249,5 +1270,115 @@ mod tests {
         // 100% threshold (maximum)
         assert!(should_scrobble(300.0, 300.0, 100)); // 300s = 100%
         assert!(!should_scrobble(300.0, 299.0, 100));
+    }
+
+    #[test]
+    fn test_reset_loved_cache_response_serialization() {
+        let response = ResetLovedCacheResponse {
+            status: "success".to_string(),
+            cleared: 42,
+            unfavorited: 5,
+            message: "Cleared 42 cached loved tracks, removed 5 auto-favorited tracks."
+                .to_string(),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"cleared\":42"));
+        assert!(json.contains("\"unfavorited\":5"));
+        assert!(json.contains("\"status\":\"success\""));
+    }
+
+    /// Helper to set up a test DB with schema
+    fn setup_reset_test_db() -> rusqlite::Connection {
+        use crate::db::schema::{create_tables, run_migrations};
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_tables(&conn).unwrap();
+        run_migrations(&conn).unwrap();
+        conn
+    }
+
+    /// Helper to add a library track
+    fn add_test_track(conn: &rusqlite::Connection, artist: &str, title: &str, path: &str) -> i64 {
+        crate::db::library::add_track(
+            conn,
+            path,
+            &crate::db::TrackMetadata {
+                title: Some(title.to_string()),
+                artist: Some(artist.to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_reset_unfavorites_auto_liked_tracks() {
+        let conn = setup_reset_test_db();
+
+        // Add two library tracks
+        let auto_id = add_test_track(&conn, "Artist", "Auto Track", "/music/auto.mp3");
+        let manual_id = add_test_track(&conn, "Other", "Manual Track", "/music/manual.mp3");
+
+        // Manually favorite one
+        favorites::add_favorite(&conn, manual_id).unwrap();
+
+        // Simulate Last.fm sync: cache + match + auto-favorite
+        lastfm_loved::upsert_loved_track(&conn, "Artist", "Auto Track", Some(1000)).unwrap();
+        let loved = lastfm_loved::get_loved_by_name(&conn, "Artist", "Auto Track")
+            .unwrap()
+            .unwrap();
+        lastfm_loved::set_matched_track(&conn, loved.id, auto_id).unwrap();
+        favorites::add_favorite(&conn, auto_id).unwrap();
+
+        // Both are favorited
+        assert!(favorites::is_favorite(&conn, auto_id).unwrap().0);
+        assert!(favorites::is_favorite(&conn, manual_id).unwrap().0);
+
+        // Reset: get matched IDs, unfavorite them, clear cache
+        let matched_ids = lastfm_loved::get_matched_track_ids(&conn).unwrap();
+        assert_eq!(matched_ids.len(), 1);
+        assert_eq!(matched_ids[0], auto_id);
+
+        let mut unfavorited = 0;
+        for id in &matched_ids {
+            if favorites::remove_favorite(&conn, *id).unwrap() {
+                unfavorited += 1;
+            }
+        }
+        let cleared = lastfm_loved::clear_loved_cache(&conn).unwrap();
+
+        assert_eq!(cleared, 1);
+        assert_eq!(unfavorited, 1);
+
+        // Auto-favorited track is no longer a favorite
+        assert!(!favorites::is_favorite(&conn, auto_id).unwrap().0);
+        // Manually favorited track is preserved
+        assert!(favorites::is_favorite(&conn, manual_id).unwrap().0);
+    }
+
+    #[test]
+    fn test_reset_empty_cache() {
+        let conn = setup_reset_test_db();
+
+        let matched_ids = lastfm_loved::get_matched_track_ids(&conn).unwrap();
+        assert!(matched_ids.is_empty());
+
+        let cleared = lastfm_loved::clear_loved_cache(&conn).unwrap();
+        assert_eq!(cleared, 0);
+    }
+
+    #[test]
+    fn test_reset_with_unmatched_tracks_only() {
+        let conn = setup_reset_test_db();
+
+        // Cache loved tracks but don't match any
+        lastfm_loved::upsert_loved_track(&conn, "Unknown", "Song", Some(1000)).unwrap();
+        lastfm_loved::upsert_loved_track(&conn, "Unknown2", "Song2", Some(2000)).unwrap();
+
+        let matched_ids = lastfm_loved::get_matched_track_ids(&conn).unwrap();
+        assert!(matched_ids.is_empty());
+
+        let cleared = lastfm_loved::clear_loved_cache(&conn).unwrap();
+        assert_eq!(cleared, 2);
     }
 }

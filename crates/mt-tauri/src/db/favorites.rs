@@ -526,4 +526,49 @@ mod tests {
         assert_eq!(top[1].title, Some("Medium Plays".to_string()));
         assert_eq!(top[2].title, Some("Low Plays".to_string()));
     }
+
+    #[test]
+    fn test_favorites_independent_of_lastfm_settings() {
+        let conn = setup_test_db();
+
+        // Set a fake Last.fm session key
+        use crate::db::settings;
+        settings::set_setting(&conn, "lastfm_session_key", &serde_json::json!("fake_key"))
+            .unwrap();
+
+        // Favorites operations should work regardless
+        let metadata = TrackMetadata {
+            title: Some("Test".to_string()),
+            artist: Some("Test Artist".to_string()),
+            ..Default::default()
+        };
+        let id = add_track(&conn, "/music/test.mp3", &metadata).unwrap();
+
+        let ts = add_favorite(&conn, id).unwrap();
+        assert!(ts.is_some());
+
+        let (is_fav, _) = is_favorite(&conn, id).unwrap();
+        assert!(is_fav);
+
+        let removed = remove_favorite(&conn, id).unwrap();
+        assert!(removed);
+
+        let (is_fav, _) = is_favorite(&conn, id).unwrap();
+        assert!(!is_fav);
+    }
+
+    #[test]
+    fn test_favorite_track_without_metadata() {
+        let conn = setup_test_db();
+
+        // Track with no artist/title
+        let metadata = TrackMetadata::default();
+        let id = add_track(&conn, "/music/unknown.mp3", &metadata).unwrap();
+
+        let ts = add_favorite(&conn, id).unwrap();
+        assert!(ts.is_some());
+
+        let (is_fav, _) = is_favorite(&conn, id).unwrap();
+        assert!(is_fav);
+    }
 }
