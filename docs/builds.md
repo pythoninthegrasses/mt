@@ -9,6 +9,7 @@ Build configuration, performance tuning, signing, and distribution for mt.
 | macOS | ARM64 | Self-hosted `[macOS, ARM64]` | `.app`, `.dmg` |
 | Linux | amd64 | `ubuntu-latest` (CI) or Docker (`Dockerfile.linux-amd64`) | `.deb` |
 | Linux | arm64 | Docker (`Dockerfile.linux-arm64`) | `.deb` |
+| Windows | x64 | Self-hosted `[self-hosted, Windows, X64]` | `.exe` (NSIS) |
 
 ## Taskfile Commands
 
@@ -25,6 +26,7 @@ All `task tauri:*` commands default to nightly with parallel codegen and sccache
 | `task tauri:build:signed` | Build signed + notarized `.app` and `.dmg` (macOS) |
 | `task tauri:build:dmg` | Build signed + notarized `.dmg` only (macOS) |
 | `task tauri:icons` | Generate app icons from `static/logo.png` |
+| `task tauri:build:windows` | Build Windows x64 NSIS `.exe` installer |
 | `task tauri:build:linux-amd64` | Build Linux amd64 `.deb` via Docker |
 | `task tauri:build:linux-arm64` | Build Linux arm64 `.deb` via Docker |
 | `task tauri:clean` | Clean all build artifacts |
@@ -109,6 +111,9 @@ rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
 [target.aarch64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 ```
 
 ### Linker Options by Platform
@@ -406,22 +411,60 @@ task build:linux-amd64:shell
 task build:linux-arm64:shell
 ```
 
-### Windows
+### Windows (NSIS)
 
-> Not yet implemented. Placeholder for future Windows code signing with Authenticode / EV certificates.
+Windows builds produce NSIS `.exe` installers with self-signed code signing.
 
-Planned approach:
+#### Prerequisites
 
-- Sign with an EV code signing certificate (avoids SmartScreen warnings)
-- Use `signtool.exe` or Tauri's built-in Windows signing support
-- NSIS or WiX installer bundle
-- GitHub Actions runner: `windows-latest` or self-hosted
+- Visual Studio Build Tools (MSVC v143+, Windows 11 SDK)
+- WebView2 runtime (pre-installed on Windows 10 1803+ and Windows 11)
+- Chocolatey (for CI dependency management)
+
+#### Bundle Configuration
+
+`crates/mt-tauri/tauri.conf.json` includes `nsis` in bundle targets with per-user + per-machine install support:
+
+```json
+"windows": {
+  "nsis": {
+    "installMode": "both"
+  }
+}
+```
+
+#### Self-Signed Code Signing
+
+CI uses a self-signed certificate generated at build time via `New-SelfSignedCertificate`. This prevents Windows Defender real-time protection false positives but does **not** eliminate SmartScreen "unrecognized app" warnings (that requires an EV certificate with download reputation).
+
+The signing flow:
+
+1. Install Windows SDK (provides `signtool.exe`)
+2. Generate a `CodeSigningCert` with subject `CN=MT`
+3. Export to PFX with password from `WINDOWS_CERT_PASSWORD` secret
+4. Tauri calls `signtool sign` via `bundle.windows.signCommand` (passed as a `--config` override)
+5. Both the application binary and NSIS installer are signed
+6. DigiCert timestamp server ensures signatures remain valid after cert expiry
+
+#### Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `WINDOWS_CERT_PASSWORD` | Password for the self-signed PFX certificate (GitHub secret) |
+
+#### Local Build
+
+```bash
+task tauri:build:windows
+```
+
+This builds an unsigned NSIS installer. For local signed builds, generate a certificate manually and pass a `--config` override with `bundle.windows.signCommand`.
 
 ## CI/CD
 
 The release pipeline (`.github/workflows/release.yml`) runs on version tags (`v*`) and manual `workflow_dispatch`.
 
-Two parallel jobs:
+Three parallel jobs:
 
 ### `build-macos` — macOS ARM64
 
@@ -440,6 +483,18 @@ Runs on `ubuntu-latest`:
 1. Sets up the Tauri build environment via the shared composite action
 2. Builds with `tauri-action` targeting `x86_64-unknown-linux-gnu --bundles deb`
 3. Attaches the `.deb` to the same draft GitHub Release
+
+### `build-windows` — Windows x64
+
+Runs on a self-hosted `[self-hosted, Windows, X64]` runner:
+
+1. Sets up the Tauri build environment (Chocolatey installs cmake)
+2. Installs Windows SDK for `signtool.exe`
+3. Generates a self-signed `CodeSigningCert` and exports to PFX
+4. Writes a config override with `bundle.windows.signCommand` pointing to signtool
+5. Builds with `tauri-action` which calls the sign command for both the binary and NSIS installer
+6. Attaches the signed `.exe` to the same draft GitHub Release
+7. Cleans up the certificate and config override (runs in `always()` step)
 
 ## Linux System Dependencies
 

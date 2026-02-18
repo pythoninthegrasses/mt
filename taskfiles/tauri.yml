@@ -12,6 +12,7 @@ vars:
   MACOS_X64_TARGET: "x86_64-apple-darwin"
   LINUX_AMD64_TARGET: "x86_64-unknown-linux-gnu"
   LINUX_ARM64_TARGET: "aarch64-unknown-linux-gnu"
+  WINDOWS_X64_TARGET: "x86_64-pc-windows-msvc"
   # Reserve 2 cores for system, minimum 1 job
   BUILD_JOBS: '{{if gt (sub numCPU 2) 0}}{{sub numCPU 2}}{{else}}1{{end}}'
 env:
@@ -129,6 +130,7 @@ tasks:
             darwin/amd64)  echo "x86_64-apple-darwin" ;;
             linux/amd64)   echo "x86_64-unknown-linux-gnu" ;;
             linux/arm64)   echo "aarch64-unknown-linux-gnu" ;;
+            windows/amd64) echo "x86_64-pc-windows-msvc" ;;
             *) echo "Unsupported platform: {{OS}}/{{ARCH}}" >&2; exit 1 ;;
           esac
     cmds:
@@ -161,6 +163,19 @@ tasks:
       - task: _build
         vars:
           TARGET: "{{.MACOS_X64_TARGET}}"
+    sources:
+      - "{{.TAURI_DIR}}/src/**/*.rs"
+      - "{{.TAURI_DIR}}/Cargo.toml"
+      - "{{.TAURI_DIR}}/tauri.conf.json"
+
+  build:windows:
+    desc: "Build Tauri app for Windows (x86_64 NSIS installer)"
+    platforms: [windows]
+    deps: [":deno:install"]
+    cmds:
+      - task: _build
+        vars:
+          TARGET: "{{.WINDOWS_X64_TARGET}}"
     sources:
       - "{{.TAURI_DIR}}/src/**/*.rs"
       - "{{.TAURI_DIR}}/Cargo.toml"

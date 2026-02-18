@@ -98,3 +98,69 @@ jobs:
           prerelease: false
           args: --target x86_64-unknown-linux-gnu --bundles deb
           projectPath: './crates/mt-tauri'
+
+  build-windows:
+    name: Build Windows (x64)
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Tauri build environment
+        uses: ./.github/actions/setup-tauri-build
+
+      - name: Install Windows SDK (signtool)
+        shell: pwsh
+        run: |
+          choco install windows-sdk-10.1 -y
+          $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
+            -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\' } `
+            | Sort-Object { [version]($_.FullName -replace '.*\\(\d+\.\d+\.\d+\.\d+)\\.*','$1') } `
+            | Select-Object -Last 1 -ExpandProperty FullName
+          echo "SIGNTOOL_PATH=$signtool" >> $env:GITHUB_ENV
+
+      - name: Generate self-signed code signing certificate
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $password = ConvertTo-SecureString -String $env:WINDOWS_CERT_PASSWORD -Force -AsPlainText
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=MT' `
+            -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddYears(5)
+          Export-PfxCertificate -Cert $cert -FilePath "${{ runner.temp }}\mt-cert.pfx" -Password $password
+          echo "CERT_PATH=${{ runner.temp }}\mt-cert.pfx" >> $env:GITHUB_ENV
+
+      - name: Write signing config override
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $signCmd = "$env:SIGNTOOL_PATH sign /f $env:CERT_PATH /p $env:WINDOWS_CERT_PASSWORD /t http://timestamp.digicert.com /fd SHA256"
+          $config = @{ bundle = @{ windows = @{ signCommand = $signCmd } } } | ConvertTo-Json -Depth 5
+          $configPath = "${{ runner.temp }}\sign-override.json"
+          $config | Out-File -FilePath $configPath -Encoding utf8
+          echo "SIGN_CONFIG_PATH=$configPath" >> $env:GITHUB_ENV
+
+      - name: Build NSIS installer
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'mt v__VERSION__'
+          releaseBody: 'See assets below to download and install.'
+          releaseDraft: true
+          prerelease: false
+          args: --target x86_64-pc-windows-msvc --bundles nsis --config "${{ env.SIGN_CONFIG_PATH }}"
+          projectPath: './crates/mt-tauri'
+
+      - name: Cleanup certificate
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item -Force "${{ runner.temp }}\mt-cert.pfx" -ErrorAction SilentlyContinue
+          Remove-Item -Force "${{ runner.temp }}\sign-override.json" -ErrorAction SilentlyContinue
+          Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Where-Object { $_.Subject -eq 'CN=MT' } | Remove-Item

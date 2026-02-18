@@ -30,6 +30,12 @@ runs:
           libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
           cmake zlib1g-dev libgtk-3-dev
 
+    - name: Install Windows system dependencies
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
+
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
