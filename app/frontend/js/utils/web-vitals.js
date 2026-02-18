@@ -8,7 +8,7 @@
  * Only active in dev builds (import is tree-shaken in production).
  */
 
-import { onFCP, onLCP, onCLS, onINP, onTTFB } from 'web-vitals';
+import { onCLS, onFCP, onINP, onLCP, onTTFB } from 'web-vitals';
 import { reportError } from './error-reporter.js';
 
 /**
@@ -18,7 +18,11 @@ export function initWebVitals() {
   const report = (metric) => {
     const line = `[web-vitals] ${metric.name}: ${Math.round(metric.value)}ms (${metric.rating})`;
     console.log(line);
-    reportError('info', line, `id=${metric.id} delta=${Math.round(metric.delta)} navigationType=${metric.navigationType}`);
+    reportError(
+      'info',
+      line,
+      `id=${metric.id} delta=${Math.round(metric.delta)} navigationType=${metric.navigationType}`,
+    );
   };
 
   onFCP(report);
@@ -27,7 +31,11 @@ export function initWebVitals() {
     // CLS is unitless, not ms
     const line = `[web-vitals] ${metric.name}: ${metric.value.toFixed(4)} (${metric.rating})`;
     console.log(line);
-    reportError('info', line, `id=${metric.id} delta=${metric.delta.toFixed(4)} navigationType=${metric.navigationType}`);
+    reportError(
+      'info',
+      line,
+      `id=${metric.id} delta=${metric.delta.toFixed(4)} navigationType=${metric.navigationType}`,
+    );
   });
   onINP(report);
   onTTFB(report);

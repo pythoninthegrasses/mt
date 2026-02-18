@@ -314,34 +314,33 @@ export function createArtistsBrowser(Alpine) {
           this.queue._playNextOffset = 0;
           await this.player.playTrack(track);
 
-          const self = this;
           const buildQueue = async () => {
             try {
               await api.queue.clear();
-              if (self._buildQueueGeneration !== generation) return;
+              if (this._buildQueueGeneration !== generation) return;
 
               const subsequent = allTracks.slice(index);
               const preceding = allTracks.slice(0, index);
               const fullQueue = [...subsequent, ...preceding];
 
-              if (self._buildQueueGeneration !== generation) return;
+              if (this._buildQueueGeneration !== generation) return;
 
-              self.queue.items.splice(0, self.queue.items.length, ...fullQueue);
-              self.queue._originalOrder.splice(0, self.queue._originalOrder.length, ...fullQueue);
-              self.queue.currentIndex = 0;
+              this.queue.items.splice(0, this.queue.items.length, ...fullQueue);
+              this.queue._originalOrder.splice(0, this.queue._originalOrder.length, ...fullQueue);
+              this.queue.currentIndex = 0;
 
               await api.queue.add(fullQueue.map((t) => t.id));
-              if (self._buildQueueGeneration !== generation) return;
+              if (this._buildQueueGeneration !== generation) return;
 
               await api.queue.setCurrentIndex(0);
             } catch (err) {
-              if (self._buildQueueGeneration === generation) {
+              if (this._buildQueueGeneration === generation) {
                 console.error('[artists-browser] Failed to build queue:', err);
               }
             } finally {
-              if (self._buildQueueGeneration === generation) {
+              if (this._buildQueueGeneration === generation) {
                 setTimeout(() => {
-                  self.queue._updating = false;
+                  this.queue._updating = false;
                 }, 200);
               }
             }

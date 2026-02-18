@@ -1168,35 +1168,34 @@ export function createLibraryBrowser(Alpine) {
 
           // Build full queue in background
           const allTracks = this.library.filteredTracks;
-          const self = this;
           const buildQueue = async () => {
             try {
               await api.queue.clear();
-              if (self._buildQueueGeneration !== generation) return;
+              if (this._buildQueueGeneration !== generation) return;
 
               const subsequent = allTracks.slice(index);
               const preceding = allTracks.slice(0, index);
               const fullQueue = [...subsequent, ...preceding];
 
-              if (self._buildQueueGeneration !== generation) return;
+              if (this._buildQueueGeneration !== generation) return;
 
-              self.queue.items.splice(0, self.queue.items.length, ...fullQueue);
-              self.queue._originalOrder.splice(0, self.queue._originalOrder.length, ...fullQueue);
-              self.queue.currentIndex = 0;
+              this.queue.items.splice(0, this.queue.items.length, ...fullQueue);
+              this.queue._originalOrder.splice(0, this.queue._originalOrder.length, ...fullQueue);
+              this.queue.currentIndex = 0;
 
               const trackIds = fullQueue.map((t) => t.id);
               await api.queue.add(trackIds);
-              if (self._buildQueueGeneration !== generation) return;
+              if (this._buildQueueGeneration !== generation) return;
 
               await api.queue.setCurrentIndex(0);
             } catch (err) {
-              if (self._buildQueueGeneration === generation) {
+              if (this._buildQueueGeneration === generation) {
                 console.error('[library-browser] Failed to build queue:', err);
               }
             } finally {
-              if (self._buildQueueGeneration === generation) {
+              if (this._buildQueueGeneration === generation) {
                 setTimeout(() => {
-                  self.queue._updating = false;
+                  this.queue._updating = false;
                 }, 200);
               }
             }
