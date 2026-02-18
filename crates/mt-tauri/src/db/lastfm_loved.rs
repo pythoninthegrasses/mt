@@ -28,24 +28,27 @@ pub fn upsert_loved_track(
     Ok(conn.last_insert_rowid())
 }
 
-/// Bulk insert loved tracks (more efficient than individual inserts)
+/// Bulk insert loved tracks in a single transaction.
 ///
 /// Returns the number of tracks inserted/updated.
 pub fn bulk_insert_loved_tracks(
     conn: &Connection,
     tracks: &[(String, String, Option<i64>)], // (artist, track, loved_at)
 ) -> DbResult<usize> {
+    let tx = conn.unchecked_transaction()?;
+    let mut stmt = tx.prepare(
+        "INSERT INTO lastfm_loved_tracks (artist, track, loved_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(artist, track) DO UPDATE SET
+             loved_at = COALESCE(excluded.loved_at, loved_at)",
+    )?;
     let mut count = 0;
     for (artist, track, loved_at) in tracks {
-        conn.execute(
-            "INSERT INTO lastfm_loved_tracks (artist, track, loved_at)
-             VALUES (?, ?, ?)
-             ON CONFLICT(artist, track) DO UPDATE SET
-                 loved_at = COALESCE(excluded.loved_at, loved_at)",
-            params![artist, track, loved_at],
-        )?;
+        stmt.execute(params![artist, track, loved_at])?;
         count += 1;
     }
+    drop(stmt);
+    tx.commit()?;
     Ok(count)
 }
 
@@ -232,6 +235,20 @@ pub fn get_loved_count(conn: &Connection) -> DbResult<i64> {
     Ok(count)
 }
 
+/// Get all library track IDs that were matched from the loved cache.
+///
+/// These are the tracks that were auto-favorited by the Last.fm sync process.
+pub fn get_matched_track_ids(conn: &Connection) -> DbResult<Vec<i64>> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT matched_track_id FROM lastfm_loved_tracks WHERE matched_track_id IS NOT NULL",
+    )?;
+    let ids: Vec<i64> = stmt
+        .query_map([], |row| row.get(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(ids)
+}
+
 /// Helper function to map a row to LastfmLovedTrack
 fn map_loved_track(row: &rusqlite::Row) -> rusqlite::Result<LastfmLovedTrack> {
     Ok(LastfmLovedTrack {
@@ -303,6 +320,46 @@ mod tests {
 
         let count = get_loved_count(&conn).unwrap();
         assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn test_bulk_insert_large_batch() {
+        let conn = setup_test_db();
+
+        let tracks: Vec<(String, String, Option<i64>)> = (0..1000)
+            .map(|i| {
+                (
+                    format!("Artist {}", i),
+                    format!("Track {}", i),
+                    Some(i as i64),
+                )
+            })
+            .collect();
+
+        let inserted = bulk_insert_loved_tracks(&conn, &tracks).unwrap();
+        assert_eq!(inserted, 1000);
+        assert_eq!(get_loved_count(&conn).unwrap(), 1000);
+    }
+
+    #[test]
+    fn test_bulk_insert_deduplicates() {
+        let conn = setup_test_db();
+
+        let tracks = vec![
+            ("Artist".to_string(), "Track".to_string(), Some(1000)),
+            ("Artist".to_string(), "Track".to_string(), Some(2000)),
+        ];
+
+        let inserted = bulk_insert_loved_tracks(&conn, &tracks).unwrap();
+        assert_eq!(inserted, 2);
+        // Only one row because of UNIQUE(artist, track)
+        assert_eq!(get_loved_count(&conn).unwrap(), 1);
+
+        // The loved_at should be the last value (2000)
+        let entry = get_loved_by_name(&conn, "Artist", "Track")
+            .unwrap()
+            .unwrap();
+        assert_eq!(entry.loved_at, Some(2000));
     }
 
     #[test]
@@ -410,5 +467,95 @@ mod tests {
 
         let ts = get_most_recent_loved_at(&conn).unwrap();
         assert_eq!(ts, Some(3000));
+    }
+
+    #[test]
+    fn test_clear_cache_preserves_favorites() {
+        use crate::db::favorites;
+
+        let conn = setup_test_db();
+
+        // Add a library track and favorite it
+        let track_id = insert_test_library_track(&conn, "/test/fav.mp3");
+        favorites::add_favorite(&conn, track_id).unwrap();
+
+        // Cache a loved track and match it to the library track
+        let loved_id = upsert_loved_track(&conn, "Artist", "Track", Some(1000)).unwrap();
+        set_matched_track(&conn, loved_id, track_id).unwrap();
+
+        // Verify cache and favorites both populated
+        assert_eq!(get_loved_count(&conn).unwrap(), 1);
+        let (is_fav, _) = favorites::is_favorite(&conn, track_id).unwrap();
+        assert!(is_fav);
+
+        // Clear the loved cache
+        let cleared = clear_loved_cache(&conn).unwrap();
+        assert_eq!(cleared, 1);
+
+        // Cache is empty
+        assert_eq!(get_loved_count(&conn).unwrap(), 0);
+
+        // Favorites are untouched
+        let (is_fav, _) = favorites::is_favorite(&conn, track_id).unwrap();
+        assert!(is_fav);
+    }
+
+    #[test]
+    fn test_clear_cache_returns_count() {
+        let conn = setup_test_db();
+
+        // Empty cache returns 0
+        let cleared = clear_loved_cache(&conn).unwrap();
+        assert_eq!(cleared, 0);
+
+        // Add tracks then clear
+        upsert_loved_track(&conn, "A1", "T1", None).unwrap();
+        upsert_loved_track(&conn, "A2", "T2", None).unwrap();
+        upsert_loved_track(&conn, "A3", "T3", None).unwrap();
+
+        let cleared = clear_loved_cache(&conn).unwrap();
+        assert_eq!(cleared, 3);
+    }
+
+    #[test]
+    fn test_stats_zero_after_clear() {
+        let conn = setup_test_db();
+
+        // Add and match some tracks
+        let track_id = insert_test_library_track(&conn, "/test/t.mp3");
+        let loved_id = upsert_loved_track(&conn, "Artist", "Track", Some(1000)).unwrap();
+        set_matched_track(&conn, loved_id, track_id).unwrap();
+        upsert_loved_track(&conn, "Artist 2", "Track 2", None).unwrap();
+
+        let stats = get_loved_stats(&conn).unwrap();
+        assert_eq!(stats.total_cached, 2);
+        assert_eq!(stats.matched_count, 1);
+
+        clear_loved_cache(&conn).unwrap();
+
+        let stats = get_loved_stats(&conn).unwrap();
+        assert_eq!(stats.total_cached, 0);
+        assert_eq!(stats.matched_count, 0);
+        assert_eq!(stats.unmatched_count, 0);
+    }
+
+    #[test]
+    fn test_recache_after_clear() {
+        let conn = setup_test_db();
+
+        // Add, clear, re-add
+        upsert_loved_track(&conn, "Artist", "Track", Some(1000)).unwrap();
+        assert_eq!(get_loved_count(&conn).unwrap(), 1);
+
+        clear_loved_cache(&conn).unwrap();
+        assert_eq!(get_loved_count(&conn).unwrap(), 0);
+
+        // Re-caching works
+        upsert_loved_track(&conn, "Artist", "Track", Some(2000)).unwrap();
+        assert_eq!(get_loved_count(&conn).unwrap(), 1);
+
+        let entry = get_loved_by_name(&conn, "Artist", "Track").unwrap().unwrap();
+        assert_eq!(entry.loved_at, Some(2000));
+        assert_eq!(entry.matched_track_id, None); // Match was lost on clear
     }
 }

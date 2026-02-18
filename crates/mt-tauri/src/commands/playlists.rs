@@ -41,6 +41,7 @@ pub struct PlaylistGenerateNameResponse {
 }
 
 /// Get all playlists with track counts
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn playlist_list(db: State<'_, Database>) -> Result<PlaylistListResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -51,6 +52,7 @@ pub fn playlist_list(db: State<'_, Database>) -> Result<PlaylistListResponse, St
 }
 
 /// Create a new playlist
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn playlist_create(
     app: AppHandle,
@@ -72,6 +74,7 @@ pub fn playlist_create(
 }
 
 /// Get a playlist with its tracks
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn playlist_get(
     db: State<'_, Database>,
@@ -82,6 +85,7 @@ pub fn playlist_get(
 }
 
 /// Update playlist metadata (name)
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn playlist_update(
     app: AppHandle,
@@ -101,6 +105,7 @@ pub fn playlist_update(
 }
 
 /// Delete a playlist
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn playlist_delete(
     app: AppHandle,
@@ -118,6 +123,7 @@ pub fn playlist_delete(
 }
 
 /// Add tracks to a playlist
+#[tracing::instrument(skip(app, db, track_ids))]
 #[tauri::command]
 pub fn playlist_add_tracks(
     app: AppHandle,
@@ -146,6 +152,7 @@ pub fn playlist_add_tracks(
 }
 
 /// Remove a track from a playlist by position
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn playlist_remove_track(
     app: AppHandle,
@@ -166,6 +173,7 @@ pub fn playlist_remove_track(
 }
 
 /// Reorder tracks within a playlist
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn playlist_reorder_tracks(
     app: AppHandle,
@@ -187,6 +195,7 @@ pub fn playlist_reorder_tracks(
 }
 
 /// Reorder playlists in the sidebar
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn playlists_reorder(
     app: AppHandle,
@@ -208,6 +217,7 @@ pub fn playlists_reorder(
 }
 
 /// Generate a unique playlist name
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn playlist_generate_name(
     db: State<'_, Database>,

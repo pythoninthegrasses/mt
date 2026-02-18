@@ -448,6 +448,24 @@ Failed scrobbles queued for retry in `scrobble_queue` table:
 | `retry_count` | INTEGER | Number of retry attempts |
 | `created_at` | TIMESTAMP | When queued |
 
+### Loved Tracks Cache Table
+
+Cached Last.fm loved tracks in `lastfm_loved_tracks` table:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER PRIMARY KEY | Cache entry ID |
+| `artist` | TEXT NOT NULL | Artist name from Last.fm |
+| `track` | TEXT NOT NULL | Track name from Last.fm |
+| `loved_at` | INTEGER | Unix timestamp when loved |
+| `matched_track_id` | INTEGER | FK to library.id (NULL if unmatched) |
+| `last_checked_at` | INTEGER | When matching was last attempted |
+| `created_at` | TIMESTAMP | When cached |
+
+**Constraints:** `UNIQUE(artist, track)`, FK on `matched_track_id` with `ON DELETE SET NULL`
+
+**Indexes:** composite on `(artist, track)`, partial on unmatched rows (`WHERE matched_track_id IS NULL`)
+
 ### Library Table
 
 Favorites tracking in `library` table:
@@ -621,6 +639,28 @@ const result = await invoke('lastfm_import_loved_tracks');
 //   message: "Imported 120 tracks, 10 already favorited, 20 not in library"
 // }
 ```
+
+## Loved Tracks Matching Strategy
+
+Loved tracks are synced in two phases: **cache** (fetch from Last.fm API) and **match** (compare against local library).
+
+### Caching (`lastfm_cache_loved_tracks`)
+
+Fetches all loved tracks from the Last.fm API (paginated, 200/page) and bulk-inserts them into the `lastfm_loved_tracks` table in a single SQLite transaction. Supports incremental mode using the most recent `loved_at` timestamp.
+
+### Matching (`lastfm_match_loved_tracks`)
+
+Runs entirely offline (no API calls). Operates in a single transaction for all reads and writes. Uses `find_track_by_artist_title()` which requires **both** artist AND title to match at every tier:
+
+1. **Tier 1 - Case-insensitive exact**: `title = ? COLLATE NOCASE AND artist = ? COLLATE NOCASE`. Catches casing differences like `"the beatles"` vs `"The Beatles"`.
+
+2. **Tier 2 - Substring on both fields**: `title LIKE %?% AND (artist LIKE %?% OR album_artist LIKE %?%)`. Catches partial artist name differences like `"Beatles"` vs `"The Beatles"`, or compilation tracks where the artist field differs from album_artist.
+
+3. **On match**: Sets `matched_track_id` in the cache and adds the track to favorites (if not already favorited).
+
+4. **On no match**: Marks the track as checked (`last_checked_at`) so it can be re-attempted later if the library changes.
+
+Both artist and title are always required to match. There is no fallback that drops the artist constraint, which prevents false positives from common/short track names (e.g. "Plans", "Human", "17") matching unrelated tracks.
 
 ## Frontend Integration
 

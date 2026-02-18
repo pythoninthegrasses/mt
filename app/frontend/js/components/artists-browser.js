@@ -6,17 +6,20 @@ export function createArtistsBrowser(Alpine) {
     selectedArtist: null,
     artworkCache: {},
     contextMenu: null,
+    _buildQueueGeneration: 0,
+
+    // Memoization cache
+    _artistsVersion: -1,
+    _cachedArtists: [],
+    _canonicalMapVersion: -1,
+    _cachedCanonicalMap: null,
     playlists: [],
     showPlaylistSubmenu: false,
     submenuOnLeft: false,
     submenuY: 0,
     submenuCloseTimeout: null,
 
-    // All library tracks (loaded independently of library store's active section)
-    _allTracks: [],
-
     init() {
-      this._loadAllTracks();
       this._loadPlaylists();
       window.addEventListener('mt:playlists-updated', () => this._loadPlaylists());
 
@@ -31,6 +34,10 @@ export function createArtistsBrowser(Alpine) {
       if (this.$store.ui.view === 'artists' && this.artists.length > 0) {
         this.selectedArtist = this.artists[0];
       }
+    },
+
+    get _allTracks() {
+      return this.$store.library.allTracks;
     },
 
     get library() {
@@ -54,6 +61,9 @@ export function createArtistsBrowser(Alpine) {
      * tracks in that album). This keeps multi-artist albums grouped under one entry.
      */
     get _canonicalArtistMap() {
+      const v = this.$store.library._dataVersion;
+      if (this._canonicalMapVersion === v) return this._cachedCanonicalMap;
+
       const map = new Map();
       for (const track of this._allTracks) {
         const album = track.album || '';
@@ -64,6 +74,8 @@ export function createArtistsBrowser(Alpine) {
           map.set(album, artist);
         }
       }
+      this._cachedCanonicalMap = map;
+      this._canonicalMapVersion = v;
       return map;
     },
 
@@ -97,14 +109,20 @@ export function createArtistsBrowser(Alpine) {
     },
 
     get artists() {
+      const v = this.$store.library._dataVersion;
+      if (this._artistsVersion === v) return this._cachedArtists;
+
       const displayMap = this._artistDisplayNames;
       const artists = Array.from(displayMap.values());
       const ignoreWords = this._ignoreWords;
-      return artists.sort((a, b) => {
+      artists.sort((a, b) => {
         const aVal = this._stripIgnoredPrefix(a, ignoreWords).toLowerCase();
         const bVal = this._stripIgnoredPrefix(b, ignoreWords).toLowerCase();
         return aVal.localeCompare(bVal);
       });
+      this._cachedArtists = artists;
+      this._artistsVersion = v;
+      return artists;
     },
 
     get _ignoreWords() {
@@ -270,9 +288,13 @@ export function createArtistsBrowser(Alpine) {
 
     async handleTrackDoubleClick(track, allTracks, index) {
       this.queue._updating = true;
+      this._buildQueueGeneration++;
+      const generation = this._buildQueueGeneration;
+      let backgroundBuildStarted = false;
+
       try {
-        await this.queue.clear();
         if (this.queue.shuffle) {
+          await this.queue.clear();
           await this.queue.add(allTracks, false);
           if (index >= 0 && index < this.queue.items.length) {
             this.queue.currentIndex = index;
@@ -282,31 +304,58 @@ export function createArtistsBrowser(Alpine) {
           } else {
             await this.player.playTrack(track);
           }
-        } else {
-          if (index >= 0 && index < allTracks.length) {
-            await this.queue.add([track], false);
-            if (index + 1 < allTracks.length) {
-              const subsequentTracks = allTracks.slice(index + 1);
-              await this.queue.add(subsequentTracks, false);
+        } else if (index >= 0 && index < allTracks.length) {
+          backgroundBuildStarted = true;
+
+          this.queue.items.splice(0, this.queue.items.length, track);
+          this.queue._originalOrder.splice(0, this.queue._originalOrder.length, track);
+          this.queue.currentIndex = 0;
+          this.queue._playHistory = [];
+          this.queue._playNextOffset = 0;
+          await this.player.playTrack(track);
+
+          const self = this;
+          const buildQueue = async () => {
+            try {
+              await api.queue.clear();
+              if (self._buildQueueGeneration !== generation) return;
+
+              const subsequent = allTracks.slice(index);
+              const preceding = allTracks.slice(0, index);
+              const fullQueue = [...subsequent, ...preceding];
+
+              if (self._buildQueueGeneration !== generation) return;
+
+              self.queue.items.splice(0, self.queue.items.length, ...fullQueue);
+              self.queue._originalOrder.splice(0, self.queue._originalOrder.length, ...fullQueue);
+              self.queue.currentIndex = 0;
+
+              await api.queue.add(fullQueue.map((t) => t.id));
+              if (self._buildQueueGeneration !== generation) return;
+
+              await api.queue.setCurrentIndex(0);
+            } catch (err) {
+              if (self._buildQueueGeneration === generation) {
+                console.error('[artists-browser] Failed to build queue:', err);
+              }
+            } finally {
+              if (self._buildQueueGeneration === generation) {
+                setTimeout(() => {
+                  self.queue._updating = false;
+                }, 200);
+              }
             }
-            await this.queue.playIndex(0);
-          } else {
-            await this.player.playTrack(track);
-          }
+          };
+          buildQueue();
+        } else {
+          await this.player.playTrack(track);
         }
       } finally {
-        setTimeout(() => {
-          this.queue._updating = false;
-        }, 200);
-      }
-    },
-
-    async _loadAllTracks() {
-      try {
-        const data = await api.library.getTracks({ limit: 999999, offset: 0 });
-        this._allTracks = data.tracks || [];
-      } catch {
-        this._allTracks = [];
+        if (!backgroundBuildStarted) {
+          setTimeout(() => {
+            this.queue._updating = false;
+          }, 200);
+        }
       }
     },
 

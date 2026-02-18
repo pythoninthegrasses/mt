@@ -98,6 +98,9 @@ export function createLibraryBrowser(Alpine) {
     _bufferRows: 15,
     _rafId: null,
 
+    // Queue build generation counter (cancels stale background builds)
+    _buildQueueGeneration: 0,
+
     containerWidth: 0,
     resizeObserver: null,
 
@@ -1134,14 +1137,15 @@ export function createLibraryBrowser(Alpine) {
     },
 
     async handleDoubleClick(track, index) {
-      // Set flag to prevent backend events from overwriting our state during this operation
       this.queue._updating = true;
+      // Cancel any in-flight background queue build
+      this._buildQueueGeneration++;
+      const generation = this._buildQueueGeneration;
+      let backgroundBuildStarted = false;
 
       try {
-        await this.queue.clear();
-
         if (this.queue.shuffle) {
-          // Shuffle enabled: Add all tracks, then shuffle with clicked track first
+          await this.queue.clear();
           await this.queue.add(this.library.filteredTracks, false);
           if (index >= 0 && index < this.queue.items.length) {
             this.queue.currentIndex = index;
@@ -1151,26 +1155,62 @@ export function createLibraryBrowser(Alpine) {
           } else {
             await this.player.playTrack(track);
           }
-        } else {
-          // Shuffle disabled: Play clicked track, then enqueue subsequent tracks
-          if (index >= 0 && index < this.library.filteredTracks.length) {
-            // Add clicked track first (will be currently playing)
-            await this.queue.add([track], false);
-            // Add subsequent tracks (what comes after in the view)
-            if (index + 1 < this.library.filteredTracks.length) {
-              const subsequentTracks = this.library.filteredTracks.slice(index + 1);
-              await this.queue.add(subsequentTracks, false);
+        } else if (index >= 0 && index < this.library.filteredTracks.length) {
+          backgroundBuildStarted = true;
+
+          // Start playback immediately
+          this.queue.items.splice(0, this.queue.items.length, track);
+          this.queue._originalOrder.splice(0, this.queue._originalOrder.length, track);
+          this.queue.currentIndex = 0;
+          this.queue._playHistory = [];
+          this.queue._playNextOffset = 0;
+          await this.player.playTrack(track);
+
+          // Build full queue in background
+          const allTracks = this.library.filteredTracks;
+          const self = this;
+          const buildQueue = async () => {
+            try {
+              await api.queue.clear();
+              if (self._buildQueueGeneration !== generation) return;
+
+              const subsequent = allTracks.slice(index);
+              const preceding = allTracks.slice(0, index);
+              const fullQueue = [...subsequent, ...preceding];
+
+              if (self._buildQueueGeneration !== generation) return;
+
+              self.queue.items.splice(0, self.queue.items.length, ...fullQueue);
+              self.queue._originalOrder.splice(0, self.queue._originalOrder.length, ...fullQueue);
+              self.queue.currentIndex = 0;
+
+              const trackIds = fullQueue.map((t) => t.id);
+              await api.queue.add(trackIds);
+              if (self._buildQueueGeneration !== generation) return;
+
+              await api.queue.setCurrentIndex(0);
+            } catch (err) {
+              if (self._buildQueueGeneration === generation) {
+                console.error('[library-browser] Failed to build queue:', err);
+              }
+            } finally {
+              if (self._buildQueueGeneration === generation) {
+                setTimeout(() => {
+                  self.queue._updating = false;
+                }, 200);
+              }
             }
-            await this.queue.playIndex(0);
-          } else {
-            await this.player.playTrack(track);
-          }
+          };
+          buildQueue();
+        } else {
+          await this.player.playTrack(track);
         }
       } finally {
-        // Clear flag after a short delay to let any pending backend events pass
-        setTimeout(() => {
-          this.queue._updating = false;
-        }, 200);
+        if (!backgroundBuildStarted) {
+          setTimeout(() => {
+            this.queue._updating = false;
+          }, 200);
+        }
       }
     },
 
@@ -1565,14 +1605,38 @@ export function createLibraryBrowser(Alpine) {
       }) ?? window.confirm(confirmMsg);
 
       if (confirmed) {
-        for (const track of tracks) {
-          await this.library.remove(track.id);
-        }
+        const trackIds = tracks.map((t) => t.id);
+        const isDeletingAll = trackIds.length === this.library.allTracks.length;
+
+        // Optimistic UI: remove from local state immediately
+        this.library.removeTracksLocally(trackIds);
         this.selectedTracks.clear();
         this.$store.ui.toast(
           `Removed ${tracks.length} track${tracks.length > 1 ? 's' : ''}`,
           'success',
         );
+
+        const { invoke } = window.__TAURI__.core;
+
+        try {
+          if (isDeletingAll) {
+            // Remove watched folders first so watcher can't re-add tracks
+            const folders = await invoke('watched_folders_list');
+            await Promise.allSettled(
+              (folders || []).map((f) => invoke('watched_folders_remove', { id: f.id })),
+            );
+            // Single SQL wipe of library, favorites, playlist_items
+            await invoke('library_delete_all');
+            console.log('[library-browser] Deleted all tracks and removed watched folders');
+          } else {
+            // Batch delete by IDs in a single IPC call
+            await invoke('library_delete_tracks', { trackIds });
+            console.log('[library-browser] Batch deleted', trackIds.length, 'tracks');
+          }
+        } catch (err) {
+          console.error('[library-browser] Delete failed:', err);
+          this.library.fetchTracks();
+        }
       }
     },
 

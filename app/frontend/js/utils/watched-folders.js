@@ -38,7 +38,42 @@ export function extractParentDirectories(paths) {
     }
   }
 
-  return Array.from(parentDirs);
+  let dirs = Array.from(parentDirs);
+
+  // Remove subdirectories when an ancestor is also in the set
+  dirs = dirs.filter(
+    (dir) => !dirs.some((other) => dir !== other && dir.startsWith(other + '/')),
+  );
+
+  // Collapse siblings: if 5+ directories share the same parent, use the parent instead
+  const SIBLING_THRESHOLD = 5;
+  const grouped = new Map();
+  const ungrouped = [];
+
+  for (const dir of dirs) {
+    const lastSlash = dir.lastIndexOf('/');
+    if (lastSlash > 0) {
+      const parent = dir.substring(0, lastSlash);
+      if (!grouped.has(parent)) {
+        grouped.set(parent, []);
+      }
+      grouped.get(parent).push(dir);
+    } else {
+      ungrouped.push(dir);
+    }
+  }
+
+  const collapsed = [];
+  for (const [parent, children] of grouped) {
+    if (children.length >= SIBLING_THRESHOLD) {
+      collapsed.push(parent);
+    } else {
+      collapsed.push(...children);
+    }
+  }
+  collapsed.push(...ungrouped);
+
+  return collapsed;
 }
 
 /**
@@ -108,7 +143,9 @@ export async function promptToAddWatchedFolders(paths) {
 
     // Build confirmation message
     const dirList = newDirs.map((dir) => `• ${dir}`).join('\n');
-    const message = `Add ${newDirs.length === 1 ? 'this directory' : 'these directories'} to watched folders?\n\nWatched folders are automatically scanned for new music.\n\n${dirList}`;
+    const message = `Add ${
+      newDirs.length === 1 ? 'this directory' : 'these directories'
+    } to watched folders?\n\nWatched folders are automatically scanned for new music.\n\n${dirList}`;
 
     // Show confirmation dialog
     const { confirm } = window.__TAURI__.dialog;
@@ -154,7 +191,9 @@ export async function promptToAddWatchedFolders(paths) {
     if (uiStore) {
       if (results.added > 0 && results.failed === 0) {
         uiStore.toast(
-          `Added ${results.added} ${results.added === 1 ? 'directory' : 'directories'} to watched folders`,
+          `Added ${results.added} ${
+            results.added === 1 ? 'directory' : 'directories'
+          } to watched folders`,
           'success',
         );
       } else if (results.added > 0 && results.failed > 0) {

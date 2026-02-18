@@ -198,11 +198,6 @@ jobs:
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
 
-      - name: Verify build dependencies
-        run: |
-          echo "TagLib: static (vendor/taglib/lib/)"
-          ls -la vendor/taglib/lib/*.a
-
       - name: Build frontend
         working-directory: ./app/frontend
         run: npm run build

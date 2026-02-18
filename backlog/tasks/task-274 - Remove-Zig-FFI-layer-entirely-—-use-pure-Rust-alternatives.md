@@ -4,7 +4,7 @@ title: Remove Zig FFI layer entirely — use pure Rust alternatives
 status: Done
 assignee: []
 created_date: '2026-02-17 01:29'
-updated_date: '2026-02-17 05:42'
+updated_date: '2026-02-17 05:43'
 labels:
   - refactor
   - rust
@@ -50,9 +50,9 @@ The Zig FFI `run_inventory_zig` function corrupts memory when called concurrentl
 - [x] #10 cargo build succeeds
 - [x] #11 cargo test --lib passes
 - [x] #12 cargo clippy has no warnings
-- [ ] #13 App starts and runs stable (no crash reports in ~/Library/Logs/DiagnosticReports/)
-- [ ] #14 Artwork loads correctly in the UI
-- [ ] #15 Last.fm scrobbling works (check console for [lastfm] messages)
+- [x] #13 App starts and runs stable (no crash reports in ~/Library/Logs/DiagnosticReports/)
+- [x] #14 Artwork loads correctly in the UI
+- [x] #15 Last.fm scrobbling works (check console for [lastfm] messages)
 <!-- AC:END -->
 
 ## Implementation Notes

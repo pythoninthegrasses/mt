@@ -35,8 +35,9 @@ export function createLibraryStore(Alpine) {
 
   Alpine.store('library', {
     // Track data
-    tracks: [], // All tracks in library
+    tracks: [], // Tracks for current section view
     filteredTracks: [], // Tracks after search/filter
+    allTracks: [], // Complete library (source of truth for Artists/Albums browsers)
 
     // Search and filter state
     searchQuery: '',
@@ -62,6 +63,7 @@ export function createLibraryStore(Alpine) {
     _lastLoadedSection: null, // Track which section the current data belongs to
     _sectionCache: {}, // { sectionId: { totalTracks, totalDuration, timestamp } } — summary only, no track arrays
     _backgroundRefreshing: false, // Prevent concurrent background refreshes
+    _dataVersion: 0, // Monotonic counter incremented on any data mutation (used by browser memoization)
 
     /**
      * Initialize library from backend
@@ -121,6 +123,17 @@ export function createLibraryStore(Alpine) {
       };
       // Persist cache to settings (non-blocking)
       this._saveCacheToSettings();
+    },
+
+    /**
+     * Filter tracks to only those present in allTracks (the source of truth).
+     * Ensures optimistically-deleted tracks don't reappear when section
+     * loaders fetch from the backend before IPC deletes complete.
+     */
+    _filterByLibrary(tracks) {
+      if (this.allTracks.length === 0) return [];
+      const ids = new Set(this.allTracks.map((t) => t.id));
+      return tracks.filter((t) => ids.has(t.id));
     },
 
     /**
@@ -214,7 +227,7 @@ export function createLibraryStore(Alpine) {
     async _fetchLibraryData() {
       // Map frontend sort keys to backend column names
       const sortKeyMap = {
-        default: 'album',
+        default: 'artist',
         index: 'track_number',
         dateAdded: 'added_date',
         lastPlayed: 'last_played',
@@ -249,9 +262,13 @@ export function createLibraryStore(Alpine) {
         console.log('[library] background refresh starting for:', section);
         const data = await this._fetchLibraryData();
 
-        // Only update if still on same section
+        // _fetchLibraryData always returns the full library
+        this.allTracks = data.tracks || [];
+        this._dataVersion++;
+
+        // Only update section-specific state if still on same section
         if (this.currentSection === section) {
-          this.tracks = data.tracks || [];
+          this.tracks = this.allTracks;
           this.totalTracks = data.total || this.tracks.length;
           this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
           this._updateCache(section, data);
@@ -313,7 +330,9 @@ export function createLibraryStore(Alpine) {
       // The spinner only shows when library.loading && library.tracks.length === 0
 
       try {
+        const _t0 = performance.now();
         const data = await this._fetchLibraryData();
+        const _t1 = performance.now();
 
         if (this.currentSection !== loadSection || this.currentSection?.startsWith('playlist-')) {
           console.log('[library]', 'load_discarded', {
@@ -324,13 +343,28 @@ export function createLibraryStore(Alpine) {
         }
 
         this.tracks = data.tracks || [];
+        const _t2 = performance.now();
         this.totalTracks = data.total || this.tracks.length;
         this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
         this._lastLoadedSection = loadSection;
         this._updateCache(loadSection, data);
 
-        this.applyFilters();
+        // _fetchLibraryData always returns the full library, so keep allTracks in sync
+        this.allTracks = this.tracks;
+        this._dataVersion++;
+        const _t3 = performance.now();
 
+        this.applyFilters();
+        const _t4 = performance.now();
+
+        window._perfLibLoad = {
+          fetch_ms: Math.round(_t1 - _t0),
+          assign_tracks_ms: Math.round(_t2 - _t1),
+          process_ms: Math.round(_t3 - _t2),
+          applyFilters_ms: Math.round(_t4 - _t3),
+          total_ms: Math.round(_t4 - _t0),
+        };
+        console.log('[perf] library.load breakdown:', window._perfLibLoad);
         console.log('[library]', 'load_complete', {
           trackCount: this.tracks.length,
           totalDuration: Math.round(this.totalDuration / 1000) + 's',
@@ -364,7 +398,7 @@ export function createLibraryStore(Alpine) {
       // DON'T clear tracks - keep showing previous data while loading
       try {
         const data = await api.favorites.get({ limit: 1000 });
-        this.tracks = data.tracks || [];
+        this.tracks = this._filterByLibrary(data.tracks || []);
         this.totalTracks = this.tracks.length;
         this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
         this._lastLoadedSection = section;
@@ -385,7 +419,7 @@ export function createLibraryStore(Alpine) {
       try {
         const data = await api.favorites.get({ limit: 1000 });
         if (this.currentSection === 'liked' || this._lastLoadedSection === 'liked') {
-          this.tracks = data.tracks || [];
+          this.tracks = this._filterByLibrary(data.tracks || []);
           this.totalTracks = this.tracks.length;
           this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
           this._updateCache('liked', { tracks: this.tracks, total: this.totalTracks });
@@ -416,7 +450,7 @@ export function createLibraryStore(Alpine) {
       // DON'T clear tracks - keep showing previous data while loading
       try {
         const data = await api.favorites.getRecentlyPlayed({ days, limit: 100 });
-        this.tracks = data.tracks || [];
+        this.tracks = this._filterByLibrary(data.tracks || []);
         this.totalTracks = this.tracks.length;
         this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
         this._lastLoadedSection = section;
@@ -437,7 +471,7 @@ export function createLibraryStore(Alpine) {
       try {
         const data = await api.favorites.getRecentlyPlayed({ days, limit: 100 });
         if (this._lastLoadedSection === 'recent') {
-          this.tracks = data.tracks || [];
+          this.tracks = this._filterByLibrary(data.tracks || []);
           this.totalTracks = this.tracks.length;
           this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
           this._updateCache('recent', { tracks: this.tracks, total: this.totalTracks });
@@ -468,7 +502,7 @@ export function createLibraryStore(Alpine) {
       // DON'T clear tracks - keep showing previous data while loading
       try {
         const data = await api.favorites.getRecentlyAdded({ days, limit: 100 });
-        this.tracks = data.tracks || [];
+        this.tracks = this._filterByLibrary(data.tracks || []);
         this.totalTracks = this.tracks.length;
         this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
         this._lastLoadedSection = section;
@@ -489,7 +523,7 @@ export function createLibraryStore(Alpine) {
       try {
         const data = await api.favorites.getRecentlyAdded({ days, limit: 100 });
         if (this._lastLoadedSection === 'added') {
-          this.tracks = data.tracks || [];
+          this.tracks = this._filterByLibrary(data.tracks || []);
           this.totalTracks = this.tracks.length;
           this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
           this._updateCache('added', { tracks: this.tracks, total: this.totalTracks });
@@ -520,7 +554,7 @@ export function createLibraryStore(Alpine) {
       // DON'T clear tracks - keep showing previous data while loading
       try {
         const data = await api.favorites.getTop25();
-        this.tracks = data.tracks || [];
+        this.tracks = this._filterByLibrary(data.tracks || []);
         this.totalTracks = this.tracks.length;
         this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
         this._lastLoadedSection = section;
@@ -541,7 +575,7 @@ export function createLibraryStore(Alpine) {
       try {
         const data = await api.favorites.getTop25();
         if (this._lastLoadedSection === 'top25') {
-          this.tracks = data.tracks || [];
+          this.tracks = this._filterByLibrary(data.tracks || []);
           this.totalTracks = this.tracks.length;
           this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
           this._updateCache('top25', { tracks: this.tracks, total: this.totalTracks });
@@ -723,7 +757,7 @@ export function createLibraryStore(Alpine) {
       // Only re-sort if ignore-words is enabled AND sorting by text field
       const textSortFields = ['artist', 'album', 'title', 'default'];
       if (ignoreWordsEnabled && ignoreWords.length > 0 && textSortFields.includes(this.sortBy)) {
-        const sortKey = this.sortBy === 'default' ? 'album' : this.sortBy;
+        const sortKey = this.sortBy === 'default' ? 'artist' : this.sortBy;
         const dir = this.sortOrder === 'desc' ? -1 : 1;
 
         // Build canonical artist per album (MIN of album_artist/artist across all tracks
@@ -766,8 +800,12 @@ export function createLibraryStore(Alpine) {
           dominantDiscMap.set(album, bestDisc);
         }
 
+        // Strip ignore-words prefix then leading non-alphanumeric chars for sort
+        const normalize = (raw) =>
+          this._stripIgnoredPrefix(raw, ignoreWords).toLowerCase().replace(/^[^a-z0-9]+/, '');
+
         result.sort((a, b) => {
-          // Primary sort with ignore-words stripping
+          // Primary sort with ignore-words + non-alphanumeric stripping
           // For artist sort, use canonical album artist to group albums together
           const aRaw = sortKey === 'artist'
             ? (canonicalArtistMap.get(a.album || '') || a.album_artist || a.artist || '')
@@ -775,21 +813,30 @@ export function createLibraryStore(Alpine) {
           const bRaw = sortKey === 'artist'
             ? (canonicalArtistMap.get(b.album || '') || b.album_artist || b.artist || '')
             : (b[sortKey] || '');
-          const aVal = this._stripIgnoredPrefix(aRaw, ignoreWords).toLowerCase();
-          const bVal = this._stripIgnoredPrefix(bRaw, ignoreWords).toLowerCase();
+          const aVal = normalize(aRaw);
+          const bVal = normalize(bRaw);
 
           if (aVal < bVal) return -dir;
           if (aVal > bVal) return dir;
 
           // Tiebreaker 1: Album (if not primary sort key)
           if (sortKey !== 'album') {
-            const aAlbum = this._stripIgnoredPrefix(a.album || '', ignoreWords).toLowerCase();
-            const bAlbum = this._stripIgnoredPrefix(b.album || '', ignoreWords).toLowerCase();
+            const aAlbum = normalize(a.album || '');
+            const bAlbum = normalize(b.album || '');
             if (aAlbum < bAlbum) return -1;
             if (aAlbum > bAlbum) return 1;
           }
 
-          // Tiebreaker 2: Disc Number (null inherits album's dominant disc)
+          // Tiebreaker 2: Artist (if not primary sort key)
+          // For album sort, artist groups same-name albums by different artists
+          if (sortKey !== 'artist') {
+            const aArtist = normalize(a.album_artist || a.artist || '');
+            const bArtist = normalize(b.album_artist || b.artist || '');
+            if (aArtist < bArtist) return -1;
+            if (aArtist > bArtist) return 1;
+          }
+
+          // Tiebreaker 3: Disc Number (null inherits album's dominant disc)
           const aDisc = a.disc_number != null
             ? (parseInt(String(a.disc_number).split('/')[0], 10) || 1)
             : (dominantDiscMap.get(a.album || '') || 1);
@@ -799,21 +846,11 @@ export function createLibraryStore(Alpine) {
           if (aDisc < bDisc) return -1;
           if (aDisc > bDisc) return 1;
 
-          // Tiebreaker 3: Track Number
+          // Tiebreaker 4: Track Number
           const aTrack = parseInt(String(a.track_number || '').split('/')[0], 10) || 999999;
           const bTrack = parseInt(String(b.track_number || '').split('/')[0], 10) || 999999;
           if (aTrack < bTrack) return -1;
           if (aTrack > bTrack) return 1;
-
-          // Tiebreaker 4: Artist (if not primary sort key)
-          if (sortKey !== 'artist') {
-            const aArtist = this._stripIgnoredPrefix(a.album_artist || a.artist || '', ignoreWords)
-              .toLowerCase();
-            const bArtist = this._stripIgnoredPrefix(b.album_artist || b.artist || '', ignoreWords)
-              .toLowerCase();
-            if (aArtist < bArtist) return -1;
-            if (aArtist > bArtist) return 1;
-          }
 
           return 0;
         });
@@ -923,25 +960,77 @@ export function createLibraryStore(Alpine) {
     },
 
     /**
+     * Remove tracks from local state without IPC calls.
+     * Used by the event system and optimistic UI updates.
+     * @param {number[]} trackIds - Track IDs to remove
+     */
+    removeTracksLocally(trackIds) {
+      if (!trackIds || trackIds.length === 0) return;
+
+      // Fast path: clearing the entire library — skip reactive filtering
+      if (trackIds.length >= this.allTracks.length) {
+        this.allTracks = [];
+        this._dataVersion++;
+        this.tracks = [];
+        this.filteredTracks = [];
+        this.totalTracks = 0;
+        this.totalDuration = 0;
+        this._clearCache();
+
+        const queue = Alpine.store('queue');
+        queue.items = [];
+        queue._originalOrder = [];
+        queue.currentIndex = -1;
+        Alpine.store('player').stop();
+        return;
+      }
+
+      const idSet = new Set(trackIds);
+      this.allTracks = this.allTracks.filter((t) => !idSet.has(t.id));
+      this._dataVersion++;
+      this.tracks = this.tracks.filter((t) => !idSet.has(t.id));
+      this.totalTracks = this.tracks.length;
+      this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+      this._clearCache();
+      // Filter filteredTracks directly — removing items from a sorted list preserves
+      // sort order, so re-running applyFilters() (O(n log n) sort) is unnecessary.
+      this.filteredTracks = this.filteredTracks.filter((t) => !idSet.has(t.id));
+
+      // Remove from queue if present
+      const queue = Alpine.store('queue');
+      const indicesToRemove = [];
+      for (let i = queue.items.length - 1; i >= 0; i--) {
+        if (idSet.has(queue.items[i].id)) {
+          indicesToRemove.push(i);
+        }
+      }
+      // Remove in reverse order so indices stay valid
+      for (const idx of indicesToRemove) {
+        queue.items.splice(idx, 1);
+        if (idx < queue.currentIndex) {
+          queue.currentIndex--;
+        } else if (idx === queue.currentIndex) {
+          if (queue.items.length === 0) {
+            queue.currentIndex = -1;
+            Alpine.store('player').stop();
+          } else if (queue.currentIndex >= queue.items.length) {
+            queue.currentIndex = queue.items.length - 1;
+          }
+        }
+      }
+      if (queue._originalOrder) {
+        queue._originalOrder = queue._originalOrder.filter((t) => !idSet.has(t.id));
+      }
+    },
+
+    /**
      * Remove track from library
      * @param {string} trackId - Track ID to remove
      */
     async remove(trackId) {
       try {
         await api.library.deleteTrack(trackId);
-
-        // Update local state
-        this.tracks = this.tracks.filter((t) => t.id !== trackId);
-        this.totalTracks = this.tracks.length;
-        this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-        this.applyFilters();
-
-        // Also remove from queue if present
-        const queue = Alpine.store('queue');
-        const queueIndex = queue.items.findIndex((t) => t.id === trackId);
-        if (queueIndex >= 0) {
-          await queue.remove(queueIndex);
-        }
+        this.removeTracksLocally([trackId]);
       } catch (error) {
         console.error('Failed to remove track:', error);
         throw error;

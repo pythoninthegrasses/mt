@@ -129,6 +129,46 @@ pub fn get_all_tracks(conn: &Connection, query: &LibraryQuery) -> DbResult<Pagin
     })
 }
 
+/// Find all library tracks matching a given artist and title.
+///
+/// Uses exact case-insensitive matching on title AND (artist OR album_artist).
+/// Returns all matches (e.g. same song on different albums) for disambiguation.
+pub fn find_tracks_by_artist_title(
+    conn: &Connection,
+    artist: &str,
+    title: &str,
+) -> DbResult<Vec<Track>> {
+    let sql = "SELECT id, filepath, title, artist, album, album_artist,
+            track_number, track_total, disc_number, disc_total, date, genre,
+            duration, file_size, play_count, last_played, added_date,
+            missing, last_seen_at, file_mtime_ns, file_inode, content_hash
+     FROM library
+     WHERE (missing = 0 OR missing IS NULL)
+       AND title = ? COLLATE NOCASE
+       AND (artist = ? COLLATE NOCASE OR album_artist = ? COLLATE NOCASE)";
+
+    let mut stmt = conn.prepare(sql)?;
+    let tracks: Vec<Track> = stmt
+        .query_map(params![title, artist, artist], row_to_track)?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(tracks)
+}
+
+/// Find a single library track matching a given artist and title.
+///
+/// Convenience wrapper around `find_tracks_by_artist_title` that returns the
+/// first match. Use `find_tracks_by_artist_title` when disambiguation is needed.
+pub fn find_track_by_artist_title(
+    conn: &Connection,
+    artist: &str,
+    title: &str,
+) -> DbResult<Option<Track>> {
+    let tracks = find_tracks_by_artist_title(conn, artist, title)?;
+    Ok(tracks.into_iter().next())
+}
+
 /// Get a single track by ID
 pub fn get_track_by_id(conn: &Connection, track_id: i64) -> DbResult<Option<Track>> {
     let mut stmt = conn.prepare(
@@ -401,6 +441,59 @@ pub fn delete_track(conn: &Connection, track_id: i64) -> DbResult<bool> {
     Ok(deleted > 0)
 }
 
+/// Hard-delete all tracks marked as missing, including their favorites and playlist_items.
+pub fn delete_missing_tracks(conn: &Connection) -> DbResult<usize> {
+    conn.execute(
+        "DELETE FROM favorites WHERE track_id IN (SELECT id FROM library WHERE missing = 1)",
+        [],
+    )?;
+    conn.execute(
+        "DELETE FROM playlist_items WHERE track_id IN (SELECT id FROM library WHERE missing = 1)",
+        [],
+    )?;
+    let deleted = conn.execute("DELETE FROM library WHERE missing = 1", [])?;
+    Ok(deleted)
+}
+
+/// Delete multiple tracks by ID, including their favorites and playlist_items.
+/// Returns the number of library rows deleted.
+pub fn delete_tracks_by_ids(conn: &Connection, track_ids: &[i64]) -> DbResult<usize> {
+    if track_ids.is_empty() {
+        return Ok(0);
+    }
+
+    let placeholders = track_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let params: Vec<&dyn rusqlite::ToSql> = track_ids
+        .iter()
+        .map(|id| id as &dyn rusqlite::ToSql)
+        .collect();
+
+    let sql = format!(
+        "DELETE FROM favorites WHERE track_id IN ({})",
+        placeholders
+    );
+    conn.execute(&sql, params.as_slice())?;
+
+    let sql = format!(
+        "DELETE FROM playlist_items WHERE track_id IN ({})",
+        placeholders
+    );
+    conn.execute(&sql, params.as_slice())?;
+
+    let sql = format!("DELETE FROM library WHERE id IN ({})", placeholders);
+    let deleted = conn.execute(&sql, params.as_slice())?;
+    Ok(deleted)
+}
+
+/// Delete ALL tracks from the library, including their favorites and playlist_items.
+/// Returns the number of library rows deleted.
+pub fn delete_all_tracks(conn: &Connection) -> DbResult<usize> {
+    conn.execute("DELETE FROM favorites", [])?;
+    conn.execute("DELETE FROM playlist_items", [])?;
+    let deleted = conn.execute("DELETE FROM library", [])?;
+    Ok(deleted)
+}
+
 /// Update track metadata by ID
 pub fn update_track_metadata(
     conn: &Connection,
@@ -585,6 +678,49 @@ pub fn update_track_filepath(conn: &Connection, track_id: i64, new_path: &str) -
         params![new_path, track_id],
     )?;
     Ok(updated > 0)
+}
+
+/// Get fingerprints (filepath, mtime, size) for tracks under the given paths.
+/// Scopes the query at SQL level instead of fetching all tracks and filtering in memory.
+/// Each path matches either as an exact filepath or as a directory prefix (path/).
+pub fn get_fingerprints_for_paths(
+    conn: &Connection,
+    scan_paths: &[String],
+) -> DbResult<Vec<(String, Option<i64>, i64)>> {
+    if scan_paths.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // For each scan path, match both exact filepath and directory prefix.
+    // This handles both file paths and directory paths without needing to check
+    // the filesystem (which fails in tests with synthetic paths).
+    let mut conditions: Vec<String> = Vec::new();
+    for p in scan_paths {
+        let escaped = p.replace('\'', "''");
+        // Exact file match
+        conditions.push(format!("filepath = '{}'", escaped));
+        // Directory prefix match (path + '/')
+        let prefix = if escaped.ends_with('/') {
+            escaped
+        } else {
+            format!("{}/", escaped)
+        };
+        conditions.push(format!("filepath LIKE '{}%'", prefix));
+    }
+
+    let where_clause = conditions.join(" OR ");
+    let sql = format!(
+        "SELECT filepath, file_mtime_ns, file_size FROM library WHERE {}",
+        where_clause
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows: Vec<(String, Option<i64>, i64)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(rows)
 }
 
 /// Get all missing tracks
@@ -985,6 +1121,115 @@ mod tests {
         };
         let result = get_all_tracks(&conn, &query).unwrap();
         assert_eq!(result.total, 10);
+    }
+
+    #[test]
+    fn test_find_track_by_artist_title_exact_case_insensitive() {
+        let conn = setup_test_db();
+
+        let metadata = TrackMetadata {
+            title: Some("Yesterday".to_string()),
+            artist: Some("The Beatles".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/yesterday.mp3", &metadata).unwrap();
+
+        // Tier 1: case-insensitive exact match
+        let result = find_track_by_artist_title(&conn, "the beatles", "yesterday").unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().title, Some("Yesterday".to_string()));
+
+        // Non-match: wrong artist
+        let result = find_track_by_artist_title(&conn, "Rolling Stones", "Yesterday").unwrap();
+        assert!(result.is_none());
+
+        // Non-match: wrong title
+        let result = find_track_by_artist_title(&conn, "The Beatles", "Let It Be").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_tracks_no_substring_fallback() {
+        let conn = setup_test_db();
+
+        let metadata = TrackMetadata {
+            title: Some("Bastards Of Young".to_string()),
+            artist: Some("The Replacements".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/bastards.mp3", &metadata).unwrap();
+
+        // Substring "Replacements" does NOT match "The Replacements" (exact only)
+        let result =
+            find_track_by_artist_title(&conn, "Replacements", "Bastards Of Young").unwrap();
+        assert!(result.is_none());
+
+        // Exact match works
+        let result =
+            find_track_by_artist_title(&conn, "The Replacements", "Bastards Of Young").unwrap();
+        assert!(result.is_some());
+
+        // Short/common title with wrong artist must NOT match
+        let metadata2 = TrackMetadata {
+            title: Some("Plans".to_string()),
+            artist: Some("Death Cab for Cutie".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/plans.mp3", &metadata2).unwrap();
+
+        let result = find_track_by_artist_title(&conn, "The Submarines", "Plans").unwrap();
+        assert!(result.is_none());
+
+        // Substring "Death Cab" does NOT match "Death Cab for Cutie" (exact only)
+        let result = find_track_by_artist_title(&conn, "Death Cab", "Plans").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_tracks_returns_all_album_variants() {
+        let conn = setup_test_db();
+
+        // Same artist+title on two different albums
+        let metadata1 = TrackMetadata {
+            title: Some("Everlong".to_string()),
+            artist: Some("Foo Fighters".to_string()),
+            album: Some("The Colour and the Shape".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/everlong_studio.mp3", &metadata1).unwrap();
+
+        let metadata2 = TrackMetadata {
+            title: Some("Everlong".to_string()),
+            artist: Some("Foo Fighters".to_string()),
+            album: Some("Greatest Hits".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/everlong_hits.mp3", &metadata2).unwrap();
+
+        let results = find_tracks_by_artist_title(&conn, "Foo Fighters", "Everlong").unwrap();
+        assert_eq!(results.len(), 2);
+
+        let albums: Vec<_> = results.iter().map(|t| t.album.as_deref().unwrap()).collect();
+        assert!(albums.contains(&"The Colour and the Shape"));
+        assert!(albums.contains(&"Greatest Hits"));
+    }
+
+    #[test]
+    fn test_find_track_by_artist_title_checks_album_artist() {
+        let conn = setup_test_db();
+
+        // Track has album_artist but different artist (e.g. compilation)
+        let metadata = TrackMetadata {
+            title: Some("Black Dog".to_string()),
+            artist: Some("Led Zeppelin".to_string()),
+            album_artist: Some("Led Zeppelin".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/black_dog.mp3", &metadata).unwrap();
+
+        // Match via album_artist when artist field differs
+        let result = find_track_by_artist_title(&conn, "Led Zeppelin", "Black Dog").unwrap();
+        assert!(result.is_some());
     }
 
     // ===== Move Detection Tests (TDD) =====
@@ -2121,5 +2366,109 @@ mod tests {
         assert!(debug_str.contains("TrackForBackfill"));
         assert!(debug_str.contains("42"));
         assert!(debug_str.contains("backfill.mp3"));
+    }
+
+    #[test]
+    fn test_bulk_delete_cleans_all_tables() {
+        let conn = setup_test_db();
+
+        // Insert tracks
+        let metadata = TrackMetadata {
+            title: Some("Song".to_string()),
+            ..Default::default()
+        };
+        let id1 = add_track(&conn, "/music/a.mp3", &metadata).unwrap();
+        let id2 = add_track(&conn, "/music/b.mp3", &metadata).unwrap();
+        let id3 = add_track(&conn, "/music/c.mp3", &metadata).unwrap();
+
+        // Add favorites for id1 and id2
+        use crate::db::favorites;
+        favorites::add_favorite(&conn, id1).unwrap();
+        favorites::add_favorite(&conn, id2).unwrap();
+
+        // Create playlist and add id1 and id3
+        use crate::db::playlists;
+        let playlist = playlists::create_playlist(&conn, "Test Playlist").unwrap().unwrap();
+        playlists::add_tracks_to_playlist(&conn, playlist.id, &[id1, id3], None).unwrap();
+
+        // Delete id1 and id2
+        let deleted = delete_tracks_by_ids(&conn, &[id1, id2]).unwrap();
+        assert_eq!(deleted, 2);
+
+        // Verify library rows removed
+        assert!(get_track_by_id(&conn, id1).unwrap().is_none());
+        assert!(get_track_by_id(&conn, id2).unwrap().is_none());
+        assert!(get_track_by_id(&conn, id3).unwrap().is_some());
+
+        // Verify favorites cleaned up
+        let fav_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM favorites", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(fav_count, 0, "favorites should be cleaned up");
+
+        // Verify playlist_items cleaned up for deleted tracks
+        let pi_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM playlist_items WHERE track_id IN (?1, ?2)",
+                [id1, id2],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(pi_count, 0, "playlist_items for deleted tracks should be removed");
+
+        // id3's playlist entry should still exist
+        let id3_pi: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM playlist_items WHERE track_id = ?1",
+                [id3],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(id3_pi, 1, "id3 playlist item should still exist");
+    }
+
+    #[test]
+    fn test_get_fingerprints_for_paths() {
+        let conn = setup_test_db();
+
+        let metadata = TrackMetadata {
+            file_mtime_ns: Some(1000),
+            file_size: Some(5000),
+            ..Default::default()
+        };
+
+        // Tracks under different directories
+        add_track(&conn, "/music/rock/a.mp3", &metadata).unwrap();
+        add_track(&conn, "/music/rock/b.mp3", &metadata).unwrap();
+        add_track(&conn, "/music/jazz/c.mp3", &metadata).unwrap();
+        add_track(&conn, "/other/d.mp3", &metadata).unwrap();
+
+        // Scope to /music/rock/
+        let results = get_fingerprints_for_paths(
+            &conn,
+            &["/music/rock".to_string()],
+        )
+        .unwrap();
+        assert_eq!(results.len(), 2);
+
+        // Scope to both directories
+        let results = get_fingerprints_for_paths(
+            &conn,
+            &["/music/rock".to_string(), "/music/jazz".to_string()],
+        )
+        .unwrap();
+        assert_eq!(results.len(), 3);
+
+        // Scope to a specific file
+        let results = get_fingerprints_for_paths(
+            &conn,
+            &["/other/d.mp3".to_string()],
+        )
+        .unwrap();
+        assert_eq!(results.len(), 1);
+
+        // Empty paths returns empty
+        let results = get_fingerprints_for_paths(&conn, &[]).unwrap();
+        assert_eq!(results.len(), 0);
     }
 }

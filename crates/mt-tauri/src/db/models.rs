@@ -241,18 +241,16 @@ pub enum LibrarySortColumn {
 }
 
 
-/// Subquery to derive a canonical album_artist for all tracks in the same album.
-/// Uses MIN() with COLLATE NOCASE so all tracks sharing an album name get the same
-/// case-insensitive sort key, keeping soundtrack/compilation albums together.
-const CANONICAL_ALBUM_ARTIST: &str = "(SELECT MIN(COALESCE(l2.album_artist, l2.artist) \
-     COLLATE NOCASE) FROM library l2 WHERE l2.album = library.album \
-     AND (l2.missing = 0 OR l2.missing IS NULL))";
+/// Sort key for artist view. Uses the per-row COALESCE so the CTE join handles
+/// the canonical grouping. The correlated subquery was removed because it caused
+/// O(n^2) performance (full table scan per row in ORDER BY).
+const ARTIST_SORT_KEY: &str = "COALESCE(album_artist, artist) COLLATE NOCASE";
 
 impl LibrarySortColumn {
     pub fn as_sql(&self) -> &'static str {
         match self {
             LibrarySortColumn::Title => "title COLLATE NOCASE",
-            LibrarySortColumn::Artist => CANONICAL_ALBUM_ARTIST,
+            LibrarySortColumn::Artist => ARTIST_SORT_KEY,
             LibrarySortColumn::Album => "album COLLATE NOCASE",
             LibrarySortColumn::AddedDate => "added_date",
             LibrarySortColumn::PlayCount => "play_count",
@@ -273,7 +271,7 @@ impl LibrarySortColumn {
     pub fn secondary_sort_sql(&self) -> &'static str {
         match self {
             LibrarySortColumn::Artist => ", album COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC",
-            LibrarySortColumn::Album => ", CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC",
+            LibrarySortColumn::Album => ", COALESCE(album_artist, artist) COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC",
             LibrarySortColumn::DiscNumber => ", CAST(track_number AS INTEGER) ASC",
             LibrarySortColumn::TrackNumber => ", CAST(disc_number AS INTEGER) ASC",
             _ => ", COALESCE(album_artist, artist) COLLATE NOCASE ASC, album COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC",

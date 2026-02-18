@@ -545,6 +545,52 @@ test.describe('Watched Folders Utility Functions', () => {
     expect(result.length).toBe(1);
   });
 
+  test('should remove subdirectories when parent directory is also present', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { extractParentDirectories } = await import('/js/utils/watched-folders.js');
+      return extractParentDirectories([
+        '/Users/test/Music/Doppler',
+        '/Users/test/Music/Doppler/Artist A',
+        '/Users/test/Music/Doppler/Artist B',
+        '/Users/test/Music/Doppler/Artist C',
+      ]);
+    });
+
+    expect(result).toEqual(['/Users/test/Music/Doppler']);
+  });
+
+  test('should collapse many sibling directories into their common parent', async ({ page }) => {
+    // When 5+ directories share the same parent but the parent itself is not in the list,
+    // they should be collapsed into the parent directory
+    const result = await page.evaluate(async () => {
+      const { extractParentDirectories } = await import('/js/utils/watched-folders.js');
+      return extractParentDirectories([
+        '/Users/test/Music/Doppler/Artist A',
+        '/Users/test/Music/Doppler/Artist B',
+        '/Users/test/Music/Doppler/Artist C',
+        '/Users/test/Music/Doppler/Artist D',
+        '/Users/test/Music/Doppler/Artist E',
+      ]);
+    });
+
+    expect(result).toEqual(['/Users/test/Music/Doppler']);
+  });
+
+  test('should not collapse few sibling directories', async ({ page }) => {
+    // When fewer than 5 directories share the same parent, keep them individual
+    const result = await page.evaluate(async () => {
+      const { extractParentDirectories } = await import('/js/utils/watched-folders.js');
+      return extractParentDirectories([
+        '/Users/test/Music/Rock',
+        '/Users/test/Music/Jazz',
+      ]);
+    });
+
+    expect(result).toContain('/Users/test/Music/Rock');
+    expect(result).toContain('/Users/test/Music/Jazz');
+    expect(result.length).toBe(2);
+  });
+
   test('should prompt and add directories when confirmed', async ({ page }) => {
     await page.evaluate(async () => {
       const { promptToAddWatchedFolders } = await import('/js/utils/watched-folders.js');

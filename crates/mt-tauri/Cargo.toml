@@ -68,6 +68,12 @@ md5 = "0.7"
 # LRU cache for artwork
 lru = "0.12"
 
+# Structured logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2"
+dirs = "6"
+
 [features]
 default = ["mcp"]
 devtools = ["dep:tauri-plugin-devtools", "tauri/devtools"]

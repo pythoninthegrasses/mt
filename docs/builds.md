@@ -443,7 +443,7 @@ Runs on `ubuntu-latest`:
 
 ## Linux System Dependencies
 
-Tauri + TagLib on Ubuntu/Debian require these packages:
+Tauri on Ubuntu/Debian requires these packages:
 
 ```bash
 sudo apt install -y \

@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::mpsc;
+use tracing::{debug, error, info, warn};
 
 use crate::db::{library, watched, Database, TrackMetadata, WatchedFolder as DbWatchedFolder};
 use crate::events::{EventEmitter, LibraryUpdatedEvent, ScanCompleteEvent, ScanProgressEvent};
@@ -81,9 +82,8 @@ pub struct WatcherManager {
     app: AppHandle,
     db: Database,
     active_watchers: Arc<RwLock<HashMap<i64, WatcherHandle>>>,
-    /// Serializes rescan operations to prevent concurrent Zig FFI scanner
-    /// instances and concurrent SQLite writes, which cause heap corruption
-    /// (SIGBUS at 0x161746164) on startup with overlapping watched folders.
+    /// Serializes rescan operations to prevent concurrent SQLite writes
+    /// on startup with overlapping watched folders.
     rescan_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
@@ -153,10 +153,7 @@ impl WatcherManager {
         let cadence_minutes = folder.cadence_minutes.unwrap_or(10) as u64;
         let folder_path = folder.path.clone();
 
-        println!(
-            "[watcher] Starting watcher for folder {} (mode={}, cadence={}min)",
-            folder_id, mode, cadence_minutes
-        );
+        info!(folder_id, %mode, cadence_minutes, "Starting watcher for folder");
 
         let fs_watcher = if mode == "continuous" {
             self.create_fs_watcher(folder_id, &folder_path)
@@ -193,7 +190,7 @@ impl WatcherManager {
                             Self::trigger_rescan(&app, &db, folder_id).await;
                         }
                         _ = cancel_rx.recv() => {
-                            println!("[watcher] Stopping watcher for folder {}", folder_id);
+                            info!(folder_id, "Stopping watcher for folder");
                             break;
                         }
                     }
@@ -215,10 +212,7 @@ impl WatcherManager {
         let path = PathBuf::from(folder_path);
 
         if !path.exists() {
-            eprintln!(
-                "[watcher] Cannot watch folder {}: path does not exist",
-                folder_path
-            );
+            warn!(folder_id, path = %folder_path, "Cannot watch folder: path does not exist");
             return None;
         }
 
@@ -263,11 +257,7 @@ impl WatcherManager {
                         }
 
                         if has_changes && !event_paths.is_empty() {
-                            println!(
-                                "[watcher] FS events detected for folder {}: {} files changed",
-                                folder_id,
-                                event_paths.len()
-                            );
+                            debug!(folder_id, count = event_paths.len(), "FS events detected for folder");
 
                             let _ = app.emit(
                                 "watched-folder:fs-event",
@@ -288,11 +278,8 @@ impl WatcherManager {
                         }
                     }
                     Err(errors) => {
-                        for error in errors {
-                            eprintln!(
-                                "[watcher] FS watcher error for folder {}: {:?}",
-                                folder_id, error
-                            );
+                        for err in errors {
+                            error!(folder_id, error = ?err, "FS watcher error");
                         }
                     }
                 }
@@ -301,23 +288,14 @@ impl WatcherManager {
         match debouncer_result {
             Ok(mut debouncer) => {
                 if let Err(e) = debouncer.watch(&path, RecursiveMode::Recursive) {
-                    eprintln!(
-                        "[watcher] Failed to start watching folder {}: {:?}",
-                        folder_path, e
-                    );
+                    error!(folder_id, path = %folder_path, error = ?e, "Failed to start watching folder");
                     return None;
                 }
-                println!(
-                    "[watcher] FS watcher active for folder {} at {}",
-                    folder_id, folder_path
-                );
+                info!(folder_id, path = %folder_path, "FS watcher active for folder");
                 Some(debouncer)
             }
             Err(e) => {
-                eprintln!(
-                    "[watcher] Failed to create debouncer for folder {}: {:?}",
-                    folder_path, e
-                );
+                error!(path = %folder_path, error = ?e, "Failed to create debouncer");
                 None
             }
         }
@@ -325,7 +303,7 @@ impl WatcherManager {
 
     /// Trigger a rescan for a watched folder using native Rust scanner
     async fn trigger_rescan(app: &AppHandle, db: &Database, folder_id: i64) {
-        println!("[watcher] Triggering rescan for folder {}", folder_id);
+        info!(folder_id, "Triggering rescan for folder");
 
         let _ = app.emit(
             "watched-folder:status",
@@ -341,7 +319,7 @@ impl WatcherManager {
             let conn = match db.conn() {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("[watcher] Failed to get DB connection: {}", e);
+                    error!(folder_id, error = %e, "Failed to get DB connection");
                     return;
                 }
             };
@@ -350,11 +328,11 @@ impl WatcherManager {
             match folder_result {
                 Ok(Some(f)) => f,
                 Ok(None) => {
-                    eprintln!("[watcher] Folder {} not found", folder_id);
+                    error!(folder_id, "Folder not found");
                     return;
                 }
                 Err(e) => {
-                    eprintln!("[watcher] Failed to get folder {}: {}", folder_id, e);
+                    error!(folder_id, error = %e, "Failed to get folder");
                     return;
                 }
             }
@@ -365,34 +343,30 @@ impl WatcherManager {
             .unwrap_or_default()
             .as_millis());
 
-        // Get current fingerprints from DB
+        // Get DB fingerprints scoped to this folder's path only.
+        // Without scoping, scanning folder A would mark all of folder B's tracks
+        // as "deleted" because scan_2phase only walks the provided paths.
         let db_fingerprints: HashMap<String, FileFingerprint> = {
             let conn = match db.conn() {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("[watcher] Failed to get DB connection: {}", e);
+                    error!(folder_id, error = %e, "Failed to get DB connection for fingerprints");
                     return;
                 }
             };
 
-            let mut stmt = match conn
-                .prepare("SELECT filepath, file_mtime_ns, file_size FROM library")
-            {
-                Ok(s) => s,
+            match library::get_fingerprints_for_paths(&conn, std::slice::from_ref(&folder.path)) {
+                Ok(rows) => rows
+                    .into_iter()
+                    .map(|(filepath, mtime_ns, size)| {
+                        (filepath, FileFingerprint::from_db(mtime_ns, size))
+                    })
+                    .collect(),
                 Err(e) => {
-                    eprintln!("[watcher] Failed to prepare fingerprint query: {}", e);
+                    error!(folder_id, error = %e, "Failed to get scoped fingerprints");
                     return;
                 }
-            };
-
-            stmt.query_map([], |row| {
-                let filepath: String = row.get(0)?;
-                let mtime_ns: Option<i64> = row.get(1)?;
-                let size: i64 = row.get(2)?;
-                Ok((filepath, FileFingerprint::from_db(mtime_ns, size)))
-            })
-            .map(|iter| iter.filter_map(|r| r.ok()).collect())
-            .unwrap_or_default()
+            }
         };
 
         // Create progress callback
@@ -424,7 +398,7 @@ impl WatcherManager {
         {
             Ok(Ok(r)) => r,
             Ok(Err(e)) => {
-                eprintln!("[watcher] Scan failed for folder {}: {}", folder_id, e);
+                error!(folder_id, error = %e, "Scan failed for folder");
                 let _ = app.emit(
                     "watched-folder:status",
                     WatcherStatus {
@@ -436,7 +410,7 @@ impl WatcherManager {
                 return;
             }
             Err(e) => {
-                eprintln!("[watcher] Scan task panicked for folder {}: {}", folder_id, e);
+                error!(folder_id, error = %e, "Scan task panicked for folder");
                 let _ = app.emit(
                     "watched-folder:status",
                     WatcherStatus {
@@ -449,93 +423,69 @@ impl WatcherManager {
             }
         };
 
-        // Update database
-        let (added, updated, deleted) = {
-            let conn = match db.conn() {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("[watcher] Failed to get DB connection: {}", e);
-                    return;
-                }
-            };
+        // Transaction 1: mark operations + inode-based reconciliation only.
+        // Hash computation is deferred to outside the transaction to avoid holding the
+        // SQLite write lock during I/O-heavy SHA-256 reads (which blocks UI queries).
+        let modified_count = scan_result.modified.len();
+        let deleted_count = scan_result.deleted.len();
 
-            let modified_count = scan_result.modified.len();
-            let deleted_count = scan_result.deleted.len();
+        let tx_result = db.transaction(|conn| {
+            let mut reconciled_count = 0;
 
             // IMPORTANT: Mark deleted tracks as missing FIRST
             // This is required because reconciliation of "added" tracks looks for tracks
             // where missing=1. If a file is moved (delete + add in same scan), we need to
             // mark the old path as missing before we can reconcile it with the new path.
-            if !scan_result.deleted.is_empty() {
-                for filepath in &scan_result.deleted {
-                    let mark_result = library::mark_track_missing_by_filepath(&conn, filepath);
-                    if let Err(e) = mark_result {
-                        eprintln!("[watcher] Failed to mark track missing: {}", e);
-                    }
-                }
+            for filepath in &scan_result.deleted {
+                let _ = library::mark_track_missing_by_filepath(conn, filepath);
             }
 
-            // Process "added" tracks - check for moves first, then add truly new tracks
-            // Now that deleted tracks are marked missing, reconciliation by inode/hash will work
-            let mut added_count = 0;
-            let mut reconciled_count = 0;
+            // Collect indices of files that need hash computation + insertion
+            let mut unreconciled_indices: Vec<usize> = Vec::new();
+            let mut has_missing_hashes = false;
+
             if !scan_result.added.is_empty() {
-                let mut truly_new: Vec<(String, TrackMetadata)> = Vec::new();
+                let missing_tracks = library::get_missing_tracks(conn).unwrap_or_default();
 
-                for m in &scan_result.added {
-                    let mut was_reconciled = false;
+                if missing_tracks.is_empty() {
+                    // Fast path: no missing tracks, all added files are truly new.
+                    // Skip reconciliation entirely.
+                    unreconciled_indices = (0..scan_result.added.len()).collect();
+                } else {
+                    has_missing_hashes =
+                        missing_tracks.iter().any(|t| t.content_hash.is_some());
+                    let by_inode: HashMap<i64, &crate::db::Track> = missing_tracks
+                        .iter()
+                        .filter_map(|t| t.file_inode.map(|i| (i, t)))
+                        .collect();
 
-                    if let Some(inode) = m.file_inode {
-                        let track_result = library::find_missing_track_by_inode(&conn, inode);
-                        if let Ok(Some(track)) = track_result {
-                            let reconcile_result = library::reconcile_moved_track(
-                                &conn,
+                    for (idx, m) in scan_result.added.iter().enumerate() {
+                        let mut was_reconciled = false;
+
+                        // O(1) inode reconciliation (no file I/O)
+                        if let Some(inode) = m.file_inode
+                            && let Some(track) = by_inode.get(&(inode as i64))
+                            && library::reconcile_moved_track(
+                                conn,
                                 track.id,
                                 &m.filepath,
                                 Some(inode),
+                            )
+                            .is_ok()
+                        {
+                            reconciled_count += 1;
+                            was_reconciled = true;
+                            debug!(
+                                track_id = track.id,
+                                old_path = %track.filepath,
+                                new_path = %m.filepath,
+                                "Reconciled moved track by inode"
                             );
-                            if reconcile_result.is_ok() {
-                                reconciled_count += 1;
-                                was_reconciled = true;
-                                println!(
-                                    "[watcher] Reconciled moved track {} by inode: {} -> {}",
-                                    track.id, track.filepath, m.filepath
-                                );
-                            }
-                        }
-                    }
-
-                    if !was_reconciled
-                        && let Ok(hash) = compute_content_hash(std::path::Path::new(&m.filepath)) {
-                            let track_result = library::find_missing_track_by_content_hash(&conn, &hash);
-                            if let Ok(Some(track)) = track_result {
-                                let reconcile_result = library::reconcile_moved_track(
-                                    &conn,
-                                    track.id,
-                                    &m.filepath,
-                                    m.file_inode,
-                                );
-                                if reconcile_result.is_ok() {
-                                    reconciled_count += 1;
-                                    was_reconciled = true;
-                                    println!(
-                                        "[watcher] Reconciled moved track {} by content hash: {} -> {}",
-                                        track.id, track.filepath, m.filepath
-                                    );
-                                }
-                            }
                         }
 
-                    if !was_reconciled {
-                        truly_new.push((m.filepath.clone(), to_track_metadata(m)));
-                    }
-                }
-
-                // Add truly new tracks to database
-                if !truly_new.is_empty() {
-                    added_count = truly_new.len();
-                    if let Err(e) = library::add_tracks_bulk(&conn, &truly_new) {
-                        eprintln!("[watcher] Failed to add tracks: {}", e);
+                        if !was_reconciled {
+                            unreconciled_indices.push(idx);
+                        }
                     }
                 }
             }
@@ -548,47 +498,137 @@ impl WatcherManager {
                     .map(|m| (m.filepath.clone(), to_track_metadata(m)))
                     .collect();
 
-                if let Err(e) = library::update_tracks_bulk(&conn, &updates) {
-                    eprintln!("[watcher] Failed to update tracks: {}", e);
-                }
+                library::update_tracks_bulk(conn, &updates)?;
             }
 
-            // Clear missing flag for unchanged files that were previously missing but have reappeared
-            // This handles the case where a file is moved out and then moved back to the same location
+            // Clear missing flag for unchanged files that were previously missing but reappeared
             let mut recovered_count = 0;
-            if !scan_result.unchanged.is_empty() {
-                match library::mark_tracks_present_by_filepaths(&conn, &scan_result.unchanged) {
-                    Ok(count) => {
-                        if count > 0 {
-                            recovered_count = count;
-                            println!(
-                                "[watcher] Recovered {} previously missing track(s) that reappeared",
-                                count
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("[watcher] Failed to mark recovered tracks present: {}", e);
-                    }
-                }
+            if !scan_result.unchanged.is_empty()
+                && let Ok(count) =
+                    library::mark_tracks_present_by_filepaths(conn, &scan_result.unchanged)
+                && count > 0
+            {
+                recovered_count = count;
+                info!(count, "Recovered previously missing tracks that reappeared");
             }
 
             // Update last_scanned_at timestamp
-            if let Err(e) = watched::update_watched_folder_last_scanned(&conn, folder_id) {
-                eprintln!("[watcher] Failed to update last_scanned_at: {}", e);
-            }
+            let _ = watched::update_watched_folder_last_scanned(conn, folder_id);
 
-            (
-                (added_count + reconciled_count + recovered_count) as i32,
-                modified_count as i32,
-                deleted_count as i32,
-            )
+            Ok((
+                unreconciled_indices,
+                has_missing_hashes,
+                reconciled_count,
+                recovered_count,
+            ))
+        });
+
+        let (unreconciled_indices, has_missing_hashes, mut reconciled_count, recovered_count) =
+            match tx_result {
+                Ok(result) => result,
+                Err(e) => {
+                    error!(folder_id, error = %e, "Transaction failed for folder");
+                    return;
+                }
+            };
+
+        // Spacedrive pattern: defer content hashing. Initial import uses "shallow" mode
+        // (metadata only). Content hashes are populated later by Manual Scan when needed
+        // for move detection and dedup. This eliminates ~8s of parallel SHA-256 I/O.
+        let truly_new: Vec<(String, TrackMetadata)> = if has_missing_hashes {
+            // Rare path: missing tracks exist with hashes — compute hashes for reconciliation
+            use rayon::prelude::*;
+            let hashed: Vec<(usize, Option<String>)> = unreconciled_indices
+                .par_iter()
+                .map(|&idx| {
+                    let m = &scan_result.added[idx];
+                    let hash = compute_content_hash(std::path::Path::new(&m.filepath)).ok();
+                    (idx, hash)
+                })
+                .collect();
+
+            match db.transaction(|conn| {
+                let missing_tracks = library::get_missing_tracks(conn).unwrap_or_default();
+                let by_hash: HashMap<&str, &crate::db::Track> = missing_tracks
+                    .iter()
+                    .filter_map(|t| t.content_hash.as_deref().map(|h| (h, t)))
+                    .collect();
+
+                let mut result = Vec::new();
+                for &(idx, ref hash) in &hashed {
+                    let m = &scan_result.added[idx];
+                    let mut was_reconciled = false;
+
+                    if let Some(h) = hash
+                        && let Some(track) = by_hash.get(h.as_str())
+                        && library::reconcile_moved_track(
+                            conn,
+                            track.id,
+                            &m.filepath,
+                            m.file_inode,
+                        )
+                        .is_ok()
+                    {
+                        reconciled_count += 1;
+                        was_reconciled = true;
+                        debug!(
+                            track_id = track.id,
+                            old_path = %track.filepath,
+                            new_path = %m.filepath,
+                            "Reconciled moved track by content hash"
+                        );
+                    }
+
+                    if !was_reconciled {
+                        result.push((
+                            m.filepath.clone(),
+                            to_track_metadata_with_hash(m, hash.clone()),
+                        ));
+                    }
+                }
+                Ok(result)
+            }) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(folder_id, error = %e, "Hash reconciliation failed");
+                    hashed
+                        .iter()
+                        .map(|(idx, hash)| {
+                            let m = &scan_result.added[*idx];
+                            (m.filepath.clone(), to_track_metadata_with_hash(m, hash.clone()))
+                        })
+                        .collect()
+                }
+            }
+        } else {
+            // Common path: insert with content_hash = NULL. Hashes are populated
+            // later by Manual Scan (Settings > Library > Run Scan).
+            unreconciled_indices
+                .iter()
+                .map(|&idx| {
+                    let m = &scan_result.added[idx];
+                    (m.filepath.clone(), to_track_metadata_with_hash(m, None))
+                })
+                .collect()
         };
 
-        println!(
-            "[watcher] Folder {} scan complete: +{} ~{} -{}",
-            folder_id, added, updated, deleted
-        );
+        // Chunked bulk inserts. Committing every ~500 tracks releases the write lock
+        // between chunks, allowing concurrent reads (playback, UI queries).
+        let added_count = truly_new.len();
+        if !truly_new.is_empty() {
+            const CHUNK_SIZE: usize = 1000;
+            for chunk in truly_new.chunks(CHUNK_SIZE) {
+                if let Err(e) = db.transaction(|conn| library::add_tracks_bulk(conn, chunk)) {
+                    error!(folder_id, error = %e, "Failed to add tracks chunk");
+                }
+            }
+        }
+
+        let added = (added_count + reconciled_count + recovered_count) as i32;
+        let updated = modified_count as i32;
+        let deleted = deleted_count as i32;
+
+        info!(folder_id, added, updated = %updated, deleted, "Folder scan complete");
 
         // Emit scan complete event
         let _ = app.emit_scan_complete(ScanCompleteEvent {
@@ -610,15 +650,11 @@ impl WatcherManager {
             },
         );
 
-        // Emit library updated events
-        if added > 0 {
+        // Emit a single library:updated event covering all changes.
+        // Spacedrive pattern: coalesce multiple change types into one event to avoid
+        // triggering multiple frontend reloads (each event causes a full data refresh).
+        if added > 0 || updated > 0 || deleted > 0 {
             let _ = app.emit_library_updated(LibraryUpdatedEvent::added(vec![]));
-        }
-        if updated > 0 {
-            let _ = app.emit_library_updated(LibraryUpdatedEvent::modified(vec![]));
-        }
-        if deleted > 0 {
-            let _ = app.emit_library_updated(LibraryUpdatedEvent::deleted(vec![]));
         }
 
         let _ = app.emit(
@@ -663,9 +699,13 @@ impl WatcherManager {
     }
 }
 
-/// Convert ExtractedMetadata to database TrackMetadata
-fn to_track_metadata(m: &ExtractedMetadata) -> TrackMetadata {
-    let content_hash = compute_content_hash(std::path::Path::new(&m.filepath)).ok();
+/// Convert extracted metadata to DB metadata.
+/// If `precomputed_hash` is provided, it is used directly instead of re-hashing the file.
+fn to_track_metadata_with_hash(
+    m: &ExtractedMetadata,
+    precomputed_hash: Option<String>,
+) -> TrackMetadata {
+    let content_hash = precomputed_hash;
     TrackMetadata {
         title: m.title.clone(),
         artist: m.artist.clone(),
@@ -685,11 +725,16 @@ fn to_track_metadata(m: &ExtractedMetadata) -> TrackMetadata {
     }
 }
 
+fn to_track_metadata(m: &ExtractedMetadata) -> TrackMetadata {
+    to_track_metadata_with_hash(m, None)
+}
+
 // ============================================================================
 // Tauri Commands
 // ============================================================================
 
 /// List all watched folders
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 pub fn watched_folders_list(
     state: State<'_, WatcherManager>,
@@ -701,6 +746,7 @@ pub fn watched_folders_list(
 }
 
 /// Get a specific watched folder by ID
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 pub fn watched_folders_get(
     id: i64,
@@ -722,6 +768,7 @@ pub struct AddWatchedFolderRequest {
 }
 
 /// Add a new watched folder
+#[tracing::instrument(skip(state, request))]
 #[tauri::command]
 pub async fn watched_folders_add(
     request: AddWatchedFolderRequest,
@@ -765,6 +812,7 @@ pub struct UpdateWatchedFolderRequest {
 }
 
 /// Update an existing watched folder
+#[tracing::instrument(skip(state, request))]
 #[tauri::command]
 pub async fn watched_folders_update(
     id: i64,
@@ -799,6 +847,7 @@ pub async fn watched_folders_update(
 }
 
 /// Remove a watched folder
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 pub async fn watched_folders_remove(
     id: i64,
@@ -821,6 +870,7 @@ pub async fn watched_folders_remove(
 }
 
 /// Trigger a manual rescan for a watched folder
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 pub async fn watched_folders_rescan(
     id: i64,
@@ -839,6 +889,7 @@ pub async fn watched_folders_rescan(
 }
 
 /// Get the current watcher status (number of active watchers)
+#[tracing::instrument(skip(state))]
 #[tauri::command]
 pub fn watched_folders_status(state: State<'_, WatcherManager>) -> serde_json::Value {
     serde_json::json!({

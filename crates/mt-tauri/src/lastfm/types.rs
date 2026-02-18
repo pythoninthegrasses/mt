@@ -116,6 +116,15 @@ pub struct MatchLovedTracksResponse {
     pub message: String,
 }
 
+/// Reset loved tracks cache response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResetLovedCacheResponse {
+    pub status: String,
+    pub cleared: i64,
+    pub unfavorited: i64,
+    pub message: String,
+}
+
 /// Loved tracks statistics response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LovedTracksStatsResponse {

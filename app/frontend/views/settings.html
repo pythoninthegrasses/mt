@@ -770,7 +770,7 @@
            </div>
          </div>
 
-         <div class="inline-grid gap-3">
+         <div class="grid grid-cols-2 gap-3">
            <!-- Sync from Last.fm button -->
            <button
              class="text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors disabled:opacity-50"
@@ -804,8 +804,19 @@
              <div class="text-xs text-muted-foreground mt-0.5">Import loved tracks directly (for tracks already in library)</div>
            </button>
 
+           <!-- Reset loved cache button -->
+           <button
+             class="text-left px-4 py-3 rounded-lg border border-destructive/50 hover:bg-destructive/10 transition-colors disabled:opacity-50"
+             :disabled="lastfm.isResettingLoved || lastfm.lovedStats.total_cached === 0"
+             @click="resetLovedCache()"
+             data-testid="lastfm-reset-loved"
+           >
+             <div class="font-medium text-sm text-destructive" x-text="lastfm.isResettingLoved ? 'Resetting...' : 'Reset Cache'"></div>
+             <div class="text-xs text-muted-foreground mt-0.5">Clear cache and remove auto-favorited tracks</div>
+           </button>
+
            <!-- Queue Status -->
-           <div x-show="lastfm.authenticated && lastfm.enabled">
+           <div class="col-span-2" x-show="lastfm.authenticated && lastfm.enabled">
              <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3 mt-2">Scrobble Queue</h4>
              <div class="rounded-lg p-4 border border-border">
                <div class="flex items-center justify-between mb-2">

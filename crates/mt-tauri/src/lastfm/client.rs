@@ -233,6 +233,68 @@ impl LastFmClient {
         Ok(())
     }
 
+    /// Get track info, returning the album title if available.
+    ///
+    /// Calls `track.getInfo` (unauthenticated GET). Used for disambiguation
+    /// when multiple library tracks match the same artist+title.
+    pub async fn get_track_info(
+        &self,
+        artist: &str,
+        track: &str,
+    ) -> Result<Option<String>, LastFmError> {
+        let mut params = BTreeMap::new();
+        params.insert("artist".to_string(), artist.to_string());
+        params.insert("track".to_string(), track.to_string());
+
+        let response = self
+            .api_call("track.getInfo", params, None, false)
+            .await?;
+
+        // Extract album title: response.track.album.title
+        let album = response
+            .get("track")
+            .and_then(|t| t.get("album"))
+            .and_then(|a| a.get("title"))
+            .and_then(|t| t.as_str())
+            .map(|s| s.to_string());
+
+        Ok(album)
+    }
+
+    /// Love a track on Last.fm
+    pub async fn love_track(
+        &self,
+        session_key: &str,
+        artist: &str,
+        track: &str,
+    ) -> Result<(), LastFmError> {
+        let mut params = BTreeMap::new();
+        params.insert("artist".to_string(), artist.to_string());
+        params.insert("track".to_string(), track.to_string());
+
+        self.api_call("track.love", params, Some(session_key), true)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Unlove a track on Last.fm
+    pub async fn unlove_track(
+        &self,
+        session_key: &str,
+        artist: &str,
+        track: &str,
+    ) -> Result<(), LastFmError> {
+        let mut params = BTreeMap::new();
+        params.insert("artist".to_string(), artist.to_string());
+        params.insert("track".to_string(), track.to_string());
+
+        self.api_call("track.unlove", params, Some(session_key), true)
+            .await?;
+
+        Ok(())
+    }
+
     /// Scrobble a track
     pub async fn scrobble(
         &self,
@@ -318,5 +380,80 @@ mod tests {
         let client = LastFmClient::new();
         // In test environment, keys may or may not be set
         let _ = client.is_configured();
+    }
+
+    #[test]
+    fn test_parse_track_info_with_album() {
+        let json: serde_json::Value = serde_json::from_str(
+            r#"{
+                "track": {
+                    "name": "Everlong",
+                    "artist": { "name": "Foo Fighters" },
+                    "album": { "title": "The Colour and the Shape", "artist": "Foo Fighters" }
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let album = json
+            .get("track")
+            .and_then(|t| t.get("album"))
+            .and_then(|a| a.get("title"))
+            .and_then(|t| t.as_str())
+            .map(|s| s.to_string());
+
+        assert_eq!(album, Some("The Colour and the Shape".to_string()));
+    }
+
+    #[test]
+    fn test_parse_track_info_without_album() {
+        let json: serde_json::Value = serde_json::from_str(
+            r#"{
+                "track": {
+                    "name": "Some Track",
+                    "artist": { "name": "Some Artist" }
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let album = json
+            .get("track")
+            .and_then(|t| t.get("album"))
+            .and_then(|a| a.get("title"))
+            .and_then(|t| t.as_str())
+            .map(|s| s.to_string());
+
+        assert_eq!(album, None);
+    }
+
+    #[tokio::test]
+    async fn test_love_track_not_configured() {
+        let client = LastFmClient {
+            config: ApiKeyConfig::load(), // No keys in test env
+            rate_limiter: Arc::new(RateLimiter::new()),
+            http_client: reqwest::Client::new(),
+            base_url: "https://ws.audioscrobbler.com/2.0/".to_string(),
+        };
+
+        if !client.is_configured() {
+            let result = client.love_track("fake_key", "Artist", "Track").await;
+            assert!(matches!(result, Err(LastFmError::NotConfigured)));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_unlove_track_not_configured() {
+        let client = LastFmClient {
+            config: ApiKeyConfig::load(),
+            rate_limiter: Arc::new(RateLimiter::new()),
+            http_client: reqwest::Client::new(),
+            base_url: "https://ws.audioscrobbler.com/2.0/".to_string(),
+        };
+
+        if !client.is_configured() {
+            let result = client.unlove_track("fake_key", "Artist", "Track").await;
+            assert!(matches!(result, Err(LastFmError::NotConfigured)));
+        }
     }
 }

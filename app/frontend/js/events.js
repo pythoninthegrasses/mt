@@ -60,6 +60,16 @@ export async function subscribe(event, callback) {
 export async function initEventListeners(Alpine) {
   console.log('[events] Initializing Tauri event listeners...');
 
+  // Debounced library refresh — coalesces rapid-fire events (e.g. during scanning)
+  let refreshTimer = null;
+  function debouncedFetchTracks(library) {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => {
+      refreshTimer = null;
+      library.fetchTracks();
+    }, 500);
+  }
+
   // Library updated event
   await subscribe(Events.LIBRARY_UPDATED, (payload) => {
     const { action, track_ids } = payload;
@@ -71,10 +81,12 @@ export async function initEventListeners(Alpine) {
     );
 
     // Refresh library data based on action
-    if (action === 'added' || action === 'modified' || action === 'deleted') {
-      // If no track_ids, it's a bulk operation - full refresh
-      // If track_ids present, could do targeted update in the future
-      library.fetchTracks();
+    if (action === 'deleted' && track_ids.length > 0) {
+      // Targeted removal — no full reload needed
+      library.removeTracksLocally(track_ids);
+    } else if (action === 'added' || action === 'modified' || action === 'deleted') {
+      // Debounced refresh — prevents UI freeze from rapid events during scanning
+      debouncedFetchTracks(library);
     }
   });
 

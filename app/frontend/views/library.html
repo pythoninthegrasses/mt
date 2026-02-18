@@ -100,9 +100,9 @@
     </div>
 
     <!-- Track list - no scroll, parent handles both -->
-    <div class="track-list flex-1 min-h-0 w-full">
-      <!-- Loading state -->
-      <template x-if="library.loading && library.tracks.length === 0">
+    <div class="track-list min-h-full w-full relative">
+      <!-- Loading state (shown during library fetch OR active scan with empty library) -->
+      <template x-if="(library.loading || library.scanning) && library.tracks.length === 0">
       <div
         class="flex items-center justify-center py-12"
       >
@@ -128,15 +128,15 @@
             >
             </path>
           </svg>
-          <p class="text-muted-foreground">Loading library...</p>
+          <p class="text-muted-foreground" x-text="library.scanning ? 'Scanning library...' : 'Loading library...'"></p>
         </div>
       </div>
       </template>
 
       <!-- Empty state -->
       <div
-        x-show="!library.loading && library.filteredTracks.length === 0"
-        class="flex items-center justify-center h-full"
+        x-show="!library.loading && !library.scanning && library.filteredTracks.length === 0"
+        class="absolute inset-0 flex items-center justify-center"
       >
         <!-- Liked Songs empty state -->
         <template x-if="library.currentSection === 'liked' && !library.searchQuery">

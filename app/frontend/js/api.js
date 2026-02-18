@@ -1305,6 +1305,22 @@ export const api = {
       }
       return request('/lastfm/loved-stats');
     },
+
+    /**
+     * Reset loved tracks cache (does not affect favorites)
+     * @returns {Promise<{status: string, cleared: number, message: string}>}
+     */
+    async resetLovedCache() {
+      if (invoke) {
+        try {
+          return await invoke('lastfm_reset_loved_cache');
+        } catch (error) {
+          console.error('[api.lastfm.resetLovedCache] Tauri error:', error);
+          throw new ApiError(500, error.toString());
+        }
+      }
+      return request('/lastfm/reset-loved-cache', { method: 'POST' });
+    },
   },
 
   watchedFolders: {

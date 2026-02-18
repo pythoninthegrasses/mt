@@ -107,9 +107,6 @@ COPY zig-core/ zig-core/
 COPY scripts/ scripts/
 COPY static/ static/
 
-# -- Build TagLib for Linux (force — ignore any host-platform .a files) --
-RUN bash scripts/build-taglib.sh --force
-
 # -- Build frontend --
 RUN cd app/frontend && npm run build
 

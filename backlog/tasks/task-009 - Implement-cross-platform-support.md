@@ -1,16 +1,16 @@
 ---
 id: TASK-009
 title: Implement cross-platform support
-status: In Progress
+status: To Do
 assignee: []
 created_date: '2025-09-17 04:10'
-updated_date: '2026-02-09 22:31'
+updated_date: '2026-02-17 16:20'
 labels: []
 dependencies:
   - task-108
   - task-109
   - task-021
-ordinal: 500
+ordinal: 48500
 ---
 
 ## Description

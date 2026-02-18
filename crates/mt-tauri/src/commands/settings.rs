@@ -67,6 +67,7 @@ pub struct SettingsChangedPayload {
 }
 
 /// Get all settings
+#[tracing::instrument(skip(app))]
 #[tauri::command]
 pub fn settings_get_all(app: AppHandle) -> Result<AllSettingsResponse, String> {
     let store = app
@@ -96,6 +97,7 @@ pub fn settings_get_all(app: AppHandle) -> Result<AllSettingsResponse, String> {
 }
 
 /// Get a single setting
+#[tracing::instrument(skip(app))]
 #[tauri::command]
 pub fn settings_get(app: AppHandle, key: String) -> Result<SettingResponse, String> {
     let store = app
@@ -112,6 +114,7 @@ pub fn settings_get(app: AppHandle, key: String) -> Result<SettingResponse, Stri
 }
 
 /// Set a single setting
+#[tracing::instrument(skip(app))]
 #[tauri::command]
 pub fn settings_set(app: AppHandle, key: String, value: JsonValue) -> Result<SettingResponse, String> {
     let store = app
@@ -131,6 +134,7 @@ pub fn settings_set(app: AppHandle, key: String, value: JsonValue) -> Result<Set
 }
 
 /// Update multiple settings at once
+#[tracing::instrument(skip(app, settings))]
 #[tauri::command]
 pub fn settings_update(app: AppHandle, settings: SettingsUpdateRequest) -> Result<SettingsUpdateResponse, String> {
     let store = app
@@ -210,6 +214,7 @@ pub fn settings_update(app: AppHandle, settings: SettingsUpdateRequest) -> Resul
 }
 
 /// Reset settings to defaults
+#[tracing::instrument(skip(app))]
 #[tauri::command]
 pub fn settings_reset(app: AppHandle) -> Result<AllSettingsResponse, String> {
     let store = app

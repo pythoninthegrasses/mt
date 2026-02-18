@@ -4,9 +4,11 @@
 //! replacing the Python FastAPI favorites routes.
 
 use tauri::{AppHandle, State};
+use tracing::{debug, warn};
 
-use crate::db::{favorites, library, Database, FavoriteTrack, PaginatedResult, Track};
+use crate::db::{favorites, library, settings, Database, FavoriteTrack, PaginatedResult, Track};
 use crate::events::{EventEmitter, FavoritesUpdatedEvent};
+use crate::lastfm::LastFmClient;
 
 /// Response for favorites get operations with pagination
 #[derive(Clone, serde::Serialize)]
@@ -44,7 +46,56 @@ pub struct RecentTracksResponse {
     pub days: i64,
 }
 
+/// Check if Last.fm sync is configured and return session key if so.
+fn should_sync_lastfm(conn: &rusqlite::Connection) -> Option<String> {
+    let session_key = settings::get_setting(conn, "lastfm_session_key").ok()??;
+    if session_key.is_empty() {
+        return None;
+    }
+    Some(session_key)
+}
+
+/// Sync a love/unlove action to Last.fm in the background.
+///
+/// Non-blocking: spawns an async task, logs success/failure.
+fn sync_lastfm_love(db: &Database, artist: String, title: String, love: bool) {
+    let session_key = match db.with_conn(|conn| Ok(should_sync_lastfm(conn))) {
+        Ok(Some(key)) => key,
+        _ => return,
+    };
+
+    let client = LastFmClient::new();
+    if !client.is_configured() {
+        return;
+    }
+
+    tauri::async_runtime::spawn(async move {
+        let result = if love {
+            client.love_track(&session_key, &artist, &title).await
+        } else {
+            client.unlove_track(&session_key, &artist, &title).await
+        };
+
+        match result {
+            Ok(()) => debug!(
+                artist = %artist,
+                track = %title,
+                love,
+                "Synced love status to Last.fm"
+            ),
+            Err(e) => warn!(
+                artist = %artist,
+                track = %title,
+                love,
+                error = %e,
+                "Failed to sync love status to Last.fm"
+            ),
+        }
+    });
+}
+
 /// Get favorited tracks (Liked Songs) with pagination
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn favorites_get(
     db: State<'_, Database>,
@@ -67,6 +118,7 @@ pub fn favorites_get(
 }
 
 /// Check if a track is favorited
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn favorites_check(db: State<'_, Database>, track_id: i64) -> Result<FavoriteCheckResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -80,6 +132,7 @@ pub fn favorites_check(db: State<'_, Database>, track_id: i64) -> Result<Favorit
 }
 
 /// Add a track to favorites
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn favorites_add(
     app: AppHandle,
@@ -90,9 +143,7 @@ pub fn favorites_add(
 
     // Check track exists
     let track = library::get_track_by_id(&conn, track_id).map_err(|e| e.to_string())?;
-    if track.is_none() {
-        return Err(format!("Track with id {} not found", track_id));
-    }
+    let track = track.ok_or_else(|| format!("Track with id {} not found", track_id))?;
 
     // Add to favorites
     let favorited_date = favorites::add_favorite(&conn, track_id).map_err(|e| e.to_string())?;
@@ -104,6 +155,11 @@ pub fn favorites_add(
     // Emit favorites updated event
     let _ = app.emit_favorites_updated(FavoritesUpdatedEvent::added(track_id));
 
+    // Sync love to Last.fm
+    if let (Some(artist), Some(title)) = (track.artist.clone(), track.title.clone()) {
+        sync_lastfm_love(&db, artist, title, true);
+    }
+
     Ok(FavoriteAddResponse {
         success: true,
         favorited_date,
@@ -111,6 +167,7 @@ pub fn favorites_add(
 }
 
 /// Remove a track from favorites
+#[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub fn favorites_remove(
     app: AppHandle,
@@ -118,6 +175,10 @@ pub fn favorites_remove(
     track_id: i64,
 ) -> Result<(), String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
+
+    // Fetch track metadata before removal for Last.fm sync
+    let track = library::get_track_by_id(&conn, track_id).map_err(|e| e.to_string())?;
+
     let removed = favorites::remove_favorite(&conn, track_id).map_err(|e| e.to_string())?;
 
     if !removed {
@@ -127,10 +188,18 @@ pub fn favorites_remove(
     // Emit favorites updated event
     let _ = app.emit_favorites_updated(FavoritesUpdatedEvent::removed(track_id));
 
+    // Sync unlove to Last.fm
+    if let Some(track) = track
+        && let (Some(artist), Some(title)) = (track.artist, track.title)
+    {
+        sync_lastfm_love(&db, artist, title, false);
+    }
+
     Ok(())
 }
 
 /// Get top 25 most played tracks
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn favorites_get_top25(db: State<'_, Database>) -> Result<TracksResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -140,6 +209,7 @@ pub fn favorites_get_top25(db: State<'_, Database>) -> Result<TracksResponse, St
 }
 
 /// Get tracks played within the last N days
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn favorites_get_recently_played(
     db: State<'_, Database>,
@@ -156,6 +226,7 @@ pub fn favorites_get_recently_played(
 }
 
 /// Get tracks added within the last N days
+#[tracing::instrument(skip(db))]
 #[tauri::command]
 pub fn favorites_get_recently_added(
     db: State<'_, Database>,
@@ -174,6 +245,35 @@ pub fn favorites_get_recently_added(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::schema::{create_tables, run_migrations};
+
+    fn setup_test_db() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        create_tables(&conn).unwrap();
+        run_migrations(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn test_should_sync_no_session() {
+        let conn = setup_test_db();
+        // No session key set at all
+        assert!(should_sync_lastfm(&conn).is_none());
+    }
+
+    #[test]
+    fn test_should_sync_empty_session() {
+        let conn = setup_test_db();
+        settings::set_setting(&conn, "lastfm_session_key", &serde_json::json!("")).unwrap();
+        assert!(should_sync_lastfm(&conn).is_none());
+    }
+
+    #[test]
+    fn test_should_sync_with_session() {
+        let conn = setup_test_db();
+        settings::set_setting(&conn, "lastfm_session_key", &serde_json::json!("abc123")).unwrap();
+        assert_eq!(should_sync_lastfm(&conn), Some("abc123".to_string()));
+    }
 
     #[test]
     fn test_favorites_response_serialization() {

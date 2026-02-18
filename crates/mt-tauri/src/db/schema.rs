@@ -4,6 +4,7 @@
 //! incremental migrations, matching the Python backend exactly.
 
 use rusqlite::Connection;
+use tracing::info;
 
 use crate::db::DbResult;
 
@@ -160,18 +161,18 @@ pub fn run_migrations(conn: &Connection) -> DbResult<()> {
 
     // Migration: Add file_size column to library table
     if !library_columns.contains(&"file_size".to_string()) {
-        println!("[migration] Adding file_size column to library table...");
+        info!("Adding file_size column to library table");
         conn.execute(
             "ALTER TABLE library ADD COLUMN file_size INTEGER DEFAULT 0",
             [],
         )?;
-        println!("[migration] file_size column added successfully");
+        info!("file_size column added");
     }
 
     // Migration: Add position column to playlists table
     let playlist_columns = get_table_columns(conn, "playlists")?;
     if !playlist_columns.contains(&"position".to_string()) {
-        println!("[migration] Adding position column to playlists table...");
+        info!("Adding position column to playlists table");
         conn.execute(
             "ALTER TABLE playlists ADD COLUMN position INTEGER DEFAULT 0",
             [],
@@ -190,88 +191,88 @@ pub fn run_migrations(conn: &Connection) -> DbResult<()> {
                 [pos as i64, *id],
             )?;
         }
-        println!("[migration] position column added successfully");
+        info!("position column added");
     }
 
     // Migration: Add filepath index for performance
     if !index_exists(conn, "idx_library_filepath")? {
-        println!("[migration] Creating filepath index on library table...");
+        info!("Creating filepath index on library table");
         conn.execute("CREATE INDEX idx_library_filepath ON library(filepath)", [])?;
-        println!("[migration] Filepath index created successfully");
+        info!("Filepath index created");
     }
 
     // Migration: Add file_mtime_ns column for change detection
     let library_columns = get_table_columns(conn, "library")?;
     if !library_columns.contains(&"file_mtime_ns".to_string()) {
-        println!("[migration] Adding file_mtime_ns column to library table...");
+        info!("Adding file_mtime_ns column to library table");
         conn.execute("ALTER TABLE library ADD COLUMN file_mtime_ns INTEGER", [])?;
-        println!("[migration] file_mtime_ns column added successfully");
+        info!("file_mtime_ns column added");
     }
 
     // Migration: Add lastfm_loved column for Last.fm integration
     if !library_columns.contains(&"lastfm_loved".to_string()) {
-        println!("[migration] Adding lastfm_loved column to library table...");
+        info!("Adding lastfm_loved column to library table");
         conn.execute(
             "ALTER TABLE library ADD COLUMN lastfm_loved BOOLEAN DEFAULT FALSE",
             [],
         )?;
-        println!("[migration] lastfm_loved column added successfully");
+        info!("lastfm_loved column added");
     }
 
     // Migration: Add missing track columns for file status tracking
     if !library_columns.contains(&"missing".to_string()) {
-        println!("[migration] Adding missing column to library table...");
+        info!("Adding missing column to library table");
         conn.execute(
             "ALTER TABLE library ADD COLUMN missing INTEGER DEFAULT 0",
             [],
         )?;
-        println!("[migration] missing column added successfully");
+        info!("missing column added");
     }
 
     if !library_columns.contains(&"last_seen_at".to_string()) {
-        println!("[migration] Adding last_seen_at column to library table...");
+        info!("Adding last_seen_at column to library table");
         conn.execute("ALTER TABLE library ADD COLUMN last_seen_at INTEGER", [])?;
-        println!("[migration] last_seen_at column added successfully");
+        info!("last_seen_at column added");
     }
 
     // Migration: Add file_inode column for move detection (same-volume)
     let library_columns = get_table_columns(conn, "library")?;
     if !library_columns.contains(&"file_inode".to_string()) {
-        println!("[migration] Adding file_inode column to library table...");
+        info!("Adding file_inode column to library table");
         conn.execute("ALTER TABLE library ADD COLUMN file_inode INTEGER", [])?;
-        println!("[migration] file_inode column added successfully");
+        info!("file_inode column added");
     }
 
     // Migration: Add content_hash column for move detection (cross-volume fallback)
     if !library_columns.contains(&"content_hash".to_string()) {
-        println!("[migration] Adding content_hash column to library table...");
+        info!("Adding content_hash column to library table");
         conn.execute("ALTER TABLE library ADD COLUMN content_hash TEXT", [])?;
-        println!("[migration] content_hash column added successfully");
+        info!("content_hash column added");
     }
 
     // Migration: Add index on file_inode for fast move detection lookups
     if !index_exists(conn, "idx_library_file_inode")? {
-        println!("[migration] Creating file_inode index on library table...");
+        info!("Creating file_inode index on library table");
         conn.execute(
             "CREATE INDEX idx_library_file_inode ON library(file_inode) WHERE file_inode IS NOT NULL",
             [],
         )?;
-        println!("[migration] file_inode index created successfully");
+        info!("file_inode index created");
     }
 
     // Migration: Add index on content_hash for move detection fallback
     if !index_exists(conn, "idx_library_content_hash")? {
-        println!("[migration] Creating content_hash index on library table...");
+        info!("Creating content_hash index on library table");
         conn.execute(
             "CREATE INDEX idx_library_content_hash ON library(content_hash) WHERE content_hash IS NOT NULL",
             [],
         )?;
-        println!("[migration] content_hash index created successfully");
+        info!("content_hash index created");
     }
 
     // Migration: Create lastfm_loved_tracks table for existing databases
     if !table_exists(conn, "lastfm_loved_tracks")? {
-        println!("[migration] Creating lastfm_loved_tracks table...");
+        info!("Creating lastfm_loved_tracks table");
         conn.execute(
             "CREATE TABLE lastfm_loved_tracks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -286,49 +287,61 @@ pub fn run_migrations(conn: &Connection) -> DbResult<()> {
             )",
             [],
         )?;
-        println!("[migration] lastfm_loved_tracks table created successfully");
+        info!("lastfm_loved_tracks table created");
     }
 
     // Migration: Add index on lastfm_loved_tracks for fast lookups on artist/track
     if !index_exists(conn, "idx_lastfm_loved_artist_track")? {
-        println!("[migration] Creating artist/track index on lastfm_loved_tracks table...");
+        info!("Creating artist/track index on lastfm_loved_tracks table");
         conn.execute(
             "CREATE INDEX idx_lastfm_loved_artist_track ON lastfm_loved_tracks(artist, track)",
             [],
         )?;
-        println!("[migration] artist/track index created successfully");
+        info!("artist/track index created");
     }
 
     // Migration: Add partial index for unmatched loved tracks (common query pattern)
     if !index_exists(conn, "idx_lastfm_loved_unmatched")? {
-        println!("[migration] Creating unmatched tracks index on lastfm_loved_tracks table...");
+        info!("Creating unmatched tracks index on lastfm_loved_tracks table");
         conn.execute(
             "CREATE INDEX idx_lastfm_loved_unmatched ON lastfm_loved_tracks(id) WHERE matched_track_id IS NULL",
             [],
         )?;
-        println!("[migration] unmatched tracks index created successfully");
+        info!("unmatched tracks index created");
     }
 
     // Migration: Add disc_number column for disc metadata
     let library_columns = get_table_columns(conn, "library")?;
     if !library_columns.contains(&"disc_number".to_string()) {
-        println!("[migration] Adding disc_number column to library table...");
+        info!("Adding disc_number column to library table");
         conn.execute("ALTER TABLE library ADD COLUMN disc_number TEXT", [])?;
-        println!("[migration] disc_number column added successfully");
+        info!("disc_number column added");
     }
 
     // Migration: Add disc_total column for disc metadata
     if !library_columns.contains(&"disc_total".to_string()) {
-        println!("[migration] Adding disc_total column to library table...");
+        info!("Adding disc_total column to library table");
         conn.execute("ALTER TABLE library ADD COLUMN disc_total TEXT", [])?;
-        println!("[migration] disc_total column added successfully");
+        info!("disc_total column added");
     }
 
     // Migration: Add genre column for track metadata
     if !library_columns.contains(&"genre".to_string()) {
-        println!("[migration] Adding genre column to library table...");
+        info!("Adding genre column to library table");
         conn.execute("ALTER TABLE library ADD COLUMN genre TEXT", [])?;
-        println!("[migration] genre column added successfully");
+        info!("genre column added");
+    }
+
+    // Migration: Add composite index for artist sort (canonical album_artist subquery)
+    // and the default secondary sort. Without this, ORDER BY with the correlated
+    // CANONICAL_ALBUM_ARTIST subquery does a full table scan per row — O(n^2).
+    if !index_exists(conn, "idx_library_album_artist_sort")? {
+        info!("Creating album/artist sort index on library table");
+        conn.execute(
+            "CREATE INDEX idx_library_album_artist_sort ON library(album, album_artist, artist, missing)",
+            [],
+        )?;
+        info!("album/artist sort index created");
     }
 
     Ok(())

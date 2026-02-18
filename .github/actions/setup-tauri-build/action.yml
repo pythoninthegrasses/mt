@@ -1,5 +1,5 @@
 name: 'Setup Tauri Build Environment'
-description: 'Install Node.js, Rust, TagLib (static), and frontend deps for Tauri builds'
+description: 'Install Node.js, Rust, and frontend deps for Tauri builds'
 
 inputs:
   node-version:
@@ -35,10 +35,6 @@ runs:
 
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
-
-    - name: Build TagLib (static)
-      shell: bash
-      run: scripts/build-taglib.sh
 
     - name: Install frontend dependencies
       shell: bash

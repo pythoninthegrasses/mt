@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::time::Duration;
+use tracing::{debug, error, info};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlaybackState {
@@ -58,13 +59,17 @@ impl AudioEngine {
 
         let path_obj = Path::new(path);
         if !path_obj.exists() {
+            error!(path, "Track file not found");
             return Err(AudioError::FileOpen(format!("File not found: {}", path)));
         }
 
         let file = File::open(path)?;
         let reader = BufReader::new(file);
         let source = Decoder::new(reader)
-            .map_err(|e| AudioError::Decode(e.to_string()))?;
+            .map_err(|e| {
+                error!(path, error = %e, "Failed to decode track");
+                AudioError::Decode(e.to_string())
+            })?;
 
         let sample_rate = source.sample_rate();
         let channels = source.channels();
@@ -87,6 +92,14 @@ impl AudioEngine {
         self.current_track = Some(track_info.clone());
         self.state = PlaybackState::Paused;
 
+        info!(
+            path,
+            duration_ms,
+            sample_rate,
+            channels,
+            "Track loaded"
+        );
+
         Ok(track_info)
     }
 
@@ -94,6 +107,7 @@ impl AudioEngine {
         if let Some(ref handle) = self.player_handle {
             handle.sink.play();
             self.state = PlaybackState::Playing;
+            debug!("Playback started");
             Ok(())
         } else {
             Err(AudioError::NoTrack)
@@ -104,6 +118,7 @@ impl AudioEngine {
         if let Some(ref handle) = self.player_handle {
             handle.sink.pause();
             self.state = PlaybackState::Paused;
+            debug!("Playback paused");
             Ok(())
         } else {
             Err(AudioError::NoTrack)
@@ -116,6 +131,7 @@ impl AudioEngine {
         }
         self.state = PlaybackState::Stopped;
         self.current_track = None;
+        debug!("Playback stopped");
     }
 
     pub fn seek(&mut self, position_ms: u64) -> Result<(), AudioError> {
@@ -137,7 +153,11 @@ impl AudioEngine {
         if let Some(ref handle) = self.player_handle {
             let duration = Duration::from_millis(position_ms);
             handle.sink.try_seek(duration)
-                .map_err(|e| AudioError::Seek(format!("{:?}", e)))?;
+                .map_err(|e| {
+                    error!(position_ms, error = ?e, "Seek forward failed");
+                    AudioError::Seek(format!("{:?}", e))
+                })?;
+            debug!(position_ms, "Seeked forward");
             Ok(())
         } else {
             Err(AudioError::NoTrack)
@@ -147,24 +167,30 @@ impl AudioEngine {
     fn seek_by_reload(&mut self, position_ms: u64) -> Result<(), AudioError> {
         let track_info = self.current_track.clone().ok_or(AudioError::NoTrack)?;
         let was_playing = self.state == PlaybackState::Playing;
-        
+
         let file = File::open(&track_info.path)?;
         let reader = BufReader::new(file);
         let source = Decoder::new(reader)
-            .map_err(|e| AudioError::Decode(e.to_string()))?;
-        
+            .map_err(|e| {
+                error!(path = %track_info.path, error = %e, "Decode failed during seek-by-reload");
+                AudioError::Decode(e.to_string())
+            })?;
+
         if let Some(handle) = self.player_handle.take() {
             handle.sink.stop();
         }
-        
+
         let sink = Sink::connect_new(self.stream.mixer());
         sink.set_volume(self.volume);
         sink.append(source);
-        
+
         let duration = Duration::from_millis(position_ms);
         sink.try_seek(duration)
-            .map_err(|e| AudioError::Seek(format!("{:?}", e)))?;
-        
+            .map_err(|e| {
+                error!(position_ms, error = ?e, "Seek-by-reload seek failed");
+                AudioError::Seek(format!("{:?}", e))
+            })?;
+
         if was_playing {
             sink.play();
             self.state = PlaybackState::Playing;
@@ -172,8 +198,9 @@ impl AudioEngine {
             sink.pause();
             self.state = PlaybackState::Paused;
         }
-        
+
         self.player_handle = Some(PlayerHandle { sink });
+        debug!(position_ms, "Seeked backward (via reload)");
         Ok(())
     }
 
