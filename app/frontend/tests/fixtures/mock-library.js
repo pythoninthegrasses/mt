@@ -615,6 +615,48 @@ export async function setupLibraryMocks(page, state) {
       body: JSON.stringify(track || { error: 'Track not found' }),
     });
   });
+
+  // --- Queue API mocks (needed for handleDoubleClick background queue build) ---
+
+  // POST /api/queue/clear
+  await page.route(/\/api\/queue\/clear(\?.*)?$/, async (route, request) => {
+    if (request.method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    state.apiCalls.push({ method: 'POST', url: '/queue/clear' });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+
+  // POST /api/queue/add
+  await page.route(/\/api\/queue\/add(\?.*)?$/, async (route, request) => {
+    if (request.method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    const body = request.postDataJSON();
+    const ids = body?.track_ids || [];
+    state.apiCalls.push({ method: 'POST', url: '/queue/add', body });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ added: ids.length, queue_length: ids.length }),
+    });
+  });
+
+  // GET /api/queue
+  await page.route(/\/api\/queue(\?.*)?$/, async (route, request) => {
+    if (request.method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    state.apiCalls.push({ method: 'GET', url: '/queue' });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [], current_index: 0 }),
+    });
+  });
 }
 
 /**

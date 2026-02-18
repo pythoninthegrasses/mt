@@ -77,9 +77,17 @@ jobs:
     steps:
       - name: Checkout code
         run: |
-          # act copies workdir automatically for -self-hosted runners
+          # act -self-hosted doesn't auto-clone; symlink source into workspace
+          if [ ! -d "app" ]; then
+            PROJECT_DIR="${OLDPWD:-/Users/lance/git/mt}"
+            if [ -d "$PROJECT_DIR/app" ]; then
+              ln -sf "$PROJECT_DIR"/* . 2>/dev/null || true
+              ln -sf "$PROJECT_DIR"/.[!.]* . 2>/dev/null || true
+            fi
+          fi
           echo "Working directory: $(pwd)"
           echo "Node version: $(node --version)"
+          ls -la app/frontend/ | head -5
 
       - name: Install frontend dependencies
         working-directory: ./app/frontend

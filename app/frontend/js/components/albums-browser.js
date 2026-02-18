@@ -119,7 +119,7 @@ export function createAlbumsBrowser(Alpine) {
           for (const entry of entries) {
             if (entry.isIntersecting) {
               const card = entry.target;
-              const trackId = card.dataset.trackId;
+              const trackId = card.dataset.artworkTrackId;
               const albumName = card.dataset.albumName;
               if (trackId && albumName) {
                 this._loadArtwork(albumName, parseInt(trackId, 10), card);
@@ -134,7 +134,7 @@ export function createAlbumsBrowser(Alpine) {
 
     observeCard(el, albumName, trackId) {
       if (!el || !this._observer) return;
-      el.dataset.trackId = trackId;
+      el.dataset.artworkTrackId = trackId;
       el.dataset.albumName = albumName;
 
       // Check cache first

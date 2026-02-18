@@ -122,7 +122,7 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_SKIP_WEBSERVER ? undefined : {
     command: 'npm run dev',
     url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !process.env.CI || !!process.env.ACT,
     timeout: 120000,
     stdout: 'ignore',
     stderr: 'pipe',
