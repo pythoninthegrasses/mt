@@ -37,6 +37,9 @@ runs:
         choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
         choco install rustup.install -y
 
+    - name: Install Task
+      uses: go-task/setup-task@v1
+
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
