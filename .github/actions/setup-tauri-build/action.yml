@@ -35,7 +35,7 @@ runs:
       shell: pwsh
       run: |
         choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
-        choco install rust -y
+        choco install rustup.install -y
 
     - name: Setup Node.js
       uses: actions/setup-node@v6
@@ -55,7 +55,8 @@ runs:
         # Refresh PATH to pick up choco-installed rustup
         Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
         refreshenv
-        rustup default stable
+        rustup toolchain install nightly-2026-02-09
+        rustup default nightly-2026-02-09
         rustc --version
         cargo --version
 
