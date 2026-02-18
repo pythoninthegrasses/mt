@@ -238,12 +238,16 @@ export function createLibraryStore(Alpine) {
         discNumber: 'disc_number',
       };
 
+      const uiStore = Alpine.store('ui');
+      const ignoreWords = uiStore.sortIgnoreWords ? uiStore.sortIgnoreWordsList : null;
+
       return await api.library.getTracks({
         search: this.searchQuery.trim() || null,
         sort: sortKeyMap[this.sortBy] || this.sortBy,
         order: this.sortOrder,
         limit: 999999,
         offset: 0,
+        ignoreWords,
       });
     },
 
@@ -707,156 +711,12 @@ export function createLibraryStore(Alpine) {
     },
 
     /**
-     * Strip ignored prefixes from a string for sorting
-     * @param {string} value - String to process
-     * @param {string[]} ignoreWords - Array of prefixes to ignore
-     * @returns {string} String with prefix removed
-     */
-    _stripIgnoredPrefix(value, ignoreWords) {
-      if (!value || !ignoreWords || ignoreWords.length === 0) {
-        return String(value || '').trim();
-      }
-
-      const str = String(value).trim();
-      const lowerStr = str.toLowerCase();
-
-      for (const word of ignoreWords) {
-        const prefix = word.trim().toLowerCase();
-        if (!prefix) continue;
-
-        // Check if string starts with prefix followed by a space
-        if (lowerStr.startsWith(prefix + ' ')) {
-          return str.substring(prefix.length + 1).trim();
-        }
-      }
-
-      return str;
-    },
-
-    /**
-     * Apply client-side filters (ignore-words normalization only)
-     * Backend now handles search and primary sorting
+     * Apply client-side filters.
+     * Backend handles all sorting including ignore-words prefix stripping via
+     * the strip_sort_prefix() SQLite function.
      */
     applyFilters() {
-      // Backend already did search/sort, we only apply ignore-words normalization
-      const result = [...this.tracks];
-
-      // Skip client-side sorting for playlists - they should maintain their stored order
-      const isPlaylistView = this.currentSection?.startsWith('playlist-');
-      if (isPlaylistView) {
-        this.filteredTracks = result;
-        return;
-      }
-
-      const uiStore = Alpine.store('ui');
-      const ignoreWordsEnabled = uiStore.sortIgnoreWords;
-      const ignoreWords = ignoreWordsEnabled
-        ? uiStore.sortIgnoreWordsList.split(',').map((w) => w.trim()).filter(Boolean)
-        : [];
-
-      // Only re-sort if ignore-words is enabled AND sorting by text field
-      const textSortFields = ['artist', 'album', 'title', 'default'];
-      if (ignoreWordsEnabled && ignoreWords.length > 0 && textSortFields.includes(this.sortBy)) {
-        const sortKey = this.sortBy === 'default' ? 'artist' : this.sortBy;
-        const dir = this.sortOrder === 'desc' ? -1 : 1;
-
-        // Build canonical artist per album (MIN of album_artist/artist across all tracks
-        // in the same album). This keeps soundtrack/compilation albums together even when
-        // per-track artists differ.
-        const canonicalArtistMap = new Map();
-        if (sortKey === 'artist') {
-          for (const track of result) {
-            const album = track.album || '';
-            const artist = track.album_artist || track.artist || '';
-            const existing = canonicalArtistMap.get(album);
-            if (existing === undefined || artist < existing) {
-              canonicalArtistMap.set(album, artist);
-            }
-          }
-        }
-
-        // Build dominant disc per album so null disc_number tracks sort alongside
-        // their siblings instead of being forced to disc 1.
-        const dominantDiscMap = new Map();
-        for (const track of result) {
-          const album = track.album || '';
-          if (track.disc_number != null) {
-            const d = parseInt(String(track.disc_number).split('/')[0], 10) || 1;
-            const counts = dominantDiscMap.get(album) || new Map();
-            counts.set(d, (counts.get(d) || 0) + 1);
-            dominantDiscMap.set(album, counts);
-          }
-        }
-        // Resolve each album to its most common disc number
-        for (const [album, counts] of dominantDiscMap) {
-          let bestDisc = 1;
-          let bestCount = 0;
-          for (const [disc, count] of counts) {
-            if (count > bestCount) {
-              bestCount = count;
-              bestDisc = disc;
-            }
-          }
-          dominantDiscMap.set(album, bestDisc);
-        }
-
-        // Strip ignore-words prefix then leading non-alphanumeric chars for sort
-        const normalize = (raw) =>
-          this._stripIgnoredPrefix(raw, ignoreWords).toLowerCase().replace(/^[^a-z0-9]+/, '');
-
-        result.sort((a, b) => {
-          // Primary sort with ignore-words + non-alphanumeric stripping
-          // For artist sort, use canonical album artist to group albums together
-          const aRaw = sortKey === 'artist'
-            ? (canonicalArtistMap.get(a.album || '') || a.album_artist || a.artist || '')
-            : (a[sortKey] || '');
-          const bRaw = sortKey === 'artist'
-            ? (canonicalArtistMap.get(b.album || '') || b.album_artist || b.artist || '')
-            : (b[sortKey] || '');
-          const aVal = normalize(aRaw);
-          const bVal = normalize(bRaw);
-
-          if (aVal < bVal) return -dir;
-          if (aVal > bVal) return dir;
-
-          // Tiebreaker 1: Album (if not primary sort key)
-          if (sortKey !== 'album') {
-            const aAlbum = normalize(a.album || '');
-            const bAlbum = normalize(b.album || '');
-            if (aAlbum < bAlbum) return -1;
-            if (aAlbum > bAlbum) return 1;
-          }
-
-          // Tiebreaker 2: Artist (if not primary sort key)
-          // For album sort, artist groups same-name albums by different artists
-          if (sortKey !== 'artist') {
-            const aArtist = normalize(a.album_artist || a.artist || '');
-            const bArtist = normalize(b.album_artist || b.artist || '');
-            if (aArtist < bArtist) return -1;
-            if (aArtist > bArtist) return 1;
-          }
-
-          // Tiebreaker 3: Disc Number (null inherits album's dominant disc)
-          const aDisc = a.disc_number != null
-            ? (parseInt(String(a.disc_number).split('/')[0], 10) || 1)
-            : (dominantDiscMap.get(a.album || '') || 1);
-          const bDisc = b.disc_number != null
-            ? (parseInt(String(b.disc_number).split('/')[0], 10) || 1)
-            : (dominantDiscMap.get(b.album || '') || 1);
-          if (aDisc < bDisc) return -1;
-          if (aDisc > bDisc) return 1;
-
-          // Tiebreaker 4: Track Number
-          const aTrack = parseInt(String(a.track_number || '').split('/')[0], 10) || 999999;
-          const bTrack = parseInt(String(b.track_number || '').split('/')[0], 10) || 999999;
-          if (aTrack < bTrack) return -1;
-          if (aTrack > bTrack) return 1;
-
-          return 0;
-        });
-      }
-
-      this.filteredTracks = result;
+      this.filteredTracks = [...this.tracks];
     },
 
     /**

@@ -31,33 +31,6 @@ function createTestLibraryStore(initialTracks = []) {
     totalDuration: initialTracks.reduce((sum, t) => sum + (t.duration || 0), 0),
 
     /**
-     * Strip ignored prefixes from a string for sorting
-     * @param {string} value - String to process
-     * @param {string[]} ignoreWords - Array of prefixes to ignore
-     * @returns {string} String with prefix removed
-     */
-    _stripIgnoredPrefix(value, ignoreWords) {
-      if (!value || !ignoreWords || ignoreWords.length === 0) {
-        return String(value || '').trim();
-      }
-
-      const str = String(value).trim();
-      const lowerStr = str.toLowerCase();
-
-      for (const word of ignoreWords) {
-        const prefix = word.trim().toLowerCase();
-        if (!prefix) continue;
-
-        // Check if string starts with prefix followed by a space
-        if (lowerStr.startsWith(prefix + ' ')) {
-          return str.substring(prefix.length + 1).trim();
-        }
-      }
-
-      return str;
-    },
-
-    /**
      * Format total duration for display
      */
     get formattedTotalDuration() {
@@ -147,106 +120,6 @@ const trackArb = fc.record({
 /** Generate an array of tracks */
 const tracksArb = fc.array(trackArb, { minLength: 0, maxLength: 30 });
 
-/** Generate ignore words list */
-const ignoreWordsArb = fc.array(fc.constantFrom('The', 'A', 'An', 'Le', 'La', 'Los', 'Das'), {
-  minLength: 0,
-  maxLength: 5,
-});
-
-// -----------------------------------------------------------------------------
-// Tests: _stripIgnoredPrefix Function
-// -----------------------------------------------------------------------------
-
-describe('Library Store - _stripIgnoredPrefix', () => {
-  let store;
-
-  beforeEach(() => {
-    store = createTestLibraryStore();
-  });
-
-  it('strips "The" prefix from artist name', () => {
-    const result = store._stripIgnoredPrefix('The Beatles', ['The', 'A', 'An']);
-    expect(result).toBe('Beatles');
-  });
-
-  it('strips "A" prefix from album name', () => {
-    const result = store._stripIgnoredPrefix('A Night at the Opera', ['The', 'A', 'An']);
-    expect(result).toBe('Night at the Opera');
-  });
-
-  it('strips "An" prefix from title', () => {
-    const result = store._stripIgnoredPrefix('An Evening With', ['The', 'A', 'An']);
-    expect(result).toBe('Evening With');
-  });
-
-  it('preserves string when no prefix matches', () => {
-    const result = store._stripIgnoredPrefix('Led Zeppelin', ['The', 'A', 'An']);
-    expect(result).toBe('Led Zeppelin');
-  });
-
-  it('is case-insensitive for prefix matching', () => {
-    const result = store._stripIgnoredPrefix('THE ROLLING STONES', ['the']);
-    expect(result).toBe('ROLLING STONES');
-  });
-
-  it('returns empty string for null input', () => {
-    const result = store._stripIgnoredPrefix(null, ['The']);
-    expect(result).toBe('');
-  });
-
-  it('returns empty string for undefined input', () => {
-    const result = store._stripIgnoredPrefix(undefined, ['The']);
-    expect(result).toBe('');
-  });
-
-  it('returns original string for empty ignore words', () => {
-    const result = store._stripIgnoredPrefix('The Beatles', []);
-    expect(result).toBe('The Beatles');
-  });
-
-  it('returns original string for null ignore words', () => {
-    const result = store._stripIgnoredPrefix('The Beatles', null);
-    expect(result).toBe('The Beatles');
-  });
-
-  it('handles whitespace in ignore words', () => {
-    const result = store._stripIgnoredPrefix('The Beatles', ['  The  ', 'A']);
-    expect(result).toBe('Beatles');
-  });
-
-  it('does not strip prefix that is not followed by space', () => {
-    const result = store._stripIgnoredPrefix('Therapy?', ['The']);
-    expect(result).toBe('Therapy?');
-  });
-
-  it('trims leading/trailing whitespace from input', () => {
-    const result = store._stripIgnoredPrefix('  The Beatles  ', ['The']);
-    expect(result).toBe('Beatles');
-  });
-
-  it('only strips first matching prefix', () => {
-    const result = store._stripIgnoredPrefix('A The Band', ['A', 'The']);
-    expect(result).toBe('The Band');
-  });
-
-  test.prop([fc.string({ minLength: 0, maxLength: 100 }), ignoreWordsArb])(
-    'never returns null or undefined',
-    (value, ignoreWords) => {
-      const result = store._stripIgnoredPrefix(value, ignoreWords);
-      expect(result).not.toBeNull();
-      expect(result).not.toBeUndefined();
-      expect(typeof result).toBe('string');
-    }
-  );
-
-  test.prop([fc.string({ minLength: 0, maxLength: 100 }), ignoreWordsArb])(
-    'result length is <= original length',
-    (value, ignoreWords) => {
-      const result = store._stripIgnoredPrefix(value, ignoreWords);
-      expect(result.length).toBeLessThanOrEqual((value || '').trim().length);
-    }
-  );
-});
 
 // -----------------------------------------------------------------------------
 // Tests: formattedTotalDuration Getter
@@ -541,66 +414,6 @@ describe('Library Store - getTrack', () => {
   });
 });
 
-// -----------------------------------------------------------------------------
-// Tests: Sorting with Ignore Words (Integration)
-// -----------------------------------------------------------------------------
-
-describe('Library Store - Sorting with Ignore Words', () => {
-  let store;
-
-  beforeEach(() => {
-    store = createTestLibraryStore();
-  });
-
-  it('sorts artists ignoring "The" prefix', () => {
-    const artists = ['The Beatles', 'Led Zeppelin', 'The Rolling Stones', 'Pink Floyd'];
-    const ignoreWords = ['The', 'A', 'An'];
-
-    const sorted = artists.sort((a, b) => {
-      const aStripped = store._stripIgnoredPrefix(a, ignoreWords).toLowerCase();
-      const bStripped = store._stripIgnoredPrefix(b, ignoreWords).toLowerCase();
-      return aStripped.localeCompare(bStripped);
-    });
-
-    // Beatles < Led Zeppelin < Pink Floyd < Rolling Stones
-    expect(sorted).toEqual(['The Beatles', 'Led Zeppelin', 'Pink Floyd', 'The Rolling Stones']);
-  });
-
-  it('sorts albums ignoring "A" prefix', () => {
-    const albums = ['A Night at the Opera', 'Dark Side of the Moon', 'Abbey Road'];
-    const ignoreWords = ['The', 'A', 'An'];
-
-    const sorted = albums.sort((a, b) => {
-      const aStripped = store._stripIgnoredPrefix(a, ignoreWords).toLowerCase();
-      const bStripped = store._stripIgnoredPrefix(b, ignoreWords).toLowerCase();
-      return aStripped.localeCompare(bStripped);
-    });
-
-    // Abbey Road < Dark Side... < Night at the Opera
-    expect(sorted).toEqual(['Abbey Road', 'Dark Side of the Moon', 'A Night at the Opera']);
-  });
-
-  test.prop([fc.array(fc.string({ minLength: 1, maxLength: 50 }), { minLength: 2, maxLength: 20 }), ignoreWordsArb])(
-    'sorting with ignore words is consistent',
-    (values, ignoreWords) => {
-      // Sort once
-      const sorted1 = [...values].sort((a, b) => {
-        const aStripped = store._stripIgnoredPrefix(a, ignoreWords).toLowerCase();
-        const bStripped = store._stripIgnoredPrefix(b, ignoreWords).toLowerCase();
-        return aStripped.localeCompare(bStripped);
-      });
-
-      // Sort again
-      const sorted2 = [...values].sort((a, b) => {
-        const aStripped = store._stripIgnoredPrefix(a, ignoreWords).toLowerCase();
-        const bStripped = store._stripIgnoredPrefix(b, ignoreWords).toLowerCase();
-        return aStripped.localeCompare(bStripped);
-      });
-
-      expect(sorted1).toEqual(sorted2);
-    }
-  );
-});
 
 // -----------------------------------------------------------------------------
 // Tests: Statistics and State

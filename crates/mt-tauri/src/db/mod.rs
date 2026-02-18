@@ -21,6 +21,7 @@ mod compat_test;
 
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::functions::FunctionFlags;
 use rusqlite::Connection;
 use std::path::Path;
 use std::sync::Arc;
@@ -54,6 +55,35 @@ pub type DbResult<T> = Result<T, DbError>;
 pub type DbPool = Pool<SqliteConnectionManager>;
 pub type DbConnection = PooledConnection<SqliteConnectionManager>;
 
+/// Register custom SQLite functions on a connection.
+/// Called from `with_init` so every pooled connection has them available.
+fn register_custom_functions(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.create_scalar_function(
+        "strip_sort_prefix",
+        2,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        |ctx| {
+            let value: Option<String> = ctx.get(0)?;
+            let prefixes: Option<String> = ctx.get(1)?;
+            let Some(value) = value else {
+                return Ok(None);
+            };
+            let Some(prefixes) = prefixes else {
+                return Ok(Some(value));
+            };
+            let lower = value.to_lowercase();
+            for prefix in prefixes.split(',') {
+                let p = prefix.trim().to_lowercase();
+                if !p.is_empty() && lower.starts_with(&format!("{p} ")) {
+                    return Ok(Some(value[p.len() + 1..].trim_start().to_string()));
+                }
+            }
+            Ok(Some(value))
+        },
+    )?;
+    Ok(())
+}
+
 /// Main database interface with connection pooling
 #[derive(Clone)]
 pub struct Database {
@@ -82,7 +112,8 @@ impl Database {
                 PRAGMA foreign_keys = ON;
                 PRAGMA cache_size = -64000;
                 ",
-            )
+            )?;
+            register_custom_functions(conn)
         });
         let pool = Pool::builder()
             .max_size(4)
@@ -109,7 +140,8 @@ impl Database {
                 PRAGMA foreign_keys = ON;
                 PRAGMA cache_size = -64000;
                 ",
-            )
+            )?;
+            register_custom_functions(conn)
         });
         let pool = Pool::builder().max_size(1).build(manager)?;
 
@@ -219,5 +251,104 @@ mod tests {
             .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
             .unwrap();
         assert_eq!(fk_enabled, 1);
+    }
+
+    #[test]
+    fn test_strip_sort_prefix_strips_the() {
+        let db = Database::new_in_memory().expect("Failed to create database");
+        let conn = db.conn().expect("Failed to get connection");
+        let result: String = conn
+            .query_row(
+                "SELECT strip_sort_prefix('The Beatles', 'the,a,an')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(result, "Beatles");
+    }
+
+    #[test]
+    fn test_strip_sort_prefix_strips_a() {
+        let db = Database::new_in_memory().expect("Failed to create database");
+        let conn = db.conn().expect("Failed to get connection");
+        let result: String = conn
+            .query_row(
+                "SELECT strip_sort_prefix('A Night at the Opera', 'the,a,an')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(result, "Night at the Opera");
+    }
+
+    #[test]
+    fn test_strip_sort_prefix_case_insensitive() {
+        let db = Database::new_in_memory().expect("Failed to create database");
+        let conn = db.conn().expect("Failed to get connection");
+        let result: String = conn
+            .query_row(
+                "SELECT strip_sort_prefix('THE ROLLING STONES', 'the')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(result, "ROLLING STONES");
+    }
+
+    #[test]
+    fn test_strip_sort_prefix_no_match() {
+        let db = Database::new_in_memory().expect("Failed to create database");
+        let conn = db.conn().expect("Failed to get connection");
+        let result: String = conn
+            .query_row(
+                "SELECT strip_sort_prefix('Led Zeppelin', 'the,a,an')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(result, "Led Zeppelin");
+    }
+
+    #[test]
+    fn test_strip_sort_prefix_does_not_strip_partial() {
+        let db = Database::new_in_memory().expect("Failed to create database");
+        let conn = db.conn().expect("Failed to get connection");
+        // "Therapy?" starts with "the" but not "the " (no space)
+        let result: String = conn
+            .query_row(
+                "SELECT strip_sort_prefix('Therapy?', 'the')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(result, "Therapy?");
+    }
+
+    #[test]
+    fn test_strip_sort_prefix_null_value() {
+        let db = Database::new_in_memory().expect("Failed to create database");
+        let conn = db.conn().expect("Failed to get connection");
+        let result: Option<String> = conn
+            .query_row(
+                "SELECT strip_sort_prefix(NULL, 'the,a,an')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_strip_sort_prefix_null_prefixes() {
+        let db = Database::new_in_memory().expect("Failed to create database");
+        let conn = db.conn().expect("Failed to get connection");
+        let result: String = conn
+            .query_row(
+                "SELECT strip_sort_prefix('The Beatles', NULL)",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(result, "The Beatles");
     }
 }

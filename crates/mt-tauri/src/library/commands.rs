@@ -45,6 +45,7 @@ pub fn library_get_all(
     sort_order: Option<String>,
     limit: Option<i64>,
     offset: Option<i64>,
+    ignore_words: Option<String>,
 ) -> Result<LibraryResponse, String> {
     let start_time = std::time::Instant::now();
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -72,6 +73,7 @@ pub fn library_get_all(
             .unwrap_or(SortOrder::Desc),
         limit: limit.unwrap_or(100),
         offset: offset.unwrap_or(0),
+        ignore_words,
     };
 
     let result = library::get_all_tracks(&conn, &query).map_err(|e| e.to_string())?;

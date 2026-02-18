@@ -57,22 +57,43 @@ export function createArtistsBrowser(Alpine) {
     },
 
     /**
-     * Build a map of album → canonical artist (shortest album_artist across all
-     * tracks in that album). This keeps multi-artist albums grouped under one entry.
+     * Build a map of album → canonical artist. Uses the most common non-null
+     * album_artist per album. Albums where any track has null album_artist
+     * are treated as compilations and excluded, so each track maps to its
+     * own artist independently.
      */
     get _canonicalArtistMap() {
       const v = this.$store.library._dataVersion;
       if (this._canonicalMapVersion === v) return this._cachedCanonicalMap;
 
-      const map = new Map();
+      // Collect album_artist counts per album; flag if any track has null album_artist
+      const albumInfo = new Map();
       for (const track of this._allTracks) {
         const album = track.album || '';
-        const artist = (track.album_artist || track.artist || '').replace(/;+$/, '').trim();
-        if (!artist) continue;
-        const existing = map.get(album);
-        if (!existing || artist.length < existing.length) {
-          map.set(album, artist);
+        const aa = (track.album_artist || '').replace(/;+$/, '').trim() || null;
+        if (!albumInfo.has(album)) {
+          albumInfo.set(album, { counts: new Map(), hasNull: false });
         }
+        const info = albumInfo.get(album);
+        if (!aa) {
+          info.hasNull = true;
+        } else {
+          info.counts.set(aa, (info.counts.get(aa) || 0) + 1);
+        }
+      }
+      // Use most common album_artist; skip albums with any null album_artist
+      const map = new Map();
+      for (const [album, info] of albumInfo) {
+        if (info.hasNull || info.counts.size === 0) continue;
+        let bestArtist = '';
+        let bestCount = 0;
+        for (const [artist, count] of info.counts) {
+          if (count > bestCount) {
+            bestCount = count;
+            bestArtist = artist;
+          }
+        }
+        if (bestArtist) map.set(album, bestArtist);
       }
       this._cachedCanonicalMap = map;
       this._canonicalMapVersion = v;
@@ -80,19 +101,35 @@ export function createArtistsBrowser(Alpine) {
     },
 
     /**
-     * Case-insensitive dedup: group canonical artists by lowercase name,
-     * pick the most-frequent form as the display name.
+     * Case-insensitive dedup: collect all artists (canonical + per-track for
+     * compilations), pick the most-frequent casing as the display name.
      */
     get _artistDisplayNames() {
       const canonicalMap = this._canonicalArtistMap;
       const countMap = new Map();
-      for (const canonical of canonicalMap.values()) {
-        if (!canonical) continue;
-        const lower = canonical.toLowerCase();
+
+      const addArtist = (name) => {
+        if (!name) return;
+        const lower = name.toLowerCase();
         if (!countMap.has(lower)) countMap.set(lower, new Map());
         const formCounts = countMap.get(lower);
-        formCounts.set(canonical, (formCounts.get(canonical) || 0) + 1);
+        formCounts.set(name, (formCounts.get(name) || 0) + 1);
+      };
+
+      // Add canonical artists (from albums with consistent album_artist)
+      for (const canonical of canonicalMap.values()) {
+        addArtist(canonical);
       }
+
+      // Add per-track artists for compilations (albums not in canonicalMap)
+      for (const track of this._allTracks) {
+        const album = track.album || '';
+        if (!canonicalMap.has(album)) {
+          const artist = (track.album_artist || track.artist || '').replace(/;+$/, '').trim();
+          addArtist(artist);
+        }
+      }
+
       const displayMap = new Map();
       for (const [lower, formCounts] of countMap) {
         let bestForm = '';
@@ -158,16 +195,28 @@ export function createArtistsBrowser(Alpine) {
     get selectedArtistTracks() {
       if (!this.selectedArtist) return [];
       const canonicalMap = this._canonicalArtistMap;
-      // Find all albums where the canonical artist matches (case-insensitive)
       const selectedLower = this.selectedArtist.toLowerCase();
+
+      // Find albums where the canonical artist matches
       const matchingAlbums = new Set();
       for (const [album, canonical] of canonicalMap) {
         if (canonical.toLowerCase() === selectedLower) {
           matchingAlbums.add(album);
         }
       }
+
       return this._allTracks
-        .filter((t) => matchingAlbums.has(t.album || ''))
+        .filter((t) => {
+          const album = t.album || '';
+          // Album with consistent album_artist: include all its tracks
+          if (matchingAlbums.has(album)) return true;
+          // Compilation or non-canonical album: match by individual track artist
+          if (!canonicalMap.has(album)) {
+            const trackArtist = (t.album_artist || t.artist || '').replace(/;+$/, '').trim();
+            return trackArtist.toLowerCase() === selectedLower;
+          }
+          return false;
+        })
         .sort((a, b) => {
           const albumCmp = (a.album || '').localeCompare(b.album || '');
           if (albumCmp !== 0) return albumCmp;
@@ -184,22 +233,24 @@ export function createArtistsBrowser(Alpine) {
       const albumMap = {};
 
       for (const track of tracks) {
-        const albumKey = track.album || 'Unknown Album';
-        if (!albumMap[albumKey]) {
-          albumMap[albumKey] = {
-            name: albumKey,
+        const albumName = track.album || 'Unknown Album';
+        // Group by album name only — we're already scoped to one artist's tracks,
+        // so same-name entries with different album_artist variants are the same album.
+        if (!albumMap[albumName]) {
+          albumMap[albumName] = {
+            name: albumName,
             year: track.date || '',
             genre: track.genre || '',
             tracks: [],
             representativeTrackId: track.id,
           };
         }
-        albumMap[albumKey].tracks.push(track);
-        if (track.date && !albumMap[albumKey].year) {
-          albumMap[albumKey].year = track.date;
+        albumMap[albumName].tracks.push(track);
+        if (track.date && !albumMap[albumName].year) {
+          albumMap[albumName].year = track.date;
         }
-        if (track.genre && !albumMap[albumKey].genre) {
-          albumMap[albumKey].genre = track.genre;
+        if (track.genre && !albumMap[albumName].genre) {
+          albumMap[albumName].genre = track.genre;
         }
       }
 

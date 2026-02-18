@@ -22,25 +22,25 @@
       class="flex-1 min-h-0 overflow-y-auto p-6"
     >
       <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-6">
-        <template x-for="album in albumList" :key="album.name">
+        <template x-for="album in albumList" :key="album.firstTrackId">
           <div
             class="group cursor-pointer"
-            x-init="$nextTick(() => observeCard($el, album.name, album.firstTrackId))"
+            x-init="$nextTick(() => observeCard($el, album.firstTrackId))"
             @click="openAlbumDetail(album)"
             @contextmenu="showAlbumContextMenu($event, album)"
             data-testid="album-card"
           >
             <!-- Artwork -->
             <div class="relative aspect-square bg-muted rounded-lg overflow-hidden shadow-sm">
-              <template x-if="getArtworkUrl(album.name)">
+              <template x-if="getArtworkUrl(album.firstTrackId)">
                 <img
-                  :src="getArtworkUrl(album.name)"
+                  :src="getArtworkUrl(album.firstTrackId)"
                   :alt="album.name"
                   class="w-full h-full object-cover"
                   loading="lazy"
                 >
               </template>
-              <template x-if="!getArtworkUrl(album.name)">
+              <template x-if="!getArtworkUrl(album.firstTrackId)">
                 <div class="w-full h-full flex items-center justify-center">
                   <svg class="w-12 h-12 text-muted-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>

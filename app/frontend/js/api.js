@@ -96,6 +96,7 @@ export const api = {
             sortOrder: params.order || null,
             limit: params.limit || null,
             offset: params.offset || null,
+            ignoreWords: params.ignoreWords || null,
           });
         } catch (error) {
           console.error('[api.library.getTracks] Tauri error:', error);

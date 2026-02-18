@@ -241,16 +241,45 @@ pub enum LibrarySortColumn {
 }
 
 
-/// Sort key for artist view. Uses the per-row COALESCE so the CTE join handles
-/// the canonical grouping. The correlated subquery was removed because it caused
-/// O(n^2) performance (full table scan per row in ORDER BY).
-const ARTIST_SORT_KEY: &str = "COALESCE(album_artist, artist) COLLATE NOCASE";
+/// Raw column expression for artist sort (no COLLATE).
+const ARTIST_SORT_EXPR: &str = "COALESCE(album_artist, artist)";
 
 impl LibrarySortColumn {
+    /// Raw column expression without COLLATE or wrapping
+    fn column_expr(&self) -> &'static str {
+        match self {
+            LibrarySortColumn::Title => "title",
+            LibrarySortColumn::Artist => ARTIST_SORT_EXPR,
+            LibrarySortColumn::Album => "album",
+            LibrarySortColumn::AddedDate => "added_date",
+            LibrarySortColumn::PlayCount => "play_count",
+            LibrarySortColumn::Duration => "duration",
+            LibrarySortColumn::LastPlayed => "last_played",
+            LibrarySortColumn::Year => "date",
+            LibrarySortColumn::Genre => "genre",
+            LibrarySortColumn::DiscNumber => "disc_number",
+            LibrarySortColumn::TrackTotal => "track_total",
+            LibrarySortColumn::TrackNumber => "track_number",
+        }
+    }
+
+    /// Whether this column is a text field that benefits from COLLATE NOCASE
+    /// and ignore-words prefix stripping
+    fn is_text_column(&self) -> bool {
+        matches!(
+            self,
+            LibrarySortColumn::Title
+                | LibrarySortColumn::Artist
+                | LibrarySortColumn::Album
+                | LibrarySortColumn::Genre
+        )
+    }
+
+    /// Static SQL expression for backward compatibility (no ignore-words)
     pub fn as_sql(&self) -> &'static str {
         match self {
             LibrarySortColumn::Title => "title COLLATE NOCASE",
-            LibrarySortColumn::Artist => ARTIST_SORT_KEY,
+            LibrarySortColumn::Artist => "COALESCE(album_artist, artist) COLLATE NOCASE",
             LibrarySortColumn::Album => "album COLLATE NOCASE",
             LibrarySortColumn::AddedDate => "added_date",
             LibrarySortColumn::PlayCount => "play_count",
@@ -264,10 +293,32 @@ impl LibrarySortColumn {
         }
     }
 
+    /// Build a text sort expression, optionally wrapping with strip_sort_prefix.
+    /// Escapes single quotes in the ignore_words CSV for safe SQL interpolation.
+    fn text_sort_expr(col: &str, ignore_words: Option<&str>) -> String {
+        match ignore_words {
+            Some(words) => {
+                let escaped = words.replace('\'', "''");
+                format!("strip_sort_prefix({col}, '{escaped}') COLLATE NOCASE")
+            }
+            None => format!("{col} COLLATE NOCASE"),
+        }
+    }
+
+    /// ORDER BY expression for the primary sort column.
+    /// When `ignore_words` is provided, text columns are wrapped with
+    /// `strip_sort_prefix()` to strip article prefixes before comparison.
+    pub fn as_order_by(&self, ignore_words: Option<&str>) -> String {
+        if self.is_text_column() {
+            Self::text_sort_expr(self.column_expr(), ignore_words)
+        } else {
+            self.column_expr().to_string()
+        }
+    }
+
     /// Returns secondary ORDER BY columns for deterministic album track ordering.
     /// Ensures tracks within the same album are sorted by disc number then track number.
     /// Uses CAST(... AS INTEGER) because track_number and disc_number are TEXT columns.
-    /// Uses COLLATE NOCASE for case-insensitive text sorting.
     pub fn secondary_sort_sql(&self) -> &'static str {
         match self {
             LibrarySortColumn::Artist => ", album COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC",
@@ -275,6 +326,22 @@ impl LibrarySortColumn {
             LibrarySortColumn::DiscNumber => ", CAST(track_number AS INTEGER) ASC",
             LibrarySortColumn::TrackNumber => ", CAST(disc_number AS INTEGER) ASC",
             _ => ", COALESCE(album_artist, artist) COLLATE NOCASE ASC, album COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC",
+        }
+    }
+
+    /// Secondary ORDER BY with optional ignore-words wrapping on text columns.
+    pub fn secondary_order_by(&self, ignore_words: Option<&str>) -> String {
+        let album_expr = Self::text_sort_expr("album", ignore_words);
+        let artist_expr = Self::text_sort_expr(ARTIST_SORT_EXPR, ignore_words);
+        let disc = "CAST(disc_number AS INTEGER) ASC";
+        let track = "CAST(track_number AS INTEGER) ASC";
+
+        match self {
+            LibrarySortColumn::Artist => format!(", {album_expr} ASC, {disc}, {track}"),
+            LibrarySortColumn::Album => format!(", {artist_expr} ASC, {disc}, {track}"),
+            LibrarySortColumn::DiscNumber => format!(", {track}"),
+            LibrarySortColumn::TrackNumber => format!(", {disc}"),
+            _ => format!(", {artist_expr} ASC, {album_expr} ASC, {disc}, {track}"),
         }
     }
 }

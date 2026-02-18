@@ -519,7 +519,7 @@
               <input
                 type="checkbox"
                 x-model="$store.ui.sortIgnoreWords"
-                @change="$store.library.applyFilters()"
+                @change="$store.library.load({ forceReload: true })"
                 class="w-4 h-4 rounded border-border text-primary focus:ring-primary focus:ring-offset-0"
                 data-testid="settings-sort-ignore-words-toggle"
               />
@@ -537,7 +537,7 @@
               <input
                 type="text"
                 x-model="$store.ui.sortIgnoreWordsList"
-                @input.debounce.500ms="$store.library.applyFilters()"
+                @input.debounce.500ms="$store.library.load({ forceReload: true })"
                 :disabled="!$store.ui.sortIgnoreWords"
                 placeholder="the, a, an, la, le, les, los, las, el, die, der, das, il, lo, gli"
                 class="w-full px-3 py-2 rounded-md border border-border bg-background text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:ring-1 focus:ring-primary focus:border-primary"

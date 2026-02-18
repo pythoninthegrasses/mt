@@ -49,6 +49,8 @@ pub struct LibraryQuery {
     pub sort_order: SortOrder,
     pub limit: i64,
     pub offset: i64,
+    /// CSV of prefix words to strip for text sort ordering (e.g. "the,a,an")
+    pub ignore_words: Option<String>,
 }
 
 impl LibraryQuery {
@@ -108,9 +110,9 @@ pub fn get_all_tracks(conn: &Connection, query: &LibraryQuery) -> DbResult<Pagin
          ORDER BY {} {}{}
          LIMIT ? OFFSET ?",
         where_clause,
-        query.sort_by.as_sql(),
+        query.sort_by.as_order_by(query.ignore_words.as_deref()),
         query.sort_order.as_sql(),
-        query.sort_by.secondary_sort_sql()
+        query.sort_by.secondary_order_by(query.ignore_words.as_deref())
     );
 
     let mut all_params: Vec<&dyn rusqlite::ToSql> = params_refs;
@@ -996,9 +998,11 @@ pub fn merge_duplicate_tracks(conn: &Connection, keep_id: i64, delete_id: i64) -
 mod tests {
     use super::*;
     use crate::db::schema::{create_tables, run_migrations};
+    use crate::db::register_custom_functions;
 
     fn setup_test_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
+        register_custom_functions(&conn).unwrap();
         create_tables(&conn).unwrap();
         run_migrations(&conn).unwrap();
         conn
@@ -2470,5 +2474,140 @@ mod tests {
         // Empty paths returns empty
         let results = get_fingerprints_for_paths(&conn, &[]).unwrap();
         assert_eq!(results.len(), 0);
+    }
+
+    /// Helper to insert a track with specific fields for sort tests
+    fn insert_sort_track(
+        conn: &Connection,
+        artist: &str,
+        album_artist: Option<&str>,
+        album: &str,
+        disc: Option<&str>,
+        track_num: Option<&str>,
+        title: &str,
+    ) {
+        let metadata = TrackMetadata {
+            title: Some(title.to_string()),
+            artist: Some(artist.to_string()),
+            album_artist: album_artist.map(|s| s.to_string()),
+            album: Some(album.to_string()),
+            disc_number: disc.map(|s| s.to_string()),
+            track_number: track_num.map(|s| s.to_string()),
+            ..Default::default()
+        };
+        let path = format!("/music/{}/{}/{}.mp3", artist, album, title);
+        add_track(conn, &path, &metadata).unwrap();
+    }
+
+    #[test]
+    fn test_sort_compilation_by_individual_artist() {
+        let conn = setup_test_db();
+
+        // Compilation: album_artist is null, different artists per track
+        insert_sort_track(&conn, "The Decemberists", None, "Dark Was the Night", Some("1"), Some("12"), "Sleepless");
+        insert_sort_track(&conn, "Arcade Fire", None, "Dark Was the Night", Some("2"), Some("2"), "Lenin");
+        insert_sort_track(&conn, "Spoon", None, "Dark Was the Night", Some("2"), Some("1"), "Well-Alright");
+
+        // The Decemberists' own album
+        insert_sort_track(&conn, "The Decemberists", None, "Her Majesty", None, Some("1"), "Shanty");
+
+        let query = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            limit: 100,
+            ..Default::default()
+        };
+
+        let result = get_all_tracks(&conn, &query).unwrap();
+        let artists: Vec<_> = result.items.iter().map(|t| t.artist.as_deref().unwrap()).collect();
+
+        // Arcade Fire < Spoon < The Decemberists (all Decemberists tracks adjacent)
+        assert_eq!(artists[0], "Arcade Fire");
+        assert_eq!(artists[1], "Spoon");
+        // The Decemberists tracks should be grouped: compilation + own album
+        assert_eq!(artists[2], "The Decemberists");
+        assert_eq!(artists[3], "The Decemberists");
+    }
+
+    #[test]
+    fn test_sort_same_name_albums_separately() {
+        let conn = setup_test_db();
+
+        // "Ceremony" by Anna Von Hausswolff
+        insert_sort_track(&conn, "Anna Von Hausswolff", Some("Anna Von Hausswolff"), "Ceremony", Some("1"), Some("1"), "Epitaph");
+        insert_sort_track(&conn, "Anna Von Hausswolff", Some("Anna Von Hausswolff"), "Ceremony", Some("1"), Some("2"), "Deathbed");
+
+        // "Ceremony" by Phantogram
+        insert_sort_track(&conn, "Phantogram", Some("Phantogram"), "Ceremony", Some("1"), Some("1"), "Dear God");
+        insert_sort_track(&conn, "Phantogram", Some("Phantogram"), "Ceremony", Some("1"), Some("2"), "In A Spiral");
+
+        let query = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            limit: 100,
+            ..Default::default()
+        };
+
+        let result = get_all_tracks(&conn, &query).unwrap();
+        let pairs: Vec<_> = result.items.iter()
+            .map(|t| (t.album_artist.as_deref().unwrap(), t.title.as_deref().unwrap()))
+            .collect();
+
+        // Anna Von Hausswolff tracks first, then Phantogram
+        assert_eq!(pairs[0].0, "Anna Von Hausswolff");
+        assert_eq!(pairs[1].0, "Anna Von Hausswolff");
+        assert_eq!(pairs[2].0, "Phantogram");
+        assert_eq!(pairs[3].0, "Phantogram");
+    }
+
+    #[test]
+    fn test_sort_soundtrack_grouped() {
+        let conn = setup_test_db();
+
+        // Soundtrack: same album_artist for all tracks
+        insert_sort_track(&conn, "Lorien Testard", Some("Lorien Testard"), "Clair Obscur OST", None, Some("1"), "Track 1");
+        insert_sort_track(&conn, "Lorien Testard", Some("Lorien Testard"), "Clair Obscur OST", None, Some("2"), "Track 2");
+        insert_sort_track(&conn, "Lorien Testard", Some("Lorien Testard"), "Clair Obscur OST", None, Some("3"), "Track 3");
+
+        let query = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            limit: 100,
+            ..Default::default()
+        };
+
+        let result = get_all_tracks(&conn, &query).unwrap();
+        let titles: Vec<_> = result.items.iter().map(|t| t.title.as_deref().unwrap()).collect();
+
+        // All grouped together by track number order
+        assert_eq!(titles, vec!["Track 1", "Track 2", "Track 3"]);
+    }
+
+    #[test]
+    fn test_sort_with_ignore_words() {
+        let conn = setup_test_db();
+
+        // "The Decemberists" should sort as "Decemberists" with ignore words
+        insert_sort_track(&conn, "The Decemberists", None, "Her Majesty", None, Some("1"), "Shanty");
+        // "Arcade Fire" sorts as "Arcade Fire"
+        insert_sort_track(&conn, "Arcade Fire", None, "Funeral", None, Some("1"), "Neighborhood");
+        // "Belle and Sebastian" sorts as "Belle..."
+        insert_sort_track(&conn, "Belle and Sebastian", None, "Tigermilk", None, Some("1"), "The State");
+
+        let query = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            ignore_words: Some("the,a,an".to_string()),
+            limit: 100,
+            ..Default::default()
+        };
+
+        let result = get_all_tracks(&conn, &query).unwrap();
+        let artists: Vec<_> = result.items.iter().map(|t| t.artist.as_deref().unwrap()).collect();
+
+        // With "The" stripped: Arcade Fire < Belle and Sebastian < (The) Decemberists
+        assert_eq!(artists[0], "Arcade Fire");
+        assert_eq!(artists[1], "Belle and Sebastian");
+        assert_eq!(artists[2], "The Decemberists");
     }
 }

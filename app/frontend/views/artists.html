@@ -58,7 +58,7 @@
 
         <!-- Albums -->
         <div class="space-y-10">
-          <template x-for="album in selectedArtistAlbums" :key="album.name">
+          <template x-for="album in selectedArtistAlbums" :key="album.representativeTrackId">
             <div class="flex gap-5" :data-testid="'album-section-' + album.name">
               <!-- Album artwork + summary -->
               <div class="w-40 shrink-0">

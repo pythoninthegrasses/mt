@@ -18,7 +18,7 @@ export function createAlbumsBrowser(Alpine) {
     selectedAlbumTracks: [],
     selectedAlbumArtwork: null,
 
-    // Artwork cache for grid cards: { albumName: { url, trackId } }
+    // Artwork cache for grid cards: { trackId: url }
     artworkCache: {},
 
     // IntersectionObserver for lazy loading
@@ -84,19 +84,25 @@ export function createAlbumsBrowser(Alpine) {
       const v = this.$store.library._dataVersion;
       if (this._albumListVersion === v) return this._cachedAlbumList;
 
-      const tracksByAlbum = {};
+      // Group by composite key (album + album_artist) to separate
+      // identically named albums by different artists
+      const tracksByKey = {};
       for (const track of this._allTracks) {
         const album = track.album || 'Unknown Album';
-        if (!tracksByAlbum[album]) tracksByAlbum[album] = [];
-        tracksByAlbum[album].push(track);
+        const albumArtist = track.album_artist || track.artist || 'Unknown Artist';
+        const key = `${album}|||${albumArtist}`;
+        if (!tracksByKey[key]) tracksByKey[key] = [];
+        tracksByKey[key].push(track);
       }
       const albums = [];
 
-      for (const [albumName, tracks] of Object.entries(tracksByAlbum)) {
+      for (const tracks of Object.values(tracksByKey)) {
         const firstTrack = tracks[0];
+        const albumArtist = firstTrack.album_artist || firstTrack.artist || 'Unknown Artist';
         albums.push({
-          name: albumName,
-          artist: firstTrack.album_artist || firstTrack.artist || 'Unknown Artist',
+          name: firstTrack.album || 'Unknown Album',
+          artist: albumArtist,
+          albumArtist,
           year: firstTrack.date ? String(firstTrack.date).slice(0, 4) : '',
           genre: firstTrack.genre || '',
           trackCount: tracks.length,
@@ -120,9 +126,8 @@ export function createAlbumsBrowser(Alpine) {
             if (entry.isIntersecting) {
               const card = entry.target;
               const trackId = card.dataset.artworkTrackId;
-              const albumName = card.dataset.albumName;
-              if (trackId && albumName) {
-                this._loadArtwork(albumName, parseInt(trackId, 10), card);
+              if (trackId) {
+                this._loadArtwork(parseInt(trackId, 10), card);
               }
               this._observer.unobserve(card);
             }
@@ -132,32 +137,31 @@ export function createAlbumsBrowser(Alpine) {
       );
     },
 
-    observeCard(el, albumName, trackId) {
+    observeCard(el, trackId) {
       if (!el || !this._observer) return;
       el.dataset.artworkTrackId = trackId;
-      el.dataset.albumName = albumName;
 
       // Check cache first
-      if (this.artworkCache[albumName]) {
+      if (this.artworkCache[trackId]) {
         return;
       }
 
       this._observer.observe(el);
     },
 
-    async _loadArtwork(albumName, trackId, _card) {
-      if (this.artworkCache[albumName]) return;
+    async _loadArtwork(trackId, _card) {
+      if (this.artworkCache[trackId]) return;
 
       try {
         const url = await api.library.getArtworkUrl(trackId);
-        this.artworkCache[albumName] = url || null;
+        this.artworkCache[trackId] = url || null;
       } catch {
-        this.artworkCache[albumName] = null;
+        this.artworkCache[trackId] = null;
       }
     },
 
-    getArtworkUrl(albumName) {
-      return this.artworkCache[albumName] || null;
+    getArtworkUrl(trackId) {
+      return this.artworkCache[trackId] || null;
     },
 
     // --- Navigation ---
@@ -170,7 +174,7 @@ export function createAlbumsBrowser(Alpine) {
       }
 
       this.selectedAlbum = album;
-      this.selectedAlbumTracks = this._getAlbumTracks(album.name);
+      this.selectedAlbumTracks = this._getAlbumTracks(album.name, album.albumArtist);
       this._loadDetailArtwork(album.firstTrackId);
       this.subView = 'detail';
     },
@@ -200,8 +204,15 @@ export function createAlbumsBrowser(Alpine) {
 
     // --- Album Detail ---
 
-    _getAlbumTracks(albumName) {
-      const tracks = this._allTracks.filter((t) => (t.album || 'Unknown Album') === albumName);
+    _getAlbumTracks(albumName, albumArtist) {
+      const tracks = this._allTracks.filter((t) => {
+        if ((t.album || 'Unknown Album') !== albumName) return false;
+        if (albumArtist) {
+          const trackArtist = t.album_artist || t.artist || 'Unknown Artist';
+          return trackArtist === albumArtist;
+        }
+        return true;
+      });
       // Find dominant disc number for tracks missing disc metadata
       const discCounts = {};
       for (const t of tracks) {
@@ -251,7 +262,7 @@ export function createAlbumsBrowser(Alpine) {
     // --- Playback ---
 
     async playAlbum(album) {
-      const tracks = this._getAlbumTracks(album.name);
+      const tracks = this._getAlbumTracks(album.name, album.albumArtist);
       if (tracks.length === 0) return;
 
       await this.queue.clear();
@@ -260,7 +271,7 @@ export function createAlbumsBrowser(Alpine) {
     },
 
     async shuffleAlbum(album) {
-      const tracks = this._getAlbumTracks(album.name);
+      const tracks = this._getAlbumTracks(album.name, album.albumArtist);
       if (tracks.length === 0) return;
 
       await this.queue.clear();
@@ -284,7 +295,7 @@ export function createAlbumsBrowser(Alpine) {
     },
 
     async addAlbumToQueue(album) {
-      const tracks = this._getAlbumTracks(album.name);
+      const tracks = this._getAlbumTracks(album.name, album.albumArtist);
       if (tracks.length > 0) {
         await this.queue.addTracks(tracks);
         this.ui.toast(`Added ${tracks.length} tracks to queue`, 'success');
@@ -293,7 +304,7 @@ export function createAlbumsBrowser(Alpine) {
     },
 
     async playAlbumNext(album) {
-      const tracks = this._getAlbumTracks(album.name);
+      const tracks = this._getAlbumTracks(album.name, album.albumArtist);
       if (tracks.length > 0) {
         await this.queue.playNextTracks(tracks);
         this.ui.toast(`Playing ${tracks.length} tracks next`, 'success');
@@ -338,7 +349,7 @@ export function createAlbumsBrowser(Alpine) {
         },
       ];
 
-      const tracks = this._getAlbumTracks(album.name);
+      const tracks = this._getAlbumTracks(album.name, album.albumArtist);
       let x = event.clientX;
       let y = event.clientY;
       const menuWidth = 200;
