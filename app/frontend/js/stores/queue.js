@@ -261,7 +261,9 @@ export function createQueueStore(Alpine) {
           console.error('[queue] Failed to persist insert:', error);
         }
       } finally {
-        setTimeout(() => { this._updating = false; }, 50);
+        setTimeout(() => {
+          this._updating = false;
+        }, 50);
       }
     },
 
@@ -509,7 +511,9 @@ export function createQueueStore(Alpine) {
       try {
         await this._doSkipNext();
       } finally {
-        setTimeout(() => { this._updating = false; }, 50);
+        setTimeout(() => {
+          this._updating = false;
+        }, 50);
       }
     },
 
@@ -528,7 +532,9 @@ export function createQueueStore(Alpine) {
       try {
         await this.playPrevious();
       } finally {
-        setTimeout(() => { this._updating = false; }, 50);
+        setTimeout(() => {
+          this._updating = false;
+        }, 50);
       }
     },
 
@@ -579,7 +585,9 @@ export function createQueueStore(Alpine) {
         // Sync queue order to backend
         await this._syncQueueToBackend();
       } finally {
-        setTimeout(() => { this._updating = false; }, 50);
+        setTimeout(() => {
+          this._updating = false;
+        }, 50);
       }
     },
 
