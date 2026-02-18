@@ -101,21 +101,11 @@ export function createPlayerStore(Alpine) {
       });
 
       try {
-        // Stop current playback first for responsive feedback
-        await invoke('audio_stop');
-
-        // Check if this request was superseded while stopping
-        if (this._playRequestId !== requestId) {
-          console.log('[playback]', 'request_superseded_early', {
-            requestId,
-            currentId: this._playRequestId,
-          });
-          return;
-        }
-
-        const info = await invoke('audio_load', {
+        // Combined load+play in a single IPC call to minimize transition gap.
+        // engine.load() already stops any current playback internally.
+        const info = await invoke('audio_load_and_play', {
           path: track.filepath || track.path,
-          trackId: track.id, // Pass track_id for backend play count tracking
+          trackId: track.id,
         });
 
         // Check if this request was superseded while loading
@@ -139,8 +129,6 @@ export function createPlayerStore(Alpine) {
         this.duration = durationMs;
         this.currentTime = 0;
         this.progress = 0;
-
-        await invoke('audio_play');
         this.isPlaying = true;
 
         await this.checkFavoriteStatus();

@@ -48,8 +48,9 @@
           <p class="text-sm">Queue is empty</p>
           <p class="text-xs mt-1">Add tracks from the library</p>
         </div>
-        <div x-show="$store.queue.items.length > 0" x-ref="sortableContainer" class="relative">
-          <template x-for="(item, displayIndex) in $store.queue.playOrderItems" :key="item.track.id + '-' + item.originalIndex">
+        <div x-show="$store.queue.items.length > 0" :style="`height: ${queueTotalHeight}px; position: relative;`">
+          <div :style="`transform: translateY(${queueOffsetY}px); will-change: transform;`" x-ref="sortableContainer">
+          <template x-for="item in visibleQueueItems" :key="item.track.id + '-' + item.originalIndex">
             <div
               class="queue-item-wrapper"
               :class="[
@@ -101,6 +102,7 @@
               </div>
             </div>
           </template>
+          </div>
         </div>
       </div>
     </div>

@@ -17,6 +17,7 @@ pub struct PlaybackStatus {
 
 enum AudioCommand {
     Load(String, Option<i64>, Sender<Result<TrackInfo, String>>),  // Add track_id
+    LoadAndPlay(String, Option<i64>, Sender<Result<TrackInfo, String>>),
     Play(Sender<Result<(), String>>),
     Pause(Sender<Result<(), String>>),
     Stop(Sender<Result<(), String>>),
@@ -93,6 +94,26 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                     scrobble_state.threshold_reached = false;
 
                     last_finished = false;
+
+                    let _ = reply.send(result);
+                }
+                AudioCommand::LoadAndPlay(path, track_id, reply) => {
+                    let result = engine.load(&path).map_err(|e| e.to_string());
+
+                    // Reset play count state for new track
+                    play_count_state.track_id = track_id;
+                    play_count_state.threshold_reached = false;
+
+                    // Reset scrobble state for new track
+                    scrobble_state.track_id = track_id;
+                    scrobble_state.threshold_reached = false;
+
+                    last_finished = false;
+
+                    // If load succeeded, immediately play in the same iteration
+                    if result.is_ok() {
+                        let _ = engine.play();
+                    }
 
                     let _ = reply.send(result);
                 }
@@ -208,6 +229,14 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
 pub fn audio_load(path: String, track_id: Option<i64>, state: State<AudioState>) -> Result<TrackInfo, String> {
     let (tx, rx) = mpsc::channel();
     state.send_command(AudioCommand::Load(path, track_id, tx));
+    rx.recv().map_err(|_| "Channel closed".to_string())?
+}
+
+#[tracing::instrument(skip(state))]
+#[tauri::command]
+pub fn audio_load_and_play(path: String, track_id: Option<i64>, state: State<AudioState>) -> Result<TrackInfo, String> {
+    let (tx, rx) = mpsc::channel();
+    state.send_command(AudioCommand::LoadAndPlay(path, track_id, tx));
     rx.recv().map_err(|_| "Channel closed".to_string())?
 }
 

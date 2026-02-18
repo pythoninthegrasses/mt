@@ -1,9 +1,10 @@
 ---
 id: task-276
 title: Add "Add to Liked Songs" context menu item in music library
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-18 05:58'
+updated_date: '2026-02-18 06:20'
 labels:
   - frontend
   - ux

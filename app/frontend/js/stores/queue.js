@@ -84,7 +84,9 @@ export function createQueueStore(Alpine) {
         const rawItems = data.items || [];
         this.items = rawItems.map((item) => item.track || item);
         this.currentIndex = data.currentIndex ?? -1;
-        this._originalOrder = [...this.items];
+        if (!this.shuffle) {
+          this._originalOrder = [...this.items];
+        }
       } catch (error) {
         console.error('Failed to load queue:', error);
       } finally {
@@ -126,7 +128,9 @@ export function createQueueStore(Alpine) {
         const data = await api.queue.get();
         const rawItems = data.items || [];
         this.items = rawItems.map((item) => item.track || item);
-        this._originalOrder = [...this.items];
+        if (!this.shuffle) {
+          this._originalOrder = [...this.items];
+        }
 
         // Restore currentIndex by finding the currently playing track
         if (currentTrackId !== null) {
@@ -257,9 +261,7 @@ export function createQueueStore(Alpine) {
           console.error('[queue] Failed to persist insert:', error);
         }
       } finally {
-        setTimeout(() => {
-          this._updating = false;
-        }, 200);
+        setTimeout(() => { this._updating = false; }, 50);
       }
     },
 
@@ -505,9 +507,7 @@ export function createQueueStore(Alpine) {
       try {
         await this._doSkipNext();
       } finally {
-        setTimeout(() => {
-          this._updating = false;
-        }, 200);
+        setTimeout(() => { this._updating = false; }, 50);
       }
     },
 
@@ -526,9 +526,7 @@ export function createQueueStore(Alpine) {
       try {
         await this.playPrevious();
       } finally {
-        setTimeout(() => {
-          this._updating = false;
-        }, 200);
+        setTimeout(() => { this._updating = false; }, 50);
       }
     },
 
@@ -573,21 +571,14 @@ export function createQueueStore(Alpine) {
           this._playHistory = [];
         }
 
-        // Persist shuffle state to backend
+        // Persist shuffle state and current index to backend
         await api.queue.setShuffle(this.shuffle);
-
-        // Only update backend index when disabling shuffle (index changed in original order)
-        if (!this.shuffle) {
-          await api.queue.setCurrentIndex(this.currentIndex);
-        }
+        await api.queue.setCurrentIndex(this.currentIndex);
 
         // Sync queue order to backend
         await this._syncQueueToBackend();
       } finally {
-        // Delay reset to let pending backend events pass
-        setTimeout(() => {
-          this._updating = false;
-        }, 200);
+        setTimeout(() => { this._updating = false; }, 50);
       }
     },
 
