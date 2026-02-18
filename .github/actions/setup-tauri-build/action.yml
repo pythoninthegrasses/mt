@@ -41,12 +41,29 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
 
-    - name: Setup Rust
+    - name: Setup Rust (non-Windows)
+      if: runner.os != 'Windows'
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         toolchain: stable
 
-    - name: Install frontend dependencies
+    - name: Setup Rust (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        rustup default stable
+        rustup update stable
+        rustc --version
+        cargo --version
+
+    - name: Install frontend dependencies (non-Windows)
+      if: runner.os != 'Windows'
       shell: bash
+      working-directory: ./app/frontend
+      run: npm ci
+
+    - name: Install frontend dependencies (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
       working-directory: ./app/frontend
       run: npm ci
