@@ -479,14 +479,17 @@ test.describe('Track sorting regression - Artists view', () => {
 test.describe('Large library loading regression', () => {
   test('albums view fetches all tracks when library exceeds default API limit', async ({ page }) => {
     // Create a library larger than the default API limit of 100
+    // Each album has 10 tracks, and the artist is derived from the album index
+    // so album boundaries align with artist boundaries (no split albums).
     const tracks = [];
     for (let i = 1; i <= 150; i++) {
+      const albumNum = Math.ceil(i / 10);
       tracks.push({
         id: i,
         title: `Track ${i}`,
-        artist: `Artist ${Math.ceil(i / 15)}`,
-        album_artist: `Artist ${Math.ceil(i / 15)}`,
-        album: `Album ${Math.ceil(i / 10)}`,
+        artist: `Artist ${Math.ceil(albumNum / 2)}`,
+        album_artist: `Artist ${Math.ceil(albumNum / 2)}`,
+        album: `Album ${albumNum}`,
         track_number: String(((i - 1) % 10) + 1),
         disc_number: '1',
         duration: 200,

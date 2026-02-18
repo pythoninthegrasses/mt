@@ -1,12 +1,6 @@
-import { test, expect } from '@playwright/test';
-import {
-  waitForAlpine,
-  getAlpineStore,
-} from './fixtures/helpers.js';
-import {
-  createLibraryState,
-  setupLibraryMocks,
-} from './fixtures/mock-library.js';
+import { expect, test } from '@playwright/test';
+import { getAlpineStore, waitForAlpine } from './fixtures/helpers.js';
+import { createLibraryState, setupLibraryMocks } from './fixtures/mock-library.js';
 import { DEFAULT_SORT_IGNORE_WORDS } from '../js/constants.js';
 
 test.describe('Sorting - Ignore Words Feature', () => {
@@ -22,11 +16,41 @@ test.describe('Sorting - Ignore Words Feature', () => {
     // Inject test tracks with prefixes for testing
     await page.evaluate(() => {
       const testTracks = [
-        { id: 'test-1', title: 'Song One', artist: 'The Beatles', album: 'Abbey Road', duration: 180000 },
-        { id: 'test-2', title: 'Song Two', artist: 'Beatles Cover Band', album: 'The Best Album', duration: 200000 },
-        { id: 'test-3', title: 'The Beginning', artist: 'Artist Name', album: 'Los Angeles', duration: 220000 },
-        { id: 'test-4', title: 'A New Hope', artist: 'Composer', album: 'Le Soundtrack', duration: 240000 },
-        { id: 'test-5', title: 'Track Five', artist: 'Los Lobos', album: 'La Bamba', duration: 190000 },
+        {
+          id: 'test-1',
+          title: 'Song One',
+          artist: 'The Beatles',
+          album: 'Abbey Road',
+          duration: 180000,
+        },
+        {
+          id: 'test-2',
+          title: 'Song Two',
+          artist: 'Beatles Cover Band',
+          album: 'The Best Album',
+          duration: 200000,
+        },
+        {
+          id: 'test-3',
+          title: 'The Beginning',
+          artist: 'Artist Name',
+          album: 'Los Angeles',
+          duration: 220000,
+        },
+        {
+          id: 'test-4',
+          title: 'A New Hope',
+          artist: 'Composer',
+          album: 'Le Soundtrack',
+          duration: 240000,
+        },
+        {
+          id: 'test-5',
+          title: 'Track Five',
+          artist: 'Los Lobos',
+          album: 'La Bamba',
+          duration: 190000,
+        },
       ];
       window.Alpine.store('library').tracks = testTracks;
       window.Alpine.store('library').applyFilters();
@@ -116,7 +140,7 @@ test.describe('Sorting - Ignore Words Feature', () => {
       await page.waitForTimeout(300);
 
       const library = await getAlpineStore(page, 'library');
-      const artists = library.filteredTracks.map(t => t.artist);
+      const artists = library.filteredTracks.map((t) => t.artist);
 
       // "The Beatles" should sort as "Beatles", so it should come before "Los Lobos"
       const beatlesIndex = artists.indexOf('The Beatles');
@@ -137,7 +161,7 @@ test.describe('Sorting - Ignore Words Feature', () => {
       await page.waitForTimeout(300);
 
       const library = await getAlpineStore(page, 'library');
-      const artists = library.filteredTracks.map(t => t.artist);
+      const artists = library.filteredTracks.map((t) => t.artist);
 
       // "Los Lobos" should sort as "Lobos"
       const lobosIndex = artists.indexOf('Los Lobos');
@@ -156,7 +180,7 @@ test.describe('Sorting - Ignore Words Feature', () => {
       await page.waitForTimeout(300);
 
       const library = await getAlpineStore(page, 'library');
-      const albums = library.filteredTracks.map(t => t.album);
+      const albums = library.filteredTracks.map((t) => t.album);
 
       // "The Best Album" should sort as "Best Album"
       const bestAlbumIndex = albums.indexOf('The Best Album');
@@ -178,7 +202,7 @@ test.describe('Sorting - Ignore Words Feature', () => {
       await page.waitForTimeout(300);
 
       const library = await getAlpineStore(page, 'library');
-      const titles = library.filteredTracks.map(t => t.title);
+      const titles = library.filteredTracks.map((t) => t.title);
 
       // "A New Hope" should sort as "New Hope" (N)
       // "The Beginning" should sort as "Beginning" (B)
@@ -250,7 +274,7 @@ test.describe('Sorting - Ignore Words Feature', () => {
       await page.waitForTimeout(300);
 
       const library = await getAlpineStore(page, 'library');
-      const artists = library.filteredTracks.map(t => t.artist);
+      const artists = library.filteredTracks.map((t) => t.artist);
 
       // "THE UPPERCASE BAND" should sort as "UPPERCASE BAND"
       const uppercaseIndex = artists.indexOf('THE UPPERCASE BAND');
@@ -333,7 +357,7 @@ test.describe('Sorting - Ignore Words Feature', () => {
       await page.waitForTimeout(300);
 
       const library = await getAlpineStore(page, 'library');
-      const artists = library.filteredTracks.map(t => t.artist);
+      const artists = library.filteredTracks.map((t) => t.artist);
 
       // "Artist Mozart" should sort as "Mozart" with custom ignore words
       const mozartIndex = artists.indexOf('Artist Mozart');
@@ -358,16 +382,67 @@ test.describe('Sorting - Ignore Words Feature', () => {
   });
 
   test.describe('Disc Number Tiebreaker', () => {
-    test('should sort multi-disc album tracks by disc then track number', async ({ page }) => {
-      // Create a multi-disc album with tracks in scrambled order
+    // Disc/track number sorting is handled by the SQL backend.
+    // These tests verify the frontend preserves backend sort order.
+
+    test('should preserve backend disc-then-track sort order', async ({ page }) => {
+      // Backend returns tracks already sorted by disc, then track number
       await page.evaluate((defaultWords) => {
         const testTracks = [
-          { id: 'd1', title: 'Disc 2 Track 3', artist: 'Same Artist', album: 'Multi Disc Album', disc_number: '2', track_number: '3', duration: 180000 },
-          { id: 'd2', title: 'Disc 1 Track 2', artist: 'Same Artist', album: 'Multi Disc Album', disc_number: '1', track_number: '2', duration: 180000 },
-          { id: 'd3', title: 'Disc 2 Track 1', artist: 'Same Artist', album: 'Multi Disc Album', disc_number: '2', track_number: '1', duration: 180000 },
-          { id: 'd4', title: 'Disc 1 Track 1', artist: 'Same Artist', album: 'Multi Disc Album', disc_number: '1', track_number: '1', duration: 180000 },
-          { id: 'd5', title: 'Disc 1 Track 3', artist: 'Same Artist', album: 'Multi Disc Album', disc_number: '1', track_number: '3', duration: 180000 },
-          { id: 'd6', title: 'Disc 2 Track 2', artist: 'Same Artist', album: 'Multi Disc Album', disc_number: '2', track_number: '2', duration: 180000 },
+          {
+            id: 'd4',
+            title: 'Disc 1 Track 1',
+            artist: 'Same Artist',
+            album: 'Multi Disc Album',
+            disc_number: '1',
+            track_number: '1',
+            duration: 180000,
+          },
+          {
+            id: 'd2',
+            title: 'Disc 1 Track 2',
+            artist: 'Same Artist',
+            album: 'Multi Disc Album',
+            disc_number: '1',
+            track_number: '2',
+            duration: 180000,
+          },
+          {
+            id: 'd5',
+            title: 'Disc 1 Track 3',
+            artist: 'Same Artist',
+            album: 'Multi Disc Album',
+            disc_number: '1',
+            track_number: '3',
+            duration: 180000,
+          },
+          {
+            id: 'd3',
+            title: 'Disc 2 Track 1',
+            artist: 'Same Artist',
+            album: 'Multi Disc Album',
+            disc_number: '2',
+            track_number: '1',
+            duration: 180000,
+          },
+          {
+            id: 'd6',
+            title: 'Disc 2 Track 2',
+            artist: 'Same Artist',
+            album: 'Multi Disc Album',
+            disc_number: '2',
+            track_number: '2',
+            duration: 180000,
+          },
+          {
+            id: 'd1',
+            title: 'Disc 2 Track 3',
+            artist: 'Same Artist',
+            album: 'Multi Disc Album',
+            disc_number: '2',
+            track_number: '3',
+            duration: 180000,
+          },
         ];
         window.Alpine.store('ui').sortIgnoreWords = true;
         window.Alpine.store('ui').sortIgnoreWordsList = defaultWords;
@@ -380,9 +455,9 @@ test.describe('Sorting - Ignore Words Feature', () => {
       await page.waitForTimeout(300);
 
       const library = await getAlpineStore(page, 'library');
-      const titles = library.filteredTracks.map(t => t.title);
+      const titles = library.filteredTracks.map((t) => t.title);
 
-      // Expected order: disc 1 tracks (1,2,3), then disc 2 tracks (1,2,3)
+      // Frontend preserves the backend sort order
       expect(titles).toEqual([
         'Disc 1 Track 1',
         'Disc 1 Track 2',
@@ -393,12 +468,37 @@ test.describe('Sorting - Ignore Words Feature', () => {
       ]);
     });
 
-    test('should sort tracks without disc number before tracks with disc number', async ({ page }) => {
+    test('should preserve backend null-disc-first sort order', async ({ page }) => {
+      // Backend sorts null disc before disc 1
       await page.evaluate((defaultWords) => {
         const testTracks = [
-          { id: 'n1', title: 'Track B', artist: 'Same Artist', album: 'Same Album', disc_number: '1', track_number: '2', duration: 180000 },
-          { id: 'n2', title: 'Track A', artist: 'Same Artist', album: 'Same Album', disc_number: null, track_number: '1', duration: 180000 },
-          { id: 'n3', title: 'Track C', artist: 'Same Artist', album: 'Same Album', disc_number: '1', track_number: '1', duration: 180000 },
+          {
+            id: 'n2',
+            title: 'Track A',
+            artist: 'Same Artist',
+            album: 'Same Album',
+            disc_number: null,
+            track_number: '1',
+            duration: 180000,
+          },
+          {
+            id: 'n3',
+            title: 'Track C',
+            artist: 'Same Artist',
+            album: 'Same Album',
+            disc_number: '1',
+            track_number: '1',
+            duration: 180000,
+          },
+          {
+            id: 'n1',
+            title: 'Track B',
+            artist: 'Same Artist',
+            album: 'Same Album',
+            disc_number: '1',
+            track_number: '2',
+            duration: 180000,
+          },
         ];
         window.Alpine.store('ui').sortIgnoreWords = true;
         window.Alpine.store('ui').sortIgnoreWordsList = defaultWords;
@@ -411,12 +511,12 @@ test.describe('Sorting - Ignore Words Feature', () => {
       await page.waitForTimeout(300);
 
       const library = await getAlpineStore(page, 'library');
-      const tracks = library.filteredTracks.map(t => ({
+      const tracks = library.filteredTracks.map((t) => ({
         disc: t.disc_number,
         track: t.track_number,
       }));
 
-      // Null disc (parsed as 0) sorts before disc 1
+      // Frontend preserves backend order: null disc first, then disc 1
       expect(tracks[0].disc).toBeNull();
       expect(tracks[1].disc).toBe('1');
       expect(tracks[1].track).toBe('1');
@@ -438,7 +538,7 @@ test.describe('Sorting - Ignore Words Feature', () => {
       await page.waitForTimeout(300);
 
       const libraryBefore = await getAlpineStore(page, 'library');
-      const artistsBefore = libraryBefore.filteredTracks.map(t => t.artist);
+      const artistsBefore = libraryBefore.filteredTracks.map((t) => t.artist);
 
       // Enable ignore words
       await page.click('[data-testid="sidebar-settings"]');
@@ -454,7 +554,7 @@ test.describe('Sorting - Ignore Words Feature', () => {
       await page.waitForTimeout(200);
 
       const libraryAfter = await getAlpineStore(page, 'library');
-      const artistsAfter = libraryAfter.filteredTracks.map(t => t.artist);
+      const artistsAfter = libraryAfter.filteredTracks.map((t) => t.artist);
 
       // Order should be different
       expect(artistsAfter).not.toEqual(artistsBefore);
