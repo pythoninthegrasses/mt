@@ -156,14 +156,16 @@ jobs:
         env:
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          # Use structured signCommand to handle spaces in signtool path
-          $signCmd = @{
-            cmd = $env:SIGNTOOL_PATH
-            args = @("sign", "/f", $env:CERT_PATH, "/p", $env:WINDOWS_CERT_PASSWORD, "/t", "http://timestamp.digicert.com", "/fd", "SHA256")
-          }
+          # Write a .cmd wrapper so signtool path with spaces is properly quoted
+          # (.cmd files require cmd.exe to interpret — they can't be launched via CreateProcess)
+          $signScript = Join-Path "${{ runner.temp }}" 'sign.cmd'
+          @"
+          @echo off
+          "$env:SIGNTOOL_PATH" sign /f "$env:CERT_PATH" /p "$env:WINDOWS_CERT_PASSWORD" /t http://timestamp.digicert.com /fd SHA256 %1
+          "@ | Out-File -FilePath $signScript -Encoding ascii
           $config = @{
             build = @{ beforeBuildCommand = "" }
-            bundle = @{ windows = @{ signCommand = $signCmd } }
+            bundle = @{ windows = @{ signCommand = @{ cmd = "cmd"; args = @("/C", $signScript, "%1") } } }
           } | ConvertTo-Json -Depth 5
           $configPath = "${{ runner.temp }}\sign-override.json"
           $config | Out-File -FilePath $configPath -Encoding utf8
