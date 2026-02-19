@@ -33,7 +33,7 @@ $script:FrontendDir = Join-Path $RepoRoot 'app\frontend'
 $script:Target = 'x86_64-pc-windows-msvc'
 $script:RustToolchain = 'nightly-2026-02-09'
 $script:BuildTemp = Join-Path $env:TEMP "mt-build-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-$script:SignConfigPath = $null
+$script:SignCommand = $null
 $script:CertPath = $null
 
 function Assert-NativePath {
@@ -209,11 +209,8 @@ function Initialize-CodeSigning {
     Write-Host "  Certificate exported to $script:CertPath"
     Write-Host "  Thumbprint: $($cert.Thumbprint)"
 
-    $signCmd = "$signtool sign /f $($script:CertPath) /p $CertPassword /t http://timestamp.digicert.com /fd SHA256"
-    $config = @{ bundle = @{ windows = @{ signCommand = $signCmd } } } | ConvertTo-Json -Depth 5
-    $script:SignConfigPath = Join-Path $script:BuildTemp 'sign-override.json'
-    $config | Out-File -FilePath $script:SignConfigPath -Encoding utf8
-    Write-Host "  Sign config: $script:SignConfigPath"
+    $script:SignCommand = "$signtool sign /f $($script:CertPath) /p $CertPassword /t http://timestamp.digicert.com /fd SHA256"
+    Write-Host "  Sign command configured"
 }
 
 function Import-EnvFile {
@@ -237,14 +234,21 @@ function Build-NsisInstaller {
 
     $env:RUSTUP_TOOLCHAIN = $script:RustToolchain
 
+    # Build a config override that skips beforeBuildCommand (frontend
+    # is already built by Build-Frontend) and optionally includes signing.
+    $overrideCfg = @{ build = @{ beforeBuildCommand = '' } }
+    if ($script:SignCommand) {
+        $overrideCfg['bundle'] = @{ windows = @{ signCommand = $script:SignCommand } }
+    }
+    $overridePath = Join-Path $script:BuildTemp 'tauri-override.json'
+    $overrideCfg | ConvertTo-Json -Depth 5 | Out-File -FilePath $overridePath -Encoding utf8
+
     $tauriArgs = @(
         'build',
         '--target', $script:Target,
-        '--bundles', 'nsis'
+        '--bundles', 'nsis',
+        '--config', $overridePath
     )
-    if ($script:SignConfigPath) {
-        $tauriArgs += @('--config', $script:SignConfigPath)
-    }
 
     Push-Location $script:TauriDir
     try {
@@ -274,7 +278,6 @@ function Invoke-Cleanup {
     Write-Step 'Cleanup'
     if (-not $SkipSign) {
         Remove-Item -Force $script:CertPath -ErrorAction SilentlyContinue
-        Remove-Item -Force $script:SignConfigPath -ErrorAction SilentlyContinue
         Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert `
             | Where-Object { $_.Subject -eq 'CN=MT' } `
             | Remove-Item -ErrorAction SilentlyContinue
