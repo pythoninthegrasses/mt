@@ -1,0 +1,235 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    Local Windows build and signing script for mt NSIS installer.
+.DESCRIPTION
+    Replicates the CI release pipeline locally on a Windows machine.
+    Installs prerequisites, builds the frontend, compiles the Rust/Tauri
+    backend, generates a self-signed code-signing certificate, signs the
+    output, and produces an NSIS installer.
+.PARAMETER SkipDeps
+    Skip installing system dependencies (cmake, rustup, node, task).
+.PARAMETER SkipSign
+    Build without code signing.
+.PARAMETER CertPassword
+    Password for the self-signed certificate. Defaults to a random GUID.
+.PARAMETER Clean
+    Run cargo clean before building.
+#>
+[CmdletBinding()]
+param(
+    [switch]$SkipDeps,
+    [switch]$SkipSign,
+    [string]$CertPassword = [guid]::NewGuid().ToString(),
+    [switch]$Clean
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$script:RepoRoot = (Resolve-Path "$PSScriptRoot\..").Path
+$script:TauriDir = Join-Path $RepoRoot 'crates\mt-tauri'
+$script:FrontendDir = Join-Path $RepoRoot 'app\frontend'
+$script:Target = 'x86_64-pc-windows-msvc'
+$script:RustToolchain = 'nightly-2026-02-09'
+$script:BuildTemp = Join-Path $env:TEMP "mt-build-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+$script:SignConfigPath = $null
+$script:CertPath = $null
+
+function Write-Step {
+    param([string]$Message)
+    Write-Host "`n==> $Message" -ForegroundColor Cyan
+}
+
+function Assert-Command {
+    param([string]$Name)
+    if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
+        Write-Error "$Name not found in PATH. Install it or re-run without -SkipDeps."
+    }
+}
+
+function Install-Dependencies {
+    Write-Step 'Installing system dependencies via Chocolatey'
+
+    if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+        Write-Error 'Chocolatey is not installed. See https://chocolatey.org/install'
+    }
+
+    $packages = @(
+        @{ Name = 'cmake'; Args = '--installargs "ADD_CMAKE_TO_PATH=System"' },
+        @{ Name = 'rustup.install'; Args = '' },
+        @{ Name = 'nodejs-lts'; Args = '' },
+        @{ Name = 'go-task'; Args = '' }
+    )
+    foreach ($pkg in $packages) {
+        $installed = choco list --exact $pkg.Name --limit-output 2>$null
+        if ($installed) {
+            Write-Host "  $($pkg.Name) already installed"
+        } else {
+            Write-Host "  Installing $($pkg.Name)..."
+            $cmd = "choco install $($pkg.Name) -y"
+            if ($pkg.Args) { $cmd += " $($pkg.Args)" }
+            Invoke-Expression $cmd
+        }
+    }
+
+    Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+    refreshenv
+}
+
+function Install-RustToolchain {
+    Write-Step "Setting up Rust toolchain ($script:RustToolchain)"
+    Assert-Command 'rustup'
+
+    rustup toolchain install $script:RustToolchain
+    rustup default $script:RustToolchain
+    Write-Host "  rustc: $(rustc --version)"
+    Write-Host "  cargo: $(cargo --version)"
+}
+
+function Build-Frontend {
+    Write-Step 'Installing frontend dependencies'
+    Assert-Command 'npm'
+
+    Push-Location $script:FrontendDir
+    try {
+        npm ci
+        Write-Step 'Building frontend'
+        npm run build
+    } finally {
+        Pop-Location
+    }
+}
+
+function Invoke-CargoClean {
+    Write-Step 'Cleaning Rust build artifacts'
+    Push-Location $script:RepoRoot
+    try { cargo clean } finally { Pop-Location }
+}
+
+function Find-SignTool {
+    $sdkBinRoot = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+    if (-not (Test-Path $sdkBinRoot)) { return $null }
+
+    Get-ChildItem -Path $sdkBinRoot -Recurse -Filter signtool.exe `
+        | Where-Object { $_.FullName -match '\\x64\\' } `
+        | Sort-Object { [version]($_.FullName -replace '.*\\(\d+\.\d+\.\d+\.\d+)\\.*','$1') } `
+        | Select-Object -Last 1 -ExpandProperty FullName
+}
+
+function Initialize-CodeSigning {
+    Write-Step 'Setting up code signing'
+
+    $signtool = Find-SignTool
+    if (-not $signtool) {
+        Write-Host '  signtool.exe not found, installing Windows SDK...'
+        choco install windows-sdk-10.1 -y
+        Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+        refreshenv
+        $signtool = Find-SignTool
+    }
+    if (-not $signtool) {
+        Write-Error 'Could not locate signtool.exe after SDK install.'
+    }
+    Write-Host "  signtool: $signtool"
+
+    $securePassword = ConvertTo-SecureString -String $CertPassword -Force -AsPlainText
+    $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=MT' `
+        -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddYears(1)
+    $script:CertPath = Join-Path $script:BuildTemp 'mt-cert.pfx'
+    Export-PfxCertificate -Cert $cert -FilePath $script:CertPath -Password $securePassword | Out-Null
+    Write-Host "  Certificate exported to $script:CertPath"
+    Write-Host "  Thumbprint: $($cert.Thumbprint)"
+
+    $signCmd = "$signtool sign /f $($script:CertPath) /p $CertPassword /t http://timestamp.digicert.com /fd SHA256"
+    $config = @{ bundle = @{ windows = @{ signCommand = $signCmd } } } | ConvertTo-Json -Depth 5
+    $script:SignConfigPath = Join-Path $script:BuildTemp 'sign-override.json'
+    $config | Out-File -FilePath $script:SignConfigPath -Encoding utf8
+    Write-Host "  Sign config: $script:SignConfigPath"
+}
+
+function Import-EnvFile {
+    $envFile = Join-Path $script:RepoRoot '.env'
+    if (-not (Test-Path $envFile)) { return }
+
+    Get-Content $envFile | ForEach-Object {
+        if ($_ -match '^\s*([A-Z_]+)\s*=\s*(.*)$') {
+            $key = $Matches[1]
+            $val = $Matches[2].Trim("'", '"')
+            [Environment]::SetEnvironmentVariable($key, $val, 'Process')
+        }
+    }
+    Write-Host '  Loaded .env'
+}
+
+function Build-NsisInstaller {
+    Write-Step 'Building NSIS installer'
+    Import-EnvFile
+
+    $env:RUSTUP_TOOLCHAIN = $script:RustToolchain
+
+    $cargoArgs = @(
+        'tauri', 'build',
+        '--target', $script:Target,
+        '--bundles', 'nsis'
+    )
+    if ($script:SignConfigPath) {
+        $cargoArgs += @('--config', $script:SignConfigPath)
+    }
+
+    Push-Location $script:TauriDir
+    try {
+        Write-Host "  cargo $($cargoArgs -join ' ')"
+        & cargo $cargoArgs
+        if ($LASTEXITCODE -ne 0) { throw "cargo tauri build exited with code $LASTEXITCODE" }
+    } finally {
+        Pop-Location
+    }
+}
+
+function Show-BuildOutput {
+    $bundleDir = Join-Path $script:RepoRoot "target\$($script:Target)\release\bundle\nsis"
+    Write-Step 'Build complete'
+    if (Test-Path $bundleDir) {
+        Write-Host '  NSIS artifacts:'
+        Get-ChildItem $bundleDir | ForEach-Object {
+            Write-Host "    $($_.Name)  ($([math]::Round($_.Length / 1MB, 1)) MB)"
+        }
+    } else {
+        Write-Host "  Bundle directory not found at $bundleDir"
+        Write-Host '  Check cargo output above for errors.'
+    }
+}
+
+function Invoke-Cleanup {
+    Write-Step 'Cleanup'
+    if (-not $SkipSign) {
+        Remove-Item -Force $script:CertPath -ErrorAction SilentlyContinue
+        Remove-Item -Force $script:SignConfigPath -ErrorAction SilentlyContinue
+        Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert `
+            | Where-Object { $_.Subject -eq 'CN=MT' } `
+            | Remove-Item -ErrorAction SilentlyContinue
+        Write-Host '  Removed certificate and signing config'
+    }
+    Remove-Item -Recurse -Force $script:BuildTemp -ErrorAction SilentlyContinue
+    Write-Host '  Done.'
+}
+
+function Main {
+    New-Item -ItemType Directory -Path $script:BuildTemp -Force | Out-Null
+
+    if (-not $SkipDeps) { Install-Dependencies }
+    Install-RustToolchain
+    Build-Frontend
+    if ($Clean) { Invoke-CargoClean }
+    if (-not $SkipSign) { Initialize-CodeSigning }
+
+    try {
+        Build-NsisInstaller
+        Show-BuildOutput
+    } finally {
+        Invoke-Cleanup
+    }
+}
+
+Main
