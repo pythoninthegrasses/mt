@@ -65,6 +65,13 @@ runs:
         echo "RUSTUP_TOOLCHAIN=nightly-2026-02-09" >> $env:GITHUB_ENV
         rustup toolchain install nightly-2026-02-09 --no-self-update --target x86_64-pc-windows-msvc
         rustup default nightly-2026-02-09
+        # Parallelism: match build.ps1 settings
+        $cpus = [Environment]::ProcessorCount
+        $buildJobs = [Math]::Max(1, $cpus - 2)
+        $rustThreads = [Math]::Max(1, [Math]::Round($cpus * 0.8))
+        echo "CARGO_BUILD_JOBS=$buildJobs" >> $env:GITHUB_ENV
+        echo "RUSTFLAGS=-Zthreads=$rustThreads" >> $env:GITHUB_ENV
+        echo "CARGO_PROFILE_RELEASE_CODEGEN_UNITS=$rustThreads" >> $env:GITHUB_ENV
         rustc --version
         cargo --version
 
