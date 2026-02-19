@@ -148,9 +148,12 @@ function Install-RustToolchain {
     Write-Step "Setting up Rust toolchain ($script:RustToolchain)"
     Assert-Command 'rustup'
 
+    # Set RUSTUP_TOOLCHAIN for the entire process so all cargo/rustc
+    # invocations use the correct nightly, regardless of rustup default
+    $env:RUSTUP_TOOLCHAIN = $script:RustToolchain
+
     rustup toolchain install $script:RustToolchain
-    rustup default $script:RustToolchain
-    rustup target add x86_64-pc-windows-msvc --toolchain $script:RustToolchain
+    rustup target add $script:Target --toolchain $script:RustToolchain
     Write-Host "  rustc: $(rustc --version)"
     Write-Host "  cargo: $(cargo --version)"
 }
@@ -232,8 +235,6 @@ function Build-NsisInstaller {
     Write-Step 'Building NSIS installer'
     Assert-Command 'npx'
     Import-EnvFile
-
-    $env:RUSTUP_TOOLCHAIN = $script:RustToolchain
 
     # Build a config override that skips beforeBuildCommand (frontend
     # is already built by Build-Frontend) and optionally includes signing.
