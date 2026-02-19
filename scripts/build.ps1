@@ -114,14 +114,22 @@ function Install-Dependencies {
         @{ Name = 'cmake'; Args = '--installargs "ADD_CMAKE_TO_PATH=System"' },
         @{ Name = 'rustup.install'; Args = '' },
         @{ Name = 'nodejs-lts'; Args = '' },
-        @{ Name = 'go-task'; Args = '' }
+        @{ Name = 'go-task'; Args = '' },
+        # Installs VS 2022 Build Tools + the VC++ toolset (MSVC compiler,
+        # link.exe, etc.) required to compile x86_64-pc-windows-msvc Rust code.
+        @{ Name = 'visualstudio2022-workload-vctools'; Args = '' }
     )
 
-    # Collect packages that need installing
+    # Single choco list call to check all installed packages at once
+    $installedSet = [System.Collections.Generic.HashSet[string]]::new(
+        [string[]]((choco list --limit-output 2>$null) |
+            ForEach-Object { ($_ -split '\|')[0] }),
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+
     $toInstall = @()
     foreach ($pkg in $packages) {
-        $installed = choco list --exact $pkg.Name --limit-output 2>$null
-        if ($installed) {
+        if ($installedSet.Contains($pkg.Name)) {
             Write-Host "  $($pkg.Name) already installed"
         } else {
             $toInstall += $pkg
@@ -138,24 +146,68 @@ function Install-Dependencies {
         $script = $lines -join "; "
         Invoke-Elevated -Command 'powershell' `
             -Arguments "-NoProfile -ExecutionPolicy Bypass -Command `"$script`""
-    }
 
-    Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
-    refreshenv
+        # Only pay the refreshenv cost when something was actually installed
+        Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+        refreshenv
+    }
 }
 
 function Install-RustToolchain {
     Write-Step "Setting up Rust toolchain ($script:RustToolchain)"
     Assert-Command 'rustup'
 
+    # Ensure the rustup-managed binaries take precedence over any other
+    # Rust installation on PATH (e.g. a stable Rust shim from chocolatey).
+    # CARGO_HOME defaults to ~/.cargo; bin/ holds the rustup proxy executables.
+    $cargoBin = if ($env:CARGO_HOME) {
+        Join-Path $env:CARGO_HOME 'bin'
+    } else {
+        Join-Path $env:USERPROFILE '.cargo\bin'
+    }
+    if (Test-Path $cargoBin) {
+        $env:PATH = "$cargoBin;$env:PATH"
+    }
+
     # Set RUSTUP_TOOLCHAIN for the entire process so all cargo/rustc
     # invocations use the correct nightly, regardless of rustup default
     $env:RUSTUP_TOOLCHAIN = $script:RustToolchain
 
-    rustup toolchain install $script:RustToolchain
-    rustup target add $script:Target --toolchain $script:RustToolchain
+    # Parallel compilation targeting ~75 % CPU:
+    # CARGO_BUILD_JOBS  – crates compiled concurrently; use most cores
+    # -Zthreads         – threads per rustc invocation (nightly only); cap at
+    #                     half the cores so the final single-crate link phase
+    #                     doesn't peg the CPU at 100 %
+    $cpus = [Environment]::ProcessorCount
+    # CARGO_BUILD_JOBS: how many crates compile concurrently (dep-phase parallelism)
+    $buildJobs   = [Math]::Max(1, $cpus - 2)
+    # -Zthreads: threads per rustc invocation (nightly only).
+    # Applies to every crate but small deps finish too fast to saturate their
+    # budget; the real effect is on large single-crate phases (mt-tauri).
+    # Target ~80 % utilisation during that phase.
+    $rustThreads = [Math]::Max(1, [Math]::Round($cpus * 0.8))
+    $env:CARGO_BUILD_JOBS = "$buildJobs"
+    $env:RUSTFLAGS = "-Zthreads=$rustThreads"
+    # codegen-units=1 is set in Cargo.toml for release (best optimisation) but
+    # it serialises LLVM codegen into one thread, leaving -Zthreads with nothing
+    # to parallelise at the LLVM layer.  Override it here so LLVM can split work
+    # across rustThreads units; LTO at link time preserves optimisation quality.
+    $env:CARGO_PROFILE_RELEASE_CODEGEN_UNITS = "$rustThreads"
+
+    # Skip the network round-trip when toolchain + target are already present
+    $haveToolchain = (rustup toolchain list 2>$null) -match [regex]::Escape($script:RustToolchain)
+    $haveTarget    = $haveToolchain -and
+        ((rustup target list --installed --toolchain $script:RustToolchain 2>$null) -contains $script:Target)
+
+    if ($haveToolchain -and $haveTarget) {
+        Write-Host "  $script:RustToolchain ($script:Target) already installed"
+    } else {
+        rustup toolchain install $script:RustToolchain --target $script:Target --no-self-update
+    }
+
     Write-Host "  rustc: $(rustc --version)"
     Write-Host "  cargo: $(cargo --version)"
+    Write-Host "  build jobs: $buildJobs crates / $rustThreads threads per crate  ($cpus logical CPUs)"
 }
 
 function Build-Frontend {
@@ -164,7 +216,21 @@ function Build-Frontend {
 
     Push-Location $script:FrontendDir
     try {
-        npm ci
+        # npm ci is slow (~6 s) even when nothing changed.  Skip it when
+        # node_modules is already consistent with the lock file: npm ci writes
+        # node_modules/.package-lock.json; if it is newer than package-lock.json
+        # the tree is up to date.
+        $lockFile      = Join-Path $script:FrontendDir 'package-lock.json'
+        $installedLock = Join-Path $script:FrontendDir 'node_modules\.package-lock.json'
+        $needsInstall  = -not (Test-Path $installedLock) -or
+            (Get-Item $lockFile).LastWriteTime -gt (Get-Item $installedLock).LastWriteTime
+
+        if ($needsInstall) {
+            npm ci
+        } else {
+            Write-Host '  node_modules up to date, skipping npm ci'
+        }
+
         Write-Step 'Building frontend'
         npm run build
     } finally {
@@ -205,7 +271,9 @@ function Initialize-CodeSigning {
     }
     Write-Host "  signtool: $signtool"
 
-    $securePassword = ConvertTo-SecureString -String $CertPassword -Force -AsPlainText
+    $securePassword = New-Object System.Security.SecureString
+    foreach ($c in $CertPassword.ToCharArray()) { $securePassword.AppendChar($c) }
+    $securePassword.MakeReadOnly()
     $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=MT' `
         -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddYears(1)
     $script:CertPath = Join-Path $script:BuildTemp 'mt-cert.pfx'
@@ -213,8 +281,19 @@ function Initialize-CodeSigning {
     Write-Host "  Certificate exported to $script:CertPath"
     Write-Host "  Thumbprint: $($cert.Thumbprint)"
 
-    $script:SignCommand = "$signtool sign /f $($script:CertPath) /p $CertPassword /t http://timestamp.digicert.com /fd SHA256"
-    Write-Host "  Sign command configured"
+    # Write a .cmd wrapper so the sign command token has no spaces.
+    # $BuildTemp is always under %TEMP% which contains no spaces on this system,
+    # so the script path is a single NSIS token – NSIS won't split it.
+    # Inside the .cmd, standard cmd.exe double-quote rules handle the signtool
+    # path (which lives under "Program Files (x86)").
+    $signScript = Join-Path $script:BuildTemp 'sign.cmd'
+    @"
+@echo off
+"$signtool" sign /f "$($script:CertPath)" /p "$CertPassword" /fd SHA256 "%1"
+"@ | Out-File -FilePath $signScript -Encoding ascii
+
+    $script:SignCommand = $signScript
+    Write-Host "  Sign command: $signScript"
 }
 
 function Import-EnvFile {
@@ -240,7 +319,10 @@ function Build-NsisInstaller {
     # is already built by Build-Frontend) and optionally includes signing.
     $overrideCfg = @{ build = @{ beforeBuildCommand = '' } }
     if ($script:SignCommand) {
-        $overrideCfg['bundle'] = @{ windows = @{ signCommand = $script:SignCommand } }
+        # cmd is the executable Tauri spawns via CreateProcess.  .cmd files cannot
+        # be run directly (no PE header); they need cmd.exe to interpret them.
+        # /C runs the batch file and exits; %1 is the file path Tauri substitutes.
+        $overrideCfg['bundle'] = @{ windows = @{ signCommand = @{ cmd = 'cmd'; args = @('/C', $script:SignCommand, '%1') } } }
     }
     $overridePath = Join-Path $script:BuildTemp 'tauri-override.json'
     $overrideCfg | ConvertTo-Json -Depth 5 | Out-File -FilePath $overridePath -Encoding utf8

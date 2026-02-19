@@ -454,11 +454,38 @@ The signing flow:
 
 #### Local Build
 
-```bash
-task tauri:build:windows
+Use `scripts/build.ps1` from a **native PowerShell terminal** (not git bash — the `Cert:\` drive and certificate cmdlets require the PowerShell Security module, which fails to auto-load under git bash):
+
+```powershell
+# Full build with self-signed code signing (recommended)
+.\scripts\build.ps1
+
+# Skip dependency installation (faster on subsequent runs)
+.\scripts\build.ps1 -SkipDeps
+
+# Build without code signing
+.\scripts\build.ps1 -SkipSign
+
+# Clean Rust artifacts before building
+.\scripts\build.ps1 -Clean
+
+# Provide your own certificate password
+.\scripts\build.ps1 -CertPassword 'my-secret-password'
 ```
 
-This builds an unsigned NSIS installer. For local signed builds, generate a certificate manually and pass a `--config` override with `bundle.windows.signCommand`.
+The script replicates the CI pipeline locally:
+
+1. Installs prerequisites via Chocolatey (cmake, rustup, node, go-task, MSVC build tools) — skipped if already present
+2. Configures the nightly Rust toolchain and `x86_64-pc-windows-msvc` target
+3. Builds the frontend (`npm ci` + `npm run build`) — skips `npm ci` when `node_modules` is already up to date
+4. Generates a self-signed `CodeSigningCert` and exports it to a temporary PFX
+5. Writes a `sign.cmd` batch wrapper that invokes `signtool.exe sign` with the PFX
+6. Calls `npx @tauri-apps/cli build --bundles nsis` with a JSON config override that sets `bundle.windows.signCommand` to `cmd /C sign.cmd %1` (`.cmd` files require `cmd.exe` to execute — they cannot be launched directly via `CreateProcess`)
+7. Cleans up the certificate and temp files
+
+Output is written to `target/x86_64-pc-windows-msvc/release/bundle/nsis/`.
+
+> **Note:** Signing with a self-signed certificate prevents Windows Defender false positives but does **not** eliminate SmartScreen "unrecognized publisher" warnings. That requires an EV certificate with established download reputation.
 
 ## CI/CD
 

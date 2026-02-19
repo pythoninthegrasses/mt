@@ -19,10 +19,28 @@ pub struct MediaKeyManager {
 
 impl MediaKeyManager {
     pub fn new(app: AppHandle) -> Result<Self, String> {
+        // On Windows, souvlaki panics (not errors) if hwnd is None.
+        // Extract the HWND from the main window via raw_window_handle.
+        #[cfg(target_os = "windows")]
+        let hwnd = {
+            use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+            use tauri::Manager;
+            app.get_webview_window("main").and_then(|w| {
+                let handle = w.window_handle().ok()?;
+                match handle.as_raw() {
+                    RawWindowHandle::Win32(h) => {
+                        Some(h.hwnd.get() as *mut std::ffi::c_void)
+                    }
+                    _ => None,
+                }
+            })
+        };
+
         let config = PlatformConfig {
             dbus_name: "mt_music_player",
             display_name: "mt",
-            hwnd: None,
+            #[cfg(target_os = "windows")]
+            hwnd,
         };
 
         let mut controls = MediaControls::new(config)
