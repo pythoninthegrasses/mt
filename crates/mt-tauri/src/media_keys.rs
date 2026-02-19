@@ -39,8 +39,12 @@ impl MediaKeyManager {
         let config = PlatformConfig {
             dbus_name: "mt_music_player",
             display_name: "mt",
-            #[cfg(target_os = "windows")]
-            hwnd,
+            hwnd: {
+                #[cfg(target_os = "windows")]
+                { hwnd }
+                #[cfg(not(target_os = "windows"))]
+                { None }
+            },
         };
 
         let mut controls = MediaControls::new(config)

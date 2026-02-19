@@ -145,13 +145,26 @@ jobs:
           Export-PfxCertificate -Cert $cert -FilePath "${{ runner.temp }}\mt-cert.pfx" -Password $password
           echo "CERT_PATH=${{ runner.temp }}\mt-cert.pfx" >> $env:GITHUB_ENV
 
+      - name: Build frontend
+        shell: pwsh
+        working-directory: ./app/frontend
+        run: |
+          npm run build
+
       - name: Write signing config override
         shell: pwsh
         env:
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          $signCmd = "$env:SIGNTOOL_PATH sign /f $env:CERT_PATH /p $env:WINDOWS_CERT_PASSWORD /t http://timestamp.digicert.com /fd SHA256"
-          $config = @{ bundle = @{ windows = @{ signCommand = $signCmd } } } | ConvertTo-Json -Depth 5
+          # Use structured signCommand to handle spaces in signtool path
+          $signCmd = @{
+            cmd = $env:SIGNTOOL_PATH
+            args = @("sign", "/f", $env:CERT_PATH, "/p", $env:WINDOWS_CERT_PASSWORD, "/t", "http://timestamp.digicert.com", "/fd", "SHA256")
+          }
+          $config = @{
+            build = @{ beforeBuildCommand = "" }
+            bundle = @{ windows = @{ signCommand = $signCmd } }
+          } | ConvertTo-Json -Depth 5
           $configPath = "${{ runner.temp }}\sign-override.json"
           $config | Out-File -FilePath $configPath -Encoding utf8
           echo "SIGN_CONFIG_PATH=$configPath" >> $env:GITHUB_ENV

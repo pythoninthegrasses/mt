@@ -442,7 +442,7 @@ The signing flow:
 1. Install Windows SDK (provides `signtool.exe`)
 2. Generate a `CodeSigningCert` with subject `CN=MT`
 3. Export to PFX with password from `WINDOWS_CERT_PASSWORD` secret
-4. Tauri calls `signtool sign` via `bundle.windows.signCommand` (passed as a `--config` override)
+4. Tauri calls `signtool.exe` via `bundle.windows.signCommand` using structured `{ cmd, args }` format to handle spaces in the signtool path (passed as a `--config` override that also disables `beforeBuildCommand`)
 5. Both the application binary and NSIS installer are signed
 6. DigiCert timestamp server ensures signatures remain valid after cert expiry
 
@@ -515,13 +515,14 @@ Runs on `ubuntu-latest`:
 
 Runs on a self-hosted `[self-hosted, Windows, X64]` runner:
 
-1. Sets up the Tauri build environment (Chocolatey installs cmake)
+1. Sets up the Tauri build environment (Chocolatey installs cmake and rustup; `RUSTUP_TOOLCHAIN=nightly-2026-02-09` is exported to `GITHUB_ENV` and `~/.cargo/bin` is prepended to `GITHUB_PATH` to ensure the nightly toolchain takes precedence)
 2. Installs Windows SDK for `signtool.exe`
 3. Generates a self-signed `CodeSigningCert` and exports to PFX
-4. Writes a config override with `bundle.windows.signCommand` pointing to signtool
-5. Builds with `tauri-action` which calls the sign command for both the binary and NSIS installer
-6. Attaches the signed `.exe` to the same draft GitHub Release
-7. Cleans up the certificate and config override (runs in `always()` step)
+4. Builds the frontend explicitly (`npm run build` in `app/frontend/`)
+5. Writes a config override that disables `beforeBuildCommand` (frontend already built) and sets `bundle.windows.signCommand` using structured `{ cmd, args }` format (handles spaces in `signtool.exe` path)
+6. Builds with `tauri-action` which calls the sign command for both the binary and NSIS installer
+7. Attaches the signed `.exe` to the same draft GitHub Release
+8. Cleans up the certificate and config override (runs in `always()` step)
 
 ## Linux System Dependencies
 

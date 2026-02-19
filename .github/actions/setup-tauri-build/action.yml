@@ -58,9 +58,13 @@ runs:
         # Refresh PATH to pick up choco-installed rustup
         Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
         refreshenv
-        rustup toolchain install nightly-2026-02-09
+        # Ensure rustup-managed binaries take precedence over chocolatey
+        $cargobin = Join-Path $env:USERPROFILE '.cargo\bin'
+        echo $cargobin >> $env:GITHUB_PATH
+        # Pin nightly toolchain via env var (overrides any default)
+        echo "RUSTUP_TOOLCHAIN=nightly-2026-02-09" >> $env:GITHUB_ENV
+        rustup toolchain install nightly-2026-02-09 --no-self-update --target x86_64-pc-windows-msvc
         rustup default nightly-2026-02-09
-        rustup target add x86_64-pc-windows-msvc --toolchain nightly-2026-02-09
         rustc --version
         cargo --version
 
