@@ -1,0 +1,20 @@
+# Normalize all text files to LF in the repository and on checkout.
+# Overrides core.autocrlf / core.eol so the repo is portable across platforms.
+* text=auto eol=lf
+
+# Explicitly mark binary formats so git never attempts line-ending conversion.
+*.png  binary
+*.ico  binary
+*.icns binary
+*.pxd  binary
+*.flac binary
+*.mp3  binary
+*.ogg  binary
+*.wav  binary
+*.m4a  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.eot  binary
+*.pdf  binary
