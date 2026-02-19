@@ -36,6 +36,24 @@ $script:BuildTemp = Join-Path $env:TEMP "mt-build-$(Get-Date -Format 'yyyyMMdd-H
 $script:SignConfigPath = $null
 $script:CertPath = $null
 
+function Assert-NativePath {
+    param([string]$Path)
+    if ($Path -match '^\\\\') {
+        Write-Error (@(
+            "Repo is on a UNC path ($Path)."
+            'Windows cmd.exe (used by npm/vite) does not support UNC paths.'
+            'Create a git worktree on a native NTFS path instead:'
+            ''
+            '  # from WSL'
+            '  git worktree add /mnt/c/Users/$USER/git/mt-win main'
+            ''
+            '  # then from PowerShell'
+            '  cd C:\Users\$env:USERNAME\git\mt-win'
+            '  .\scripts\build.ps1'
+        ) -join "`n")
+    }
+}
+
 function Write-Step {
     param([string]$Message)
     Write-Host "`n==> $Message" -ForegroundColor Cyan
@@ -214,24 +232,25 @@ function Import-EnvFile {
 
 function Build-NsisInstaller {
     Write-Step 'Building NSIS installer'
+    Assert-Command 'npx'
     Import-EnvFile
 
     $env:RUSTUP_TOOLCHAIN = $script:RustToolchain
 
-    $cargoArgs = @(
-        'tauri', 'build',
+    $tauriArgs = @(
+        'build',
         '--target', $script:Target,
         '--bundles', 'nsis'
     )
     if ($script:SignConfigPath) {
-        $cargoArgs += @('--config', $script:SignConfigPath)
+        $tauriArgs += @('--config', $script:SignConfigPath)
     }
 
     Push-Location $script:TauriDir
     try {
-        Write-Host "  cargo $($cargoArgs -join ' ')"
-        & cargo $cargoArgs
-        if ($LASTEXITCODE -ne 0) { throw "cargo tauri build exited with code $LASTEXITCODE" }
+        Write-Host "  npx @tauri-apps/cli $($tauriArgs -join ' ')"
+        & npx @tauri-apps/cli @tauriArgs
+        if ($LASTEXITCODE -ne 0) { throw "npx @tauri-apps/cli build exited with code $LASTEXITCODE" }
     } finally {
         Pop-Location
     }
@@ -266,6 +285,7 @@ function Invoke-Cleanup {
 }
 
 function Main {
+    Assert-NativePath $script:RepoRoot
     New-Item -ItemType Directory -Path $script:BuildTemp -Force | Out-Null
 
     if (-not $SkipDeps) { Install-Dependencies }
