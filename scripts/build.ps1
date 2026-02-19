@@ -150,6 +150,7 @@ function Install-RustToolchain {
 
     rustup toolchain install $script:RustToolchain
     rustup default $script:RustToolchain
+    rustup target add x86_64-pc-windows-msvc --toolchain $script:RustToolchain
     Write-Host "  rustc: $(rustc --version)"
     Write-Host "  cargo: $(cargo --version)"
 }

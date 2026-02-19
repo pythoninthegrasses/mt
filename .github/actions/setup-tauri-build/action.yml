@@ -60,6 +60,7 @@ runs:
         refreshenv
         rustup toolchain install nightly-2026-02-09
         rustup default nightly-2026-02-09
+        rustup target add x86_64-pc-windows-msvc --toolchain nightly-2026-02-09
         rustc --version
         cargo --version
 
