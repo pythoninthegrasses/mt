@@ -5,7 +5,7 @@ Build configuration, performance tuning, signing, and distribution for mt.
 ## Build Strategy
 
 | Platform | Architecture | Runner | Bundle |
-|----------|-------------|--------|--------|
+| ---------- | ------------- | -------- | -------- |
 | macOS | ARM64 | Self-hosted `[macOS, ARM64]` | `.app`, `.dmg` |
 | Linux | amd64 | `ubuntu-latest` (CI) or Docker (`Dockerfile.linux-amd64`) | `.deb` |
 | Linux | arm64 | Docker (`Dockerfile.linux-arm64`) | `.deb` |
@@ -17,7 +17,7 @@ All `task tauri:*` commands default to nightly with parallel codegen and sccache
 (`RUSTUP_TOOLCHAIN=nightly`, `RUSTFLAGS="-Zthreads=16"`, `RUSTC_WRAPPER=sccache`).
 
 | Task | Description |
-|------|-------------|
+| ------ | ------------- |
 | `task tauri:dev` | Run development server |
 | `task tauri:dev:mcp` | Dev server with MCP bridge for AI agent debugging |
 | `task tauri:build` | Build for current platform (auto-detects `{{OS}}/{{ARCH}}`) |
@@ -121,7 +121,7 @@ rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 #### macOS (ARM64)
 
 | Linker | Status | Notes |
-|--------|--------|-------|
+| -------- | -------- | ------- |
 | **lld** | Recommended | Currently configured, fast and stable |
 | ld-prime | Alternative | Apple's default, similar performance |
 | sold | Avoid | Fastest but has codesign issues |
@@ -129,14 +129,14 @@ rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 #### Linux
 
 | Linker | Status | Notes |
-|--------|--------|-------|
+| -------- | -------- | ------- |
 | **mold** | Recommended | Currently configured, fastest option |
 | lld | Alternative | Good fallback |
 
 #### Windows
 
 | Linker | Status | Notes |
-|--------|--------|-------|
+| -------- | -------- | ------- |
 | rust-lld | Recommended | Fast for full builds |
 | link.exe | Alternative | Better for tiny incrementals |
 
@@ -151,14 +151,14 @@ Measured on Apple M4 Max, macOS 15.7.1:
 #### Stable (Rust 1.92.0)
 
 | Scenario | Time | Notes |
-|----------|------|-------|
+| ---------- | ------ | ------- |
 | Cold build | ~50.2s | Full rebuild from clean |
 | Incremental build | ~1.06s | After touching `src/main.rs` |
 
 #### Nightly + `-Zthreads=16` (Rust 1.95.0-nightly)
 
 | Scenario | Time | Improvement | Notes |
-|----------|------|-------------|-------|
+| ---------- | ------ | ------------- | ------- |
 | Cold build | ~50.1s | -0.3% | Negligible difference |
 | Incremental build | ~0.82s | **-23%** | Significant improvement |
 
@@ -261,7 +261,7 @@ Without all three, macOS Gatekeeper blocks the app on users' machines.
 All signing secrets are stored in `.env` (loaded via Taskfile dotenv). See `.env.example` for the template.
 
 | Variable | Purpose |
-|----------|---------|
+| ---------- | --------- |
 | `APPLE_SIGNING_IDENTITY` | Full signing identity string, e.g. `Developer ID Application: Name (TEAMID)` |
 | `APPLE_CERTIFICATE` | Base64-encoded `.p12` certificate export |
 | `APPLE_CERTIFICATE_PASSWORD` | Password set during `.p12` export |
@@ -275,7 +275,7 @@ All signing secrets are stored in `.env` (loaded via Taskfile dotenv). See `.env
 `crates/mt-tauri/Entitlements.plist` declares hardened runtime entitlements:
 
 | Entitlement | Reason |
-|-------------|--------|
+| ------------- | -------- |
 | `com.apple.security.cs.allow-jit` | WebView/JS engine |
 | `com.apple.security.cs.allow-unsigned-executable-memory` | WebView/JS engine |
 | `com.apple.security.cs.allow-dyld-environment-variables` | Bundled dylibs |
@@ -387,7 +387,7 @@ task tauri:build
 Both Linux architectures can be built locally via Docker, which is useful for producing `.deb` packages from a macOS development machine.
 
 | Architecture | Task | Dockerfile | Notes |
-|-------------|------|------------|-------|
+| ------------- | ------ | ------------ | ------- |
 | arm64 | `task build:linux-arm64` | `docker/Dockerfile.linux-arm64` | Native on Apple Silicon |
 | amd64 | `task build:linux-amd64` | `docker/Dockerfile.linux-amd64` | QEMU emulation on Apple Silicon |
 
@@ -449,7 +449,7 @@ The signing flow:
 #### Environment Variables
 
 | Variable | Purpose |
-|----------|---------|
+| ---------- | --------- |
 | `WINDOWS_CERT_PASSWORD` | Password for the self-signed PFX certificate (GitHub secret) |
 
 #### Local Build
