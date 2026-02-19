@@ -48,6 +48,43 @@ function Assert-Command {
     }
 }
 
+function Test-IsElevated {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]$identity
+    $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Invoke-Elevated {
+    <#
+    .SYNOPSIS
+        Run a command with UAC elevation via Start-Process. Single UAC prompt.
+    .PARAMETER Command
+        The executable to run.
+    .PARAMETER Arguments
+        Arguments passed to the executable.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Command,
+        [string]$Arguments
+    )
+
+    if (Test-IsElevated) {
+        # Already elevated, run directly
+        if ($Arguments) {
+            & $Command $Arguments.Split(' ')
+        } else {
+            & $Command
+        }
+        return
+    }
+
+    $proc = Start-Process -Verb RunAs -Wait -PassThru `
+        -FilePath $Command -ArgumentList $Arguments
+    if ($proc.ExitCode -ne 0) {
+        Write-Error "$Command exited with code $($proc.ExitCode)"
+    }
+}
+
 function Install-Dependencies {
     Write-Step 'Installing system dependencies via Chocolatey'
 
@@ -61,16 +98,28 @@ function Install-Dependencies {
         @{ Name = 'nodejs-lts'; Args = '' },
         @{ Name = 'go-task'; Args = '' }
     )
+
+    # Collect packages that need installing
+    $toInstall = @()
     foreach ($pkg in $packages) {
         $installed = choco list --exact $pkg.Name --limit-output 2>$null
         if ($installed) {
             Write-Host "  $($pkg.Name) already installed"
         } else {
-            Write-Host "  Installing $($pkg.Name)..."
-            $cmd = "choco install $($pkg.Name) -y"
-            if ($pkg.Args) { $cmd += " $($pkg.Args)" }
-            Invoke-Expression $cmd
+            $toInstall += $pkg
         }
+    }
+
+    if ($toInstall.Count -gt 0) {
+        # Build a single script block for all installs (one UAC prompt)
+        $lines = $toInstall | ForEach-Object {
+            $cmd = "choco install $($_.Name) -y"
+            if ($_.Args) { $cmd += " $($_.Args)" }
+            "Write-Host '  Installing $($_.Name)...'; $cmd"
+        }
+        $script = $lines -join "; "
+        Invoke-Elevated -Command 'powershell' `
+            -Arguments "-NoProfile -ExecutionPolicy Bypass -Command `"$script`""
     }
 
     Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
@@ -123,7 +172,8 @@ function Initialize-CodeSigning {
     $signtool = Find-SignTool
     if (-not $signtool) {
         Write-Host '  signtool.exe not found, installing Windows SDK...'
-        choco install windows-sdk-10.1 -y
+        Invoke-Elevated -Command 'powershell' `
+            -Arguments "-NoProfile -ExecutionPolicy Bypass -Command `"choco install windows-sdk-10.1 -y`""
         Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
         refreshenv
         $signtool = Find-SignTool
