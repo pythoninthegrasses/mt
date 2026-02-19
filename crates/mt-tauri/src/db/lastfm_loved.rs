@@ -292,7 +292,7 @@ mod tests {
         assert!(id > 0);
 
         // Second insert should update, not duplicate
-        let id2 = upsert_loved_track(&conn, "Artist", "Track", Some(1234567899)).unwrap();
+        let _id2 = upsert_loved_track(&conn, "Artist", "Track", Some(1234567899)).unwrap();
 
         // Count should still be 1
         let count = get_loved_count(&conn).unwrap();
