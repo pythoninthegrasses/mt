@@ -2,6 +2,7 @@ use lofty::config::{ParseOptions, ParsingMode, WriteOptions};
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use lofty::tag::Tag;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -134,6 +135,15 @@ pub fn get_track_metadata(path: String) -> Result<TrackMetadata, String> {
             channels: None,
         })
     }
+}
+
+#[tauri::command]
+pub fn get_tracks_metadata_batch(paths: Vec<String>) -> Result<Vec<TrackMetadata>, String> {
+    let results: Vec<TrackMetadata> = paths
+        .into_par_iter()
+        .map(|path| get_track_metadata(path))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(results)
 }
 
 #[tracing::instrument(skip(update))]
@@ -626,5 +636,34 @@ mod tests {
 
         assert!(deserialized.title.as_ref().unwrap().contains("&"));
         assert!(deserialized.path.contains("&"));
+    }
+
+    // =========================================================================
+    // Batch command tests
+    // =========================================================================
+
+    #[test]
+    fn test_batch_metadata_empty_paths() {
+        let result = get_tracks_metadata_batch(vec![]);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_batch_metadata_missing_file_returns_error() {
+        let result = get_tracks_metadata_batch(vec![
+            "/nonexistent/file1.mp3".to_string(),
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_batch_metadata_multiple_missing_files() {
+        let result = get_tracks_metadata_batch(vec![
+            "/nonexistent/a.mp3".to_string(),
+            "/nonexistent/b.flac".to_string(),
+            "/nonexistent/c.wav".to_string(),
+        ]);
+        assert!(result.is_err());
     }
 }

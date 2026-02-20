@@ -237,43 +237,41 @@ export function createMetadataModal(Alpine) {
         'year',
         'genre',
       ];
-      const allMetadata = [];
 
-      for (const track of this.tracks) {
-        const trackPath = this.getTrackPath(track);
-        if (!trackPath) continue;
+      const paths = this.tracks
+        .map((t) => this.getTrackPath(t))
+        .filter(Boolean);
 
-        let trackMeta;
-        if (!window.__TAURI__) {
-          trackMeta = {
-            title: track.title || '',
-            artist: track.artist || '',
-            album: track.album || '',
-            album_artist: track.album_artist || '',
-            track_number: track.track_number?.toString() || '',
-            track_total: '',
-            disc_number: track.disc_number?.toString() || '',
-            disc_total: '',
-            year: track.year?.toString() || '',
-            genre: track.genre || '',
-          };
-        } else {
-          const { invoke } = window.__TAURI__.core;
-          const data = await invoke('get_track_metadata', { path: trackPath });
-          trackMeta = {
-            title: data.title || '',
-            artist: data.artist || '',
-            album: data.album || '',
-            album_artist: data.album_artist || '',
-            track_number: data.track_number?.toString() || '',
-            track_total: data.track_total?.toString() || '',
-            disc_number: data.disc_number?.toString() || '',
-            disc_total: data.disc_total?.toString() || '',
-            year: data.year?.toString() || '',
-            genre: data.genre || '',
-          };
-        }
-        allMetadata.push(trackMeta);
+      let allMetadata;
+
+      if (!window.__TAURI__) {
+        allMetadata = this.tracks.map((track) => ({
+          title: track.title || '',
+          artist: track.artist || '',
+          album: track.album || '',
+          album_artist: track.album_artist || '',
+          track_number: track.track_number?.toString() || '',
+          track_total: '',
+          disc_number: track.disc_number?.toString() || '',
+          disc_total: '',
+          year: track.year?.toString() || '',
+          genre: track.genre || '',
+        }));
+      } else {
+        const { invoke } = window.__TAURI__.core;
+        const results = await invoke('get_tracks_metadata_batch', { paths });
+        allMetadata = results.map((data) => ({
+          title: data.title || '',
+          artist: data.artist || '',
+          album: data.album || '',
+          album_artist: data.album_artist || '',
+          track_number: data.track_number?.toString() || '',
+          track_total: data.track_total?.toString() || '',
+          disc_number: data.disc_number?.toString() || '',
+          disc_total: data.disc_total?.toString() || '',
+          year: data.year?.toString() || '',
+          genre: data.genre || '',
+        }));
       }
 
       const mergedMetadata = {};
@@ -356,8 +354,8 @@ export function createMetadataModal(Alpine) {
 
       try {
         const { invoke } = window.__TAURI__.core;
-        let savedCount = 0;
 
+        const updates = [];
         for (const track of this.tracks) {
           const trackPath = this.getTrackPath(track);
           if (!trackPath) continue;
@@ -382,23 +380,26 @@ export function createMetadataModal(Alpine) {
           }
 
           if (hasChanges) {
-            await invoke('save_track_metadata', { update });
-            savedCount++;
+            updates.push({ track, update });
           }
         }
 
-        if (savedCount > 0) {
+        if (updates.length > 0) {
+          await Promise.all(
+            updates.map(({ update }) => invoke('save_track_metadata', { update })),
+          );
+
           if (!silent) {
-            const msg = savedCount === 1
+            const msg = updates.length === 1
               ? 'Metadata saved successfully'
-              : `Metadata saved for ${savedCount} tracks`;
+              : `Metadata saved for ${updates.length} tracks`;
             Alpine.store('ui').toast(msg, 'success');
           }
 
           if (this.library) {
-            for (const track of this.tracks) {
-              await this.library.rescanTrack(track.id);
-            }
+            await Promise.all(
+              updates.map(({ track }) => this.library.rescanTrack(track.id)),
+            );
           }
         }
 

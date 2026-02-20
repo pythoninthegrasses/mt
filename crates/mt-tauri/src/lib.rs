@@ -32,7 +32,7 @@ use commands::{
 };
 use dialog::{open_add_music_dialog, open_file_dialog, open_folder_dialog};
 use media_keys::{MediaKeyManager, NowPlayingInfo};
-use metadata::{get_track_metadata, save_track_metadata};
+use metadata::{get_track_metadata, get_tracks_metadata_batch, save_track_metadata};
 use scanner::commands::{
     extract_file_metadata, get_track_artwork, get_track_artwork_url, scan_paths_metadata,
     scan_paths_to_library,
@@ -332,6 +332,7 @@ pub fn run() {
             export_diagnostics,
             log_frontend_error,
             get_track_metadata,
+            get_tracks_metadata_batch,
             save_track_metadata,
             watched_folders_list,
             watched_folders_get,
