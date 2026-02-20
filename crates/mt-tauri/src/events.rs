@@ -387,6 +387,49 @@ impl LastfmQueueUpdatedEvent {
 }
 
 // ============================================
+// Reconcile Events
+// ============================================
+
+/// Emitted during library reconcile scan to report progress
+#[derive(Clone, Debug, Serialize)]
+pub struct ReconcileProgressEvent {
+    /// Current phase: "fingerprinting", "deduplicating", "complete"
+    pub phase: String,
+    /// Number of items processed so far in the current phase
+    pub current: u32,
+    /// Total items to process in the current phase
+    pub total: u32,
+}
+
+impl ReconcileProgressEvent {
+    pub const EVENT_NAME: &'static str = "reconcile:progress";
+
+    pub fn fingerprinting(current: u32, total: u32) -> Self {
+        Self {
+            phase: "fingerprinting".to_string(),
+            current,
+            total,
+        }
+    }
+
+    pub fn deduplicating(current: u32, total: u32) -> Self {
+        Self {
+            phase: "deduplicating".to_string(),
+            current,
+            total,
+        }
+    }
+
+    pub fn complete(total: u32) -> Self {
+        Self {
+            phase: "complete".to_string(),
+            current: total,
+            total,
+        }
+    }
+}
+
+// ============================================
 // Helper trait for emitting events
 // ============================================
 
@@ -400,6 +443,7 @@ pub trait EventEmitter {
     fn emit_favorites_updated(&self, event: FavoritesUpdatedEvent) -> Result<(), String>;
     fn emit_playlists_updated(&self, event: PlaylistsUpdatedEvent) -> Result<(), String>;
     fn emit_settings_updated(&self, event: SettingsUpdatedEvent) -> Result<(), String>;
+    fn emit_reconcile_progress(&self, event: ReconcileProgressEvent) -> Result<(), String>;
 }
 
 impl EventEmitter for tauri::AppHandle {
@@ -448,6 +492,12 @@ impl EventEmitter for tauri::AppHandle {
     fn emit_settings_updated(&self, event: SettingsUpdatedEvent) -> Result<(), String> {
         use tauri::Emitter;
         self.emit(SettingsUpdatedEvent::EVENT_NAME, event)
+            .map_err(|e| e.to_string())
+    }
+
+    fn emit_reconcile_progress(&self, event: ReconcileProgressEvent) -> Result<(), String> {
+        use tauri::Emitter;
+        self.emit(ReconcileProgressEvent::EVENT_NAME, event)
             .map_err(|e| e.to_string())
     }
 }
@@ -891,6 +941,55 @@ mod tests {
         assert_eq!(LastfmQueueUpdatedEvent::EVENT_NAME, "lastfm:queue-updated");
     }
 
+    // ==================== ReconcileProgressEvent Tests ====================
+
+    #[test]
+    fn test_reconcile_progress_event_fingerprinting() {
+        let event = ReconcileProgressEvent::fingerprinting(50, 200);
+        assert_eq!(event.phase, "fingerprinting");
+        assert_eq!(event.current, 50);
+        assert_eq!(event.total, 200);
+    }
+
+    #[test]
+    fn test_reconcile_progress_event_deduplicating() {
+        let event = ReconcileProgressEvent::deduplicating(10, 30);
+        assert_eq!(event.phase, "deduplicating");
+        assert_eq!(event.current, 10);
+        assert_eq!(event.total, 30);
+    }
+
+    #[test]
+    fn test_reconcile_progress_event_complete() {
+        let event = ReconcileProgressEvent::complete(200);
+        assert_eq!(event.phase, "complete");
+        assert_eq!(event.current, 200);
+        assert_eq!(event.total, 200);
+    }
+
+    #[test]
+    fn test_reconcile_progress_event_serialization() {
+        let event = ReconcileProgressEvent::fingerprinting(100, 500);
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"phase\":\"fingerprinting\""));
+        assert!(json.contains("\"current\":100"));
+        assert!(json.contains("\"total\":500"));
+    }
+
+    #[test]
+    fn test_reconcile_progress_event_name() {
+        assert_eq!(ReconcileProgressEvent::EVENT_NAME, "reconcile:progress");
+    }
+
+    #[test]
+    fn test_reconcile_progress_event_clone() {
+        let event = ReconcileProgressEvent::fingerprinting(1, 10);
+        let cloned = event.clone();
+        assert_eq!(event.phase, cloned.phase);
+        assert_eq!(event.current, cloned.current);
+        assert_eq!(event.total, cloned.total);
+    }
+
     // ==================== Event Name Consistency Tests ====================
 
     #[test]
@@ -908,6 +1007,7 @@ mod tests {
             LastfmAuthEvent::EVENT_NAME,
             ScrobbleStatusEvent::EVENT_NAME,
             LastfmQueueUpdatedEvent::EVENT_NAME,
+            ReconcileProgressEvent::EVENT_NAME,
         ];
 
         for name in event_names {
@@ -931,6 +1031,7 @@ mod tests {
         let _ = LastfmAuthEvent::authenticated("user".to_string()).clone();
         let _ = ScrobbleStatusEvent::success("a".to_string(), "t".to_string()).clone();
         let _ = LastfmQueueUpdatedEvent::new(0).clone();
+        let _ = ReconcileProgressEvent::fingerprinting(0, 0).clone();
     }
 
     #[test]

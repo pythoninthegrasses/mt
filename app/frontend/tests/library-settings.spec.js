@@ -69,6 +69,9 @@ test.describe('Library Settings with Mocked Tauri', () => {
             return null;
           },
         },
+        event: {
+          listen: async () => () => {},
+        },
         dialog: {
           confirm: async () => true,
         },
@@ -116,5 +119,81 @@ test.describe('Library Settings with Mocked Tauri', () => {
     await scanButton.click();
 
     await expect(scanButton).toBeDisabled();
+  });
+
+  test('should display progress bar during reconcile scan', async ({ page }) => {
+    // Mock listen to capture the callback so we can emit progress events
+    await page.addInitScript(() => {
+      window.__reconcileListeners = [];
+      const originalInvoke = window.__TAURI__.core.invoke;
+      window.__TAURI__.core.invoke = async (cmd, args) => {
+        if (cmd === 'library_reconcile_scan') {
+          // Emit progress events before resolving
+          for (const cb of window.__reconcileListeners) {
+            cb({ payload: { phase: 'fingerprinting', current: 50, total: 200 } });
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          for (const cb of window.__reconcileListeners) {
+            cb({ payload: { phase: 'complete', current: 200, total: 200 } });
+          }
+          return { backfilled: 3, duplicates_merged: 1, errors: 0 };
+        }
+        return originalInvoke(cmd, args);
+      };
+      window.__TAURI__.event.listen = async (event, cb) => {
+        if (event === 'reconcile:progress') {
+          window.__reconcileListeners.push(cb);
+        }
+        return () => {
+          window.__reconcileListeners = window.__reconcileListeners.filter((l) => l !== cb);
+        };
+      };
+    });
+
+    await page.reload();
+    await waitForAlpine(page);
+    await page.click('[data-testid="sidebar-settings"]');
+    await page.click('[data-testid="settings-nav-library"]');
+
+    const scanButton = page.locator('[data-testid="settings-reconcile-scan"]');
+    await scanButton.click();
+
+    // Progress bar should appear during scan
+    const progress = page.locator('[data-testid="reconcile-progress"]');
+    await expect(progress).toBeVisible({ timeout: 2000 });
+    await expect(progress.locator('text=Computing fingerprints')).toBeVisible();
+    await expect(progress.locator('text=50 / 200')).toBeVisible();
+
+    // After scan completes, progress should disappear and results show
+    await page.waitForSelector('text=Last scan results:', { state: 'visible', timeout: 5000 });
+    await expect(progress).not.toBeVisible();
+  });
+
+  test('should remain responsive during reconcile scan', async ({ page }) => {
+    await page.addInitScript(() => {
+      const originalInvoke = window.__TAURI__.core.invoke;
+      window.__TAURI__.core.invoke = async (cmd, args) => {
+        if (cmd === 'library_reconcile_scan') {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          return { backfilled: 0, duplicates_merged: 0, errors: 0 };
+        }
+        return originalInvoke(cmd, args);
+      };
+    });
+
+    await page.reload();
+    await waitForAlpine(page);
+    await page.click('[data-testid="sidebar-settings"]');
+    await page.click('[data-testid="settings-nav-library"]');
+
+    const scanButton = page.locator('[data-testid="settings-reconcile-scan"]');
+    await scanButton.click();
+
+    // UI should remain responsive: we can still interact with other settings nav items
+    const appearanceNav = page.locator('[data-testid="settings-nav-appearance"]');
+    await expect(appearanceNav).toBeVisible();
+    await appearanceNav.click();
+    const appearanceSection = page.locator('[data-testid="settings-section-appearance"]');
+    await expect(appearanceSection).toBeVisible();
   });
 });

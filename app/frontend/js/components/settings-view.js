@@ -32,6 +32,7 @@ export function createSettingsView(Alpine) {
     reconcileScan: {
       isRunning: false,
       lastResult: null,
+      progress: null,
     },
 
     // Column settings for Settings > Columns section
@@ -545,8 +546,17 @@ export function createSettingsView(Alpine) {
       }
 
       this.reconcileScan.isRunning = true;
+      this.reconcileScan.progress = null;
+
+      let unlisten = null;
       try {
         const { invoke } = window.__TAURI__.core;
+        const { listen } = window.__TAURI__.event;
+
+        unlisten = await listen('reconcile:progress', (e) => {
+          this.reconcileScan.progress = e.payload;
+        });
+
         const result = await invoke('library_reconcile_scan');
         this.reconcileScan.lastResult = result;
 
@@ -565,7 +575,9 @@ export function createSettingsView(Alpine) {
         console.error('[settings] Reconcile scan failed:', error);
         Alpine.store('ui').toast('Reconcile scan failed', 'error');
       } finally {
+        if (unlisten) unlisten();
         this.reconcileScan.isRunning = false;
+        this.reconcileScan.progress = null;
       }
     },
 

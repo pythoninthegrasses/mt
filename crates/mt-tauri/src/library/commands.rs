@@ -456,102 +456,166 @@ pub struct ReconcileScanResult {
 
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn library_reconcile_scan(
+pub async fn library_reconcile_scan(
     app: AppHandle,
     db: State<'_, Database>,
 ) -> Result<ReconcileScanResult, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use rayon::prelude::*;
+    use crate::events::ReconcileProgressEvent;
 
-    let mut backfilled = 0u32;
-    let mut errors = 0u32;
+    let db = db.inner().clone();
+    let app_handle = app.clone();
 
-    let tracks = library::get_tracks_needing_fingerprints(&conn).map_err(|e| e.to_string())?;
+    tokio::task::spawn_blocking(move || {
+        let conn = db.conn().map_err(|e| e.to_string())?;
 
-    for track in tracks {
-        let path = std::path::Path::new(&track.filepath);
-        if !path.exists() {
-            continue;
-        }
+        let tracks = library::get_tracks_needing_fingerprints(&conn).map_err(|e| e.to_string())?;
+        let total = tracks.len() as u32;
 
-        let fingerprint = match FileFingerprint::from_path(path) {
-            Ok(fp) => fp,
-            Err(_) => {
-                errors += 1;
-                continue;
-            }
-        };
+        // Phase 1: compute fingerprints and hashes in parallel
+        let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::fingerprinting(0, total));
 
-        let content_hash = match compute_content_hash(path) {
-            Ok(h) => Some(h),
-            Err(_) => {
-                errors += 1;
-                None
-            }
-        };
+        let processed = AtomicU32::new(0);
+        let fp_errors = AtomicU32::new(0);
+        let app_progress = app_handle.clone();
 
-        match library::update_track_fingerprints(
-            &conn,
-            track.id,
-            fingerprint.inode,
-            content_hash.as_deref(),
-        ) {
-            Ok(true) => backfilled += 1,
-            Ok(false) => {}
-            Err(_) => errors += 1,
-        }
-    }
-
-    let mut duplicates_merged = 0u32;
-    let mut deleted_ids = Vec::new();
-
-    let inode_dups = library::find_duplicates_by_inode(&conn).map_err(|e| e.to_string())?;
-    for group in inode_dups {
-        if group.len() < 2 {
-            continue;
-        }
-        let keep = &group[0];
-        for dup in &group[1..] {
-            match library::merge_duplicate_tracks(&conn, keep.id, dup.id) {
-                Ok(true) => {
-                    duplicates_merged += 1;
-                    deleted_ids.push(dup.id);
+        // Each result: (track_id, Option<fingerprint>, Option<content_hash>)
+        // Fingerprint errors and hash errors are counted atomically during parallel phase
+        let results: Vec<_> = tracks
+            .par_iter()
+            .map(|track| {
+                let path = std::path::Path::new(&track.filepath);
+                if !path.exists() {
+                    let count = processed.fetch_add(1, Ordering::Relaxed) + 1;
+                    if count.is_multiple_of(100) || count == total {
+                        let _ = app_progress.emit_reconcile_progress(
+                            ReconcileProgressEvent::fingerprinting(count, total),
+                        );
+                    }
+                    return (track.id, None, None);
                 }
+
+                let fingerprint = match FileFingerprint::from_path(path) {
+                    Ok(fp) => Some(fp),
+                    Err(_) => {
+                        fp_errors.fetch_add(1, Ordering::Relaxed);
+                        let count = processed.fetch_add(1, Ordering::Relaxed) + 1;
+                        if count.is_multiple_of(100) || count == total {
+                            let _ = app_progress.emit_reconcile_progress(
+                                ReconcileProgressEvent::fingerprinting(count, total),
+                            );
+                        }
+                        return (track.id, None, None);
+                    }
+                };
+
+                let content_hash = match compute_content_hash(path) {
+                    Ok(h) => Some(h),
+                    Err(_) => {
+                        fp_errors.fetch_add(1, Ordering::Relaxed);
+                        None
+                    }
+                };
+
+                let count = processed.fetch_add(1, Ordering::Relaxed) + 1;
+                if count.is_multiple_of(100) || count == total {
+                    let _ = app_progress.emit_reconcile_progress(
+                        ReconcileProgressEvent::fingerprinting(count, total),
+                    );
+                }
+
+                (track.id, fingerprint, content_hash)
+            })
+            .collect();
+
+        // Phase 1b: sequential DB writes for fingerprint backfill
+        let mut backfilled = 0u32;
+        let mut errors = fp_errors.load(Ordering::Relaxed);
+
+        for (track_id, fingerprint, content_hash) in &results {
+            let Some(fp) = fingerprint else {
+                continue;
+            };
+
+            match library::update_track_fingerprints(
+                &conn,
+                *track_id,
+                fp.inode,
+                content_hash.as_deref(),
+            ) {
+                Ok(true) => backfilled += 1,
                 Ok(false) => {}
                 Err(_) => errors += 1,
             }
         }
-    }
 
-    let hash_dups = library::find_duplicates_by_content_hash(&conn).map_err(|e| e.to_string())?;
-    for group in hash_dups {
-        if group.len() < 2 {
-            continue;
-        }
-        let keep = &group[0];
-        for dup in &group[1..] {
-            if deleted_ids.contains(&dup.id) {
+        // Phase 2: deduplication
+        let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::deduplicating(0, 0));
+
+        let mut duplicates_merged = 0u32;
+        let mut deleted_ids = Vec::new();
+
+        let inode_dups = library::find_duplicates_by_inode(&conn).map_err(|e| e.to_string())?;
+        let dup_total = inode_dups.len() as u32;
+        for (i, group) in inode_dups.iter().enumerate() {
+            if group.len() < 2 {
                 continue;
             }
-            match library::merge_duplicate_tracks(&conn, keep.id, dup.id) {
-                Ok(true) => {
-                    duplicates_merged += 1;
-                    deleted_ids.push(dup.id);
+            let keep = &group[0];
+            for dup in &group[1..] {
+                match library::merge_duplicate_tracks(&conn, keep.id, dup.id) {
+                    Ok(true) => {
+                        duplicates_merged += 1;
+                        deleted_ids.push(dup.id);
+                    }
+                    Ok(false) => {}
+                    Err(_) => errors += 1,
                 }
-                Ok(false) => {}
-                Err(_) => errors += 1,
+            }
+            if (i as u32 + 1).is_multiple_of(100) {
+                let _ = app_handle.emit_reconcile_progress(
+                    ReconcileProgressEvent::deduplicating(i as u32 + 1, dup_total),
+                );
             }
         }
-    }
 
-    if !deleted_ids.is_empty() {
-        let _ = app.emit_library_updated(LibraryUpdatedEvent::deleted(deleted_ids));
-    }
+        let hash_dups =
+            library::find_duplicates_by_content_hash(&conn).map_err(|e| e.to_string())?;
+        for group in hash_dups {
+            if group.len() < 2 {
+                continue;
+            }
+            let keep = &group[0];
+            for dup in &group[1..] {
+                if deleted_ids.contains(&dup.id) {
+                    continue;
+                }
+                match library::merge_duplicate_tracks(&conn, keep.id, dup.id) {
+                    Ok(true) => {
+                        duplicates_merged += 1;
+                        deleted_ids.push(dup.id);
+                    }
+                    Ok(false) => {}
+                    Err(_) => errors += 1,
+                }
+            }
+        }
 
-    Ok(ReconcileScanResult {
-        backfilled,
-        duplicates_merged,
-        errors,
+        if !deleted_ids.is_empty() {
+            let _ = app_handle.emit_library_updated(LibraryUpdatedEvent::deleted(deleted_ids));
+        }
+
+        let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::complete(total));
+
+        Ok(ReconcileScanResult {
+            backfilled,
+            duplicates_merged,
+            errors,
+        })
     })
+    .await
+    .map_err(|e| format!("Reconcile scan task failed: {e}"))?
 }
 
 #[cfg(test)]

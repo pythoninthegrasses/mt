@@ -250,7 +250,23 @@
               </button>
             </div>
 
-            <!-- Progress/Results -->
+            <!-- Progress bar -->
+            <template x-if="reconcileScan.progress && reconcileScan.progress.phase !== 'complete'">
+              <div class="mt-3" data-testid="reconcile-progress">
+                <div class="flex justify-between text-xs text-muted-foreground mb-1">
+                  <span x-text="reconcileScan.progress.phase === 'fingerprinting' ? 'Computing fingerprints...' : 'Merging duplicates...'"></span>
+                  <span x-show="reconcileScan.progress.total > 0" x-text="`${reconcileScan.progress.current} / ${reconcileScan.progress.total}`"></span>
+                </div>
+                <div class="w-full bg-muted rounded-full h-2 overflow-hidden">
+                  <div
+                    class="bg-primary h-2 rounded-full transition-all duration-300"
+                    :style="`width: ${reconcileScan.progress.total > 0 ? (reconcileScan.progress.current / reconcileScan.progress.total * 100) : 0}%`"
+                  ></div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Results -->
             <template x-if="reconcileScan.lastResult !== null">
               <div class="mt-3 pt-3 border-t border-border/50">
                 <div class="text-xs text-muted-foreground mb-2">Last scan results:</div>

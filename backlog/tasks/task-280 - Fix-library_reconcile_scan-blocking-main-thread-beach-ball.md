@@ -1,10 +1,10 @@
 ---
 id: TASK-280
 title: Fix library_reconcile_scan blocking main thread (beach ball)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-20 21:28'
-updated_date: '2026-02-20 21:28'
+updated_date: '2026-02-20 22:45'
 labels:
   - bug
   - performance
@@ -25,14 +25,14 @@ The fix is to make the command `async`, move fingerprint/hash computation into `
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 library_reconcile_scan command is async (does not block main thread)
-- [ ] #2 Fingerprint computation uses rayon parallel iteration via spawn_blocking
-- [ ] #3 ReconcileProgressEvent emitted during scan with phase/current/total
-- [ ] #4 Frontend shows progress bar during reconcile scan
-- [ ] #5 UI remains responsive during scan (no beach ball)
-- [ ] #6 Existing E2E tests pass
-- [ ] #7 New E2E tests verify progress display and non-blocking behavior
-- [ ] #8 New Rust unit tests for ReconcileProgressEvent serialization
+- [x] #1 library_reconcile_scan command is async (does not block main thread)
+- [x] #2 Fingerprint computation uses rayon parallel iteration via spawn_blocking
+- [x] #3 ReconcileProgressEvent emitted during scan with phase/current/total
+- [x] #4 Frontend shows progress bar during reconcile scan
+- [x] #5 UI remains responsive during scan (no beach ball)
+- [x] #6 Existing E2E tests pass
+- [x] #7 New E2E tests verify progress display and non-blocking behavior
+- [x] #8 New Rust unit tests for ReconcileProgressEvent serialization
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -60,3 +60,51 @@ The fix is to make the command `async`, move fingerprint/hash computation into `
 - spawn_blocking — `watcher.rs:389`
 - EventEmitter trait — `events.rs:394`
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Changes
+
+### Backend (`crates/mt-tauri/src/`)
+
+**events.rs**
+- Added `ReconcileProgressEvent` struct with `phase`, `current`, `total` fields
+- Added `fingerprinting()`, `deduplicating()`, `complete()` constructors
+- Added `emit_reconcile_progress()` to `EventEmitter` trait and `AppHandle` impl
+- Added 6 unit tests for serialization, constructors, clone, and event name
+- Added to event name consistency and clone aggregate tests
+
+**library/commands.rs**
+- Converted `library_reconcile_scan` from `pub fn` to `pub async fn`
+- Wrapped all work in `tokio::task::spawn_blocking` to avoid blocking the main thread
+- Fingerprint + SHA-256 computation uses `rayon::par_iter()` for parallel I/O
+- Error counting uses `AtomicU32` for thread-safe accumulation
+- Emits `ReconcileProgressEvent` every 100 tracks during fingerprinting phase
+- Emits progress during deduplication phase
+- Emits `complete` event when done
+- DB writes remain sequential (SQLite single-writer constraint)
+
+### Frontend
+
+**js/components/settings-view.js**
+- Added `progress` field to `reconcileScan` state
+- `runReconcileScan()` subscribes to `reconcile:progress` via `listen()`, unsubscribes in `finally`
+
+**views/settings.html**
+- Added progress bar with phase label and `current / total` counter
+- Progress bar shows during fingerprinting and deduplication phases
+- Hidden when phase is `complete` or scan finishes
+
+### Tests
+
+**E2E (library-settings.spec.js)**
+- Added `event.listen` mock to existing Tauri mock setup (fixed webkit test failures)
+- Added test: progress bar displays during reconcile scan with mock progress events
+- Added test: UI remains responsive during scan (can navigate to other settings sections)
+- All 8 tests pass (6 existing + 2 new)
+
+**Rust**
+- 594 tests pass, 0 failures
+- 0 new clippy warnings
+<!-- SECTION:FINAL_SUMMARY:END -->
