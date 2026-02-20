@@ -7,7 +7,7 @@ import {
 /**
  * Watched Folders E2E Tests
  *
- * Tests for the Settings > General > Watched Folders UI.
+ * Tests for the Settings > Library > Watched Folders UI.
  * Note: Folder picker dialogs and actual file system operations require Tauri runtime.
  * These tests validate the UI behavior with mocked Tauri commands.
  */
@@ -17,12 +17,13 @@ test.describe('Watched Folders Settings UI', () => {
     await page.goto('/');
     await waitForAlpine(page);
 
-    // Navigate to Settings
+    // Navigate to Settings > Library
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
   });
 
-  test('should display Watched Folders section in Settings > General', async ({ page }) => {
+  test('should display Watched Folders section in Settings > Library', async ({ page }) => {
     const watchedFoldersHeader = page.locator('h4:has-text("Watched Folders")');
     await expect(watchedFoldersHeader).toBeVisible();
 
@@ -95,7 +96,8 @@ test.describe('Watched Folders with Mocked Tauri', () => {
     await waitForAlpine(page);
 
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
 
     // Wait for the settings view to initialize
     await page.waitForTimeout(200);
@@ -121,7 +123,8 @@ test.describe('Watched Folders with Mocked Tauri', () => {
     await waitForAlpine(page);
 
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
 
     // Wait for Alpine to process the watched folders
     await page.waitForTimeout(300);
@@ -144,7 +147,8 @@ test.describe('Watched Folders with Mocked Tauri', () => {
     await waitForAlpine(page);
 
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
     await page.waitForTimeout(300);
 
     const modeSelect = page.locator('[data-testid="watched-folder-item-1"] select');
@@ -168,7 +172,8 @@ test.describe('Watched Folders with Mocked Tauri', () => {
     await waitForAlpine(page);
 
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
     await page.waitForTimeout(300);
 
     // Continuous mode folder should have cadence input
@@ -191,7 +196,8 @@ test.describe('Watched Folders with Mocked Tauri', () => {
     await waitForAlpine(page);
 
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
     await page.waitForTimeout(300);
 
     const rescanBtn = page.locator('[data-testid="watched-folder-rescan-btn-1"]');
@@ -210,7 +216,8 @@ test.describe('Watched Folders with Mocked Tauri', () => {
     await waitForAlpine(page);
 
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
     await page.waitForTimeout(300);
 
     const removeBtn = page.locator('[data-testid="watched-folder-remove-btn-1"]');
@@ -229,7 +236,8 @@ test.describe('Watched Folders with Mocked Tauri', () => {
     await waitForAlpine(page);
 
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
     await page.waitForTimeout(300);
 
     const addBtn = page.locator('[data-testid="watched-folder-add-btn"]');
@@ -250,7 +258,8 @@ test.describe('Watched Folders with Mocked Tauri', () => {
     await waitForAlpine(page);
 
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
     await page.waitForTimeout(300);
 
     const pathSpan = page.locator('[data-testid="watched-folder-item-1"] span.font-mono');
@@ -310,7 +319,8 @@ test.describe('Watched Folders Actions', () => {
     await waitForAlpine(page);
 
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
     await page.waitForTimeout(300);
 
     // Verify 2 folders exist
@@ -338,7 +348,8 @@ test.describe('Watched Folders Actions', () => {
     await waitForAlpine(page);
 
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
     await page.waitForTimeout(300);
 
     // Change mode to startup
@@ -360,7 +371,8 @@ test.describe('Watched Folders Actions', () => {
     await waitForAlpine(page);
 
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
 
     // Set loading state directly via Alpine
     await page.evaluate(() => {
@@ -412,7 +424,8 @@ test.describe('Watched Folders Rescan', () => {
     await waitForAlpine(page);
 
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
     await page.waitForTimeout(300);
 
     // Click rescan button
@@ -438,7 +451,8 @@ test.describe('Watched Folders Rescan', () => {
     await waitForAlpine(page);
 
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForSelector('[data-testid="settings-section-general"]', { state: 'visible' });
+    await page.click('[data-testid="settings-nav-library"]');
+    await page.waitForSelector('[data-testid="settings-section-library"]', { state: 'visible' });
     await page.waitForTimeout(300);
 
     // Set scanning state directly via Alpine
