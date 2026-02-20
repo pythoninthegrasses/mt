@@ -46,12 +46,39 @@ export function createPlayerStore(Alpine) {
       });
 
       this._mediaKeyListeners = await Promise.all([
-        listen('mediakey://play', () => this.resume()),
-        listen('mediakey://pause', () => this.pause()),
-        listen('mediakey://toggle', () => this.togglePlay()),
-        listen('mediakey://next', () => this.next()),
-        listen('mediakey://previous', () => this.previous()),
-        listen('mediakey://stop', () => this.stop()),
+        listen('mediakey://play', () => {
+          console.log('[media-keys]', 'play', {
+            isPlaying: this.isPlaying,
+            trackId: this.currentTrack?.id,
+          });
+          this.resume();
+        }),
+        listen('mediakey://pause', () => {
+          console.log('[media-keys]', 'pause', {
+            isPlaying: this.isPlaying,
+            trackId: this.currentTrack?.id,
+          });
+          this.pause();
+        }),
+        listen('mediakey://toggle', () => {
+          console.log('[media-keys]', 'toggle', {
+            isPlaying: this.isPlaying,
+            trackId: this.currentTrack?.id,
+          });
+          this.togglePlay();
+        }),
+        listen('mediakey://next', () => {
+          console.log('[media-keys]', 'next', { trackId: this.currentTrack?.id });
+          this.next();
+        }),
+        listen('mediakey://previous', () => {
+          console.log('[media-keys]', 'previous', { trackId: this.currentTrack?.id });
+          this.previous();
+        }),
+        listen('mediakey://stop', () => {
+          console.log('[media-keys]', 'stop', { trackId: this.currentTrack?.id });
+          this.stop();
+        }),
       ]);
 
       try {
@@ -419,6 +446,13 @@ export function createPlayerStore(Alpine) {
     },
 
     async _updateNowPlayingState() {
+      const state = this.isPlaying ? 'playing' : 'paused';
+      console.log('[media-controls]', 'update_now_playing_state', {
+        state,
+        progressMs: this.currentTime,
+        trackId: this.currentTrack?.id,
+      });
+
       try {
         if (this.isPlaying) {
           await invoke('media_set_playing', { progressMs: this.currentTime || null });

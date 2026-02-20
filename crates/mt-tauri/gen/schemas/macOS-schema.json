@@ -2589,6 +2589,72 @@
           "markdownDescription": "Denies the save command without any pre-configured scope."
         },
         {
+          "description": "No features are enabled by default, as we believe\nthe shortcuts can be inherently dangerous and it is\napplication specific if specific shortcuts should be\nregistered or unregistered.\n",
+          "type": "string",
+          "const": "global-shortcut:default",
+          "markdownDescription": "No features are enabled by default, as we believe\nthe shortcuts can be inherently dangerous and it is\napplication specific if specific shortcuts should be\nregistered or unregistered.\n"
+        },
+        {
+          "description": "Enables the is_registered command without any pre-configured scope.",
+          "type": "string",
+          "const": "global-shortcut:allow-is-registered",
+          "markdownDescription": "Enables the is_registered command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the register command without any pre-configured scope.",
+          "type": "string",
+          "const": "global-shortcut:allow-register",
+          "markdownDescription": "Enables the register command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the register_all command without any pre-configured scope.",
+          "type": "string",
+          "const": "global-shortcut:allow-register-all",
+          "markdownDescription": "Enables the register_all command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the unregister command without any pre-configured scope.",
+          "type": "string",
+          "const": "global-shortcut:allow-unregister",
+          "markdownDescription": "Enables the unregister command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the unregister_all command without any pre-configured scope.",
+          "type": "string",
+          "const": "global-shortcut:allow-unregister-all",
+          "markdownDescription": "Enables the unregister_all command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the is_registered command without any pre-configured scope.",
+          "type": "string",
+          "const": "global-shortcut:deny-is-registered",
+          "markdownDescription": "Denies the is_registered command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the register command without any pre-configured scope.",
+          "type": "string",
+          "const": "global-shortcut:deny-register",
+          "markdownDescription": "Denies the register command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the register_all command without any pre-configured scope.",
+          "type": "string",
+          "const": "global-shortcut:deny-register-all",
+          "markdownDescription": "Denies the register_all command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unregister command without any pre-configured scope.",
+          "type": "string",
+          "const": "global-shortcut:deny-unregister",
+          "markdownDescription": "Denies the unregister command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unregister_all command without any pre-configured scope.",
+          "type": "string",
+          "const": "global-shortcut:deny-unregister-all",
+          "markdownDescription": "Denies the unregister_all command without any pre-configured scope."
+        },
+        {
           "description": "Default permissions for MCP Bridge plugin\n#### This default permission set includes:\n\n- `allow-capture-native-screenshot`\n- `allow-emit-event`\n- `allow-execute-command`\n- `allow-execute-js`\n- `allow-get-backend-state`\n- `allow-get-ipc-events`\n- `allow-get-window-info`\n- `allow-list-windows`\n- `allow-report-ipc-event`\n- `allow-request-script-injection`\n- `allow-script-result`\n- `allow-start-ipc-monitor`\n- `allow-stop-ipc-monitor`",
           "type": "string",
           "const": "mcp-bridge:default",

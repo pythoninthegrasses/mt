@@ -23,11 +23,11 @@ export function initStores(Alpine) {
   // Library store (no store dependencies, uses API)
   createLibraryStore(Alpine);
 
-  // Queue store (may reference library)
-  createQueueStore(Alpine);
-
-  // Player store (may reference queue)
+  // Player store before queue (queue.clear() calls player.stop())
   createPlayerStore(Alpine);
+
+  // Queue store (references player and library)
+  createQueueStore(Alpine);
 
   console.log('[stores] All stores registered');
 

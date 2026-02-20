@@ -318,7 +318,7 @@ export function createQueueStore(Alpine) {
         // Currently playing track was removed
         if (this.items.length === 0) {
           this.currentIndex = -1;
-          Alpine.store('player').stop();
+          Alpine.store('player')?.stop();
         } else if (this.currentIndex >= this.items.length) {
           this.currentIndex = this.items.length - 1;
         }
@@ -344,7 +344,7 @@ export function createQueueStore(Alpine) {
       this._originalOrder = [];
       // _playHistory intentionally preserved - persists across queue rebuilds
 
-      Alpine.store('player').stop();
+      Alpine.store('player')?.stop();
 
       // Persist to backend
       try {

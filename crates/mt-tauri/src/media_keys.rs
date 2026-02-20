@@ -2,7 +2,7 @@ use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, M
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-use tracing::debug;
+use tracing::{debug, warn};
 
 #[derive(Debug, Clone, Default)]
 pub struct NowPlayingInfo {
@@ -91,6 +91,13 @@ impl MediaKeyManager {
     }
 
     pub fn set_metadata(&self, info: NowPlayingInfo) -> Result<(), String> {
+        debug!(
+            title = ?info.title,
+            artist = ?info.artist,
+            album = ?info.album,
+            duration_ms = ?info.duration.map(|d| d.as_millis()),
+            "Setting media metadata"
+        );
         let mut controls = self.controls.lock().map_err(|e| e.to_string())?;
         controls
             .set_metadata(MediaMetadata {
@@ -100,32 +107,47 @@ impl MediaKeyManager {
                 duration: info.duration,
                 cover_url: info.cover_url.as_deref(),
             })
-            .map_err(|e| format!("Failed to set metadata: {:?}", e))
+            .map_err(|e| {
+                warn!(error = %e, "Failed to set metadata");
+                format!("Failed to set metadata: {:?}", e)
+            })
     }
 
     pub fn set_playing(&self, progress: Option<Duration>) -> Result<(), String> {
+        debug!(progress_ms = ?progress.map(|d| d.as_millis()), "Setting media playback → Playing");
         let mut controls = self.controls.lock().map_err(|e| e.to_string())?;
         controls
             .set_playback(MediaPlayback::Playing {
                 progress: progress.map(MediaPosition),
             })
-            .map_err(|e| format!("Failed to set playing state: {:?}", e))
+            .map_err(|e| {
+                warn!(error = %e, "Failed to set playing state");
+                format!("Failed to set playing state: {:?}", e)
+            })
     }
 
     pub fn set_paused(&self, progress: Option<Duration>) -> Result<(), String> {
+        debug!(progress_ms = ?progress.map(|d| d.as_millis()), "Setting media playback → Paused");
         let mut controls = self.controls.lock().map_err(|e| e.to_string())?;
         controls
             .set_playback(MediaPlayback::Paused {
                 progress: progress.map(MediaPosition),
             })
-            .map_err(|e| format!("Failed to set paused state: {:?}", e))
+            .map_err(|e| {
+                warn!(error = %e, "Failed to set paused state");
+                format!("Failed to set paused state: {:?}", e)
+            })
     }
 
     pub fn set_stopped(&self) -> Result<(), String> {
+        debug!("Setting media playback → Stopped");
         let mut controls = self.controls.lock().map_err(|e| e.to_string())?;
         controls
             .set_playback(MediaPlayback::Stopped)
-            .map_err(|e| format!("Failed to set stopped state: {:?}", e))
+            .map_err(|e| {
+                warn!(error = %e, "Failed to set stopped state");
+                format!("Failed to set stopped state: {:?}", e)
+            })
     }
 }
 

@@ -17,6 +17,7 @@
     "dialog:default",
     "dialog:allow-open",
     "opener:default",
-    "store:default"
+    "store:default",
+    "global-shortcut:allow-register"
   ]
 }

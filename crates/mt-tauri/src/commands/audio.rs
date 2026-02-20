@@ -118,14 +118,23 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                     let _ = reply.send(result);
                 }
                 AudioCommand::Play(reply) => {
-                    let result = engine.play().map_err(|e| e.to_string());
+                    debug!("Audio thread received Play command");
+                    let result = engine.play().map_err(|e| {
+                        error!(error = %e, "Audio play failed");
+                        e.to_string()
+                    });
                     let _ = reply.send(result);
                 }
                 AudioCommand::Pause(reply) => {
-                    let result = engine.pause().map_err(|e| e.to_string());
+                    debug!("Audio thread received Pause command");
+                    let result = engine.pause().map_err(|e| {
+                        error!(error = %e, "Audio pause failed");
+                        e.to_string()
+                    });
                     let _ = reply.send(result);
                 }
                 AudioCommand::Stop(reply) => {
+                    debug!("Audio thread received Stop command");
                     engine.stop();
                     let _ = reply.send(Ok(()));
                 }
