@@ -3,6 +3,7 @@
 //! Extracts audio metadata from files using the lofty crate.
 //! Supports parallel extraction using rayon.
 
+use lofty::config::{ParseOptions, ParsingMode};
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use rayon::prelude::*;
@@ -32,9 +33,10 @@ pub fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> {
         ..Default::default()
     };
 
-    // Try to read audio file
+    // Try to read audio file (relaxed parsing tolerates malformed tags)
+    let parse_options = ParseOptions::new().parsing_mode(ParsingMode::Relaxed);
     let tagged_file = match Probe::open(path) {
-        Ok(probe) => match probe.read() {
+        Ok(probe) => match probe.options(parse_options).read() {
             Ok(file) => file,
             Err(e) => {
                 // Use filename as title if we can't read the file

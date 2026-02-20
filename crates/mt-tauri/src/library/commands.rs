@@ -14,7 +14,7 @@ use crate::events::{EventEmitter, LibraryUpdatedEvent};
 use crate::scanner::artwork::Artwork;
 use crate::scanner::artwork_cache::ArtworkCache;
 use crate::scanner::fingerprint::{compute_content_hash, FileFingerprint};
-use crate::scanner::metadata::extract_metadata;
+use crate::scanner::metadata::extract_metadata_or_default;
 
 /// Response for paginated library queries
 #[derive(Clone, serde::Serialize)]
@@ -242,9 +242,8 @@ pub fn library_rescan_track(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Track with id {} not found", track_id))?;
 
-    // Extract fresh metadata
-    let extracted = extract_metadata(&track.filepath)
-        .map_err(|e| format!("Failed to extract metadata: {}", e))?;
+    // Extract fresh metadata (use or_default to handle files with malformed tags)
+    let extracted = extract_metadata_or_default(&track.filepath);
 
     // Convert to TrackMetadata for update
     let metadata = TrackMetadata {
