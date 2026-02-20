@@ -1,10 +1,10 @@
 ---
 id: task-109
 title: 'P5: Add Windows platform support'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-01-12 04:09'
-updated_date: '2026-01-27 03:02'
+updated_date: '2026-02-20 18:32'
 labels:
   - windows
   - platform

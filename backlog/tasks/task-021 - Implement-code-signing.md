@@ -1,18 +1,22 @@
 ---
 id: TASK-021
 title: Implement code signing
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2025-09-17 04:11'
-updated_date: '2026-02-10 06:20'
+updated_date: '2026-02-20 21:26'
 labels:
   - signing
   - macos
   - ci-cd
   - distribution
 dependencies: []
-priority: high
-ordinal: 38500
+references:
+  - 'https://tauri.app/distribute/sign/macos/'
+  - 'https://tauri.app/distribute/sign/windows/'
+  - 'https://tauri.app/distribute/sign/linux/'
+priority: medium
+ordinal: 3000
 ---
 
 ## Description

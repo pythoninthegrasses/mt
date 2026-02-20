@@ -1,18 +1,20 @@
 ---
-id: task-265
+id: TASK-265
 title: 'Custom HTML titlebar with decorations:false on Windows'
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-11 07:09'
-updated_date: '2026-02-16 16:13'
+updated_date: '2026-02-20 21:27'
 labels:
   - enhancement
   - frontend
   - windows
   - titlebar
 dependencies: []
-priority: medium
-ordinal: 39500
+references:
+  - 'https://v2.tauri.app/reference/javascript/api/namespacewindow/#titlebar'
+priority: low
+ordinal: 4000
 ---
 
 ## Description
