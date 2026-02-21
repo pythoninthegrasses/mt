@@ -442,12 +442,29 @@ export function createArtistsBrowser(Alpine) {
             this.showPlaylistSubmenu = !this.showPlaylistSubmenu;
           },
         },
+        {
+          label: 'Add to Liked Songs',
+          action: () => this._toggleFavorite(track),
+        },
         { type: 'separator' },
         {
           label: 'Show in Finder',
           action: () => this._showInFinder(track),
         },
       ];
+
+      // Check favorite status and update label asynchronously
+      api.favorites.check(track.id).then((result) => {
+        if (!this.contextMenu) return;
+        const favoriteItem = this.contextMenu.items.find(
+          (i) => i.label === 'Add to Liked Songs' || i.label === 'Remove from Liked Songs',
+        );
+        if (favoriteItem) {
+          favoriteItem.label = result.is_favorite
+            ? 'Remove from Liked Songs'
+            : 'Add to Liked Songs';
+        }
+      }).catch(() => {});
 
       const menuHeight = 220;
       const menuWidth = 200;
@@ -491,6 +508,29 @@ export function createArtistsBrowser(Alpine) {
       await api.queue.add([track.id], pos);
       await this.queue._loadFromBackend();
       this.$store.ui.toast('Playing next', 'success');
+    },
+
+    async _toggleFavorite(track) {
+      this.closeContextMenu();
+      try {
+        const result = await api.favorites.check(track.id);
+        if (result.is_favorite) {
+          await api.favorites.remove(track.id);
+        } else {
+          await api.favorites.add(track.id);
+        }
+        const player = this.$store.player;
+        if (player.currentTrack?.id === track.id) {
+          player.isFavorite = !result.is_favorite;
+        }
+        this.library.refreshIfLikedSongs();
+      } catch (error) {
+        console.error('[context-menu]', 'toggle_favorite_error', {
+          trackId: track.id,
+          error: error.message,
+        });
+        this.$store.ui.toast('Failed to update liked songs', 'error');
+      }
     },
 
     async addToPlaylist(playlistId) {
