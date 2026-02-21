@@ -50,6 +50,7 @@ jobs:
           security default-keychain -s ci_signing.keychain
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" ci_signing.keychain
           security set-keychain-settings -t 3600 -u ci_signing.keychain
+          security list-keychains -d user -s ci_signing.keychain login.keychain
           security import certificate.p12 -k ci_signing.keychain \
             -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
