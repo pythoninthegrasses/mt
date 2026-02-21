@@ -80,8 +80,24 @@ jobs:
         with:
           tagName: ${{ github.event.release.tag_name }}
           releaseId: ${{ github.event.release.id }}
-          args: --target aarch64-apple-darwin --config '{"build":{"beforeBuildCommand":""}}'
+          args: --target aarch64-apple-darwin --bundles app --config '{"build":{"beforeBuildCommand":""}}'
           projectPath: './crates/mt-tauri'
+
+      - name: Create DMG
+        run: |
+          APP_PATH="target/aarch64-apple-darwin/release/bundle/macos/mt.app"
+          DMG_PATH="target/aarch64-apple-darwin/release/bundle/dmg/mt_1.0.0_aarch64.dmg"
+          mkdir -p "$(dirname "$DMG_PATH")"
+          hdiutil create -volname "mt" -srcfolder "$APP_PATH" \
+            -ov -format UDZO "$DMG_PATH"
+
+      - name: Upload DMG to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            target/aarch64-apple-darwin/release/bundle/dmg/mt_1.0.0_aarch64.dmg
 
       - name: Cleanup CI keychain
         if: always()
