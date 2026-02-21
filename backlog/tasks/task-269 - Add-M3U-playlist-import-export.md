@@ -1,10 +1,10 @@
 ---
-id: task-269
+id: TASK-269
 title: Add M3U playlist import/export
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-16 15:08'
-updated_date: '2026-02-16 16:13'
+updated_date: '2026-02-21 00:12'
 labels:
   - playlists
   - feature
@@ -33,3 +33,9 @@ M3U is the universal playlist interchange format. Parse file paths from M3U, mat
 - [ ] #7 Rust unit tests for M3U parsing and path resolution
 - [ ] #8 Playwright E2E test for import and export workflows
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Not interested in adding this feature.
+<!-- SECTION:FINAL_SUMMARY:END -->

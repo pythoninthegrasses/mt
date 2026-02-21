@@ -1,10 +1,10 @@
 ---
-id: task-267
+id: TASK-267
 title: Add playback speed control
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-16 15:08'
-updated_date: '2026-02-16 16:13'
+updated_date: '2026-02-21 00:19'
 labels:
   - audio
   - feature
@@ -33,3 +33,9 @@ Note: rodio's set_speed changes pitch proportionally. Pitch-invariant time-stret
 - [ ] #6 Rust unit tests for speed command handling
 - [ ] #7 Playwright E2E test for speed selector interaction
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Won't do
+<!-- SECTION:FINAL_SUMMARY:END -->
