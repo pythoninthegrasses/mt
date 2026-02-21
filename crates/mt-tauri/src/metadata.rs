@@ -6,6 +6,16 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+/// Convert empty or whitespace-only tag strings to None.
+fn non_empty(s: &str) -> Option<String> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TrackMetadata {
     pub path: String,
@@ -57,7 +67,9 @@ pub fn get_track_metadata(path: String) -> Result<TrackMetadata, String> {
     };
 
     if let Some(tagged_file) = tagged_file {
-        let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag());
+        let tag = tagged_file
+            .primary_tag()
+            .or_else(|| tagged_file.first_tag());
         let properties = tagged_file.properties();
 
         let format = match tagged_file.file_type() {
@@ -76,23 +88,33 @@ pub fn get_track_metadata(path: String) -> Result<TrackMetadata, String> {
             _ => "Unknown",
         };
 
-        let (title, artist, album, album_artist, track_number, track_total, disc_number, disc_total, year, genre) =
-            if let Some(tag) = tag {
-                (
-                    tag.title().map(|s| s.to_string()),
-                    tag.artist().map(|s| s.to_string()),
-                    tag.album().map(|s| s.to_string()),
-                    tag.get_string(&ItemKey::AlbumArtist).map(|s| s.to_string()),
-                    tag.track(),
-                    tag.track_total(),
-                    tag.disk(),
-                    tag.disk_total(),
-                    tag.year(),
-                    tag.genre().map(|s| s.to_string()),
-                )
-            } else {
-                (None, None, None, None, None, None, None, None, None, None)
-            };
+        let (
+            title,
+            artist,
+            album,
+            album_artist,
+            track_number,
+            track_total,
+            disc_number,
+            disc_total,
+            year,
+            genre,
+        ) = if let Some(tag) = tag {
+            (
+                tag.title().and_then(|s| non_empty(&s)),
+                tag.artist().and_then(|s| non_empty(&s)),
+                tag.album().and_then(|s| non_empty(&s)),
+                tag.get_string(&ItemKey::AlbumArtist).and_then(non_empty),
+                tag.track(),
+                tag.track_total(),
+                tag.disk(),
+                tag.disk_total(),
+                tag.year(),
+                tag.genre().and_then(|s| non_empty(&s)),
+            )
+        } else {
+            (None, None, None, None, None, None, None, None, None, None)
+        };
 
         Ok(TrackMetadata {
             path,
@@ -115,7 +137,10 @@ pub fn get_track_metadata(path: String) -> Result<TrackMetadata, String> {
     } else {
         // File exists but tags are unreadable — return empty metadata so the
         // editor can still open and the user can write new tags.
-        tracing::warn!("Could not parse tags for {:?}; returning empty metadata", path);
+        tracing::warn!(
+            "Could not parse tags for {:?}; returning empty metadata",
+            path
+        );
         Ok(TrackMetadata {
             path,
             title: None,
@@ -467,7 +492,20 @@ mod tests {
 
     #[test]
     fn test_supported_formats() {
-        let formats = ["AAC", "AIFF", "APE", "FLAC", "MP3", "M4A", "MPC", "Opus", "Ogg Vorbis", "Speex", "WAV", "WavPack"];
+        let formats = [
+            "AAC",
+            "AIFF",
+            "APE",
+            "FLAC",
+            "MP3",
+            "M4A",
+            "MPC",
+            "Opus",
+            "Ogg Vorbis",
+            "Speex",
+            "WAV",
+            "WavPack",
+        ];
 
         for format in formats {
             let metadata = TrackMetadata {
@@ -651,9 +689,7 @@ mod tests {
 
     #[test]
     fn test_batch_metadata_missing_file_returns_error() {
-        let result = get_tracks_metadata_batch(vec![
-            "/nonexistent/file1.mp3".to_string(),
-        ]);
+        let result = get_tracks_metadata_batch(vec!["/nonexistent/file1.mp3".to_string()]);
         assert!(result.is_err());
     }
 

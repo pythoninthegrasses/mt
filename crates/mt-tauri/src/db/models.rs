@@ -203,14 +203,12 @@ pub struct PaginatedResult<T> {
 }
 
 /// Sort order for queries
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SortOrder {
     Asc,
     #[default]
     Desc,
 }
-
 
 impl SortOrder {
     pub fn as_sql(&self) -> &'static str {
@@ -222,8 +220,7 @@ impl SortOrder {
 }
 
 /// Valid sort columns for library queries
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LibrarySortColumn {
     Title,
     Artist,
@@ -240,9 +237,8 @@ pub enum LibrarySortColumn {
     TrackNumber,
 }
 
-
 /// Raw column expression for artist sort (no COLLATE).
-const ARTIST_SORT_EXPR: &str = "COALESCE(album_artist, artist)";
+const ARTIST_SORT_EXPR: &str = "COALESCE(NULLIF(album_artist, ''), artist)";
 
 impl LibrarySortColumn {
     /// Raw column expression without COLLATE or wrapping
@@ -279,7 +275,9 @@ impl LibrarySortColumn {
     pub fn as_sql(&self) -> &'static str {
         match self {
             LibrarySortColumn::Title => "title COLLATE NOCASE",
-            LibrarySortColumn::Artist => "COALESCE(album_artist, artist) COLLATE NOCASE",
+            LibrarySortColumn::Artist => {
+                "COALESCE(NULLIF(album_artist, ''), artist) COLLATE NOCASE"
+            }
             LibrarySortColumn::Album => "album COLLATE NOCASE",
             LibrarySortColumn::AddedDate => "added_date",
             LibrarySortColumn::PlayCount => "play_count",
@@ -321,11 +319,17 @@ impl LibrarySortColumn {
     /// Uses CAST(... AS INTEGER) because track_number and disc_number are TEXT columns.
     pub fn secondary_sort_sql(&self) -> &'static str {
         match self {
-            LibrarySortColumn::Artist => ", album COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC",
-            LibrarySortColumn::Album => ", COALESCE(album_artist, artist) COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC",
+            LibrarySortColumn::Artist => {
+                ", album COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC"
+            }
+            LibrarySortColumn::Album => {
+                ", COALESCE(NULLIF(album_artist, ''), artist) COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC"
+            }
             LibrarySortColumn::DiscNumber => ", CAST(track_number AS INTEGER) ASC",
             LibrarySortColumn::TrackNumber => ", CAST(disc_number AS INTEGER) ASC",
-            _ => ", COALESCE(album_artist, artist) COLLATE NOCASE ASC, album COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC",
+            _ => {
+                ", COALESCE(NULLIF(album_artist, ''), artist) COLLATE NOCASE ASC, album COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC"
+            }
         }
     }
 
@@ -389,6 +393,34 @@ mod tests {
         let deserialized: Track = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.id, 1);
         assert_eq!(deserialized.title, Some("Test Song".to_string()));
+    }
+
+    #[test]
+    fn test_artist_sort_expr_uses_nullif() {
+        // Empty album_artist should fall through to artist, not sort as ""
+        let expr = ARTIST_SORT_EXPR;
+        assert!(
+            expr.contains("NULLIF"),
+            "ARTIST_SORT_EXPR must use NULLIF to handle empty album_artist: {expr}"
+        );
+        assert!(
+            expr.contains("NULLIF(album_artist, '')"),
+            "ARTIST_SORT_EXPR must convert empty album_artist to NULL: {expr}"
+        );
+    }
+
+    #[test]
+    fn test_artist_order_by_with_ignore_words() {
+        let col = LibrarySortColumn::Artist;
+        let order_by = col.as_order_by(Some("the, a, an"));
+        assert!(
+            order_by.contains("NULLIF(album_artist, '')"),
+            "Artist ORDER BY must handle empty album_artist: {order_by}"
+        );
+        assert!(
+            order_by.contains("strip_sort_prefix"),
+            "Artist ORDER BY with ignore_words must use strip_sort_prefix: {order_by}"
+        );
     }
 
     #[test]

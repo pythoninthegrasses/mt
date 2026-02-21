@@ -8,11 +8,21 @@ use lofty::prelude::*;
 use lofty::probe::Probe;
 use rayon::prelude::*;
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::scanner::fingerprint::FileFingerprint;
 use crate::scanner::{ExtractedMetadata, ScanResult};
+
+/// Convert empty or whitespace-only tag strings to None.
+fn non_empty(s: &str) -> Option<String> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
 
 /// Extract metadata from a single audio file
 pub fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> {
@@ -78,10 +88,10 @@ pub fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> {
         .primary_tag()
         .or_else(|| tagged_file.first_tag())
     {
-        metadata.title = tag.title().map(|s| s.to_string());
-        metadata.artist = tag.artist().map(|s| s.to_string());
-        metadata.album = tag.album().map(|s| s.to_string());
-        metadata.album_artist = tag.get_string(&ItemKey::AlbumArtist).map(|s| s.to_string());
+        metadata.title = tag.title().and_then(|s| non_empty(&s));
+        metadata.artist = tag.artist().and_then(|s| non_empty(&s));
+        metadata.album = tag.album().and_then(|s| non_empty(&s));
+        metadata.album_artist = tag.get_string(&ItemKey::AlbumArtist).and_then(non_empty);
 
         // Track number can be in format "1" or "1/10"
         metadata.track_number = tag.track().map(|n| n.to_string());
@@ -93,7 +103,7 @@ pub fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> {
         // Year/date
         metadata.date = tag.year().map(|y| y.to_string());
 
-        metadata.genre = tag.genre().map(|s| s.to_string());
+        metadata.genre = tag.genre().and_then(|s| non_empty(&s));
     }
 
     // Use filename as title if no title found
