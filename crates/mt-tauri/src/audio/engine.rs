@@ -2,7 +2,6 @@ use crate::audio::error::AudioError;
 use rodio::{Decoder, OutputStream, OutputStreamBuilder, Sink, Source};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::BufReader;
 use std::path::Path;
 use std::time::Duration;
 use tracing::{debug, error, info};
@@ -64,8 +63,7 @@ impl AudioEngine {
         }
 
         let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let source = Decoder::new(reader)
+        let source = Decoder::try_from(file)
             .map_err(|e| {
                 error!(path, error = %e, "Failed to decode track");
                 AudioError::Decode(e.to_string())
@@ -169,8 +167,7 @@ impl AudioEngine {
         let was_playing = self.state == PlaybackState::Playing;
 
         let file = File::open(&track_info.path)?;
-        let reader = BufReader::new(file);
-        let source = Decoder::new(reader)
+        let source = Decoder::try_from(file)
             .map_err(|e| {
                 error!(path = %track_info.path, error = %e, "Decode failed during seek-by-reload");
                 AudioError::Decode(e.to_string())
