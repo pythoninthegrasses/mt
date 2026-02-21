@@ -3,7 +3,7 @@
 //! Provides persistent key-value storage for user preferences.
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_store::StoreExt;
@@ -79,18 +79,17 @@ pub fn settings_get_all(app: AppHandle) -> Result<AllSettingsResponse, String> {
 
     // Load all settings with defaults
     for (key, default) in defaults {
-        let value = store
-            .get(key)
-            .unwrap_or(default);
+        let value = store.get(key).unwrap_or(default);
         settings.insert(key.to_string(), value);
     }
 
     // Also include any extra keys that might be in the store
     for key in store.keys() {
         if !settings.contains_key(&key)
-            && let Some(value) = store.get(&key) {
-                settings.insert(key, value.clone());
-            }
+            && let Some(value) = store.get(&key)
+        {
+            settings.insert(key, value.clone());
+        }
     }
 
     Ok(AllSettingsResponse { settings })
@@ -116,19 +115,28 @@ pub fn settings_get(app: AppHandle, key: String) -> Result<SettingResponse, Stri
 /// Set a single setting
 #[tracing::instrument(skip(app))]
 #[tauri::command]
-pub fn settings_set(app: AppHandle, key: String, value: JsonValue) -> Result<SettingResponse, String> {
+pub fn settings_set(
+    app: AppHandle,
+    key: String,
+    value: JsonValue,
+) -> Result<SettingResponse, String> {
     let store = app
         .store(STORE_NAME)
         .map_err(|e| format!("Failed to open settings store: {}", e))?;
 
     store.set(key.clone(), value.clone());
-    store.save().map_err(|e| format!("Failed to save settings: {}", e))?;
+    store
+        .save()
+        .map_err(|e| format!("Failed to save settings: {}", e))?;
 
     // Emit settings changed event
-    let _ = app.emit("settings://changed", SettingsChangedPayload {
-        key: key.clone(),
-        value: value.clone(),
-    });
+    let _ = app.emit(
+        "settings://changed",
+        SettingsChangedPayload {
+            key: key.clone(),
+            value: value.clone(),
+        },
+    );
 
     Ok(SettingResponse { key, value })
 }
@@ -136,7 +144,10 @@ pub fn settings_set(app: AppHandle, key: String, value: JsonValue) -> Result<Set
 /// Update multiple settings at once
 #[tracing::instrument(skip(app, settings))]
 #[tauri::command]
-pub fn settings_update(app: AppHandle, settings: SettingsUpdateRequest) -> Result<SettingsUpdateResponse, String> {
+pub fn settings_update(
+    app: AppHandle,
+    settings: SettingsUpdateRequest,
+) -> Result<SettingsUpdateResponse, String> {
     let store = app
         .store(STORE_NAME)
         .map_err(|e| format!("Failed to open settings store: {}", e))?;
@@ -148,19 +159,25 @@ pub fn settings_update(app: AppHandle, settings: SettingsUpdateRequest) -> Resul
         let vol = volume.clamp(0, 100);
         store.set("volume".to_string(), json!(vol));
         updated.push("volume".to_string());
-        let _ = app.emit("settings://changed", SettingsChangedPayload {
-            key: "volume".to_string(),
-            value: json!(vol),
-        });
+        let _ = app.emit(
+            "settings://changed",
+            SettingsChangedPayload {
+                key: "volume".to_string(),
+                value: json!(vol),
+            },
+        );
     }
 
     if let Some(shuffle) = settings.shuffle {
         store.set("shuffle".to_string(), json!(shuffle));
         updated.push("shuffle".to_string());
-        let _ = app.emit("settings://changed", SettingsChangedPayload {
-            key: "shuffle".to_string(),
-            value: json!(shuffle),
-        });
+        let _ = app.emit(
+            "settings://changed",
+            SettingsChangedPayload {
+                key: "shuffle".to_string(),
+                value: json!(shuffle),
+            },
+        );
     }
 
     if let Some(ref loop_mode) = settings.loop_mode {
@@ -168,20 +185,26 @@ pub fn settings_update(app: AppHandle, settings: SettingsUpdateRequest) -> Resul
         if ["none", "all", "one"].contains(&loop_mode.as_str()) {
             store.set("loop_mode".to_string(), json!(loop_mode));
             updated.push("loop_mode".to_string());
-            let _ = app.emit("settings://changed", SettingsChangedPayload {
-                key: "loop_mode".to_string(),
-                value: json!(loop_mode),
-            });
+            let _ = app.emit(
+                "settings://changed",
+                SettingsChangedPayload {
+                    key: "loop_mode".to_string(),
+                    value: json!(loop_mode),
+                },
+            );
         }
     }
 
     if let Some(ref theme) = settings.theme {
         store.set("theme".to_string(), json!(theme));
         updated.push("theme".to_string());
-        let _ = app.emit("settings://changed", SettingsChangedPayload {
-            key: "theme".to_string(),
-            value: json!(theme),
-        });
+        let _ = app.emit(
+            "settings://changed",
+            SettingsChangedPayload {
+                key: "theme".to_string(),
+                value: json!(theme),
+            },
+        );
     }
 
     if let Some(sidebar_width) = settings.sidebar_width {
@@ -189,10 +212,13 @@ pub fn settings_update(app: AppHandle, settings: SettingsUpdateRequest) -> Resul
         let width = sidebar_width.clamp(100, 500);
         store.set("sidebar_width".to_string(), json!(width));
         updated.push("sidebar_width".to_string());
-        let _ = app.emit("settings://changed", SettingsChangedPayload {
-            key: "sidebar_width".to_string(),
-            value: json!(width),
-        });
+        let _ = app.emit(
+            "settings://changed",
+            SettingsChangedPayload {
+                key: "sidebar_width".to_string(),
+                value: json!(width),
+            },
+        );
     }
 
     if let Some(queue_panel_height) = settings.queue_panel_height {
@@ -200,14 +226,19 @@ pub fn settings_update(app: AppHandle, settings: SettingsUpdateRequest) -> Resul
         let height = queue_panel_height.clamp(100, 800);
         store.set("queue_panel_height".to_string(), json!(height));
         updated.push("queue_panel_height".to_string());
-        let _ = app.emit("settings://changed", SettingsChangedPayload {
-            key: "queue_panel_height".to_string(),
-            value: json!(height),
-        });
+        let _ = app.emit(
+            "settings://changed",
+            SettingsChangedPayload {
+                key: "queue_panel_height".to_string(),
+                value: json!(height),
+            },
+        );
     }
 
     if !updated.is_empty() {
-        store.save().map_err(|e| format!("Failed to save settings: {}", e))?;
+        store
+            .save()
+            .map_err(|e| format!("Failed to save settings: {}", e))?;
     }
 
     Ok(SettingsUpdateResponse { updated })
@@ -231,13 +262,18 @@ pub fn settings_reset(app: AppHandle) -> Result<AllSettingsResponse, String> {
         store.set(key.to_string(), value.clone());
         settings.insert(key.to_string(), value.clone());
 
-        let _ = app.emit("settings://changed", SettingsChangedPayload {
-            key: key.to_string(),
-            value,
-        });
+        let _ = app.emit(
+            "settings://changed",
+            SettingsChangedPayload {
+                key: key.to_string(),
+                value,
+            },
+        );
     }
 
-    store.save().map_err(|e| format!("Failed to save settings: {}", e))?;
+    store
+        .save()
+        .map_err(|e| format!("Failed to save settings: {}", e))?;
 
     // Emit reset event
     let _ = app.emit("settings://reset", ());

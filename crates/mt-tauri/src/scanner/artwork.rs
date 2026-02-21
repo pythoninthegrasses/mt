@@ -3,7 +3,7 @@
 //! Supports extracting embedded artwork from audio files and
 //! finding folder-based artwork (cover.jpg, folder.jpg, etc.)
 
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,9 @@ pub fn get_embedded_artwork(filepath: &str) -> Option<Artwork> {
     let tagged_file = Probe::open(path).ok()?.read().ok()?;
 
     // Try primary tag first, then any tag
-    let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag())?;
+    let tag = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag())?;
 
     // Get pictures from the tag
     let pictures = tag.pictures();
@@ -86,23 +88,24 @@ pub fn get_folder_artwork(filepath: &str) -> Option<Artwork> {
     for filename in ARTWORK_FILENAMES {
         let artwork_path = folder.join(filename);
         if artwork_path.exists()
-            && let Ok(data) = fs::read(&artwork_path) {
-                let ext = artwork_path.extension()?.to_str()?.to_lowercase();
-                let mime_type = match ext.as_str() {
-                    "jpg" | "jpeg" => "image/jpeg",
-                    "png" => "image/png",
-                    "gif" => "image/gif",
-                    "bmp" => "image/bmp",
-                    _ => "image/jpeg",
-                };
+            && let Ok(data) = fs::read(&artwork_path)
+        {
+            let ext = artwork_path.extension()?.to_str()?.to_lowercase();
+            let mime_type = match ext.as_str() {
+                "jpg" | "jpeg" => "image/jpeg",
+                "png" => "image/png",
+                "gif" => "image/gif",
+                "bmp" => "image/bmp",
+                _ => "image/jpeg",
+            };
 
-                return Some(Artwork {
-                    data: BASE64.encode(&data),
-                    mime_type: mime_type.to_string(),
-                    source: "folder".to_string(),
-                    filename: Some(filename.to_string()),
-                });
-            }
+            return Some(Artwork {
+                data: BASE64.encode(&data),
+                mime_type: mime_type.to_string(),
+                source: "folder".to_string(),
+                filename: Some(filename.to_string()),
+            });
+        }
     }
 
     // Try case-insensitive search
@@ -157,7 +160,10 @@ pub fn get_artwork(filepath: &str) -> Option<Artwork> {
 /// Get artwork data URL for use in HTML/CSS
 pub fn get_artwork_data_url(filepath: &str) -> Option<String> {
     let artwork = get_artwork(filepath)?;
-    Some(format!("data:{};base64,{}", artwork.mime_type, artwork.data))
+    Some(format!(
+        "data:{};base64,{}",
+        artwork.mime_type, artwork.data
+    ))
 }
 
 #[cfg(test)]

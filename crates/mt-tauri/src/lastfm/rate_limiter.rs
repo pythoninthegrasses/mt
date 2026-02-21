@@ -79,7 +79,10 @@ impl RateLimiter {
     pub async fn request_count(&self) -> usize {
         let requests = self.requests.lock().await;
         let now = Self::current_timestamp();
-        requests.iter().filter(|&&req_time| now - req_time < 86400).count()
+        requests
+            .iter()
+            .filter(|&&req_time| now - req_time < 86400)
+            .count()
     }
 }
 

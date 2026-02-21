@@ -16,7 +16,7 @@ pub struct PlaybackStatus {
 }
 
 enum AudioCommand {
-    Load(String, Option<i64>, Sender<Result<TrackInfo, String>>),  // Add track_id
+    Load(String, Option<i64>, Sender<Result<TrackInfo, String>>), // Add track_id
     LoadAndPlay(String, Option<i64>, Sender<Result<TrackInfo, String>>),
     Play(Sender<Result<(), String>>),
     Pause(Sender<Result<(), String>>),
@@ -176,53 +176,57 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
 
             // Check play count threshold (75%)
             if !play_count_state.threshold_reached
-               && progress.duration_ms > 0
-               && play_count_state.track_id.is_some() {
+                && progress.duration_ms > 0
+                && play_count_state.track_id.is_some()
+            {
                 let ratio = progress.position_ms as f64 / progress.duration_ms as f64;
 
                 if ratio >= 0.75
-                    && let Some(track_id) = play_count_state.track_id {
-                        // Spawn async task to avoid blocking audio thread
-                        let app_handle = app.clone();
-                        std::thread::spawn(move || {
-                            use crate::db::Database;
-                            use crate::db::library;
+                    && let Some(track_id) = play_count_state.track_id
+                {
+                    // Spawn async task to avoid blocking audio thread
+                    let app_handle = app.clone();
+                    std::thread::spawn(move || {
+                        use crate::db::Database;
+                        use crate::db::library;
 
-                            let db = app_handle.state::<Database>();
-                            if let Ok(conn) = db.conn() {
-                                let _ = library::update_play_count(&conn, track_id);
-                                debug!(track_id, "Play count updated");
-                            }
-                        });
-                        play_count_state.threshold_reached = true;
-                    }
+                        let db = app_handle.state::<Database>();
+                        if let Ok(conn) = db.conn() {
+                            let _ = library::update_play_count(&conn, track_id);
+                            debug!(track_id, "Play count updated");
+                        }
+                    });
+                    play_count_state.threshold_reached = true;
+                }
             }
 
             // Check scrobble threshold (90% default, configurable)
             if !scrobble_state.threshold_reached
-               && progress.duration_ms > 0
-               && scrobble_state.track_id.is_some() {
+                && progress.duration_ms > 0
+                && scrobble_state.track_id.is_some()
+            {
                 let ratio = progress.position_ms as f64 / progress.duration_ms as f64;
 
                 if ratio >= scrobble_state.threshold_percent
-                    && let Some(track_id) = scrobble_state.track_id {
-                        // Spawn async task to avoid blocking audio thread
-                        let app_handle = app.clone();
-                        std::thread::spawn(move || {
-                            use crate::commands::lastfm;
-                            use crate::db::Database;
+                    && let Some(track_id) = scrobble_state.track_id
+                {
+                    // Spawn async task to avoid blocking audio thread
+                    let app_handle = app.clone();
+                    std::thread::spawn(move || {
+                        use crate::commands::lastfm;
+                        use crate::db::Database;
 
-                            let db = app_handle.state::<Database>();
-                            if let Ok(conn) = db.conn() {
-                                // Queue scrobble from audio thread
-                                match lastfm::scrobble_from_audio_thread(&app_handle, &conn, track_id) {
-                                    Ok(_) => debug!(track_id, "Scrobble queued"),
-                                    Err(e) => error!(track_id, error = %e, "Failed to queue scrobble"),
-                                }
+                        let db = app_handle.state::<Database>();
+                        if let Ok(conn) = db.conn() {
+                            // Queue scrobble from audio thread
+                            match lastfm::scrobble_from_audio_thread(&app_handle, &conn, track_id) {
+                                Ok(_) => debug!(track_id, "Scrobble queued"),
+                                Err(e) => error!(track_id, error = %e, "Failed to queue scrobble"),
                             }
-                        });
-                        scrobble_state.threshold_reached = true;
-                    }
+                        }
+                    });
+                    scrobble_state.threshold_reached = true;
+                }
             }
         }
 
@@ -235,7 +239,11 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub fn audio_load(path: String, track_id: Option<i64>, state: State<AudioState>) -> Result<TrackInfo, String> {
+pub fn audio_load(
+    path: String,
+    track_id: Option<i64>,
+    state: State<AudioState>,
+) -> Result<TrackInfo, String> {
     let (tx, rx) = mpsc::channel();
     state.send_command(AudioCommand::Load(path, track_id, tx));
     rx.recv().map_err(|_| "Channel closed".to_string())?
@@ -243,7 +251,11 @@ pub fn audio_load(path: String, track_id: Option<i64>, state: State<AudioState>)
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub fn audio_load_and_play(path: String, track_id: Option<i64>, state: State<AudioState>) -> Result<TrackInfo, String> {
+pub fn audio_load_and_play(
+    path: String,
+    track_id: Option<i64>,
+    state: State<AudioState>,
+) -> Result<TrackInfo, String> {
     let (tx, rx) = mpsc::channel();
     state.send_command(AudioCommand::LoadAndPlay(path, track_id, tx));
     rx.recv().map_err(|_| "Channel closed".to_string())?

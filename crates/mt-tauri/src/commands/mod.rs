@@ -6,8 +6,8 @@ mod queue;
 mod settings;
 
 pub use audio::{
-    audio_get_status, audio_get_volume, audio_load, audio_load_and_play, audio_pause, audio_play,
-    audio_seek, audio_set_volume, audio_stop, AudioState, PlaybackStatus,
+    AudioState, PlaybackStatus, audio_get_status, audio_get_volume, audio_load,
+    audio_load_and_play, audio_pause, audio_play, audio_seek, audio_set_volume, audio_stop,
 };
 
 pub use favorites::{
@@ -34,6 +34,4 @@ pub use queue::{
     queue_reorder, queue_set_current_index, queue_set_loop, queue_set_shuffle, queue_shuffle,
 };
 
-pub use settings::{
-    settings_get, settings_get_all, settings_reset, settings_set, settings_update,
-};
+pub use settings::{settings_get, settings_get_all, settings_reset, settings_set, settings_update};

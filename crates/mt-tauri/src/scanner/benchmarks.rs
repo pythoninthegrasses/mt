@@ -17,7 +17,9 @@ mod tests {
         let mut paths = Vec::with_capacity(count);
 
         for i in 0..count {
-            let subdir = dir.join(format!("artist{}", i % 100)).join(format!("album{}", i % 10));
+            let subdir = dir
+                .join(format!("artist{}", i % 100))
+                .join(format!("album{}", i % 10));
             std::fs::create_dir_all(&subdir).unwrap();
 
             let filename = format!("track{:04}.mp3", i);
@@ -96,10 +98,8 @@ mod tests {
         .unwrap();
 
         // Build fingerprint map from first scan
-        let db_fingerprints: HashMap<String, FileFingerprint> = first_result
-            .added
-            .into_iter()
-            .collect();
+        let db_fingerprints: HashMap<String, FileFingerprint> =
+            first_result.added.into_iter().collect();
 
         // Rescan with existing fingerprints (no changes)
         let iterations = 10;

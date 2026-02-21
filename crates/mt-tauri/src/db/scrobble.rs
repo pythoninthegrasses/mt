@@ -2,7 +2,7 @@
 //!
 //! Operations for offline Last.fm scrobble queue.
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 use crate::db::{DbResult, ScrobbleEntry};
 
@@ -87,11 +87,7 @@ pub fn clean_old_scrobbles(conn: &Connection, max_age_days: i64) -> DbResult<i64
 
 /// Get the count of queued scrobbles
 pub fn get_scrobble_queue_count(conn: &Connection) -> DbResult<i64> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM scrobble_queue",
-        [],
-        |row| row.get(0),
-    )?;
+    let count: i64 = conn.query_row("SELECT COUNT(*) FROM scrobble_queue", [], |row| row.get(0))?;
     Ok(count)
 }
 

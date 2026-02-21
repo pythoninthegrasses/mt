@@ -1,4 +1,6 @@
-use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig};
+use souvlaki::{
+    MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig,
+};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
@@ -28,9 +30,7 @@ impl MediaKeyManager {
             app.get_webview_window("main").and_then(|w| {
                 let handle = w.window_handle().ok()?;
                 match handle.as_raw() {
-                    RawWindowHandle::Win32(h) => {
-                        Some(h.hwnd.get() as *mut std::ffi::c_void)
-                    }
+                    RawWindowHandle::Win32(h) => Some(h.hwnd.get() as *mut std::ffi::c_void),
                     _ => None,
                 }
             })
@@ -41,9 +41,13 @@ impl MediaKeyManager {
             display_name: "mt",
             hwnd: {
                 #[cfg(target_os = "windows")]
-                { hwnd }
+                {
+                    hwnd
+                }
                 #[cfg(not(target_os = "windows"))]
-                { None }
+                {
+                    None
+                }
             },
         };
 
@@ -142,12 +146,10 @@ impl MediaKeyManager {
     pub fn set_stopped(&self) -> Result<(), String> {
         debug!("Setting media playback → Stopped");
         let mut controls = self.controls.lock().map_err(|e| e.to_string())?;
-        controls
-            .set_playback(MediaPlayback::Stopped)
-            .map_err(|e| {
-                warn!(error = %e, "Failed to set stopped state");
-                format!("Failed to set stopped state: {:?}", e)
-            })
+        controls.set_playback(MediaPlayback::Stopped).map_err(|e| {
+            warn!(error = %e, "Failed to set stopped state");
+            format!("Failed to set stopped state: {:?}", e)
+        })
     }
 }
 

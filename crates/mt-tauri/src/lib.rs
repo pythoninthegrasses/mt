@@ -15,45 +15,44 @@ pub mod watcher;
 mod concurrency_test;
 
 use commands::{
-    audio_get_status, audio_get_volume, audio_load, audio_load_and_play, audio_pause, audio_play,
-    audio_seek, audio_set_volume, audio_stop, favorites_add, favorites_check, favorites_get,
-    favorites_get_recently_added, favorites_get_recently_played, favorites_get_top25,
-    favorites_remove, lastfm_auth_callback, lastfm_cache_loved_tracks, lastfm_disconnect,
-    lastfm_get_auth_url, lastfm_get_settings, lastfm_import_loved_tracks, lastfm_loved_stats,
-    lastfm_match_loved_tracks, lastfm_reset_loved_cache, match_loved_tracks_impl,
-    lastfm_now_playing, lastfm_queue_retry,
-    lastfm_queue_status,
-    lastfm_scrobble, lastfm_update_settings, playlist_add_tracks, playlist_create, playlist_delete,
+    AudioState, audio_get_status, audio_get_volume, audio_load, audio_load_and_play, audio_pause,
+    audio_play, audio_seek, audio_set_volume, audio_stop, favorites_add, favorites_check,
+    favorites_get, favorites_get_recently_added, favorites_get_recently_played,
+    favorites_get_top25, favorites_remove, lastfm_auth_callback, lastfm_cache_loved_tracks,
+    lastfm_disconnect, lastfm_get_auth_url, lastfm_get_settings, lastfm_import_loved_tracks,
+    lastfm_loved_stats, lastfm_match_loved_tracks, lastfm_now_playing, lastfm_queue_retry,
+    lastfm_queue_status, lastfm_reset_loved_cache, lastfm_scrobble, lastfm_update_settings,
+    match_loved_tracks_impl, playlist_add_tracks, playlist_create, playlist_delete,
     playlist_generate_name, playlist_get, playlist_list, playlist_remove_track,
     playlist_reorder_tracks, playlist_update, playlists_reorder, queue_add, queue_add_files,
     queue_clear, queue_get, queue_get_playback_state, queue_remove, queue_reorder,
     queue_set_current_index, queue_set_loop, queue_set_shuffle, queue_shuffle, settings_get,
-    settings_get_all, settings_reset, settings_set, settings_update, AudioState,
+    settings_get_all, settings_reset, settings_set, settings_update,
 };
 use dialog::{open_add_music_dialog, open_file_dialog, open_folder_dialog};
+use library::commands::{
+    library_check_status, library_delete_all, library_delete_track, library_delete_tracks,
+    library_get_all, library_get_artwork, library_get_artwork_url, library_get_missing,
+    library_get_stats, library_get_track, library_locate_track, library_mark_missing,
+    library_mark_present, library_purge_missing, library_reconcile_scan, library_rescan_track,
+    library_update_play_count,
+};
 use media_keys::{MediaKeyManager, NowPlayingInfo};
 use metadata::{get_track_metadata, get_tracks_metadata_batch, save_track_metadata};
 use scanner::commands::{
     extract_file_metadata, get_track_artwork, get_track_artwork_url, scan_paths_metadata,
     scan_paths_to_library,
 };
-use library::commands::{
-    library_check_status, library_delete_all, library_delete_track, library_delete_tracks,
-    library_get_all,
-    library_get_artwork, library_get_artwork_url, library_get_missing, library_get_stats,
-    library_get_track, library_locate_track, library_mark_missing, library_mark_present,
-    library_purge_missing, library_reconcile_scan, library_rescan_track, library_update_play_count,
-};
-use tracing::{debug, error, info, warn};
-use watcher::{
-    watched_folders_add, watched_folders_get, watched_folders_list, watched_folders_remove,
-    watched_folders_rescan, watched_folders_status, watched_folders_update, WatcherManager,
-};
 use serde::Serialize;
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+use tokio::io::AsyncWriteExt;
+use tracing::{debug, error, info, warn};
+use watcher::{
+    WatcherManager, watched_folders_add, watched_folders_get, watched_folders_list,
+    watched_folders_remove, watched_folders_rescan, watched_folders_status, watched_folders_update,
+};
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
@@ -76,7 +75,10 @@ fn media_set_metadata(
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-fn media_set_playing(progress_ms: Option<u64>, state: State<MediaKeyManager>) -> Result<(), String> {
+fn media_set_playing(
+    progress_ms: Option<u64>,
+    state: State<MediaKeyManager>,
+) -> Result<(), String> {
     state.set_playing(progress_ms.map(Duration::from_millis))
 }
 
@@ -115,15 +117,9 @@ fn log_frontend_error(level: String, message: String, context: Option<String>) {
 #[tauri::command]
 fn app_get_info() -> AppInfo {
     let version = env!("CARGO_PKG_VERSION").to_string();
-    let build = option_env!("MT_BUILD_ID")
-        .unwrap_or("dev")
-        .to_string();
-    let platform = format!(
-        "{} {}",
-        std::env::consts::OS,
-        std::env::consts::ARCH
-    );
-    
+    let build = option_env!("MT_BUILD_ID").unwrap_or("dev").to_string();
+    let platform = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
+
     AppInfo {
         version,
         build,
@@ -145,7 +141,10 @@ async fn export_diagnostics(path: String) -> Result<(), String> {
     content.push_str(&format!("Timestamp: {}\n", chrono::Utc::now().to_rfc3339()));
 
     content.push_str("\n=== Environment ===\n\n");
-    content.push_str(&format!("Rust version: {}\n", env!("CARGO_PKG_RUST_VERSION")));
+    content.push_str(&format!(
+        "Rust version: {}\n",
+        env!("CARGO_PKG_RUST_VERSION")
+    ));
 
     if let Ok(cwd) = std::env::current_dir() {
         content.push_str(&format!("Working directory: {}\n", cwd.display()));
@@ -162,11 +161,7 @@ async fn export_diagnostics(path: String) -> Result<(), String> {
             .into_iter()
             .flatten()
             .flatten()
-            .filter(|e| {
-                e.file_name()
-                    .to_string_lossy()
-                    .starts_with("mt.log")
-            })
+            .filter(|e| e.file_name().to_string_lossy().starts_with("mt.log"))
             .collect();
         log_files.sort_by_key(|e| std::cmp::Reverse(e.file_name()));
 

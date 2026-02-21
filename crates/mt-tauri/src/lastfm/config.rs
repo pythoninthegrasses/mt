@@ -34,7 +34,9 @@ impl ApiKeyConfig {
 
     /// Get API key (panics if not configured)
     pub fn api_key(&self) -> &str {
-        self.api_key.as_ref().expect("LASTFM_API_KEY not configured")
+        self.api_key
+            .as_ref()
+            .expect("LASTFM_API_KEY not configured")
     }
 
     /// Get API secret (panics if not configured)

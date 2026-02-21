@@ -195,7 +195,7 @@ pub struct LovedTrack {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LovedDate {
-    pub uts: String,    // Unix timestamp as string
+    pub uts: String, // Unix timestamp as string
     #[serde(rename = "#text")]
     pub text: Option<String>, // Human-readable date
 }

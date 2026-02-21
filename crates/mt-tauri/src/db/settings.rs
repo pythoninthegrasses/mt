@@ -2,7 +2,7 @@
 //!
 //! Operations for key-value settings storage.
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 
@@ -33,21 +33,15 @@ pub fn get_all_settings(conn: &Connection) -> DbResult<HashMap<String, JsonValue
         .filter_map(|r| r.ok())
         .map(|(key, value)| {
             let json_value = match key.as_str() {
-                "volume" | "sidebar_width" | "queue_panel_height" => {
-                    value
-                        .and_then(|v| v.parse::<i64>().ok())
-                        .map(JsonValue::from)
-                        .unwrap_or(JsonValue::from(0))
-                }
+                "volume" | "sidebar_width" | "queue_panel_height" => value
+                    .and_then(|v| v.parse::<i64>().ok())
+                    .map(JsonValue::from)
+                    .unwrap_or(JsonValue::from(0)),
                 "shuffle" | "loop_enabled" | "repeat_one" => {
-                    let is_true = value
-                        .map(|v| v == "1" || v == "true")
-                        .unwrap_or(false);
+                    let is_true = value.map(|v| v == "1" || v == "true").unwrap_or(false);
                     JsonValue::from(is_true)
                 }
-                _ => value
-                    .map(JsonValue::from)
-                    .unwrap_or(JsonValue::Null),
+                _ => value.map(JsonValue::from).unwrap_or(JsonValue::Null),
             };
             (key, json_value)
         })
@@ -65,11 +59,9 @@ pub fn get_all_settings(conn: &Connection) -> DbResult<HashMap<String, JsonValue
 
 /// Get a single setting value
 pub fn get_setting(conn: &Connection, key: &str) -> DbResult<Option<String>> {
-    match conn.query_row(
-        "SELECT value FROM settings WHERE key = ?",
-        [key],
-        |row| row.get(0),
-    ) {
+    match conn.query_row("SELECT value FROM settings WHERE key = ?", [key], |row| {
+        row.get(0)
+    }) {
         Ok(value) => Ok(value),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.into()),

@@ -2,7 +2,7 @@
 //!
 //! Provides OAuth authentication, scrobbling, now playing updates, and loved tracks import.
 
-use crate::db::{favorites, lastfm_loved, library, scrobble, settings, Database};
+use crate::db::{Database, favorites, lastfm_loved, library, scrobble, settings};
 use crate::events::{LastfmAuthEvent, ScrobbleStatusEvent};
 use crate::lastfm::{
     AuthCallbackResponse, AuthUrlResponse, CacheLovedTracksResponse, DisconnectResponse,
@@ -16,7 +16,10 @@ use tracing::{debug, error, info, warn};
 
 /// Helper to check if a setting is truthy
 fn is_setting_truthy(value: Option<String>) -> bool {
-    matches!(value.as_deref(), Some("1") | Some("true") | Some("yes") | Some("on"))
+    matches!(
+        value.as_deref(),
+        Some("1") | Some("true") | Some("yes") | Some("on")
+    )
 }
 
 /// Helper to parse setting as u8
@@ -71,11 +74,7 @@ pub fn lastfm_update_settings(
         if let Some(threshold) = settings_update.scrobble_threshold {
             // Clamp to valid range (25-100%)
             let clamped_threshold = threshold.clamp(25, 100);
-            settings::set_setting(
-                conn,
-                "lastfm_scrobble_threshold",
-                &json!(clamped_threshold),
-            )?;
+            settings::set_setting(conn, "lastfm_scrobble_threshold", &json!(clamped_threshold))?;
             updated.push("scrobble_threshold");
         }
 
@@ -97,7 +96,10 @@ pub async fn lastfm_get_auth_url(app: AppHandle) -> Result<AuthUrlResponse, Stri
     let client = LastFmClient::new();
 
     if !client.is_configured() {
-        return Err("Last.fm API keys not configured. Set LASTFM_API_KEY and LASTFM_API_SECRET.".to_string());
+        return Err(
+            "Last.fm API keys not configured. Set LASTFM_API_KEY and LASTFM_API_SECRET."
+                .to_string(),
+        );
     }
 
     let (auth_url, token) = client
@@ -106,11 +108,8 @@ pub async fn lastfm_get_auth_url(app: AppHandle) -> Result<AuthUrlResponse, Stri
         .map_err(|e| format!("Failed to get auth URL: {}", e))?;
 
     // Emit pending event
-    app.emit(
-        LastfmAuthEvent::EVENT_NAME,
-        LastfmAuthEvent::pending(),
-    )
-    .map_err(|e| format!("Failed to emit event: {}", e))?;
+    app.emit(LastfmAuthEvent::EVENT_NAME, LastfmAuthEvent::pending())
+        .map_err(|e| format!("Failed to emit event: {}", e))?;
 
     Ok(AuthUrlResponse { auth_url, token })
 }
@@ -177,11 +176,8 @@ pub fn lastfm_disconnect(
     .map_err(|e: crate::db::DbError| format!("Failed to disconnect: {}", e))?;
 
     // Emit disconnected event
-    app.emit(
-        LastfmAuthEvent::EVENT_NAME,
-        LastfmAuthEvent::disconnected(),
-    )
-    .map_err(|e| format!("Failed to emit event: {}", e))?;
+    app.emit(LastfmAuthEvent::EVENT_NAME, LastfmAuthEvent::disconnected())
+        .map_err(|e| format!("Failed to emit event: {}", e))?;
 
     Ok(DisconnectResponse {
         status: "success".to_string(),
@@ -225,7 +221,12 @@ pub async fn lastfm_now_playing(
 ) -> Result<serde_json::Value, String> {
     // Check if scrobbling is enabled
     let enabled = db
-        .with_conn(|conn| Ok(is_setting_truthy(settings::get_setting(conn, "lastfm_scrobbling_enabled")?)))
+        .with_conn(|conn| {
+            Ok(is_setting_truthy(settings::get_setting(
+                conn,
+                "lastfm_scrobbling_enabled",
+            )?))
+        })
         .map_err(|e: crate::db::DbError| format!("Database error: {}", e))?;
 
     if !enabled {
@@ -238,7 +239,9 @@ pub async fn lastfm_now_playing(
         .map_err(|e: crate::db::DbError| format!("Database error: {}", e))?;
 
     if session_key.is_none() || session_key.as_deref() == Some("") {
-        return Ok(json!({ "status": "not_authenticated", "message": "Not authenticated with Last.fm" }));
+        return Ok(
+            json!({ "status": "not_authenticated", "message": "Not authenticated with Last.fm" }),
+        );
     }
 
     let session_key = session_key.unwrap();
@@ -275,7 +278,12 @@ pub async fn lastfm_scrobble(
 ) -> Result<ScrobbleResponse, String> {
     // Check if scrobbling is enabled
     let enabled = db
-        .with_conn(|conn| Ok(is_setting_truthy(settings::get_setting(conn, "lastfm_scrobbling_enabled")?)))
+        .with_conn(|conn| {
+            Ok(is_setting_truthy(settings::get_setting(
+                conn,
+                "lastfm_scrobbling_enabled",
+            )?))
+        })
         .map_err(|e: crate::db::DbError| format!("Database error: {}", e))?;
 
     if !enabled {
@@ -299,7 +307,12 @@ pub async fn lastfm_scrobble(
 
     // Get threshold
     let threshold = db
-        .with_conn(|conn| Ok(parse_threshold(settings::get_setting(conn, "lastfm_scrobble_threshold")?, 90)))
+        .with_conn(|conn| {
+            Ok(parse_threshold(
+                settings::get_setting(conn, "lastfm_scrobble_threshold")?,
+                90,
+            ))
+        })
         .map_err(|e: crate::db::DbError| format!("Database error: {}", e))?;
 
     // Check if track meets threshold
@@ -399,8 +412,10 @@ pub(crate) fn scrobble_from_audio_thread(
     track_id: i64,
 ) -> Result<(), String> {
     // Check if scrobbling is enabled
-    let enabled = is_setting_truthy(settings::get_setting(conn, "lastfm_scrobbling_enabled")
-        .map_err(|e| format!("Database error: {}", e))?);
+    let enabled = is_setting_truthy(
+        settings::get_setting(conn, "lastfm_scrobbling_enabled")
+            .map_err(|e| format!("Database error: {}", e))?,
+    );
 
     if !enabled {
         return Ok(());
@@ -434,14 +449,8 @@ pub(crate) fn scrobble_from_audio_thread(
     let title = track.title.as_deref().unwrap_or("Unknown Track");
     let album = track.album.as_deref();
 
-    scrobble::queue_scrobble(
-        conn,
-        artist,
-        title,
-        album,
-        timestamp as i64,
-    )
-    .map_err(|e| format!("Failed to queue scrobble: {}", e))?;
+    scrobble::queue_scrobble(conn, artist, title, album, timestamp as i64)
+        .map_err(|e| format!("Failed to queue scrobble: {}", e))?;
 
     // Emit queued event
     let _ = app.emit(
@@ -574,7 +583,12 @@ pub async fn lastfm_queue_retry(
 
     let status = if successful > 0 {
         if failed > 0 {
-            format!("Retried {} scrobbles ({} successful, {} failed)", successful + failed, successful, failed)
+            format!(
+                "Retried {} scrobbles ({} successful, {} failed)",
+                successful + failed,
+                successful,
+                failed
+            )
         } else {
             format!("Successfully retried {} scrobbles", successful)
         }
@@ -645,7 +659,10 @@ pub async fn lastfm_import_loved_tracks(
     }
 
     let total_loved = all_loved_tracks.len();
-    info!(count = total_loved, "Fetched loved tracks from Last.fm (import)");
+    info!(
+        count = total_loved,
+        "Fetched loved tracks from Last.fm (import)"
+    );
 
     // Match loved tracks against local library and add to favorites
     let mut imported = 0;
@@ -672,12 +689,19 @@ pub async fn lastfm_import_loved_tracks(
             &matched_tracks[0]
         } else {
             // Call track.getInfo to get the album for disambiguation
-            let album = client.get_track_info(artist_name, track_name).await.ok().flatten();
+            let album = client
+                .get_track_info(artist_name, track_name)
+                .await
+                .ok()
+                .flatten();
             if let Some(ref album_name) = album {
                 matched_tracks
                     .iter()
                     .find(|t| {
-                        t.album.as_deref().map(|a| a.eq_ignore_ascii_case(album_name)).unwrap_or(false)
+                        t.album
+                            .as_deref()
+                            .map(|a| a.eq_ignore_ascii_case(album_name))
+                            .unwrap_or(false)
                     })
                     .unwrap_or(&matched_tracks[0])
             } else {
@@ -730,7 +754,10 @@ pub async fn lastfm_import_loved_tracks(
         imported, already_favorited, not_in_library
     );
 
-    info!(imported, already_favorited, not_in_library, "Import loved tracks complete");
+    info!(
+        imported,
+        already_favorited, not_in_library, "Import loved tracks complete"
+    );
     crate::logging::log_slow_command("lastfm_import_loved_tracks", start);
 
     Ok(ImportLovedTracksResponse {
@@ -783,7 +810,11 @@ pub async fn lastfm_cache_loved_tracks(
         None
     };
 
-    info!(incremental, ?since_timestamp, "Fetching loved tracks for cache");
+    info!(
+        incremental,
+        ?since_timestamp,
+        "Fetching loved tracks for cache"
+    );
 
     // Fetch all loved tracks (paginated)
     let mut all_loved_tracks = Vec::new();
@@ -828,7 +859,10 @@ pub async fn lastfm_cache_loved_tracks(
     }
 
     let total_fetched = all_loved_tracks.len();
-    info!(count = total_fetched, "Fetched loved tracks from Last.fm (cache)");
+    info!(
+        count = total_fetched,
+        "Fetched loved tracks from Last.fm (cache)"
+    );
 
     // Store in cache
     let tracks_to_cache: Vec<(String, String, Option<i64>)> = all_loved_tracks
@@ -857,7 +891,10 @@ pub async fn lastfm_cache_loved_tracks(
         )
     };
 
-    info!(total_fetched, newly_cached, incremental, "Cache loved tracks complete");
+    info!(
+        total_fetched,
+        newly_cached, incremental, "Cache loved tracks complete"
+    );
     crate::logging::log_slow_command("lastfm_cache_loved_tracks", start);
 
     Ok(CacheLovedTracksResponse {
@@ -926,8 +963,10 @@ pub async fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksRe
         };
 
         let library_track_id = library_track.id;
-        db.with_conn(|conn| lastfm_loved::set_matched_track(conn, loved_track.id, library_track_id))
-            .map_err(|e| format!("Failed to set match: {}", e))?;
+        db.with_conn(|conn| {
+            lastfm_loved::set_matched_track(conn, loved_track.id, library_track_id)
+        })
+        .map_err(|e| format!("Failed to set match: {}", e))?;
         matched += 1;
 
         let (is_fav, _) = db
@@ -967,7 +1006,10 @@ pub async fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksRe
         matched, new_favorites, already_matched, no_match
     );
 
-    info!(matched, new_favorites, already_matched, no_match, "Match loved tracks complete");
+    info!(
+        matched,
+        new_favorites, already_matched, no_match, "Match loved tracks complete"
+    );
 
     Ok(MatchLovedTracksResponse {
         status: "success".to_string(),
@@ -1256,7 +1298,7 @@ mod tests {
         // Track duration: 300 seconds
 
         // 25% threshold (minimum)
-        assert!(should_scrobble(300.0, 75.0, 25));  // 75s = 25%
+        assert!(should_scrobble(300.0, 75.0, 25)); // 75s = 25%
         assert!(!should_scrobble(300.0, 74.0, 25));
 
         // 50% threshold
@@ -1278,8 +1320,7 @@ mod tests {
             status: "success".to_string(),
             cleared: 42,
             unfavorited: 5,
-            message: "Cleared 42 cached loved tracks, removed 5 auto-favorited tracks."
-                .to_string(),
+            message: "Cleared 42 cached loved tracks, removed 5 auto-favorited tracks.".to_string(),
         };
 
         let json = serde_json::to_string(&response).unwrap();

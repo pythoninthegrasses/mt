@@ -2,7 +2,7 @@
 //!
 //! Operations for watched folder configuration.
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 use crate::db::{DbResult, WatchedFolder};
 
@@ -162,7 +162,10 @@ pub fn get_enabled_watched_folders(conn: &Connection) -> DbResult<Vec<WatchedFol
 }
 
 /// Get watched folder by path
-pub fn get_watched_folder_by_path(conn: &Connection, path: &str) -> DbResult<Option<WatchedFolder>> {
+pub fn get_watched_folder_by_path(
+    conn: &Connection,
+    path: &str,
+) -> DbResult<Option<WatchedFolder>> {
     match conn.query_row(
         "SELECT * FROM watched_folders WHERE path = ?",
         [path],
@@ -219,9 +222,10 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        let updated = update_watched_folder(&conn, folder.id, Some("manual"), Some(30), Some(false))
-            .unwrap()
-            .unwrap();
+        let updated =
+            update_watched_folder(&conn, folder.id, Some("manual"), Some(30), Some(false))
+                .unwrap()
+                .unwrap();
 
         assert_eq!(updated.mode, "manual");
         assert_eq!(updated.cadence_minutes, 30);

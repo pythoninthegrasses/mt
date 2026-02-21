@@ -21,8 +21,8 @@ mod compat_test;
 
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::functions::FunctionFlags;
 use rusqlite::Connection;
+use rusqlite::functions::FunctionFlags;
 use std::path::Path;
 use std::sync::Arc;
 use thiserror::Error;
@@ -315,11 +315,9 @@ mod tests {
         let conn = db.conn().expect("Failed to get connection");
         // "Therapy?" starts with "the" but not "the " (no space)
         let result: String = conn
-            .query_row(
-                "SELECT strip_sort_prefix('Therapy?', 'the')",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT strip_sort_prefix('Therapy?', 'the')", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(result, "Therapy?");
     }
@@ -329,11 +327,9 @@ mod tests {
         let db = Database::new_in_memory().expect("Failed to create database");
         let conn = db.conn().expect("Failed to get connection");
         let result: Option<String> = conn
-            .query_row(
-                "SELECT strip_sort_prefix(NULL, 'the,a,an')",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT strip_sort_prefix(NULL, 'the,a,an')", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(result, None);
     }
@@ -343,11 +339,9 @@ mod tests {
         let db = Database::new_in_memory().expect("Failed to create database");
         let conn = db.conn().expect("Failed to get connection");
         let result: String = conn
-            .query_row(
-                "SELECT strip_sort_prefix('The Beatles', NULL)",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT strip_sort_prefix('The Beatles', NULL)", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(result, "The Beatles");
     }

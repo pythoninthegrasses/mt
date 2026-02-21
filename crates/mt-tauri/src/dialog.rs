@@ -9,16 +9,17 @@ pub async fn open_file_dialog(app: tauri::AppHandle) -> Result<Vec<String>, Stri
 
     app.dialog()
         .file()
-        .add_filter("Audio Files", &["mp3", "m4a", "flac", "ogg", "wav", "aac", "wma", "opus"])
+        .add_filter(
+            "Audio Files",
+            &["mp3", "m4a", "flac", "ogg", "wav", "aac", "wma", "opus"],
+        )
         .add_filter("All Files", &["*"])
         .set_title("Select audio files to add to your library")
         .pick_files(move |paths| {
             let result = paths
                 .map(|p| {
                     p.iter()
-                        .filter_map(|path| {
-                            path.as_path().map(|p| p.to_string_lossy().to_string())
-                        })
+                        .filter_map(|path| path.as_path().map(|p| p.to_string_lossy().to_string()))
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
@@ -42,9 +43,7 @@ pub async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Vec<String>, St
             let result = paths
                 .map(|p| {
                     p.iter()
-                        .filter_map(|path| {
-                            path.as_path().map(|p| p.to_string_lossy().to_string())
-                        })
+                        .filter_map(|path| path.as_path().map(|p| p.to_string_lossy().to_string()))
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
@@ -52,7 +51,10 @@ pub async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Vec<String>, St
         });
 
     let paths = rx.await.map_err(|e| format!("Dialog error: {}", e))?;
-    debug!(count = paths.len(), "Folders selected via open_folder_dialog");
+    debug!(
+        count = paths.len(),
+        "Folders selected via open_folder_dialog"
+    );
     Ok(paths)
 }
 
@@ -66,23 +68,23 @@ pub async fn open_add_music_dialog(
     #[allow(unused_variables)] app: tauri::AppHandle,
 ) -> Result<Vec<String>, String> {
     let paths = open_add_music_dialog_impl(app).await?;
-    debug!(count = paths.len(), ?paths, "Paths selected via open_add_music_dialog");
+    debug!(
+        count = paths.len(),
+        ?paths,
+        "Paths selected via open_add_music_dialog"
+    );
     Ok(paths)
 }
 
 #[cfg(target_os = "macos")]
-async fn open_add_music_dialog_impl(
-    _app: tauri::AppHandle,
-) -> Result<Vec<String>, String> {
+async fn open_add_music_dialog_impl(_app: tauri::AppHandle) -> Result<Vec<String>, String> {
     tokio::task::spawn_blocking(open_combined_dialog_macos)
         .await
         .map_err(|e| format!("Dialog error: {}", e))
 }
 
 #[cfg(not(target_os = "macos"))]
-async fn open_add_music_dialog_impl(
-    app: tauri::AppHandle,
-) -> Result<Vec<String>, String> {
+async fn open_add_music_dialog_impl(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     // GTK on Linux does not support combined file+folder selection.
     // Fall back to file selection with audio filters.
     let (tx, rx) = oneshot::channel();
@@ -98,9 +100,7 @@ async fn open_add_music_dialog_impl(
             let result = paths
                 .map(|p| {
                     p.iter()
-                        .filter_map(|path| {
-                            path.as_path().map(|p| p.to_string_lossy().to_string())
-                        })
+                        .filter_map(|path| path.as_path().map(|p| p.to_string_lossy().to_string()))
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();

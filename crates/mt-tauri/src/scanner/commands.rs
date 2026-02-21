@@ -11,12 +11,12 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::commands::match_new_tracks_against_loved;
-use crate::db::{library, Database};
+use crate::db::{Database, library};
 use crate::events::{EventEmitter, LibraryUpdatedEvent, ScanCompleteEvent, ScanProgressEvent};
-use crate::scanner::artwork::{get_artwork, Artwork};
-use crate::scanner::fingerprint::{compute_content_hash, FileFingerprint};
+use crate::scanner::artwork::{Artwork, get_artwork};
+use crate::scanner::fingerprint::{FileFingerprint, compute_content_hash};
 use crate::scanner::metadata::extract_metadata;
-use crate::scanner::scan::{scan_2phase, ProgressCallback, ScanResult2Phase};
+use crate::scanner::scan::{ProgressCallback, ScanResult2Phase, scan_2phase};
 use crate::scanner::{ExtractedMetadata, ScanProgress, ScanStats};
 
 /// Internal scan progress event for metadata-only scans
@@ -68,8 +68,7 @@ fn get_scoped_fingerprints(
     scan_paths: &[String],
 ) -> Result<HashMap<String, FileFingerprint>, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
-    let rows =
-        library::get_fingerprints_for_paths(&conn, scan_paths).map_err(|e| e.to_string())?;
+    let rows = library::get_fingerprints_for_paths(&conn, scan_paths).map_err(|e| e.to_string())?;
 
     Ok(rows
         .into_iter()
@@ -111,8 +110,13 @@ pub async fn scan_paths_to_library(
     });
 
     // Run 2-phase scan
-    let scan_result = scan_2phase(&paths, &db_fingerprints, recursive, Some(&progress_callback))
-        .map_err(|e| e.to_string())?;
+    let scan_result = scan_2phase(
+        &paths,
+        &db_fingerprints,
+        recursive,
+        Some(&progress_callback),
+    )
+    .map_err(|e| e.to_string())?;
 
     // Transaction 1: mark operations + inode-based reconciliation only.
     // Hash computation is deferred to outside the transaction to avoid holding the
@@ -137,8 +141,7 @@ pub async fn scan_paths_to_library(
                     // Fast path: no missing tracks, all added files are truly new
                     unreconciled_indices = (0..scan_result.added.len()).collect();
                 } else {
-                    has_missing_hashes =
-                        missing_tracks.iter().any(|t| t.content_hash.is_some());
+                    has_missing_hashes = missing_tracks.iter().any(|t| t.content_hash.is_some());
                     let by_inode: HashMap<i64, &crate::db::Track> = missing_tracks
                         .iter()
                         .filter_map(|t| t.file_inode.map(|i| (i, t)))
@@ -267,14 +270,16 @@ pub async fn scan_paths_to_library(
 
         // Auto-favorite tracks that match cached Last.fm loved tracks
         db.transaction(|conn| {
-            let new_filepaths: Vec<String> =
-                truly_new.iter().map(|(fp, _)| fp.clone()).collect();
+            let new_filepaths: Vec<String> = truly_new.iter().map(|(fp, _)| fp.clone()).collect();
             if let Ok(new_track_ids) = library::get_track_ids_by_filepaths(conn, &new_filepaths)
                 && !new_track_ids.is_empty()
             {
                 match match_new_tracks_against_loved(conn, &new_track_ids) {
                     Ok(favorited) if favorited > 0 => {
-                        info!(count = favorited, "Auto-favorited tracks from Last.fm loved cache");
+                        info!(
+                            count = favorited,
+                            "Auto-favorited tracks from Last.fm loved cache"
+                        );
                     }
                     Err(e) => {
                         error!(error = %e, "Failed to auto-favorite from loved cache");
@@ -345,8 +350,13 @@ pub async fn scan_paths_metadata(
         );
     });
 
-    let scan_result = scan_2phase(&paths, &db_fingerprints, recursive, Some(&progress_callback))
-        .map_err(|e| e.to_string())?;
+    let scan_result = scan_2phase(
+        &paths,
+        &db_fingerprints,
+        recursive,
+        Some(&progress_callback),
+    )
+    .map_err(|e| e.to_string())?;
 
     // Return all metadata (added is everything since we have no DB fingerprints)
     Ok(scan_result.added)

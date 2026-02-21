@@ -2,7 +2,7 @@
 //!
 //! Operations for playlists and playlist items.
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 use crate::db::{DbResult, Playlist, PlaylistTrack, PlaylistWithTracks, Track};
 
@@ -388,9 +388,9 @@ pub fn generate_unique_playlist_name(conn: &Connection, base: &str) -> DbResult<
 mod tests {
     use super::*;
     use crate::db::{
+        TrackMetadata,
         library::add_track,
         schema::{create_tables, run_migrations},
-        TrackMetadata,
     };
 
     fn setup_test_db() -> Connection {
@@ -702,8 +702,14 @@ mod tests {
 
         let playlist = get_playlist(&conn, playlist.id).unwrap().unwrap();
         assert_eq!(playlist.tracks.len(), 1);
-        assert_eq!(playlist.tracks[0].track.title, Some("Specific Track".to_string()));
-        assert_eq!(playlist.tracks[0].track.artist, Some("Test Artist".to_string()));
+        assert_eq!(
+            playlist.tracks[0].track.title,
+            Some("Specific Track".to_string())
+        );
+        assert_eq!(
+            playlist.tracks[0].track.artist,
+            Some("Test Artist".to_string())
+        );
         assert_eq!(playlist.tracks[0].position, 0);
     }
 }

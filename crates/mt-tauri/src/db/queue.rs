@@ -2,9 +2,9 @@
 //!
 //! Operations for the playback queue.
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
-use crate::db::{library::get_track_by_filepath, DbResult, QueueItem, QueueState, Track};
+use crate::db::{DbResult, QueueItem, QueueState, Track, library::get_track_by_filepath};
 
 /// Get all items in the queue with track metadata
 pub fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
@@ -353,9 +353,9 @@ pub fn set_original_order_json(conn: &Connection, json: Option<String>) -> DbRes
 mod tests {
     use super::*;
     use crate::db::{
+        TrackMetadata,
         library::add_track,
         schema::{create_tables, run_migrations},
-        TrackMetadata,
     };
 
     fn setup_test_db() -> Connection {
@@ -581,10 +581,7 @@ mod tests {
         let conn = setup_test_db();
 
         // Add files not in library
-        let filepaths = vec![
-            "/music/new1.mp3".to_string(),
-            "/music/new2.mp3".to_string(),
-        ];
+        let filepaths = vec!["/music/new1.mp3".to_string(), "/music/new2.mp3".to_string()];
 
         let (count, tracks) = add_files_to_queue(&conn, &filepaths, None).unwrap();
         assert_eq!(count, 2);
@@ -617,7 +614,10 @@ mod tests {
         let conn = setup_test_db();
 
         // Add initial files
-        let initial = vec!["/music/first.mp3".to_string(), "/music/second.mp3".to_string()];
+        let initial = vec![
+            "/music/first.mp3".to_string(),
+            "/music/second.mp3".to_string(),
+        ];
         add_files_to_queue(&conn, &initial, None).unwrap();
 
         // Add new files at position 1

@@ -5,7 +5,7 @@
 
 use tauri::{AppHandle, State};
 
-use crate::db::{playlists, Database, Playlist, PlaylistWithTracks};
+use crate::db::{Database, Playlist, PlaylistWithTracks, playlists};
 use crate::events::{EventEmitter, PlaylistsUpdatedEvent};
 
 /// Response for playlist list operations
@@ -94,8 +94,8 @@ pub fn playlist_update(
     name: Option<String>,
 ) -> Result<PlaylistResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
-    let playlist =
-        playlists::update_playlist(&conn, playlist_id, name.as_deref()).map_err(|e| e.to_string())?;
+    let playlist = playlists::update_playlist(&conn, playlist_id, name.as_deref())
+        .map_err(|e| e.to_string())?;
 
     if playlist.is_some() && name.is_some() {
         let _ = app.emit_playlists_updated(PlaylistsUpdatedEvent::renamed(playlist_id));
@@ -137,18 +137,14 @@ pub fn playlist_add_tracks(
     }
 
     let conn = db.conn().map_err(|e| e.to_string())?;
-    let added =
-        playlists::add_tracks_to_playlist(&conn, playlist_id, &track_ids, position)
-            .map_err(|e| e.to_string())?;
+    let added = playlists::add_tracks_to_playlist(&conn, playlist_id, &track_ids, position)
+        .map_err(|e| e.to_string())?;
     let track_count =
         playlists::get_playlist_track_count(&conn, playlist_id).map_err(|e| e.to_string())?;
 
     let _ = app.emit_playlists_updated(PlaylistsUpdatedEvent::tracks_added(playlist_id, track_ids));
 
-    Ok(PlaylistAddTracksResponse {
-        added,
-        track_count,
-    })
+    Ok(PlaylistAddTracksResponse { added, track_count })
 }
 
 /// Remove a track from a playlist by position
@@ -161,12 +157,12 @@ pub fn playlist_remove_track(
     position: i64,
 ) -> Result<PlaylistOperationResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
-    let success =
-        playlists::remove_track_from_playlist(&conn, playlist_id, position)
-            .map_err(|e| e.to_string())?;
+    let success = playlists::remove_track_from_playlist(&conn, playlist_id, position)
+        .map_err(|e| e.to_string())?;
 
     if success {
-        let _ = app.emit_playlists_updated(PlaylistsUpdatedEvent::tracks_removed(playlist_id, vec![]));
+        let _ =
+            app.emit_playlists_updated(PlaylistsUpdatedEvent::tracks_removed(playlist_id, vec![]));
     }
 
     Ok(PlaylistOperationResponse { success })
@@ -183,9 +179,8 @@ pub fn playlist_reorder_tracks(
     to_position: i64,
 ) -> Result<PlaylistOperationResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
-    let success =
-        playlists::reorder_playlist(&conn, playlist_id, from_position, to_position)
-            .map_err(|e| e.to_string())?;
+    let success = playlists::reorder_playlist(&conn, playlist_id, from_position, to_position)
+        .map_err(|e| e.to_string())?;
 
     if success {
         let _ = app.emit_playlists_updated(PlaylistsUpdatedEvent::reordered(playlist_id));
@@ -204,9 +199,8 @@ pub fn playlists_reorder(
     to_position: i64,
 ) -> Result<PlaylistOperationResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
-    let success =
-        playlists::reorder_playlists(&conn, from_position, to_position)
-            .map_err(|e| e.to_string())?;
+    let success = playlists::reorder_playlists(&conn, from_position, to_position)
+        .map_err(|e| e.to_string())?;
 
     if success {
         // Use playlist_id=0 to indicate sidebar reorder (affects all playlists)

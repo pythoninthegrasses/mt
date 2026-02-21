@@ -2,7 +2,7 @@
 //!
 //! CRUD operations for the music library (tracks table).
 
-use rusqlite::{params, Connection, Row};
+use rusqlite::{Connection, Row, params};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -112,7 +112,9 @@ pub fn get_all_tracks(conn: &Connection, query: &LibraryQuery) -> DbResult<Pagin
         where_clause,
         query.sort_by.as_order_by(query.ignore_words.as_deref()),
         query.sort_order.as_sql(),
-        query.sort_by.secondary_order_by(query.ignore_words.as_deref())
+        query
+            .sort_by
+            .secondary_order_by(query.ignore_words.as_deref())
     );
 
     let mut all_params: Vec<&dyn rusqlite::ToSql> = params_refs;
@@ -470,10 +472,7 @@ pub fn delete_tracks_by_ids(conn: &Connection, track_ids: &[i64]) -> DbResult<us
         .map(|id| id as &dyn rusqlite::ToSql)
         .collect();
 
-    let sql = format!(
-        "DELETE FROM favorites WHERE track_id IN ({})",
-        placeholders
-    );
+    let sql = format!("DELETE FROM favorites WHERE track_id IN ({})", placeholders);
     conn.execute(&sql, params.as_slice())?;
 
     let sql = format!(
@@ -652,7 +651,10 @@ pub fn mark_track_present_by_filepath(conn: &Connection, filepath: &str) -> DbRe
 
 /// Mark multiple tracks as present by their filepaths (batch operation)
 /// Returns the number of tracks that were updated
-pub fn mark_tracks_present_by_filepaths(conn: &Connection, filepaths: &[String]) -> DbResult<usize> {
+pub fn mark_tracks_present_by_filepaths(
+    conn: &Connection,
+    filepaths: &[String],
+) -> DbResult<usize> {
     if filepaths.is_empty() {
         return Ok(0);
     }
@@ -997,8 +999,8 @@ pub fn merge_duplicate_tracks(conn: &Connection, keep_id: i64, delete_id: i64) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::schema::{create_tables, run_migrations};
     use crate::db::register_custom_functions;
+    use crate::db::schema::{create_tables, run_migrations};
 
     fn setup_test_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
@@ -1213,7 +1215,10 @@ mod tests {
         let results = find_tracks_by_artist_title(&conn, "Foo Fighters", "Everlong").unwrap();
         assert_eq!(results.len(), 2);
 
-        let albums: Vec<_> = results.iter().map(|t| t.album.as_deref().unwrap()).collect();
+        let albums: Vec<_> = results
+            .iter()
+            .map(|t| t.album.as_deref().unwrap())
+            .collect();
         assert!(albums.contains(&"The Colour and the Shape"));
         assert!(albums.contains(&"Greatest Hits"));
     }
@@ -1495,7 +1500,10 @@ mod tests {
 
         // Calling again should return false (no rows updated since already present)
         let result = mark_track_present_by_filepath(&conn, "/music/test.mp3").unwrap();
-        assert!(!result, "Should return false when track was already present");
+        assert!(
+            !result,
+            "Should return false when track was already present"
+        );
     }
 
     #[test]
@@ -1503,11 +1511,7 @@ mod tests {
         let conn = setup_test_db();
 
         // Add multiple tracks
-        let paths = vec![
-            "/music/song1.mp3",
-            "/music/song2.mp3",
-            "/music/song3.mp3",
-        ];
+        let paths = vec!["/music/song1.mp3", "/music/song2.mp3", "/music/song3.mp3"];
 
         for path in &paths {
             let metadata = TrackMetadata {
@@ -1585,7 +1589,10 @@ mod tests {
 
         // Step 5: Verify missing flag is cleared
         let track = get_track_by_id(&conn, track_id).unwrap().unwrap();
-        assert!(!track.missing, "After move back: track should NOT be missing");
+        assert!(
+            !track.missing,
+            "After move back: track should NOT be missing"
+        );
         assert_eq!(track.filepath, "/music/Beginbot/song.m4a");
         assert_eq!(track.title, Some("Beginbot Takes 10 Years".to_string()));
     }
@@ -1664,7 +1671,10 @@ mod tests {
         let track_a_updated = get_track_by_id(&conn, track_a_id).unwrap().unwrap();
         assert_eq!(track_a_updated.filepath, "/music/new/song.mp3");
         assert!(!track_a_updated.missing);
-        assert_eq!(track_a_updated.play_count, 10, "Play history should be preserved");
+        assert_eq!(
+            track_a_updated.play_count, 10,
+            "Play history should be preserved"
+        );
         assert_eq!(track_a_updated.title, Some("My Song".to_string()));
     }
 
@@ -1858,7 +1868,9 @@ mod tests {
         assert_eq!(result, 3);
 
         // Verify updates
-        let track = get_track_by_filepath(&conn, "/music/track1.mp3").unwrap().unwrap();
+        let track = get_track_by_filepath(&conn, "/music/track1.mp3")
+            .unwrap()
+            .unwrap();
         assert_eq!(track.title, Some("Updated 1".to_string()));
         assert_eq!(track.artist, Some("Updated Artist".to_string()));
     }
@@ -1917,9 +1929,21 @@ mod tests {
         let stats = get_library_stats(&conn).unwrap();
         assert_eq!(stats.total_tracks, 2);
 
-        assert!(get_track_by_filepath(&conn, "/music/track1.mp3").unwrap().is_none());
-        assert!(get_track_by_filepath(&conn, "/music/track2.mp3").unwrap().is_some());
-        assert!(get_track_by_filepath(&conn, "/music/track3.mp3").unwrap().is_none());
+        assert!(
+            get_track_by_filepath(&conn, "/music/track1.mp3")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            get_track_by_filepath(&conn, "/music/track2.mp3")
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            get_track_by_filepath(&conn, "/music/track3.mp3")
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -2101,7 +2125,8 @@ mod tests {
         let id = add_track(&conn, "/music/test.mp3", &metadata).unwrap();
 
         // Update fingerprints
-        let result = update_track_fingerprints(&conn, id, Some(12345), Some("sha256:abc123")).unwrap();
+        let result =
+            update_track_fingerprints(&conn, id, Some(12345), Some("sha256:abc123")).unwrap();
         assert!(result);
 
         // Verify update
@@ -2392,7 +2417,9 @@ mod tests {
 
         // Create playlist and add id1 and id3
         use crate::db::playlists;
-        let playlist = playlists::create_playlist(&conn, "Test Playlist").unwrap().unwrap();
+        let playlist = playlists::create_playlist(&conn, "Test Playlist")
+            .unwrap()
+            .unwrap();
         playlists::add_tracks_to_playlist(&conn, playlist.id, &[id1, id3], None).unwrap();
 
         // Delete id1 and id2
@@ -2418,7 +2445,10 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(pi_count, 0, "playlist_items for deleted tracks should be removed");
+        assert_eq!(
+            pi_count, 0,
+            "playlist_items for deleted tracks should be removed"
+        );
 
         // id3's playlist entry should still exist
         let id3_pi: i64 = conn
@@ -2448,11 +2478,7 @@ mod tests {
         add_track(&conn, "/other/d.mp3", &metadata).unwrap();
 
         // Scope to /music/rock/
-        let results = get_fingerprints_for_paths(
-            &conn,
-            &["/music/rock".to_string()],
-        )
-        .unwrap();
+        let results = get_fingerprints_for_paths(&conn, &["/music/rock".to_string()]).unwrap();
         assert_eq!(results.len(), 2);
 
         // Scope to both directories
@@ -2464,11 +2490,7 @@ mod tests {
         assert_eq!(results.len(), 3);
 
         // Scope to a specific file
-        let results = get_fingerprints_for_paths(
-            &conn,
-            &["/other/d.mp3".to_string()],
-        )
-        .unwrap();
+        let results = get_fingerprints_for_paths(&conn, &["/other/d.mp3".to_string()]).unwrap();
         assert_eq!(results.len(), 1);
 
         // Empty paths returns empty
@@ -2504,12 +2526,44 @@ mod tests {
         let conn = setup_test_db();
 
         // Compilation: album_artist is null, different artists per track
-        insert_sort_track(&conn, "The Decemberists", None, "Dark Was the Night", Some("1"), Some("12"), "Sleepless");
-        insert_sort_track(&conn, "Arcade Fire", None, "Dark Was the Night", Some("2"), Some("2"), "Lenin");
-        insert_sort_track(&conn, "Spoon", None, "Dark Was the Night", Some("2"), Some("1"), "Well-Alright");
+        insert_sort_track(
+            &conn,
+            "The Decemberists",
+            None,
+            "Dark Was the Night",
+            Some("1"),
+            Some("12"),
+            "Sleepless",
+        );
+        insert_sort_track(
+            &conn,
+            "Arcade Fire",
+            None,
+            "Dark Was the Night",
+            Some("2"),
+            Some("2"),
+            "Lenin",
+        );
+        insert_sort_track(
+            &conn,
+            "Spoon",
+            None,
+            "Dark Was the Night",
+            Some("2"),
+            Some("1"),
+            "Well-Alright",
+        );
 
         // The Decemberists' own album
-        insert_sort_track(&conn, "The Decemberists", None, "Her Majesty", None, Some("1"), "Shanty");
+        insert_sort_track(
+            &conn,
+            "The Decemberists",
+            None,
+            "Her Majesty",
+            None,
+            Some("1"),
+            "Shanty",
+        );
 
         let query = LibraryQuery {
             sort_by: LibrarySortColumn::Artist,
@@ -2519,7 +2573,11 @@ mod tests {
         };
 
         let result = get_all_tracks(&conn, &query).unwrap();
-        let artists: Vec<_> = result.items.iter().map(|t| t.artist.as_deref().unwrap()).collect();
+        let artists: Vec<_> = result
+            .items
+            .iter()
+            .map(|t| t.artist.as_deref().unwrap())
+            .collect();
 
         // Arcade Fire < Spoon < The Decemberists (all Decemberists tracks adjacent)
         assert_eq!(artists[0], "Arcade Fire");
@@ -2534,12 +2592,44 @@ mod tests {
         let conn = setup_test_db();
 
         // "Ceremony" by Anna Von Hausswolff
-        insert_sort_track(&conn, "Anna Von Hausswolff", Some("Anna Von Hausswolff"), "Ceremony", Some("1"), Some("1"), "Epitaph");
-        insert_sort_track(&conn, "Anna Von Hausswolff", Some("Anna Von Hausswolff"), "Ceremony", Some("1"), Some("2"), "Deathbed");
+        insert_sort_track(
+            &conn,
+            "Anna Von Hausswolff",
+            Some("Anna Von Hausswolff"),
+            "Ceremony",
+            Some("1"),
+            Some("1"),
+            "Epitaph",
+        );
+        insert_sort_track(
+            &conn,
+            "Anna Von Hausswolff",
+            Some("Anna Von Hausswolff"),
+            "Ceremony",
+            Some("1"),
+            Some("2"),
+            "Deathbed",
+        );
 
         // "Ceremony" by Phantogram
-        insert_sort_track(&conn, "Phantogram", Some("Phantogram"), "Ceremony", Some("1"), Some("1"), "Dear God");
-        insert_sort_track(&conn, "Phantogram", Some("Phantogram"), "Ceremony", Some("1"), Some("2"), "In A Spiral");
+        insert_sort_track(
+            &conn,
+            "Phantogram",
+            Some("Phantogram"),
+            "Ceremony",
+            Some("1"),
+            Some("1"),
+            "Dear God",
+        );
+        insert_sort_track(
+            &conn,
+            "Phantogram",
+            Some("Phantogram"),
+            "Ceremony",
+            Some("1"),
+            Some("2"),
+            "In A Spiral",
+        );
 
         let query = LibraryQuery {
             sort_by: LibrarySortColumn::Artist,
@@ -2549,8 +2639,15 @@ mod tests {
         };
 
         let result = get_all_tracks(&conn, &query).unwrap();
-        let pairs: Vec<_> = result.items.iter()
-            .map(|t| (t.album_artist.as_deref().unwrap(), t.title.as_deref().unwrap()))
+        let pairs: Vec<_> = result
+            .items
+            .iter()
+            .map(|t| {
+                (
+                    t.album_artist.as_deref().unwrap(),
+                    t.title.as_deref().unwrap(),
+                )
+            })
             .collect();
 
         // Anna Von Hausswolff tracks first, then Phantogram
@@ -2565,9 +2662,33 @@ mod tests {
         let conn = setup_test_db();
 
         // Soundtrack: same album_artist for all tracks
-        insert_sort_track(&conn, "Lorien Testard", Some("Lorien Testard"), "Clair Obscur OST", None, Some("1"), "Track 1");
-        insert_sort_track(&conn, "Lorien Testard", Some("Lorien Testard"), "Clair Obscur OST", None, Some("2"), "Track 2");
-        insert_sort_track(&conn, "Lorien Testard", Some("Lorien Testard"), "Clair Obscur OST", None, Some("3"), "Track 3");
+        insert_sort_track(
+            &conn,
+            "Lorien Testard",
+            Some("Lorien Testard"),
+            "Clair Obscur OST",
+            None,
+            Some("1"),
+            "Track 1",
+        );
+        insert_sort_track(
+            &conn,
+            "Lorien Testard",
+            Some("Lorien Testard"),
+            "Clair Obscur OST",
+            None,
+            Some("2"),
+            "Track 2",
+        );
+        insert_sort_track(
+            &conn,
+            "Lorien Testard",
+            Some("Lorien Testard"),
+            "Clair Obscur OST",
+            None,
+            Some("3"),
+            "Track 3",
+        );
 
         let query = LibraryQuery {
             sort_by: LibrarySortColumn::Artist,
@@ -2577,7 +2698,11 @@ mod tests {
         };
 
         let result = get_all_tracks(&conn, &query).unwrap();
-        let titles: Vec<_> = result.items.iter().map(|t| t.title.as_deref().unwrap()).collect();
+        let titles: Vec<_> = result
+            .items
+            .iter()
+            .map(|t| t.title.as_deref().unwrap())
+            .collect();
 
         // All grouped together by track number order
         assert_eq!(titles, vec!["Track 1", "Track 2", "Track 3"]);
@@ -2588,11 +2713,35 @@ mod tests {
         let conn = setup_test_db();
 
         // "The Decemberists" should sort as "Decemberists" with ignore words
-        insert_sort_track(&conn, "The Decemberists", None, "Her Majesty", None, Some("1"), "Shanty");
+        insert_sort_track(
+            &conn,
+            "The Decemberists",
+            None,
+            "Her Majesty",
+            None,
+            Some("1"),
+            "Shanty",
+        );
         // "Arcade Fire" sorts as "Arcade Fire"
-        insert_sort_track(&conn, "Arcade Fire", None, "Funeral", None, Some("1"), "Neighborhood");
+        insert_sort_track(
+            &conn,
+            "Arcade Fire",
+            None,
+            "Funeral",
+            None,
+            Some("1"),
+            "Neighborhood",
+        );
         // "Belle and Sebastian" sorts as "Belle..."
-        insert_sort_track(&conn, "Belle and Sebastian", None, "Tigermilk", None, Some("1"), "The State");
+        insert_sort_track(
+            &conn,
+            "Belle and Sebastian",
+            None,
+            "Tigermilk",
+            None,
+            Some("1"),
+            "The State",
+        );
 
         let query = LibraryQuery {
             sort_by: LibrarySortColumn::Artist,
@@ -2603,7 +2752,11 @@ mod tests {
         };
 
         let result = get_all_tracks(&conn, &query).unwrap();
-        let artists: Vec<_> = result.items.iter().map(|t| t.artist.as_deref().unwrap()).collect();
+        let artists: Vec<_> = result
+            .items
+            .iter()
+            .map(|t| t.artist.as_deref().unwrap())
+            .collect();
 
         // With "The" stripped: Arcade Fire < Belle and Sebastian < (The) Decemberists
         assert_eq!(artists[0], "Arcade Fire");

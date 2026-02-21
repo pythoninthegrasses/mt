@@ -9,7 +9,7 @@ mod tests {
         add_files_to_queue, add_to_queue, clear_queue, get_queue, remove_from_queue,
     };
     use proptest::prelude::*;
-    use rusqlite::{params, Connection};
+    use rusqlite::{Connection, params};
     use std::collections::HashSet;
 
     /// Create an in-memory test database with schema

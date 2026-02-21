@@ -8,7 +8,7 @@ use std::path::Path;
 use walkdir::WalkDir;
 
 use crate::scanner::fingerprint::FileFingerprint;
-use crate::scanner::{is_audio_file, ScanResult, ScanStats};
+use crate::scanner::{ScanResult, ScanStats, is_audio_file};
 
 /// Result of the inventory phase
 #[derive(Debug, Default)]

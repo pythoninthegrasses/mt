@@ -7,7 +7,7 @@ use rand::rng;
 use rand::seq::SliceRandom;
 use tauri::{AppHandle, State};
 
-use crate::db::{queue, Database, QueueItem, QueueState, Track};
+use crate::db::{Database, QueueItem, QueueState, Track, queue};
 use crate::events::{EventEmitter, QueueStateChangedEvent, QueueUpdatedEvent};
 
 /// Response for queue get operations
@@ -115,11 +115,7 @@ pub fn queue_add_files(
 /// Remove a track from the queue by position
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn queue_remove(
-    app: AppHandle,
-    db: State<'_, Database>,
-    position: i64,
-) -> Result<(), String> {
+pub fn queue_remove(app: AppHandle, db: State<'_, Database>, position: i64) -> Result<(), String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     let removed = queue::remove_from_queue(&conn, position).map_err(|e| e.to_string())?;
 
@@ -168,7 +164,11 @@ pub fn queue_reorder(
     let queue_length = queue::get_queue_length(&conn).map_err(|e| e.to_string())?;
 
     // Emit queue updated event with payload
-    let _ = app.emit_queue_updated(QueueUpdatedEvent::reordered(from_position, to_position, queue_length));
+    let _ = app.emit_queue_updated(QueueUpdatedEvent::reordered(
+        from_position,
+        to_position,
+        queue_length,
+    ));
 
     Ok(QueueOperationResponse {
         success,
@@ -195,7 +195,10 @@ pub fn queue_shuffle(
     }
 
     // Get filepaths from queue items
-    let mut filepaths: Vec<String> = items.iter().map(|item| item.track.filepath.clone()).collect();
+    let mut filepaths: Vec<String> = items
+        .iter()
+        .map(|item| item.track.filepath.clone())
+        .collect();
 
     let keep_current = keep_current.unwrap_or(true);
 
@@ -287,11 +290,7 @@ pub fn queue_set_shuffle(
 /// Set loop mode in queue playback state
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn queue_set_loop(
-    app: AppHandle,
-    db: State<'_, Database>,
-    mode: String,
-) -> Result<(), String> {
+pub fn queue_set_loop(app: AppHandle, db: State<'_, Database>, mode: String) -> Result<(), String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     queue::set_loop_mode(&conn, &mode).map_err(|e| e.to_string())?;
 

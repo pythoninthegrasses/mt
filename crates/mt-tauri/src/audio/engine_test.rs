@@ -268,7 +268,7 @@ mod tests {
     #[test]
     fn test_progress_percentage_calculation() {
         let progress = Progress {
-            position_ms: 90000, // 1.5 minutes
+            position_ms: 90000,  // 1.5 minutes
             duration_ms: 180000, // 3 minutes
             state: PlaybackState::Playing,
         };

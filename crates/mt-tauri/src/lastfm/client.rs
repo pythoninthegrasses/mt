@@ -246,9 +246,7 @@ impl LastFmClient {
         params.insert("artist".to_string(), artist.to_string());
         params.insert("track".to_string(), track.to_string());
 
-        let response = self
-            .api_call("track.getInfo", params, None, false)
-            .await?;
+        let response = self.api_call("track.getInfo", params, None, false).await?;
 
         // Extract album title: response.track.album.title
         let album = response

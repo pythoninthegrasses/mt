@@ -7,13 +7,11 @@ use std::path::Path;
 use tauri::{AppHandle, State};
 use tracing::{debug, info};
 
-use crate::db::{
-    library, Database, LibraryStats, SortOrder, Track, TrackMetadata,
-};
+use crate::db::{Database, LibraryStats, SortOrder, Track, TrackMetadata, library};
 use crate::events::{EventEmitter, LibraryUpdatedEvent};
 use crate::scanner::artwork::Artwork;
 use crate::scanner::artwork_cache::ArtworkCache;
-use crate::scanner::fingerprint::{compute_content_hash, FileFingerprint};
+use crate::scanner::fingerprint::{FileFingerprint, compute_content_hash};
 use crate::scanner::metadata::extract_metadata_or_default;
 
 /// Response for paginated library queries
@@ -171,10 +169,7 @@ pub fn library_delete_track(
 /// Purge all tracks marked as missing from the database
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn library_purge_missing(
-    app: AppHandle,
-    db: State<'_, Database>,
-) -> Result<usize, String> {
+pub fn library_purge_missing(app: AppHandle, db: State<'_, Database>) -> Result<usize, String> {
     let start = std::time::Instant::now();
     let deleted = db
         .transaction(library::delete_missing_tracks)
@@ -210,10 +205,7 @@ pub fn library_delete_tracks(
 /// Delete ALL tracks from the library (favorites, playlist_items, library rows)
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn library_delete_all(
-    app: AppHandle,
-    db: State<'_, Database>,
-) -> Result<usize, String> {
+pub fn library_delete_all(app: AppHandle, db: State<'_, Database>) -> Result<usize, String> {
     let start = std::time::Instant::now();
     let deleted = db
         .transaction(library::delete_all_tracks)
@@ -343,18 +335,19 @@ pub fn library_locate_track(
     // 3. User uses "Locate" to point the missing track to the same file
     let mut deleted_duplicate_id: Option<i64> = None;
     if let Ok(Some(existing_track)) = library::get_track_by_filepath(&conn, &new_path)
-        && existing_track.id != track_id {
-            // There's a duplicate track at this path - remove it
-            // The original track (being located) takes precedence to preserve play history
-            debug!(
-                duplicate_id = existing_track.id,
-                path = %new_path,
-                kept_id = track_id,
-                "Removing duplicate track at path (keeping original)"
-            );
-            library::delete_track(&conn, existing_track.id).map_err(|e| e.to_string())?;
-            deleted_duplicate_id = Some(existing_track.id);
-        }
+        && existing_track.id != track_id
+    {
+        // There's a duplicate track at this path - remove it
+        // The original track (being located) takes precedence to preserve play history
+        debug!(
+            duplicate_id = existing_track.id,
+            path = %new_path,
+            kept_id = track_id,
+            "Removing duplicate track at path (keeping original)"
+        );
+        library::delete_track(&conn, existing_track.id).map_err(|e| e.to_string())?;
+        deleted_duplicate_id = Some(existing_track.id);
+    }
 
     // Update the filepath (also clears missing flag and updates last_seen_at)
     library::update_track_filepath(&conn, track_id, &new_path).map_err(|e| e.to_string())?;
@@ -460,9 +453,9 @@ pub async fn library_reconcile_scan(
     app: AppHandle,
     db: State<'_, Database>,
 ) -> Result<ReconcileScanResult, String> {
-    use std::sync::atomic::{AtomicU32, Ordering};
-    use rayon::prelude::*;
     use crate::events::ReconcileProgressEvent;
+    use rayon::prelude::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     let db = db.inner().clone();
     let app_handle = app.clone();
@@ -474,7 +467,8 @@ pub async fn library_reconcile_scan(
         let total = tracks.len() as u32;
 
         // Phase 1: compute fingerprints and hashes in parallel
-        let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::fingerprinting(0, total));
+        let _ =
+            app_handle.emit_reconcile_progress(ReconcileProgressEvent::fingerprinting(0, total));
 
         let processed = AtomicU32::new(0);
         let fp_errors = AtomicU32::new(0);
@@ -574,9 +568,10 @@ pub async fn library_reconcile_scan(
                 }
             }
             if (i as u32 + 1).is_multiple_of(100) {
-                let _ = app_handle.emit_reconcile_progress(
-                    ReconcileProgressEvent::deduplicating(i as u32 + 1, dup_total),
-                );
+                let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::deduplicating(
+                    i as u32 + 1,
+                    dup_total,
+                ));
             }
         }
 

@@ -76,10 +76,7 @@ pub fn scan_2phase(
             phase: "parse".to_string(),
             current: 0,
             total: total_to_parse,
-            message: Some(format!(
-                "Parsing {} new/modified files...",
-                total_to_parse
-            )),
+            message: Some(format!("Parsing {} new/modified files...", total_to_parse)),
         });
     }
 
@@ -157,10 +154,7 @@ pub fn build_fingerprint_map(
     tracks
         .iter()
         .map(|(filepath, mtime_ns, size)| {
-            (
-                filepath.clone(),
-                FileFingerprint::from_db(*mtime_ns, *size),
-            )
+            (filepath.clone(), FileFingerprint::from_db(*mtime_ns, *size))
         })
         .collect()
 }
@@ -170,8 +164,8 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::Write;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use tempfile::tempdir;
 
     #[test]
@@ -362,7 +356,13 @@ mod tests {
     #[test]
     fn test_build_fingerprint_map_large() {
         let tracks: Vec<(String, Option<i64>, i64)> = (0..100)
-            .map(|i| (format!("/music/track{}.mp3", i), Some(i as i64), (i * 1000) as i64))
+            .map(|i| {
+                (
+                    format!("/music/track{}.mp3", i),
+                    Some(i as i64),
+                    (i * 1000) as i64,
+                )
+            })
             .collect();
 
         let map = build_fingerprint_map(&tracks);

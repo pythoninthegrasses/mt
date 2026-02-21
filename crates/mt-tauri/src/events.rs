@@ -280,7 +280,11 @@ pub struct SettingsUpdatedEvent {
 impl SettingsUpdatedEvent {
     pub const EVENT_NAME: &'static str = "settings:updated";
 
-    pub fn new(key: String, value: serde_json::Value, previous_value: Option<serde_json::Value>) -> Self {
+    pub fn new(
+        key: String,
+        value: serde_json::Value,
+        previous_value: Option<serde_json::Value>,
+    ) -> Self {
         Self {
             key,
             value,
@@ -810,11 +814,7 @@ mod tests {
 
     #[test]
     fn test_settings_updated_event_without_previous() {
-        let event = SettingsUpdatedEvent::new(
-            "theme".to_string(),
-            serde_json::json!("dark"),
-            None,
-        );
+        let event = SettingsUpdatedEvent::new("theme".to_string(), serde_json::json!("dark"), None);
         assert_eq!(event.key, "theme");
         assert_eq!(event.value, serde_json::json!("dark"));
         assert!(event.previous_value.is_none());
@@ -903,7 +903,8 @@ mod tests {
 
     #[test]
     fn test_scrobble_status_event_serialization() {
-        let event = ScrobbleStatusEvent::success("Test Artist".to_string(), "Test Track".to_string());
+        let event =
+            ScrobbleStatusEvent::success("Test Artist".to_string(), "Test Track".to_string());
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("\"status\":\"success\""));
         assert!(json.contains("\"artist\":\"Test Artist\""));
@@ -1011,11 +1012,28 @@ mod tests {
         ];
 
         for name in event_names {
-            assert!(name.contains(':'), "Event name '{}' should contain ':'", name);
+            assert!(
+                name.contains(':'),
+                "Event name '{}' should contain ':'",
+                name
+            );
             let parts: Vec<&str> = name.split(':').collect();
-            assert_eq!(parts.len(), 2, "Event name '{}' should have exactly one ':'", name);
-            assert!(!parts[0].is_empty(), "Event name '{}' should have non-empty domain", name);
-            assert!(!parts[1].is_empty(), "Event name '{}' should have non-empty action", name);
+            assert_eq!(
+                parts.len(),
+                2,
+                "Event name '{}' should have exactly one ':'",
+                name
+            );
+            assert!(
+                !parts[0].is_empty(),
+                "Event name '{}' should have non-empty domain",
+                name
+            );
+            assert!(
+                !parts[1].is_empty(),
+                "Event name '{}' should have non-empty action",
+                name
+            );
         }
     }
 

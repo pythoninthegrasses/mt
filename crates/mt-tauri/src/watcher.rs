@@ -4,9 +4,8 @@
 //! Supports real-time filesystem watching via notify crate.
 
 use notify_debouncer_full::{
-    new_debouncer,
+    DebounceEventResult, Debouncer, RecommendedCache, new_debouncer,
     notify::{self, RecursiveMode},
-    DebounceEventResult, Debouncer, RecommendedCache,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -18,11 +17,11 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
-use crate::db::{library, watched, Database, TrackMetadata, WatchedFolder as DbWatchedFolder};
+use crate::db::{Database, TrackMetadata, WatchedFolder as DbWatchedFolder, library, watched};
 use crate::events::{EventEmitter, LibraryUpdatedEvent, ScanCompleteEvent, ScanProgressEvent};
-use crate::scanner::fingerprint::{compute_content_hash, FileFingerprint};
-use crate::scanner::scan::{scan_2phase, ProgressCallback};
 use crate::scanner::ExtractedMetadata;
+use crate::scanner::fingerprint::{FileFingerprint, compute_content_hash};
+use crate::scanner::scan::{ProgressCallback, scan_2phase};
 
 /// Watched folder response for frontend (matches existing API contract)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -179,8 +178,7 @@ impl WatcherManager {
                     Self::trigger_rescan(&app, &db, folder_id).await;
                 }
 
-                let mut interval =
-                    tokio::time::interval(Duration::from_secs(cadence_minutes * 60));
+                let mut interval = tokio::time::interval(Duration::from_secs(cadence_minutes * 60));
                 interval.tick().await;
 
                 loop {
@@ -221,69 +219,75 @@ impl WatcherManager {
         // Capture the Tokio runtime handle to spawn async tasks from the sync callback
         let runtime_handle = tokio::runtime::Handle::current();
 
-        let debouncer_result =
-            new_debouncer(debounce_duration, None, move |result: DebounceEventResult| {
-                match result {
-                    Ok(events) => {
-                        let mut has_changes = false;
-                        let mut event_paths: Vec<String> = Vec::new();
+        let debouncer_result = new_debouncer(
+            debounce_duration,
+            None,
+            move |result: DebounceEventResult| match result {
+                Ok(events) => {
+                    let mut has_changes = false;
+                    let mut event_paths: Vec<String> = Vec::new();
 
-                        for event in events.iter() {
-                            match event.kind {
-                                notify::EventKind::Create(_)
-                                | notify::EventKind::Modify(_)
-                                | notify::EventKind::Remove(_) => {
-                                    has_changes = true;
-                                    for p in &event.paths {
-                                        if let Some(ext) = p.extension() {
-                                            let ext_lower = ext.to_string_lossy().to_lowercase();
-                                            if matches!(
-                                                ext_lower.as_str(),
-                                                "mp3" | "flac"
-                                                    | "m4a"
-                                                    | "ogg"
-                                                    | "wav"
-                                                    | "aac"
-                                                    | "wma"
-                                                    | "opus"
-                                            ) {
-                                                event_paths.push(p.to_string_lossy().to_string());
-                                            }
+                    for event in events.iter() {
+                        match event.kind {
+                            notify::EventKind::Create(_)
+                            | notify::EventKind::Modify(_)
+                            | notify::EventKind::Remove(_) => {
+                                has_changes = true;
+                                for p in &event.paths {
+                                    if let Some(ext) = p.extension() {
+                                        let ext_lower = ext.to_string_lossy().to_lowercase();
+                                        if matches!(
+                                            ext_lower.as_str(),
+                                            "mp3"
+                                                | "flac"
+                                                | "m4a"
+                                                | "ogg"
+                                                | "wav"
+                                                | "aac"
+                                                | "wma"
+                                                | "opus"
+                                        ) {
+                                            event_paths.push(p.to_string_lossy().to_string());
                                         }
                                     }
                                 }
-                                _ => {}
                             }
-                        }
-
-                        if has_changes && !event_paths.is_empty() {
-                            debug!(folder_id, count = event_paths.len(), "FS events detected for folder");
-
-                            let _ = app.emit(
-                                "watched-folder:fs-event",
-                                FsEvent {
-                                    folder_id,
-                                    event_type: "change".to_string(),
-                                    paths: event_paths,
-                                },
-                            );
-
-                            let app_clone = app.clone();
-                            let db_clone = db.clone();
-                            let sem_clone = rescan_sem.clone();
-                            runtime_handle.spawn(async move {
-                                let _permit = sem_clone.acquire().await;
-                                Self::trigger_rescan(&app_clone, &db_clone, folder_id).await;
-                            });
+                            _ => {}
                         }
                     }
-                    Err(errors) => {
-                        for err in errors {
-                            error!(folder_id, error = ?err, "FS watcher error");
-                        }
+
+                    if has_changes && !event_paths.is_empty() {
+                        debug!(
+                            folder_id,
+                            count = event_paths.len(),
+                            "FS events detected for folder"
+                        );
+
+                        let _ = app.emit(
+                            "watched-folder:fs-event",
+                            FsEvent {
+                                folder_id,
+                                event_type: "change".to_string(),
+                                paths: event_paths,
+                            },
+                        );
+
+                        let app_clone = app.clone();
+                        let db_clone = db.clone();
+                        let sem_clone = rescan_sem.clone();
+                        runtime_handle.spawn(async move {
+                            let _permit = sem_clone.acquire().await;
+                            Self::trigger_rescan(&app_clone, &db_clone, folder_id).await;
+                        });
                     }
                 }
-            });
+                Err(errors) => {
+                    for err in errors {
+                        error!(folder_id, error = ?err, "FS watcher error");
+                    }
+                }
+            },
+        );
 
         match debouncer_result {
             Ok(mut debouncer) => {
@@ -338,10 +342,14 @@ impl WatcherManager {
             }
         };
 
-        let job_id = format!("watcher-{}-{}", folder_id, std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis());
+        let job_id = format!(
+            "watcher-{}-{}",
+            folder_id,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+        );
 
         // Get DB fingerprints scoped to this folder's path only.
         // Without scoping, scanning folder A would mark all of folder B's tracks
@@ -452,8 +460,7 @@ impl WatcherManager {
                     // Skip reconciliation entirely.
                     unreconciled_indices = (0..scan_result.added.len()).collect();
                 } else {
-                    has_missing_hashes =
-                        missing_tracks.iter().any(|t| t.content_hash.is_some());
+                    has_missing_hashes = missing_tracks.iter().any(|t| t.content_hash.is_some());
                     let by_inode: HashMap<i64, &crate::db::Track> = missing_tracks
                         .iter()
                         .filter_map(|t| t.file_inode.map(|i| (i, t)))
@@ -561,13 +568,8 @@ impl WatcherManager {
 
                     if let Some(h) = hash
                         && let Some(track) = by_hash.get(h.as_str())
-                        && library::reconcile_moved_track(
-                            conn,
-                            track.id,
-                            &m.filepath,
-                            m.file_inode,
-                        )
-                        .is_ok()
+                        && library::reconcile_moved_track(conn, track.id, &m.filepath, m.file_inode)
+                            .is_ok()
                     {
                         reconciled_count += 1;
                         was_reconciled = true;
@@ -595,7 +597,10 @@ impl WatcherManager {
                         .iter()
                         .map(|(idx, hash)| {
                             let m = &scan_result.added[*idx];
-                            (m.filepath.clone(), to_track_metadata_with_hash(m, hash.clone()))
+                            (
+                                m.filepath.clone(),
+                                to_track_metadata_with_hash(m, hash.clone()),
+                            )
                         })
                         .collect()
                 }

@@ -130,8 +130,14 @@ mod tests {
 
     #[test]
     fn test_is_audio_file_with_path() {
-        assert!(is_audio_file(&PathBuf::from("/music/artist/album/track.mp3")));
-        assert!(is_audio_file(&PathBuf::from("/music/artist/album/track.FLAC")));
-        assert!(!is_audio_file(&PathBuf::from("/music/artist/album/cover.jpg")));
+        assert!(is_audio_file(&PathBuf::from(
+            "/music/artist/album/track.mp3"
+        )));
+        assert!(is_audio_file(&PathBuf::from(
+            "/music/artist/album/track.FLAC"
+        )));
+        assert!(!is_audio_file(&PathBuf::from(
+            "/music/artist/album/cover.jpg"
+        )));
     }
 }

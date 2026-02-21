@@ -8,9 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Instant;
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{
-    fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
-};
+use tracing_subscriber::{EnvFilter, Layer, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 /// Resolved log directory, set once during init.
 static LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -47,8 +45,8 @@ pub fn compute_log_dir(app_identifier: &str) -> PathBuf {
 
 /// Delete log files older than `max_age_days` from the given directory.
 fn cleanup_old_logs(log_dir: &Path, max_age_days: u64) {
-    let cutoff = std::time::SystemTime::now()
-        - std::time::Duration::from_secs(max_age_days * 24 * 60 * 60);
+    let cutoff =
+        std::time::SystemTime::now() - std::time::Duration::from_secs(max_age_days * 24 * 60 * 60);
 
     let entries = match std::fs::read_dir(log_dir) {
         Ok(e) => e,

@@ -6,7 +6,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::db::{favorites, library, library::LibraryQuery, playlists, settings, Database};
+    use crate::db::{Database, favorites, library, library::LibraryQuery, playlists, settings};
     use std::path::PathBuf;
 
     fn get_test_db_path() -> PathBuf {

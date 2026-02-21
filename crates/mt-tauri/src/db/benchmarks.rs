@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::db::{library, playlists, queue, settings, Database, TrackMetadata};
+    use crate::db::{Database, TrackMetadata, library, playlists, queue, settings};
     use serde_json::json;
     use std::time::Instant;
 

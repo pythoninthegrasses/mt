@@ -3,7 +3,7 @@
 //! Operations for caching Last.fm loved tracks and matching them
 //! against the local library for automatic favoriting.
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 use crate::db::{DbResult, LastfmLovedStats, LastfmLovedTrack};
 
@@ -554,7 +554,9 @@ mod tests {
         upsert_loved_track(&conn, "Artist", "Track", Some(2000)).unwrap();
         assert_eq!(get_loved_count(&conn).unwrap(), 1);
 
-        let entry = get_loved_by_name(&conn, "Artist", "Track").unwrap().unwrap();
+        let entry = get_loved_by_name(&conn, "Artist", "Track")
+            .unwrap()
+            .unwrap();
         assert_eq!(entry.loved_at, Some(2000));
         assert_eq!(entry.matched_track_id, None); // Match was lost on clear
     }

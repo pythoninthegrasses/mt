@@ -2,7 +2,7 @@
 //!
 //! Operations for favorited tracks, top played, and recently played.
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 use crate::db::{DbResult, FavoriteTrack, PaginatedResult, Track};
 
@@ -252,9 +252,9 @@ pub fn remove_favorite(conn: &Connection, track_id: i64) -> DbResult<bool> {
 mod tests {
     use super::*;
     use crate::db::{
+        TrackMetadata,
         library::{add_track, update_play_count},
         schema::{create_tables, run_migrations},
-        TrackMetadata,
     };
 
     fn setup_test_db() -> Connection {
@@ -533,8 +533,7 @@ mod tests {
 
         // Set a fake Last.fm session key
         use crate::db::settings;
-        settings::set_setting(&conn, "lastfm_session_key", &serde_json::json!("fake_key"))
-            .unwrap();
+        settings::set_setting(&conn, "lastfm_session_key", &serde_json::json!("fake_key")).unwrap();
 
         // Favorites operations should work regardless
         let metadata = TrackMetadata {

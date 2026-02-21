@@ -6,7 +6,7 @@
 use tauri::{AppHandle, State};
 use tracing::{debug, warn};
 
-use crate::db::{favorites, library, settings, Database, FavoriteTrack, PaginatedResult, Track};
+use crate::db::{Database, FavoriteTrack, PaginatedResult, Track, favorites, library, settings};
 use crate::events::{EventEmitter, FavoritesUpdatedEvent};
 use crate::lastfm::LastFmClient;
 
@@ -120,7 +120,10 @@ pub fn favorites_get(
 /// Check if a track is favorited
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn favorites_check(db: State<'_, Database>, track_id: i64) -> Result<FavoriteCheckResponse, String> {
+pub fn favorites_check(
+    db: State<'_, Database>,
+    track_id: i64,
+) -> Result<FavoriteCheckResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     let (is_favorite, favorited_date) =
         favorites::is_favorite(&conn, track_id).map_err(|e| e.to_string())?;
