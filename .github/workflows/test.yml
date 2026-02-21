@@ -184,11 +184,11 @@ jobs:
           path: app/frontend/coverage/
           retention-days: 30
 
-  # Build verification
-  build:
-    name: Build Verification
+  # Build verification and Rust backend tests with coverage
+  build-and-test:
+    name: Build & Rust Tests
     runs-on: [macOS, ARM64]
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       CARGO_INCREMENTAL: 1  # Enable incremental compilation on self-hosted (reuses artifacts)
       CARGO_TERM_COLOR: always
@@ -206,23 +206,6 @@ jobs:
 
       - name: Check Rust build
         run: cargo check --workspace --all-features
-
-  # Rust backend tests with coverage
-  rust-tests:
-    name: Rust Backend Tests
-    runs-on: [macOS, ARM64]
-    needs: build
-    timeout-minutes: 5
-    env:
-      CARGO_INCREMENTAL: 1  # Enable incremental compilation on self-hosted (reuses artifacts)
-      CARGO_TERM_COLOR: always
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup Tauri build environment
-        uses: ./.github/actions/setup-tauri-build
 
       - name: Install cargo-tarpaulin
         run: |
