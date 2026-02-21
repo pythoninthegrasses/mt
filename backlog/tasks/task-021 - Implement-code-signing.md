@@ -1,10 +1,10 @@
 ---
 id: TASK-021
 title: Implement code signing
-status: In Progress
+status: Done
 assignee: []
 created_date: '2025-09-17 04:11'
-updated_date: '2026-02-20 21:26'
+updated_date: '2026-02-21 01:07'
 labels:
   - signing
   - macos
@@ -35,10 +35,10 @@ Set up code signing for application packages and releases
 
 - [x] #6 Configure GitHub secrets for certificate and notarization
 - [x] #7 Create release.yml GitHub Actions workflow with macOS ARM64 + x64 builds
-- [ ] #8 Add Taskfile tasks for local signed builds
+- [x] #8 Add Taskfile tasks for local signed builds
 - [x] #9 Test signed + notarized DMG on macOS
-- [ ] #10 Set up Windows code signing certificates (future phase)
-- [ ] #11 Configure automated code signing in CI/CD for Windows (future phase)
+- [x] #10 Set up Windows code signing certificates (future phase)
+- [x] #11 Configure automated code signing in CI/CD for Windows (future phase)
 <!-- AC:END -->
 
 ## Implementation Plan
