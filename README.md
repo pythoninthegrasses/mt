@@ -38,22 +38,22 @@ task npm:install
 task tauri:dev
 ```
 
-## Usage
+## 1.0.0 Highlights
 
-> [!WARNING]
-> This app is currently pre-alpha and is not yet a good daily driver for playing music you don't mind getting sucked into a black hole.
-> 
-> THERE BE DRAGONS
-> 
-> With that said, with the 1.0.0 release candidate, a proper signed build will be added and this message will be removed.
->
-> For meow, you'll have to build the app per the [dev](#run-the-app) section 👌
+1. **Pure Rust backend** -- complete migration from Python/FastAPI to Tauri commands; Python sidecar removed
+2. **Last.fm scrobbling** -- now playing, loved track sync, queued retry on failure, bidirectional love sync
+3. **Cross-platform builds** -- macOS code signing and notarization, Windows NSIS installer, Linux AMD64 and ARM64 Docker builds
+4. **Virtual scrolling** -- smooth rendering for libraries with tens of thousands of tracks
+5. **Artists and Albums views** -- split-pane artist browser and album grid with detail view
+6. **Watched folders** -- multi-directory monitoring with real-time filesystem events, duplicate detection, and move tracking
+7. **Keyboard shortcuts** -- global playback controls, type-to-jump artist navigation with same-letter cycling
+8. **Drag-and-drop playlists** -- reorder tracks, columns, sidebar playlists; library-to-playlist drops
+9. **Performance tuning** -- artwork LRU cache, parallel scanning with rayon, SQLite connection pooling, CSS containment
+10. **Structured logging and diagnostics** -- tracing-based backend logging, frontend error capture, exportable log files
 
-<!-- TODO: install -->
+See the full [release notes](https://github.com/pythoninthegrass/mt/releases) for details.
 
 ## Development
-
-Same as [Setup](#setup) while in alpha.
 
 See [Builds](docs/builds.md) for build configuration, performance tuning, and signing.
 
