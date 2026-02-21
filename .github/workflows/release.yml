@@ -13,9 +13,8 @@ on:
           - macos
           - linux
           - windows
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -27,7 +26,9 @@ concurrency:
 jobs:
   build-macos:
     name: Build macOS (ARM64)
-    if: inputs.platform == 'all' || inputs.platform == 'macos' || inputs.platform == ''
+    if: >
+      github.event_name == 'release' ||
+      inputs.platform == 'all' || inputs.platform == 'macos' || inputs.platform == ''
     runs-on: [macOS, ARM64]
     timeout-minutes: 30
 
@@ -72,11 +73,8 @@ jobs:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'mt v__VERSION__'
-          releaseBody: 'See assets below to download and install.'
-          releaseDraft: true
-          prerelease: false
+          tagName: ${{ github.event.release.tag_name }}
+          releaseId: ${{ github.event.release.id }}
           args: --target aarch64-apple-darwin
           projectPath: './crates/mt-tauri'
 
@@ -88,7 +86,9 @@ jobs:
 
   build-linux-amd64:
     name: Build Linux (amd64)
-    if: inputs.platform == 'all' || inputs.platform == 'linux' || inputs.platform == ''
+    if: >
+      github.event_name == 'release' ||
+      inputs.platform == 'all' || inputs.platform == 'linux' || inputs.platform == ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -104,17 +104,54 @@ jobs:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'mt v__VERSION__'
-          releaseBody: 'See assets below to download and install.'
-          releaseDraft: true
-          prerelease: false
+          tagName: ${{ github.event.release.tag_name }}
+          releaseId: ${{ github.event.release.id }}
           args: --target x86_64-unknown-linux-gnu --bundles deb
           projectPath: './crates/mt-tauri'
 
+  build-linux-arm64:
+    name: Build Linux (ARM64)
+    if: >
+      github.event_name == 'release' ||
+      inputs.platform == 'all' || inputs.platform == 'linux' || inputs.platform == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build ARM64 .deb
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            --file docker/Dockerfile.linux-arm64 \
+            --build-arg LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }} \
+            --build-arg LASTFM_API_SECRET=${{ secrets.LASTFM_API_SECRET }} \
+            --target artifacts \
+            --output type=local,dest=dist/linux-arm64 \
+            .
+
+      - name: Upload ARM64 artifacts to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            dist/linux-arm64/*.deb
+
   build-windows:
     name: Build Windows (x64)
-    if: inputs.platform == 'all' || inputs.platform == 'windows' || inputs.platform == ''
+    if: >
+      github.event_name == 'release' ||
+      inputs.platform == 'all' || inputs.platform == 'windows' || inputs.platform == ''
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 45
 
@@ -178,11 +215,8 @@ jobs:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'mt v__VERSION__'
-          releaseBody: 'See assets below to download and install.'
-          releaseDraft: true
-          prerelease: false
+          tagName: ${{ github.event.release.tag_name }}
+          releaseId: ${{ github.event.release.id }}
           args: --target x86_64-pc-windows-msvc --bundles nsis --config "${{ env.SIGN_CONFIG_PATH }}"
           projectPath: './crates/mt-tauri'
 
