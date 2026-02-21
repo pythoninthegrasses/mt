@@ -63,6 +63,10 @@ jobs:
         run: |
           echo "$APPLE_API_KEY_B64" | base64 --decode > /tmp/auth_key.p8
 
+      - name: Build frontend
+        working-directory: ./app/frontend
+        run: npm run build
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -75,7 +79,7 @@ jobs:
         with:
           tagName: ${{ github.event.release.tag_name }}
           releaseId: ${{ github.event.release.id }}
-          args: --target aarch64-apple-darwin
+          args: --target aarch64-apple-darwin --config '{"build":{"beforeBuildCommand":""}}'
           projectPath: './crates/mt-tauri'
 
       - name: Cleanup CI keychain
@@ -98,6 +102,10 @@ jobs:
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
 
+      - name: Build frontend
+        working-directory: ./app/frontend
+        run: npm run build
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -106,7 +114,7 @@ jobs:
         with:
           tagName: ${{ github.event.release.tag_name }}
           releaseId: ${{ github.event.release.id }}
-          args: --target x86_64-unknown-linux-gnu --bundles deb
+          args: --target x86_64-unknown-linux-gnu --bundles deb --config '{"build":{"beforeBuildCommand":""}}'
           projectPath: './crates/mt-tauri'
 
   build-linux-arm64:

@@ -47,12 +47,6 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     | sh -s -- -y --default-toolchain nightly --profile minimal \
     && rustup target add aarch64-unknown-linux-gnu
 
-# -- Zig --
-ARG ZIG_VERSION=0.14.0
-RUN curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-aarch64-${ZIG_VERSION}.tar.xz" \
-    | tar -xJ -C /opt \
-    && ln -s /opt/zig-linux-aarch64-${ZIG_VERSION}/zig /usr/local/bin/zig
-
 # -- Node.js --
 ARG NODE_MAJOR=24
 RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - \
@@ -80,14 +74,11 @@ WORKDIR /build
 
 # -- Layer: dependency files (cached unless deps change) --
 COPY Cargo.toml Cargo.lock ./
-COPY crates/mt-core/Cargo.toml crates/mt-core/
-COPY crates/mt-core/build.rs crates/mt-core/
 COPY crates/mt-tauri/Cargo.toml crates/mt-tauri/
 COPY crates/mt-tauri/.cargo crates/mt-tauri/.cargo/
 
 # Stub source files for cargo fetch
-RUN mkdir -p crates/mt-core/src && echo "pub fn stub() {}" > crates/mt-core/src/lib.rs \
-    && mkdir -p crates/mt-tauri/src && echo "fn main() {}" > crates/mt-tauri/src/main.rs \
+RUN mkdir -p crates/mt-tauri/src && echo "fn main() {}" > crates/mt-tauri/src/main.rs \
     && echo "" > crates/mt-tauri/src/lib.rs
 
 RUN cargo fetch --target aarch64-unknown-linux-gnu
@@ -99,11 +90,10 @@ COPY app/frontend/package.json app/frontend/package-lock.json app/frontend/
 RUN deno install --node-modules-dir=auto
 
 # -- Layer: full source --
-RUN rm -rf crates/mt-core/src crates/mt-tauri/src
+RUN rm -rf crates/mt-tauri/src
 
 COPY crates/ crates/
 COPY app/ app/
-COPY zig-core/ zig-core/
 COPY scripts/ scripts/
 COPY static/ static/
 
