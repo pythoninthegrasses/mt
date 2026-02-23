@@ -6,12 +6,28 @@ shopt: ['globstar']
 dotenv: ['.env']
 
 vars:
+  # Reserve 2 cores for system, minimum 1 job
+  BUILD_JOBS: '{{if gt (sub numCPU 2) 0}}{{sub numCPU 2}}{{else}}1{{end}}'
+
+env:
+  # Strip IDE extension paths (e.g. VS Code globalStorage) from PATH so
+  # IDE-bundled tools don't shadow project-pinned versions during builds
+  PATH:
+    sh: 'echo "$PATH" | tr ":" "\n" | grep -v "globalStorage" | paste -sd ":" -'
+  CARGO_HOME: "{{.ROOT_DIR}}/.cache/cargo"
+  CARGO_TARGET_DIR: "{{.ROOT_DIR}}/target"
+  RUSTUP_TOOLCHAIN: nightly
+  RUSTC_WRAPPER: sccache
+  RUSTFLAGS: "-Zthreads={{.BUILD_JOBS}}"
+  CARGO_BUILD_JOBS: "{{.BUILD_JOBS}}"
 
 includes:
   npm:
     taskfile: ./taskfiles/npm.yml
   deno:
     taskfile: ./taskfiles/deno.yml
+  cargo:
+    taskfile: ./taskfiles/cargo.yml
   tauri:
     taskfile: ./taskfiles/tauri.yml
 
@@ -47,30 +63,25 @@ tasks:
   lint:
     desc: "Run linters"
     cmds:
-      - cargo clippy --workspace
-      - deno lint
+      - task: cargo:lint
+      - task: deno:lint
 
   format:
     desc: "Run formatters"
     cmds:
-      - cargo fmt --all
-      - deno fmt
+      - task: cargo:format
+      - task: deno:format
 
   test:
     desc: "Run tests (Rust + Frontend)"
     cmds:
-      - |
-        if command -v cargo-nextest &> /dev/null; then
-          cargo nextest run --workspace
-        else
-          cargo test --workspace
-        fi
-      - npm --prefix app/frontend test
+      - task: cargo:test
+      - task: deno:test
 
   test:e2e:
     desc: "Run Playwright E2E tests"
     cmds:
-      - npm --prefix app/frontend run test:e2e
+      - task: deno:test:e2e
 
   build:
     desc: "Build Tauri app for current architecture"
@@ -100,15 +111,7 @@ tasks:
   build:timings:
     desc: "Analyze build performance bottlenecks"
     cmds:
-      - cargo build --workspace --timings
-      - |
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-          open target/cargo-timings/cargo-timing.html
-        elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-          xdg-open target/cargo-timings/cargo-timing.html 2>/dev/null || echo "Open target/cargo-timings/cargo-timing.html in your browser"
-        else
-          echo "Open target/cargo-timings/cargo-timing.html in your browser"
-        fi
+      - task: cargo:build:timings
 
   profile:
     desc: "Show CPU/RAM usage for mt processes (dev + release)"

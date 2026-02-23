@@ -58,6 +58,16 @@ tasks:
       - deno info --json package.json | head -50
     silent: true
 
+  lint:
+    desc: "Run Deno linter"
+    cmds:
+      - deno lint
+
+  format:
+    desc: "Format TypeScript/JavaScript code"
+    cmds:
+      - deno fmt
+
   check-deps:
     desc: "Check if deno is installed"
     cmds:

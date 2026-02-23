@@ -13,19 +13,7 @@ vars:
   LINUX_AMD64_TARGET: "x86_64-unknown-linux-gnu"
   LINUX_ARM64_TARGET: "aarch64-unknown-linux-gnu"
   WINDOWS_X64_TARGET: "x86_64-pc-windows-msvc"
-  # Reserve 2 cores for system, minimum 1 job
-  BUILD_JOBS: '{{if gt (sub numCPU 2) 0}}{{sub numCPU 2}}{{else}}1{{end}}'
 env:
-  # Strip IDE extension paths (e.g. VS Code globalStorage) from PATH so
-  # IDE-bundled tools don't shadow project-pinned versions during builds
-  PATH:
-    sh: 'echo "$PATH" | tr ":" "\n" | grep -v "globalStorage" | paste -sd ":" -'
-  CARGO_HOME: "{{.ROOT_DIR}}/.cache/cargo"
-  CARGO_TARGET_DIR: "{{.ROOT_DIR}}/target"
-  RUSTUP_TOOLCHAIN: nightly
-  RUSTC_WRAPPER: sccache
-  RUSTFLAGS: "-Zthreads={{.BUILD_JOBS}}"
-  CARGO_BUILD_JOBS: "{{.BUILD_JOBS}}"
   APPLE_API_KEY_PATH: /tmp/auth_key.p8
 
 tasks:
@@ -53,15 +41,6 @@ tasks:
           Linux deb: target/*/release/bundle/deb/{{.APP_NAME}}_*.deb
         EOF
     silent: true
-
-  _install-macos-deps:
-    internal: true
-    desc: "Install macOS system dependencies for Tauri"
-    platforms: [darwin]
-    cmds:
-      - brew install sccache
-    status:
-      - command -v sccache &> /dev/null
 
   _install-linux-deps:
     internal: true
@@ -121,7 +100,7 @@ tasks:
 
   build:
     desc: "Build Tauri app for current platform"
-    deps: [":deno:install", "_install-macos-deps", "_install-linux-deps"]
+    deps: [":deno:install", ":cargo:install-sccache", "_install-linux-deps"]
     vars:
       CURRENT_TARGET:
         sh: |
@@ -145,7 +124,7 @@ tasks:
   build:arm64:
     desc: "Build Tauri app for Apple Silicon (arm64)"
     platforms: [darwin/arm64]
-    deps: [":deno:install", "_install-macos-deps"]
+    deps: [":deno:install", ":cargo:install-sccache"]
     cmds:
       - task: _build
         vars:
@@ -158,7 +137,7 @@ tasks:
   build:x64:
     desc: "Build Tauri app for Intel (x86_64)"
     platforms: [darwin/amd64]
-    deps: [":deno:install", "_install-macos-deps"]
+    deps: [":deno:install", ":cargo:install-sccache"]
     cmds:
       - task: _build
         vars:
@@ -191,7 +170,7 @@ tasks:
   build:signed:
     desc: "Build signed macOS app (requires APPLE_SIGNING_IDENTITY)"
     platforms: [darwin]
-    deps: [":deno:install", "_install-macos-deps"]
+    deps: [":deno:install", ":cargo:install-sccache"]
     preconditions:
       - sh: '[ -n "$APPLE_SIGNING_IDENTITY" ]'
         msg: "APPLE_SIGNING_IDENTITY env var is required"
@@ -204,7 +183,7 @@ tasks:
   build:dmg:
     desc: "Build signed DMG installer (requires APPLE_SIGNING_IDENTITY)"
     platforms: [darwin]
-    deps: [":deno:install", "_install-macos-deps"]
+    deps: [":deno:install", ":cargo:install-sccache"]
     preconditions:
       - sh: '[ -n "$APPLE_SIGNING_IDENTITY" ]'
         msg: "APPLE_SIGNING_IDENTITY env var is required"
@@ -214,7 +193,7 @@ tasks:
 
   dev:
     desc: "Run Tauri in development mode"
-    deps: [":deno:install", "_install-macos-deps"]
+    deps: [":deno:install", ":cargo:install-sccache"]
     cmds:
       - deno run -A npm:@tauri-apps/cli dev
     interactive: true
@@ -222,7 +201,7 @@ tasks:
 
   dev:mcp:
     desc: "Run Tauri in development mode with MCP bridge for AI agent debugging"
-    deps: [":deno:install", "_install-macos-deps"]
+    deps: [":deno:install", ":cargo:install-sccache"]
     cmds:
       - deno run -A npm:@tauri-apps/cli dev -- --features mcp
     interactive: true
@@ -230,6 +209,7 @@ tasks:
 
   icons:
     desc: "Generate app icons from logo"
+    deps: [":deno:install"]
     cmds:
       - deno run -A npm:@tauri-apps/cli icon {{.ROOT_DIR}}/static/logo.png
     sources:
@@ -244,22 +224,6 @@ tasks:
       - rm -rf {{.ROOT_DIR}}/build
       - rm -rf {{.ROOT_DIR}}/dist
     silent: true
-
-  clean:rust:
-    desc: "Clean only Rust build artifacts"
-    cmds:
-      - cargo clean
-    silent: true
-
-  test-app:
-    desc: "Launch the built macOS app"
-    platforms: [darwin]
-    vars:
-      APP_PATH: "{{.ROOT_DIR}}/target/{{.MACOS_ARM64_TARGET}}/release/bundle/macos/{{.APP_NAME}}.app"
-    cmds:
-      - open "{{.APP_PATH}}"
-    preconditions:
-      - test -d "{{.APP_PATH}}"
 
   check-deps:
     desc: "Check if Tauri dependencies are installed"
@@ -293,6 +257,16 @@ tasks:
     desc: "Run Tauri doctor to check environment"
     cmds:
       - deno run -A npm:@tauri-apps/cli info
+
+  test-app:
+    desc: "Launch the built macOS app"
+    platforms: [darwin]
+    vars:
+      APP_PATH: "{{.ROOT_DIR}}/target/{{.MACOS_ARM64_TARGET}}/release/bundle/macos/{{.APP_NAME}}.app"
+    cmds:
+      - open "{{.APP_PATH}}"
+    preconditions:
+      - test -d "{{.APP_PATH}}"
 
   build:linux-arm64:
     desc: "Build Linux ARM64 .deb via Docker (for Raspberry Pi)"
