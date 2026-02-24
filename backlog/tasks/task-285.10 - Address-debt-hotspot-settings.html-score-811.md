@@ -1,10 +1,10 @@
 ---
 id: TASK-285.10
 title: 'Address debt hotspot: settings.html (score 811)'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-24 00:05'
-updated_date: '2026-02-24 20:13'
+updated_date: '2026-02-24 22:01'
 labels:
   - tech-debt
   - code-health
@@ -33,7 +33,35 @@ Run `roam file app/frontend/views/settings.html` to see the structure. Examine A
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Template complexity reduced below 10 (per roam metrics)
-- [ ] #2 Inline logic extracted to settings-view.js methods
-- [ ] #3 Settings page renders and all settings function correctly
+- [x] #1 Template complexity reduced below 10 (per roam metrics)
+- [x] #2 Inline logic extracted to settings-view.js methods
+- [x] #3 Settings page renders and all settings function correctly
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Changes
+
+### settings.html (864 -> 269 lines, cognitive_load 21.9 -> 5.4)
+- Converted 8 repeated nav buttons to data-driven `x-for` loop using `navSections` array
+- Extracted Library section (198 lines) to `settings-library.html` partial
+- Extracted Columns section (119 lines) to `settings-columns.html` partial
+- Extracted Last.fm section (212 lines) to `settings-lastfm.html` partial
+- Replaced all `$store.ui.settingsSection === 'xxx'` with `isSection('xxx')` method calls
+
+### settings-view.js (new methods)
+- `navSections`: data array for navigation buttons
+- `isSection(id)`: checks active settings section
+- `navItemClass(sectionId)`: returns active/inactive nav button classes
+- `lastfmStatusColor()`: returns connection status indicator color
+- `lastfmStatusText()`: returns connection status display text
+- `reconcilePhaseText()`, `reconcileProgressText()`, `reconcileProgressWidth()`: scan progress display
+- `canResetColumns()`: column reset button enabled state
+- `themeButtonClass(preset)`: theme button active/inactive classes
+- `scanButtonText()`: scan button loading state text
+- `rescanIconClass(folderId)`: rescan icon spin animation class
+- `toggleTrackClass()`, `toggleThumbClass()`: Last.fm toggle switch classes
+- `connectButtonText()`, `completeAuthButtonText()`: auth button loading text
+- `cacheLovedButtonText()`, `matchLovedButtonText()`, `importLovedButtonText()`, `resetLovedButtonText()`: loved tracks button loading text
+<!-- SECTION:NOTES:END -->

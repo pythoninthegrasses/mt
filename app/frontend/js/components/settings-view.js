@@ -9,6 +9,17 @@ export function createSettingsView(Alpine) {
       platform: '—',
     },
 
+    navSections: [
+      { id: 'general', label: 'General' },
+      { id: 'appearance', label: 'Appearance' },
+      { id: 'library', label: 'Library' },
+      { id: 'columns', label: 'Columns' },
+      { id: 'shortcuts', label: 'Shortcuts' },
+      { id: 'sorting', label: 'Sorting' },
+      { id: 'advanced', label: 'Advanced' },
+      { id: 'lastfm', label: 'Last.fm' },
+    ],
+
     watchedFolders: [],
     watchedFoldersLoading: false,
     scanningFolders: new Set(),
@@ -50,6 +61,102 @@ export function createSettingsView(Alpine) {
 
     isExportingLogs: false,
     isDraggingThreshold: false,
+
+    isSection(id) {
+      return this.$store.ui.settingsSection === id;
+    },
+
+    navItemClass(sectionId) {
+      return this.$store.ui.settingsSection === sectionId
+        ? 'bg-primary/15 text-primary'
+        : 'hover:bg-muted/70 text-foreground/80';
+    },
+
+    lastfmStatusColor() {
+      if (this.lastfm.authenticated) return 'bg-green-500';
+      if (this.lastfm.pendingToken) return 'bg-yellow-500';
+      return 'bg-red-500';
+    },
+
+    lastfmStatusText() {
+      if (this.lastfm.authenticated) {
+        return this.lastfm.username ? 'Connected as ' + this.lastfm.username : 'Connected';
+      }
+      if (this.lastfm.pendingToken) return 'Awaiting Authorization';
+      return 'Not Connected';
+    },
+
+    reconcilePhaseText() {
+      if (!this.reconcileScan.progress) return '';
+      return this.reconcileScan.progress.phase === 'fingerprinting'
+        ? 'Computing fingerprints...'
+        : 'Merging duplicates...';
+    },
+
+    reconcileProgressText() {
+      const p = this.reconcileScan.progress;
+      if (!p || p.total <= 0) return '';
+      return `${p.current} / ${p.total}`;
+    },
+
+    reconcileProgressWidth() {
+      const p = this.reconcileScan.progress;
+      if (!p || p.total <= 0) return 'width: 0%';
+      return `width: ${(p.current / p.total * 100)}%`;
+    },
+
+    canResetColumns() {
+      return this.columnSettings.resetWidths ||
+        this.columnSettings.resetOrder ||
+        this.columnSettings.resetVisibility ||
+        this.columnSettings.resetSort;
+    },
+
+    themeButtonClass(preset) {
+      return this.$store.ui.themePreset === preset
+        ? 'border-primary bg-primary/10 text-primary'
+        : 'border-border hover:bg-muted/50';
+    },
+
+    scanButtonText() {
+      return this.reconcileScan.isRunning ? 'Scanning...' : 'Run Scan';
+    },
+
+    rescanIconClass(folderId) {
+      return this.isFolderScanning(folderId) ? 'animate-spin' : '';
+    },
+
+    toggleTrackClass() {
+      return this.lastfm.enabled ? 'bg-primary' : 'bg-muted';
+    },
+
+    toggleThumbClass() {
+      return this.lastfm.enabled ? 'translate-x-6' : 'translate-x-1';
+    },
+
+    connectButtonText() {
+      return this.lastfm.isConnecting ? 'Connecting...' : 'Connect';
+    },
+
+    completeAuthButtonText() {
+      return this.lastfm.isConnecting ? 'Completing...' : 'Complete Authentication';
+    },
+
+    cacheLovedButtonText() {
+      return this.lastfm.isCachingLoved ? 'Syncing...' : 'Sync from Last.fm';
+    },
+
+    matchLovedButtonText() {
+      return this.lastfm.isMatchingLoved ? 'Matching...' : 'Check for New Matches';
+    },
+
+    importLovedButtonText() {
+      return this.lastfm.importInProgress ? 'Importing...' : 'Direct Import';
+    },
+
+    resetLovedButtonText() {
+      return this.lastfm.isResettingLoved ? 'Resetting...' : 'Reset Cache';
+    },
 
     async init() {
       await this.loadAppInfo();
