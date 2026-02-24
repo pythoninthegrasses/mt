@@ -18,22 +18,12 @@
     >
       <template x-for="(col, colIndex) in columns" :key="col.key">
         <div
-          :class="[
-              'column-header-cell',
-              col.sortable ? 'cursor-grab' : '',
-              library.sortBy === col.key ? 'column-header-active text-foreground' : '',
-              colIndex < columns.length - 1 ? 'border-r border-border' : '',
-              col.key === 'status' ? 'px-1' : (col.key === 'index' ? 'px-2' : (col.key === 'duration' ? 'pl-[3px] pr-[10px]' : 'px-4')),
-              isColumnDragging(col.key) ? 'dragging-column' : '',
-              isOtherColumnDragging(col.key) ? 'other-dragging' : '',
-              getColumnShiftDirection(colIndex) === 'left' ? 'shift-left' : '',
-              getColumnShiftDirection(colIndex) === 'right' ? 'shift-right' : ''
-            ]"
+          :class="getColumnHeaderClasses(col, colIndex)"
           class="py-2 select-none flex items-center relative overflow-visible"
           :title="col.label || ''"
-          :style="isColumnDragging(col.key) ? 'transform:' + getColumnDragTransform(col.key) + '; z-index: 50;' : ''"
-          @mousedown="if (!$event.target.closest('.column-resizer-left') && !$event.target.closest('.column-resizer-right')) startColumnDrag(col, $event)"
-          @click="if (!draggingColumnKey && !wasResizing && !wasColumnDragging) handleSort(col.key)"
+          :style="getColumnHeaderStyle(col)"
+          @mousedown="handleColumnHeaderMousedown(col, $event)"
+          @click="handleColumnHeaderClick(col)"
         >
           <span x-text="col.label" class="truncate"></span>
           <span
@@ -103,34 +93,38 @@
     <div class="track-list min-h-full w-full relative">
       <!-- Loading state (shown during library fetch OR active scan with empty library) -->
       <template x-if="(library.loading || library.scanning) && library.tracks.length === 0">
-      <div
-        class="flex items-center justify-center py-12"
-      >
-        <div class="text-center">
-          <svg
-            class="animate-spin w-8 h-8 mx-auto mb-2 text-primary"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
+        <div
+          class="flex items-center justify-center py-12"
+        >
+          <div class="text-center">
+            <svg
+              class="animate-spin w-8 h-8 mx-auto mb-2 text-primary"
+              fill="none"
+              viewBox="0 0 24 24"
             >
-            </circle>
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              >
+              </circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              >
+              </path>
+            </svg>
+            <p
+              class="text-muted-foreground"
+              x-text="library.scanning ? 'Scanning library...' : 'Loading library...'"
             >
-            </path>
-          </svg>
-          <p class="text-muted-foreground" x-text="library.scanning ? 'Scanning library...' : 'Loading library...'"></p>
+            </p>
+          </div>
         </div>
-      </div>
       </template>
 
       <!-- Empty state -->
@@ -214,15 +208,8 @@
           <template x-for="item in visibleTracks" :key="item.track.id">
             <div
               class="grid border-b border-border/30 text-sm cursor-default select-none"
-              :style="`grid-template-columns: ${getGridTemplateColumns()};` + (isDraggingTrack(item.globalIndex) ? ` transform: ${getTrackDragTransform(item.globalIndex)}; transition: none;` : '')"
-              :class="[
-              isSelected(item.track.id) ? 'track-row-selected' : (item.globalIndex % 2 === 0 ? 'track-row-even' : 'track-row-odd'),
-              isPlaying(item.track.id) && !isSelected(item.track.id) ? 'track-row-playing' : '',
-              !isSelected(item.track.id) && !isPlaying(item.track.id) ? 'hover:bg-muted/50' : '',
-              isDraggingTrack(item.globalIndex) ? 'bg-card shadow-lg z-10 relative' : '',
-              isOtherTrackDragging(item.globalIndex) ? 'opacity-50' : '',
-              getDragOverClass(item.globalIndex)
-            ]"
+              :style="getTrackRowStyle(item)"
+              :class="getTrackRowClasses(item)"
               :data-track-id="item.track.id"
               draggable="true"
               @dragstart="handleTrackDragStart($event, item.track)"
@@ -233,11 +220,7 @@
             >
               <template x-for="col in columns" :key="col.key">
                 <div
-                  :class="[
-                  'py-1.5 overflow-hidden text-ellipsis whitespace-nowrap',
-                  col.key === 'status' ? 'px-1' : (col.key === 'index' ? 'px-2' : (col.key === 'duration' ? 'pl-[3px] pr-[10px]' : 'px-4')),
-                  col.key !== 'title' && col.key !== 'status' && !isSelected(item.track.id) ? 'text-muted-foreground' : ''
-                ]"
+                  :class="getTrackCellClasses(col, item)"
                   :data-column="col.key"
                 >
                   <template x-if="col.key === 'status'">
@@ -291,9 +274,7 @@
                     </span>
                   </template>
                   <template x-if="col.key === 'index'">
-                    <span
-                      x-text="isInPlaylistView() ? (item.globalIndex + 1) : (item.track.track_number || '')"
-                    ></span>
+                    <span x-text="getIndexDisplay(item)"></span>
                   </template>
                   <template x-if="col.key === 'title'">
                     <span
@@ -362,9 +343,9 @@
               <div
                 class="context-menu-item relative"
                 :class="{ 'disabled': item.disabled, 'danger': item.danger }"
-                @click="if (!item.disabled && !item.hasSubmenu) { item.action(); contextMenu = null; } else if (!item.disabled) { item.action(); }"
-                @mouseenter="if (item.hasSubmenu) { showPlaylistSubmenu = true; submenuY = $el.getBoundingClientRect().top; if (submenuCloseTimeout) { clearTimeout(submenuCloseTimeout); submenuCloseTimeout = null; } } else { showPlaylistSubmenu = false; }"
-                @mouseleave="if (item.hasSubmenu) { submenuCloseTimeout = setTimeout(() => { showPlaylistSubmenu = false; }, 150); }"
+                @click="handleContextMenuItemClick(item)"
+                @mouseenter="handleSubmenuMouseenter(item, $el)"
+                @mouseleave="handleSubmenuMouseleave(item)"
               >
                 <span x-text="item.icon" class="w-4 text-center"></span>
                 <span x-text="item.label" class="flex-1"></span>
@@ -387,7 +368,7 @@
     x-cloak
     class="context-menu bg-card"
     data-testid="playlist-submenu"
-    :style="contextMenu ? `left: ${submenuOnLeft ? contextMenu.x - 180 : contextMenu.x + 180 + 45}px; top: ${submenuY}px; max-height: ${window.innerHeight - submenuY - 10}px; overflow-y: auto` : ''"
+    :style="getSubmenuStyle()"
     @mouseenter="if (submenuCloseTimeout) { clearTimeout(submenuCloseTimeout); submenuCloseTimeout = null; }"
     @mouseleave="showPlaylistSubmenu = false"
   >

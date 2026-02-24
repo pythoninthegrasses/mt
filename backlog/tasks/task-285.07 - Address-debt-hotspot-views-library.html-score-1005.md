@@ -1,10 +1,10 @@
 ---
 id: TASK-285.07
 title: 'Address debt hotspot: views/library.html (score 1005)'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-24 00:05'
-updated_date: '2026-02-24 20:13'
+updated_date: '2026-02-24 21:08'
 labels:
   - tech-debt
   - code-health
@@ -33,7 +33,28 @@ Run `roam file app/frontend/views/library.html` to see the file skeleton. Examin
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Template complexity reduced (roam reports lower complexity for this file)
-- [ ] #2 Inline Alpine.js expressions extracted to named methods
-- [ ] #3 Library view renders and functions correctly
+- [x] #1 Template complexity reduced (roam reports lower complexity for this file)
+- [x] #2 Inline Alpine.js expressions extracted to named methods
+- [x] #3 Library view renders and functions correctly
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Extracted 12 complex inline Alpine.js expressions from library.html into named methods in library-browser.js:
+
+- `getColumnPaddingClass()` - replaces nested ternary used in 2 places
+- `getColumnHeaderClasses()` - replaces 10-element class array
+- `getColumnHeaderStyle()` - replaces inline style ternary
+- `handleColumnHeaderMousedown()` - replaces inline guard condition
+- `handleColumnHeaderClick()` - replaces inline guard condition
+- `getTrackRowStyle()` - replaces inline style concatenation with ternary
+- `getTrackRowClasses()` - replaces 6-element class array with complex conditions
+- `getTrackCellClasses()` - replaces 3-element class array with nested ternary
+- `getIndexDisplay()` - replaces inline ternary for playlist/library index
+- `handleContextMenuItemClick()` - replaces inline multi-branch click handler
+- `handleSubmenuMouseenter()` / `handleSubmenuMouseleave()` - replaces inline timeout management
+- `getSubmenuStyle()` - replaces complex inline style expression
+
+Results: library.html cognitive_load 8.3 -> 7.9, line count 415 -> 396. library-browser.js cognitive_load 66 -> 66.5 (marginal increase from simple delegating methods). All unit tests pass.
+<!-- SECTION:FINAL_SUMMARY:END -->

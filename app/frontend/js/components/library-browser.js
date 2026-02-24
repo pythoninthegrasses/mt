@@ -575,6 +575,123 @@ export function createLibraryBrowser(Alpine) {
       return this.$store.library.currentSection?.startsWith('playlist-') ||
         this.currentPlaylistId !== null;
     },
+
+    // --- Template helper methods (extracted from inline expressions) ---
+
+    getColumnPaddingClass(colKey) {
+      if (colKey === 'status') return 'px-1';
+      if (colKey === 'index') return 'px-2';
+      if (colKey === 'duration') return 'pl-[3px] pr-[10px]';
+      return 'px-4';
+    },
+
+    getColumnHeaderClasses(col, colIndex) {
+      return [
+        'column-header-cell',
+        col.sortable ? 'cursor-grab' : '',
+        this.library.sortBy === col.key ? 'column-header-active text-foreground' : '',
+        colIndex < this.columns.length - 1 ? 'border-r border-border' : '',
+        this.getColumnPaddingClass(col.key),
+        this.isColumnDragging(col.key) ? 'dragging-column' : '',
+        this.isOtherColumnDragging(col.key) ? 'other-dragging' : '',
+        this.getColumnShiftDirection(colIndex) === 'left' ? 'shift-left' : '',
+        this.getColumnShiftDirection(colIndex) === 'right' ? 'shift-right' : '',
+      ];
+    },
+
+    getColumnHeaderStyle(col) {
+      if (!this.isColumnDragging(col.key)) return '';
+      return `transform:${this.getColumnDragTransform(col.key)}; z-index: 50;`;
+    },
+
+    handleColumnHeaderMousedown(col, event) {
+      if (
+        !event.target.closest('.column-resizer-left') &&
+        !event.target.closest('.column-resizer-right')
+      ) {
+        this.startColumnDrag(col, event);
+      }
+    },
+
+    handleColumnHeaderClick(col) {
+      if (!this.draggingColumnKey && !this.wasResizing && !this.wasColumnDragging) {
+        this.handleSort(col.key);
+      }
+    },
+
+    getTrackRowStyle(item) {
+      const base = `grid-template-columns: ${this.getGridTemplateColumns()};`;
+      if (!this.isDraggingTrack(item.globalIndex)) return base;
+      return `${base} transform: ${
+        this.getTrackDragTransform(item.globalIndex)
+      }; transition: none;`;
+    },
+
+    getTrackRowClasses(item) {
+      const trackId = item.track.id;
+      const idx = item.globalIndex;
+      return [
+        this.isSelected(trackId)
+          ? 'track-row-selected'
+          : (idx % 2 === 0 ? 'track-row-even' : 'track-row-odd'),
+        this.isPlaying(trackId) && !this.isSelected(trackId) ? 'track-row-playing' : '',
+        !this.isSelected(trackId) && !this.isPlaying(trackId) ? 'hover:bg-muted/50' : '',
+        this.isDraggingTrack(idx) ? 'bg-card shadow-lg z-10 relative' : '',
+        this.isOtherTrackDragging(idx) ? 'opacity-50' : '',
+        this.getDragOverClass(idx),
+      ];
+    },
+
+    getTrackCellClasses(col, item) {
+      return [
+        'py-1.5 overflow-hidden text-ellipsis whitespace-nowrap',
+        this.getColumnPaddingClass(col.key),
+        col.key !== 'title' && col.key !== 'status' && !this.isSelected(item.track.id)
+          ? 'text-muted-foreground'
+          : '',
+      ];
+    },
+
+    getIndexDisplay(item) {
+      return this.isInPlaylistView() ? (item.globalIndex + 1) : (item.track.track_number || '');
+    },
+
+    handleContextMenuItemClick(item) {
+      if (!item.disabled && !item.hasSubmenu) {
+        item.action();
+        this.contextMenu = null;
+      } else if (!item.disabled) {
+        item.action();
+      }
+    },
+
+    handleSubmenuMouseenter(item, el) {
+      if (item.hasSubmenu) {
+        this.showPlaylistSubmenu = true;
+        this.submenuY = el.getBoundingClientRect().top;
+        if (this.submenuCloseTimeout) {
+          clearTimeout(this.submenuCloseTimeout);
+          this.submenuCloseTimeout = null;
+        }
+      } else {
+        this.showPlaylistSubmenu = false;
+      }
+    },
+
+    handleSubmenuMouseleave(item) {
+      if (item.hasSubmenu) {
+        this.submenuCloseTimeout = setTimeout(() => {
+          this.showPlaylistSubmenu = false;
+        }, 150);
+      }
+    },
+
+    getSubmenuStyle() {
+      if (!this.contextMenu) return '';
+      const left = this.submenuOnLeft ? this.contextMenu.x - 180 : this.contextMenu.x + 180 + 45;
+      const maxHeight = window.innerHeight - this.submenuY - 10;
+      return `left: ${left}px; top: ${this.submenuY}px; max-height: ${maxHeight}px; overflow-y: auto`;
+    },
   }));
 }
 
