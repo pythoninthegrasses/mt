@@ -78,25 +78,26 @@ When running `task build`, the following happens automatically:
 
 ```bash
 # Install dependencies
-npm install                           # Frontend dependencies
-cargo build                           # Rust backend dependencies
+deno install --node-modules-dir=auto --frozen  # Frontend (8x faster than npm ci)
+cargo build                                    # Rust backend
 
 # Fast syntax/type checking (no binary output, 2-3x faster than build)
 cargo check --manifest-path src-tauri/Cargo.toml
 cargo check --all-features
 
 # Linting
-npm run lint                          # Frontend (ESLint)
-cargo clippy                          # Rust
+deno lint                             # Frontend (Deno linter)
+cargo clippy --workspace              # Rust
 
 # Formatting
-npm run format                        # Frontend (Prettier)
-cargo fmt                             # Rust
+deno fmt                              # Frontend (Deno formatter)
+deno fmt --check                      # Check without changes
+cargo fmt --all                       # Rust
 
-# Tests directly
-cargo test --manifest-path src-tauri/Cargo.toml  # Rust backend
-npm --prefix app/frontend test                    # Vitest unit
-npm --prefix app/frontend run test:e2e            # Playwright E2E
+# Tests
+cargo nextest run --workspace                   # Rust (falls back to cargo test)
+cd app/frontend && npx vitest run               # Vitest unit/property tests
+cd app/frontend && npx playwright test          # Playwright E2E
 
 # Pre-commit hooks
 pre-commit run --all-files

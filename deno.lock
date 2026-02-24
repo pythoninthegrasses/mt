@@ -18,6 +18,7 @@
     "npm:jsdom@^27.4.0": "27.4.0",
     "npm:tailwindcss@4": "4.1.18",
     "npm:vite-plugin-handlebars@2": "2.0.0",
+    "npm:vite@*": "6.4.1_picomatch@4.0.3",
     "npm:vite@6": "6.4.1_picomatch@4.0.3",
     "npm:vitest@^4.0.17": "4.0.18_jsdom@27.4.0_vite@6.4.1__picomatch@4.0.3",
     "npm:web-vitals@^5.1.0": "5.1.0"

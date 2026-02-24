@@ -72,6 +72,47 @@ The queue store (`app/frontend/js/stores/queue.js`) maintains tracks in **play o
 
 **Now Playing view**: Always displays tracks in the order they will play (current track first, then upcoming).
 
+## Linting, Formatting, and Testing
+
+All commands use Taskfile. Run `task --list` for full list.
+
+### Task Runner (preferred)
+
+```bash
+task lint                     # Run all linters (Rust + JS)
+task format                   # Run all formatters (Rust + JS)
+task test                     # Run all tests (Rust + JS unit)
+task test:e2e                 # Run Playwright E2E tests
+task pre-commit               # Run pre-commit hooks
+```
+
+### Direct Commands
+
+**Frontend** (uses Deno toolchain, not ESLint/Prettier):
+
+```bash
+deno lint                                         # Lint JS/TS
+deno fmt                                          # Format JS/TS
+deno fmt --check                                  # Check formatting without changes
+cd app/frontend && npx vitest run                 # Unit/property tests (Vitest via Node)
+cd app/frontend && npx playwright test            # E2E tests
+```
+
+**Backend** (Rust):
+
+```bash
+cargo clippy --workspace                          # Lint
+cargo fmt --all                                   # Format
+cargo nextest run --workspace                     # Tests (falls back to cargo test)
+cargo check --manifest-path src-tauri/Cargo.toml  # Fast type check (no binary)
+```
+
+### When to Run
+
+- **Before committing**: `task lint && task format`
+- **After changing frontend code**: `cd app/frontend && npx vitest run`
+- **After changing Rust code**: `cargo nextest run --workspace`
+
 ## Implementation Notes
 
 1. **Components**: Modular, single-responsibility. Use Alpine.js for interactivity, basecoat/Tailwind for styling.
