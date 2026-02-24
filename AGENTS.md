@@ -76,9 +76,9 @@ The queue store (`app/frontend/js/stores/queue.js`) maintains tracks in **play o
 
 1. **Components**: Modular, single-responsibility. Use Alpine.js for interactivity, basecoat/Tailwind for styling.
 2. **IPC**: All backend operations via Tauri commands. Use async/await. Emit events for real-time updates.
-3. **File Organization**: Frontend in `src/`, backend in `src-tauri/src/`. Keep files under 500 LOC.
+3. **File Organization**: Frontend in `app/frontend/`, backend in `src-tauri/src/`. Keep files under 500 LOC.
 4. **Testing**: Unit tests + Playwright E2E. All integration tests MUST use Playwright.
-5. **Code Style**: ESLint + Prettier (frontend), `cargo fmt` + `cargo clippy` (backend). Run formatters before committing.
+5. **Code Style**: `deno lint` + `deno fmt` (frontend), `cargo fmt` + `cargo clippy` (backend). Run formatters before committing.
 
 ## Codebase navigation
 
