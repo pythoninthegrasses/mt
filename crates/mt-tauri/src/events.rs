@@ -23,21 +23,21 @@ pub struct LibraryUpdatedEvent {
 impl LibraryUpdatedEvent {
     pub const EVENT_NAME: &'static str = "library:updated";
 
-    pub fn added(track_ids: Vec<i64>) -> Self {
+    pub(crate) fn added(track_ids: Vec<i64>) -> Self {
         Self {
             action: "added".to_string(),
             track_ids,
         }
     }
 
-    pub fn modified(track_ids: Vec<i64>) -> Self {
+    pub(crate) fn modified(track_ids: Vec<i64>) -> Self {
         Self {
             action: "modified".to_string(),
             track_ids,
         }
     }
 
-    pub fn deleted(track_ids: Vec<i64>) -> Self {
+    pub(crate) fn deleted(track_ids: Vec<i64>) -> Self {
         Self {
             action: "deleted".to_string(),
             track_ids,
@@ -103,7 +103,7 @@ pub struct QueueUpdatedEvent {
 impl QueueUpdatedEvent {
     pub const EVENT_NAME: &'static str = "queue:updated";
 
-    pub fn added(positions: Vec<i64>, queue_length: i64) -> Self {
+    pub(crate) fn added(positions: Vec<i64>, queue_length: i64) -> Self {
         Self {
             action: "added".to_string(),
             positions: Some(positions),
@@ -111,7 +111,7 @@ impl QueueUpdatedEvent {
         }
     }
 
-    pub fn removed(position: i64, queue_length: i64) -> Self {
+    pub(crate) fn removed(position: i64, queue_length: i64) -> Self {
         Self {
             action: "removed".to_string(),
             positions: Some(vec![position]),
@@ -119,7 +119,7 @@ impl QueueUpdatedEvent {
         }
     }
 
-    pub fn cleared() -> Self {
+    pub(crate) fn cleared() -> Self {
         Self {
             action: "cleared".to_string(),
             positions: None,
@@ -127,7 +127,7 @@ impl QueueUpdatedEvent {
         }
     }
 
-    pub fn reordered(from: i64, to: i64, queue_length: i64) -> Self {
+    pub(crate) fn reordered(from: i64, to: i64, queue_length: i64) -> Self {
         Self {
             action: "reordered".to_string(),
             positions: Some(vec![from, to]),
@@ -135,7 +135,7 @@ impl QueueUpdatedEvent {
         }
     }
 
-    pub fn shuffled(queue_length: i64) -> Self {
+    pub(crate) fn shuffled(queue_length: i64) -> Self {
         Self {
             action: "shuffled".to_string(),
             positions: None,
@@ -155,7 +155,7 @@ pub struct QueueStateChangedEvent {
 impl QueueStateChangedEvent {
     pub const EVENT_NAME: &'static str = "queue:state-changed";
 
-    pub fn new(current_index: i64, shuffle_enabled: bool, loop_mode: String) -> Self {
+    pub(crate) fn new(current_index: i64, shuffle_enabled: bool, loop_mode: String) -> Self {
         Self {
             current_index,
             shuffle_enabled,
@@ -180,14 +180,14 @@ pub struct FavoritesUpdatedEvent {
 impl FavoritesUpdatedEvent {
     pub const EVENT_NAME: &'static str = "favorites:updated";
 
-    pub fn added(track_id: i64) -> Self {
+    pub(crate) fn added(track_id: i64) -> Self {
         Self {
             action: "added".to_string(),
             track_id,
         }
     }
 
-    pub fn removed(track_id: i64) -> Self {
+    pub(crate) fn removed(track_id: i64) -> Self {
         Self {
             action: "removed".to_string(),
             track_id,
@@ -213,7 +213,7 @@ pub struct PlaylistsUpdatedEvent {
 impl PlaylistsUpdatedEvent {
     pub const EVENT_NAME: &'static str = "playlists:updated";
 
-    pub fn created(playlist_id: i64) -> Self {
+    pub(crate) fn created(playlist_id: i64) -> Self {
         Self {
             action: "created".to_string(),
             playlist_id,
@@ -221,7 +221,7 @@ impl PlaylistsUpdatedEvent {
         }
     }
 
-    pub fn renamed(playlist_id: i64) -> Self {
+    pub(crate) fn renamed(playlist_id: i64) -> Self {
         Self {
             action: "renamed".to_string(),
             playlist_id,
@@ -229,7 +229,7 @@ impl PlaylistsUpdatedEvent {
         }
     }
 
-    pub fn deleted(playlist_id: i64) -> Self {
+    pub(crate) fn deleted(playlist_id: i64) -> Self {
         Self {
             action: "deleted".to_string(),
             playlist_id,
@@ -237,7 +237,7 @@ impl PlaylistsUpdatedEvent {
         }
     }
 
-    pub fn tracks_added(playlist_id: i64, track_ids: Vec<i64>) -> Self {
+    pub(crate) fn tracks_added(playlist_id: i64, track_ids: Vec<i64>) -> Self {
         Self {
             action: "tracks_added".to_string(),
             playlist_id,
@@ -245,7 +245,7 @@ impl PlaylistsUpdatedEvent {
         }
     }
 
-    pub fn tracks_removed(playlist_id: i64, track_ids: Vec<i64>) -> Self {
+    pub(crate) fn tracks_removed(playlist_id: i64, track_ids: Vec<i64>) -> Self {
         Self {
             action: "tracks_removed".to_string(),
             playlist_id,
@@ -253,7 +253,7 @@ impl PlaylistsUpdatedEvent {
         }
     }
 
-    pub fn reordered(playlist_id: i64) -> Self {
+    pub(crate) fn reordered(playlist_id: i64) -> Self {
         Self {
             action: "reordered".to_string(),
             playlist_id,
@@ -280,7 +280,7 @@ pub struct SettingsUpdatedEvent {
 impl SettingsUpdatedEvent {
     pub const EVENT_NAME: &'static str = "settings:updated";
 
-    pub fn new(
+    pub(crate) fn new(
         key: String,
         value: serde_json::Value,
         previous_value: Option<serde_json::Value>,
@@ -309,21 +309,21 @@ pub struct LastfmAuthEvent {
 impl LastfmAuthEvent {
     pub const EVENT_NAME: &'static str = "lastfm:auth";
 
-    pub fn authenticated(username: String) -> Self {
+    pub(crate) fn authenticated(username: String) -> Self {
         Self {
             state: "authenticated".to_string(),
             username: Some(username),
         }
     }
 
-    pub fn disconnected() -> Self {
+    pub(crate) fn disconnected() -> Self {
         Self {
             state: "disconnected".to_string(),
             username: None,
         }
     }
 
-    pub fn pending() -> Self {
+    pub(crate) fn pending() -> Self {
         Self {
             state: "pending".to_string(),
             username: None,
@@ -347,7 +347,7 @@ pub struct ScrobbleStatusEvent {
 impl ScrobbleStatusEvent {
     pub const EVENT_NAME: &'static str = "lastfm:scrobble-status";
 
-    pub fn success(artist: String, track: String) -> Self {
+    pub(crate) fn success(artist: String, track: String) -> Self {
         Self {
             status: "success".to_string(),
             artist,
@@ -356,7 +356,7 @@ impl ScrobbleStatusEvent {
         }
     }
 
-    pub fn queued(artist: String, track: String) -> Self {
+    pub(crate) fn queued(artist: String, track: String) -> Self {
         Self {
             status: "queued".to_string(),
             artist,
@@ -365,7 +365,7 @@ impl ScrobbleStatusEvent {
         }
     }
 
-    pub fn failed(artist: String, track: String, message: String) -> Self {
+    pub(crate) fn failed(artist: String, track: String, message: String) -> Self {
         Self {
             status: "failed".to_string(),
             artist,
@@ -385,7 +385,7 @@ pub struct LastfmQueueUpdatedEvent {
 impl LastfmQueueUpdatedEvent {
     pub const EVENT_NAME: &'static str = "lastfm:queue-updated";
 
-    pub fn new(queued_count: usize) -> Self {
+    pub(crate) fn new(queued_count: usize) -> Self {
         Self { queued_count }
     }
 }
@@ -408,7 +408,7 @@ pub struct ReconcileProgressEvent {
 impl ReconcileProgressEvent {
     pub const EVENT_NAME: &'static str = "reconcile:progress";
 
-    pub fn fingerprinting(current: u32, total: u32) -> Self {
+    pub(crate) fn fingerprinting(current: u32, total: u32) -> Self {
         Self {
             phase: "fingerprinting".to_string(),
             current,
@@ -416,7 +416,7 @@ impl ReconcileProgressEvent {
         }
     }
 
-    pub fn deduplicating(current: u32, total: u32) -> Self {
+    pub(crate) fn deduplicating(current: u32, total: u32) -> Self {
         Self {
             phase: "deduplicating".to_string(),
             current,
@@ -424,7 +424,7 @@ impl ReconcileProgressEvent {
         }
     }
 
-    pub fn complete(total: u32) -> Self {
+    pub(crate) fn complete(total: u32) -> Self {
         Self {
             phase: "complete".to_string(),
             current: total,

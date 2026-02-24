@@ -6,18 +6,17 @@
 //!
 //! This enables no-op rescans to complete quickly without parsing any tags.
 
-pub mod artwork;
-pub mod artwork_cache;
+pub(crate) mod artwork;
+pub(crate) mod artwork_cache;
 #[cfg(test)]
 mod benchmarks;
-pub mod commands;
-pub mod fingerprint;
-pub mod inventory;
-pub mod metadata;
-pub mod scan;
+pub(crate) mod commands;
+pub(crate) mod fingerprint;
+pub(crate) mod inventory;
+pub(crate) mod metadata;
+pub(crate) mod scan;
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::path::Path;
 use thiserror::Error;
 
@@ -94,7 +93,7 @@ pub struct ScanProgress {
 }
 
 /// Check if a path has a supported audio extension
-pub fn is_audio_file(path: &Path) -> bool {
+pub(crate) fn is_audio_file(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
         .map(|ext| {
@@ -104,10 +103,6 @@ pub fn is_audio_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Get supported audio extensions as a HashSet for fast lookup
-pub fn audio_extensions_set() -> HashSet<&'static str> {
-    AUDIO_EXTENSIONS.iter().copied().collect()
-}
 
 #[cfg(test)]
 mod tests {

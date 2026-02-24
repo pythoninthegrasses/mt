@@ -211,7 +211,7 @@ pub enum SortOrder {
 }
 
 impl SortOrder {
-    pub fn as_sql(&self) -> &'static str {
+    pub(crate) fn as_sql(&self) -> &'static str {
         match self {
             SortOrder::Asc => "ASC",
             SortOrder::Desc => "DESC",
@@ -272,7 +272,7 @@ impl LibrarySortColumn {
     }
 
     /// Static SQL expression for backward compatibility (no ignore-words)
-    pub fn as_sql(&self) -> &'static str {
+    pub(crate) fn as_sql(&self) -> &'static str {
         match self {
             LibrarySortColumn::Title => "title COLLATE NOCASE",
             LibrarySortColumn::Artist => {
@@ -317,7 +317,7 @@ impl LibrarySortColumn {
     /// Returns secondary ORDER BY columns for deterministic album track ordering.
     /// Ensures tracks within the same album are sorted by disc number then track number.
     /// Uses CAST(... AS INTEGER) because track_number and disc_number are TEXT columns.
-    pub fn secondary_sort_sql(&self) -> &'static str {
+    pub(crate) fn secondary_sort_sql(&self) -> &'static str {
         match self {
             LibrarySortColumn::Artist => {
                 ", album COLLATE NOCASE ASC, CAST(disc_number AS INTEGER) ASC, CAST(track_number AS INTEGER) ASC"
@@ -334,7 +334,7 @@ impl LibrarySortColumn {
     }
 
     /// Secondary ORDER BY with optional ignore-words wrapping on text columns.
-    pub fn secondary_order_by(&self, ignore_words: Option<&str>) -> String {
+    pub(crate) fn secondary_order_by(&self, ignore_words: Option<&str>) -> String {
         let album_expr = Self::text_sort_expr("album", ignore_words);
         let artist_expr = Self::text_sort_expr(ARTIST_SORT_EXPR, ignore_words);
         let disc = "CAST(disc_number AS INTEGER) ASC";

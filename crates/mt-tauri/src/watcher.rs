@@ -741,7 +741,7 @@ fn to_track_metadata(m: &ExtractedMetadata) -> TrackMetadata {
 /// List all watched folders
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub fn watched_folders_list(
+pub(crate) fn watched_folders_list(
     state: State<'_, WatcherManager>,
 ) -> Result<Vec<WatchedFolder>, String> {
     let conn = state.get_db().conn().map_err(|e| e.to_string())?;
@@ -753,7 +753,7 @@ pub fn watched_folders_list(
 /// Get a specific watched folder by ID
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub fn watched_folders_get(
+pub(crate) fn watched_folders_get(
     id: i64,
     state: State<'_, WatcherManager>,
 ) -> Result<WatchedFolder, String> {
@@ -775,7 +775,7 @@ pub struct AddWatchedFolderRequest {
 /// Add a new watched folder
 #[tracing::instrument(skip(state, request))]
 #[tauri::command]
-pub async fn watched_folders_add(
+pub(crate) async fn watched_folders_add(
     request: AddWatchedFolderRequest,
     state: State<'_, WatcherManager>,
 ) -> Result<WatchedFolder, String> {
@@ -819,7 +819,7 @@ pub struct UpdateWatchedFolderRequest {
 /// Update an existing watched folder
 #[tracing::instrument(skip(state, request))]
 #[tauri::command]
-pub async fn watched_folders_update(
+pub(crate) async fn watched_folders_update(
     id: i64,
     request: UpdateWatchedFolderRequest,
     state: State<'_, WatcherManager>,
@@ -854,7 +854,7 @@ pub async fn watched_folders_update(
 /// Remove a watched folder
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub async fn watched_folders_remove(
+pub(crate) async fn watched_folders_remove(
     id: i64,
     state: State<'_, WatcherManager>,
 ) -> Result<(), String> {
@@ -877,7 +877,7 @@ pub async fn watched_folders_remove(
 /// Trigger a manual rescan for a watched folder
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub async fn watched_folders_rescan(
+pub(crate) async fn watched_folders_rescan(
     id: i64,
     state: State<'_, WatcherManager>,
 ) -> Result<(), String> {
@@ -896,7 +896,7 @@ pub async fn watched_folders_rescan(
 /// Get the current watcher status (number of active watchers)
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub fn watched_folders_status(state: State<'_, WatcherManager>) -> serde_json::Value {
+pub(crate) fn watched_folders_status(state: State<'_, WatcherManager>) -> serde_json::Value {
     serde_json::json!({
         "active_watchers": state.active_watcher_count(),
     })

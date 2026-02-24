@@ -43,7 +43,7 @@ pub struct AudioState {
 }
 
 impl AudioState {
-    pub fn new(app: AppHandle) -> Self {
+    pub(crate) fn new(app: AppHandle) -> Self {
         let (tx, rx) = mpsc::channel::<AudioCommand>();
 
         thread::spawn(move || {
@@ -239,7 +239,7 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub fn audio_load(
+pub(crate) fn audio_load(
     path: String,
     track_id: Option<i64>,
     state: State<AudioState>,
@@ -251,7 +251,7 @@ pub fn audio_load(
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub fn audio_load_and_play(
+pub(crate) fn audio_load_and_play(
     path: String,
     track_id: Option<i64>,
     state: State<AudioState>,
@@ -263,7 +263,7 @@ pub fn audio_load_and_play(
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub fn audio_play(state: State<AudioState>) -> Result<(), String> {
+pub(crate) fn audio_play(state: State<AudioState>) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
     state.send_command(AudioCommand::Play(tx));
     rx.recv().map_err(|_| "Channel closed".to_string())?
@@ -271,7 +271,7 @@ pub fn audio_play(state: State<AudioState>) -> Result<(), String> {
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub fn audio_pause(state: State<AudioState>) -> Result<(), String> {
+pub(crate) fn audio_pause(state: State<AudioState>) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
     state.send_command(AudioCommand::Pause(tx));
     rx.recv().map_err(|_| "Channel closed".to_string())?
@@ -279,7 +279,7 @@ pub fn audio_pause(state: State<AudioState>) -> Result<(), String> {
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub fn audio_stop(state: State<AudioState>) -> Result<(), String> {
+pub(crate) fn audio_stop(state: State<AudioState>) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
     state.send_command(AudioCommand::Stop(tx));
     rx.recv().map_err(|_| "Channel closed".to_string())?
@@ -287,7 +287,7 @@ pub fn audio_stop(state: State<AudioState>) -> Result<(), String> {
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub fn audio_seek(position_ms: u64, state: State<AudioState>) -> Result<(), String> {
+pub(crate) fn audio_seek(position_ms: u64, state: State<AudioState>) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
     state.send_command(AudioCommand::Seek(position_ms, tx));
     rx.recv().map_err(|_| "Channel closed".to_string())?
@@ -295,7 +295,7 @@ pub fn audio_seek(position_ms: u64, state: State<AudioState>) -> Result<(), Stri
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
-pub fn audio_set_volume(volume: f32, state: State<AudioState>) -> Result<(), String> {
+pub(crate) fn audio_set_volume(volume: f32, state: State<AudioState>) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
     state.send_command(AudioCommand::SetVolume(volume, tx));
     rx.recv().map_err(|_| "Channel closed".to_string())?
@@ -303,7 +303,7 @@ pub fn audio_set_volume(volume: f32, state: State<AudioState>) -> Result<(), Str
 
 #[tracing::instrument(level = "trace", skip(state))]
 #[tauri::command]
-pub fn audio_get_volume(state: State<AudioState>) -> f32 {
+pub(crate) fn audio_get_volume(state: State<AudioState>) -> f32 {
     let (tx, rx) = mpsc::channel();
     state.send_command(AudioCommand::GetVolume(tx));
     rx.recv().unwrap_or(1.0)
@@ -311,7 +311,7 @@ pub fn audio_get_volume(state: State<AudioState>) -> f32 {
 
 #[tracing::instrument(level = "trace", skip(state))]
 #[tauri::command]
-pub fn audio_get_status(state: State<AudioState>) -> PlaybackStatus {
+pub(crate) fn audio_get_status(state: State<AudioState>) -> PlaybackStatus {
     let (tx, rx) = mpsc::channel();
     state.send_command(AudioCommand::GetStatus(tx));
     rx.recv().unwrap_or(PlaybackStatus {

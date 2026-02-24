@@ -69,7 +69,7 @@ pub struct SettingsChangedPayload {
 /// Get all settings
 #[tracing::instrument(skip(app))]
 #[tauri::command]
-pub fn settings_get_all(app: AppHandle) -> Result<AllSettingsResponse, String> {
+pub(crate) fn settings_get_all(app: AppHandle) -> Result<AllSettingsResponse, String> {
     let store = app
         .store(STORE_NAME)
         .map_err(|e| format!("Failed to open settings store: {}", e))?;
@@ -98,7 +98,7 @@ pub fn settings_get_all(app: AppHandle) -> Result<AllSettingsResponse, String> {
 /// Get a single setting
 #[tracing::instrument(skip(app))]
 #[tauri::command]
-pub fn settings_get(app: AppHandle, key: String) -> Result<SettingResponse, String> {
+pub(crate) fn settings_get(app: AppHandle, key: String) -> Result<SettingResponse, String> {
     let store = app
         .store(STORE_NAME)
         .map_err(|e| format!("Failed to open settings store: {}", e))?;
@@ -115,7 +115,7 @@ pub fn settings_get(app: AppHandle, key: String) -> Result<SettingResponse, Stri
 /// Set a single setting
 #[tracing::instrument(skip(app))]
 #[tauri::command]
-pub fn settings_set(
+pub(crate) fn settings_set(
     app: AppHandle,
     key: String,
     value: JsonValue,
@@ -144,7 +144,7 @@ pub fn settings_set(
 /// Update multiple settings at once
 #[tracing::instrument(skip(app, settings))]
 #[tauri::command]
-pub fn settings_update(
+pub(crate) fn settings_update(
     app: AppHandle,
     settings: SettingsUpdateRequest,
 ) -> Result<SettingsUpdateResponse, String> {
@@ -247,7 +247,7 @@ pub fn settings_update(
 /// Reset settings to defaults
 #[tracing::instrument(skip(app))]
 #[tauri::command]
-pub fn settings_reset(app: AppHandle) -> Result<AllSettingsResponse, String> {
+pub(crate) fn settings_reset(app: AppHandle) -> Result<AllSettingsResponse, String> {
     let store = app
         .store(STORE_NAME)
         .map_err(|e| format!("Failed to open settings store: {}", e))?;

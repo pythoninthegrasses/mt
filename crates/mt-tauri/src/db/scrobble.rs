@@ -7,7 +7,7 @@ use rusqlite::{Connection, params};
 use crate::db::{DbResult, ScrobbleEntry};
 
 /// Add a scrobble to the offline queue
-pub fn queue_scrobble(
+pub(crate) fn queue_scrobble(
     conn: &Connection,
     artist: &str,
     track: &str,
@@ -23,7 +23,7 @@ pub fn queue_scrobble(
 }
 
 /// Get queued scrobbles for retry
-pub fn get_queued_scrobbles(conn: &Connection, limit: i64) -> DbResult<Vec<ScrobbleEntry>> {
+pub(crate) fn get_queued_scrobbles(conn: &Connection, limit: i64) -> DbResult<Vec<ScrobbleEntry>> {
     let mut stmt = conn.prepare(
         "SELECT id, artist, track, album, timestamp, created_at, retry_count
          FROM scrobble_queue
@@ -50,13 +50,13 @@ pub fn get_queued_scrobbles(conn: &Connection, limit: i64) -> DbResult<Vec<Scrob
 }
 
 /// Remove a successfully scrobbled item from the queue
-pub fn remove_queued_scrobble(conn: &Connection, scrobble_id: i64) -> DbResult<bool> {
+pub(crate) fn remove_queued_scrobble(conn: &Connection, scrobble_id: i64) -> DbResult<bool> {
     let deleted = conn.execute("DELETE FROM scrobble_queue WHERE id = ?", [scrobble_id])?;
     Ok(deleted > 0)
 }
 
 /// Increment retry count for a failed scrobble
-pub fn increment_scrobble_retry(conn: &Connection, scrobble_id: i64) -> DbResult<i64> {
+pub(crate) fn increment_scrobble_retry(conn: &Connection, scrobble_id: i64) -> DbResult<i64> {
     conn.execute(
         "UPDATE scrobble_queue SET retry_count = retry_count + 1 WHERE id = ?",
         [scrobble_id],
@@ -74,7 +74,7 @@ pub fn increment_scrobble_retry(conn: &Connection, scrobble_id: i64) -> DbResult
 }
 
 /// Remove old queued scrobbles that are unlikely to succeed
-pub fn clean_old_scrobbles(conn: &Connection, max_age_days: i64) -> DbResult<i64> {
+pub(crate) fn clean_old_scrobbles(conn: &Connection, max_age_days: i64) -> DbResult<i64> {
     let modifier = format!("-{} days", max_age_days);
 
     let deleted = conn.execute(
@@ -86,7 +86,7 @@ pub fn clean_old_scrobbles(conn: &Connection, max_age_days: i64) -> DbResult<i64
 }
 
 /// Get the count of queued scrobbles
-pub fn get_scrobble_queue_count(conn: &Connection) -> DbResult<i64> {
+pub(crate) fn get_scrobble_queue_count(conn: &Connection) -> DbResult<i64> {
     let count: i64 = conn.query_row("SELECT COUNT(*) FROM scrobble_queue", [], |row| row.get(0))?;
     Ok(count)
 }

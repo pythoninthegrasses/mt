@@ -13,7 +13,7 @@ impl ApiKeyConfig {
     /// Load API configuration
     ///
     /// Priority: runtime env var > compile-time embedded value > None
-    pub fn load() -> Self {
+    pub(crate) fn load() -> Self {
         let api_key = env::var("LASTFM_API_KEY")
             .ok()
             .or_else(|| option_env!("LASTFM_API_KEY").map(String::from));
@@ -28,19 +28,19 @@ impl ApiKeyConfig {
     }
 
     /// Check if API is properly configured
-    pub fn is_configured(&self) -> bool {
+    pub(crate) fn is_configured(&self) -> bool {
         self.api_key.is_some() && self.api_secret.is_some()
     }
 
     /// Get API key (panics if not configured)
-    pub fn api_key(&self) -> &str {
+    pub(crate) fn api_key(&self) -> &str {
         self.api_key
             .as_ref()
             .expect("LASTFM_API_KEY not configured")
     }
 
     /// Get API secret (panics if not configured)
-    pub fn api_secret(&self) -> &str {
+    pub(crate) fn api_secret(&self) -> &str {
         self.api_secret
             .as_ref()
             .expect("LASTFM_API_SECRET not configured")

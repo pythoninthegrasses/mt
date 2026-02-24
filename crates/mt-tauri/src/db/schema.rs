@@ -144,7 +144,7 @@ pub const CREATE_TABLES: &[(&str, &str)] = &[
 ];
 
 /// Create all database tables
-pub fn create_tables(conn: &Connection) -> DbResult<()> {
+pub(crate) fn create_tables(conn: &Connection) -> DbResult<()> {
     for (_, sql) in CREATE_TABLES {
         conn.execute(sql, [])?;
     }
@@ -155,7 +155,7 @@ pub fn create_tables(conn: &Connection) -> DbResult<()> {
 ///
 /// These migrations match the Python backend's migration logic exactly
 /// to ensure backward compatibility with existing databases.
-pub fn run_migrations(conn: &Connection) -> DbResult<()> {
+pub(crate) fn run_migrations(conn: &Connection) -> DbResult<()> {
     // Get current library columns
     let library_columns = get_table_columns(conn, "library")?;
 

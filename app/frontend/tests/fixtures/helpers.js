@@ -172,13 +172,3 @@ export async function getQueueItems(page) {
   return queueStore.items;
 }
 
-/**
- * Take a screenshot with a descriptive name
- * @param {import('@playwright/test').Page} page
- * @param {string} name - Screenshot name
- * @param {string} testName - Test name for path
- */
-export async function takeScreenshot(page, name, testName) {
-  const path = `test-results/screenshots/${testName}/${name}.png`;
-  await page.screenshot({ path, fullPage: true });
-}

@@ -1,15 +1,15 @@
 pub mod audio;
-pub mod commands;
-pub mod db;
-pub mod dialog;
-pub mod events;
-pub mod lastfm;
-pub mod library;
-pub mod logging;
-pub mod media_keys;
-pub mod metadata;
-pub mod scanner;
-pub mod watcher;
+pub(crate) mod commands;
+pub(crate) mod db;
+pub(crate) mod dialog;
+pub(crate) mod events;
+pub(crate) mod lastfm;
+pub(crate) mod library;
+pub(crate) mod logging;
+pub(crate) mod media_keys;
+pub(crate) mod metadata;
+pub(crate) mod scanner;
+pub(crate) mod watcher;
 
 #[cfg(test)]
 mod concurrency_test;

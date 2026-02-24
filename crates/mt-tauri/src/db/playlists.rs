@@ -7,7 +7,7 @@ use rusqlite::{Connection, params};
 use crate::db::{DbResult, Playlist, PlaylistTrack, PlaylistWithTracks, Track};
 
 /// Get all playlists with track counts
-pub fn get_playlists(conn: &Connection) -> DbResult<Vec<Playlist>> {
+pub(crate) fn get_playlists(conn: &Connection) -> DbResult<Vec<Playlist>> {
     let mut stmt = conn.prepare(
         "SELECT p.id, p.name, p.position, p.created_at,
                 COUNT(pi.id) as track_count
@@ -34,7 +34,7 @@ pub fn get_playlists(conn: &Connection) -> DbResult<Vec<Playlist>> {
 }
 
 /// Create a new playlist
-pub fn create_playlist(conn: &Connection, name: &str) -> DbResult<Option<Playlist>> {
+pub(crate) fn create_playlist(conn: &Connection, name: &str) -> DbResult<Option<Playlist>> {
     match conn.execute("INSERT INTO playlists (name) VALUES (?)", [name]) {
         Ok(_) => {
             let id = conn.last_insert_rowid();
@@ -64,7 +64,7 @@ pub fn create_playlist(conn: &Connection, name: &str) -> DbResult<Option<Playlis
 }
 
 /// Get a playlist with its tracks
-pub fn get_playlist(conn: &Connection, playlist_id: i64) -> DbResult<Option<PlaylistWithTracks>> {
+pub(crate) fn get_playlist(conn: &Connection, playlist_id: i64) -> DbResult<Option<PlaylistWithTracks>> {
     // Get playlist metadata
     let playlist = match conn.query_row(
         "SELECT * FROM playlists WHERE id = ?",
@@ -142,7 +142,7 @@ pub fn get_playlist(conn: &Connection, playlist_id: i64) -> DbResult<Option<Play
 }
 
 /// Update playlist metadata
-pub fn update_playlist(
+pub(crate) fn update_playlist(
     conn: &Connection,
     playlist_id: i64,
     name: Option<&str>,
@@ -188,13 +188,13 @@ pub fn update_playlist(
 }
 
 /// Delete a playlist
-pub fn delete_playlist(conn: &Connection, playlist_id: i64) -> DbResult<bool> {
+pub(crate) fn delete_playlist(conn: &Connection, playlist_id: i64) -> DbResult<bool> {
     let deleted = conn.execute("DELETE FROM playlists WHERE id = ?", [playlist_id])?;
     Ok(deleted > 0)
 }
 
 /// Add tracks to a playlist
-pub fn add_tracks_to_playlist(
+pub(crate) fn add_tracks_to_playlist(
     conn: &Connection,
     playlist_id: i64,
     track_ids: &[i64],
@@ -232,7 +232,7 @@ pub fn add_tracks_to_playlist(
 }
 
 /// Remove a track from a playlist by position
-pub fn remove_track_from_playlist(
+pub(crate) fn remove_track_from_playlist(
     conn: &Connection,
     playlist_id: i64,
     position: i64,
@@ -271,7 +271,7 @@ pub fn remove_track_from_playlist(
 }
 
 /// Reorder tracks within a playlist
-pub fn reorder_playlist(
+pub(crate) fn reorder_playlist(
     conn: &Connection,
     playlist_id: i64,
     from_position: i64,
@@ -309,7 +309,7 @@ pub fn reorder_playlist(
 }
 
 /// Get the number of tracks in a playlist
-pub fn get_playlist_track_count(conn: &Connection, playlist_id: i64) -> DbResult<i64> {
+pub(crate) fn get_playlist_track_count(conn: &Connection, playlist_id: i64) -> DbResult<i64> {
     let count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM playlist_items WHERE playlist_id = ?",
         [playlist_id],
@@ -319,7 +319,7 @@ pub fn get_playlist_track_count(conn: &Connection, playlist_id: i64) -> DbResult
 }
 
 /// Reorder playlists in the sidebar
-pub fn reorder_playlists(
+pub(crate) fn reorder_playlists(
     conn: &Connection,
     from_position: i64,
     to_position: i64,
@@ -353,7 +353,7 @@ pub fn reorder_playlists(
 }
 
 /// Generate a unique playlist name
-pub fn generate_unique_playlist_name(conn: &Connection, base: &str) -> DbResult<String> {
+pub(crate) fn generate_unique_playlist_name(conn: &Connection, base: &str) -> DbResult<String> {
     let exists: bool = conn
         .query_row(
             "SELECT COUNT(*) > 0 FROM playlists WHERE name = ?",

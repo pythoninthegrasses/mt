@@ -659,30 +659,6 @@ export async function setupLibraryMocks(page, state) {
   });
 }
 
-/**
- * Helper to add a track to the mock state
- * @param {Object} state - State from createLibraryState()
- * @param {Object} track - Track object to add
- */
-export function addTrack(state, track) {
-  const newId = Math.max(...state.tracks.map((t) => t.id), 0) + 1;
-  const newTrack = { id: newId, ...track };
-  state.tracks.push(newTrack);
-  state.stats.total_tracks = state.tracks.length;
-  return newTrack;
-}
-
-/**
- * Helper to mark a track as missing
- * @param {Object} state - State from createLibraryState()
- * @param {number} trackId - Track ID to mark as missing
- */
-export function markTrackMissing(state, trackId) {
-  const track = state.tracks.find((t) => t.id === trackId);
-  if (track) {
-    track.missing = true;
-  }
-}
 
 /**
  * Helper to clear API call history
@@ -709,15 +685,3 @@ export function findApiCalls(state, method, urlPattern) {
   });
 }
 
-/**
- * Helper to set artwork configuration for a track
- * @param {Object} state - State from createLibraryState()
- * @param {number|string} trackId - Track ID
- * @param {string|Object} config - Artwork config:
- *   - 'none': No artwork (returns 404)
- *   - 'broken': Invalid/broken image data
- *   - { data, mime_type, source }: Custom artwork data
- */
-export function setTrackArtwork(state, trackId, config) {
-  state.artworkConfig[trackId] = config;
-}

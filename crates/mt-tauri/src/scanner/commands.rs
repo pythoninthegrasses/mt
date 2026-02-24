@@ -79,7 +79,7 @@ fn get_scoped_fingerprints(
 /// Scan paths and add/update tracks in the database
 #[tracing::instrument(skip(app, db, paths))]
 #[tauri::command]
-pub async fn scan_paths_to_library(
+pub(crate) async fn scan_paths_to_library(
     app: AppHandle,
     db: State<'_, Database>,
     paths: Vec<String>,
@@ -329,7 +329,7 @@ pub async fn scan_paths_to_library(
 /// Scan a single path (file or directory) without database integration
 #[tracing::instrument(skip(app, paths))]
 #[tauri::command]
-pub async fn scan_paths_metadata(
+pub(crate) async fn scan_paths_metadata(
     app: AppHandle,
     paths: Vec<String>,
     recursive: bool,
@@ -365,21 +365,21 @@ pub async fn scan_paths_metadata(
 /// Extract metadata from a single file
 #[tracing::instrument]
 #[tauri::command]
-pub fn extract_file_metadata(filepath: String) -> Result<ExtractedMetadata, String> {
+pub(crate) fn extract_file_metadata(filepath: String) -> Result<ExtractedMetadata, String> {
     extract_metadata(&filepath).map_err(|e| e.to_string())
 }
 
 /// Get artwork for a track
 #[tracing::instrument]
 #[tauri::command]
-pub fn get_track_artwork(filepath: String) -> Option<Artwork> {
+pub(crate) fn get_track_artwork(filepath: String) -> Option<Artwork> {
     get_artwork(&filepath)
 }
 
 /// Get artwork as a data URL for use in img src
 #[tracing::instrument]
 #[tauri::command]
-pub fn get_track_artwork_url(filepath: String) -> Option<String> {
+pub(crate) fn get_track_artwork_url(filepath: String) -> Option<String> {
     crate::scanner::artwork::get_artwork_data_url(&filepath)
 }
 

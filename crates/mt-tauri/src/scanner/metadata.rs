@@ -25,7 +25,7 @@ fn non_empty(s: &str) -> Option<String> {
 }
 
 /// Extract metadata from a single audio file
-pub fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> {
+pub(crate) fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> {
     let path = Path::new(filepath);
 
     // Get file fingerprint
@@ -120,7 +120,7 @@ pub fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> {
 }
 
 /// Extract metadata from a file, returning default metadata on error
-pub fn extract_metadata_or_default(filepath: &str) -> ExtractedMetadata {
+pub(crate) fn extract_metadata_or_default(filepath: &str) -> ExtractedMetadata {
     match extract_metadata(filepath) {
         Ok(metadata) => metadata,
         Err(_) => {
@@ -152,7 +152,7 @@ pub fn extract_metadata_or_default(filepath: &str) -> ExtractedMetadata {
 ///
 /// # Returns
 /// Vector of extracted metadata (one per file, in same order as input)
-pub fn extract_metadata_parallel<F>(
+pub(crate) fn extract_metadata_parallel<F>(
     filepaths: &[(String, FileFingerprint)],
     progress_fn: Option<F>,
 ) -> Vec<ExtractedMetadata>
@@ -189,37 +189,9 @@ where
     results
 }
 
-/// Extract metadata from multiple files serially (for small batches)
-pub fn extract_metadata_serial<F>(
-    filepaths: &[(String, FileFingerprint)],
-    mut progress_fn: Option<F>,
-) -> Vec<ExtractedMetadata>
-where
-    F: FnMut(usize, usize),
-{
-    let total = filepaths.len();
-    let mut results = Vec::with_capacity(total);
-
-    for (idx, (filepath, fingerprint)) in filepaths.iter().enumerate() {
-        let mut metadata = extract_metadata_or_default(filepath);
-
-        // Ensure fingerprint is set from inventory
-        metadata.file_size = fingerprint.size;
-        metadata.file_mtime_ns = fingerprint.mtime_ns;
-        metadata.file_inode = fingerprint.inode;
-
-        results.push(metadata);
-
-        if let Some(ref mut f) = progress_fn {
-            f(idx + 1, total);
-        }
-    }
-
-    results
-}
 
 /// Smart extraction that chooses parallel or serial based on batch size
-pub fn extract_metadata_batch<F>(
+pub(crate) fn extract_metadata_batch<F>(
     filepaths: &[(String, FileFingerprint)],
     progress_fn: Option<F>,
 ) -> Vec<ExtractedMetadata>

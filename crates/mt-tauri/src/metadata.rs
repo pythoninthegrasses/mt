@@ -53,7 +53,7 @@ pub struct MetadataUpdate {
 
 #[tracing::instrument]
 #[tauri::command]
-pub fn get_track_metadata(path: String) -> Result<TrackMetadata, String> {
+pub(crate) fn get_track_metadata(path: String) -> Result<TrackMetadata, String> {
     let file_path = Path::new(&path);
 
     if !file_path.exists() {
@@ -163,7 +163,7 @@ pub fn get_track_metadata(path: String) -> Result<TrackMetadata, String> {
 }
 
 #[tauri::command]
-pub fn get_tracks_metadata_batch(paths: Vec<String>) -> Result<Vec<TrackMetadata>, String> {
+pub(crate) fn get_tracks_metadata_batch(paths: Vec<String>) -> Result<Vec<TrackMetadata>, String> {
     let results: Vec<TrackMetadata> = paths
         .into_par_iter()
         .map(|path| get_track_metadata(path))
@@ -173,7 +173,7 @@ pub fn get_tracks_metadata_batch(paths: Vec<String>) -> Result<Vec<TrackMetadata
 
 #[tracing::instrument(skip(update))]
 #[tauri::command]
-pub fn save_track_metadata(update: MetadataUpdate) -> Result<TrackMetadata, String> {
+pub(crate) fn save_track_metadata(update: MetadataUpdate) -> Result<TrackMetadata, String> {
     let file_path = Path::new(&update.path);
 
     if !file_path.exists() {

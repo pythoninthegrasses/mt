@@ -42,7 +42,7 @@ pub struct QueueOperationResponse {
 /// Get the current playback queue with track metadata
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn queue_get(db: State<'_, Database>) -> Result<QueueResponse, String> {
+pub(crate) fn queue_get(db: State<'_, Database>) -> Result<QueueResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     let items = queue::get_queue(&conn).map_err(|e| e.to_string())?;
     let count = items.len() as i64;
@@ -53,7 +53,7 @@ pub fn queue_get(db: State<'_, Database>) -> Result<QueueResponse, String> {
 /// Add tracks to the queue by track IDs
 #[tracing::instrument(skip(app, db, track_ids))]
 #[tauri::command]
-pub fn queue_add(
+pub(crate) fn queue_add(
     app: AppHandle,
     db: State<'_, Database>,
     track_ids: Vec<i64>,
@@ -83,7 +83,7 @@ pub fn queue_add(
 /// Add files directly to the queue (for drag-and-drop support)
 #[tracing::instrument(skip(app, db, filepaths))]
 #[tauri::command]
-pub fn queue_add_files(
+pub(crate) fn queue_add_files(
     app: AppHandle,
     db: State<'_, Database>,
     filepaths: Vec<String>,
@@ -115,7 +115,7 @@ pub fn queue_add_files(
 /// Remove a track from the queue by position
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn queue_remove(app: AppHandle, db: State<'_, Database>, position: i64) -> Result<(), String> {
+pub(crate) fn queue_remove(app: AppHandle, db: State<'_, Database>, position: i64) -> Result<(), String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     let removed = queue::remove_from_queue(&conn, position).map_err(|e| e.to_string())?;
 
@@ -134,7 +134,7 @@ pub fn queue_remove(app: AppHandle, db: State<'_, Database>, position: i64) -> R
 /// Clear the entire queue
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn queue_clear(app: AppHandle, db: State<'_, Database>) -> Result<(), String> {
+pub(crate) fn queue_clear(app: AppHandle, db: State<'_, Database>) -> Result<(), String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     queue::clear_queue(&conn).map_err(|e| e.to_string())?;
 
@@ -147,7 +147,7 @@ pub fn queue_clear(app: AppHandle, db: State<'_, Database>) -> Result<(), String
 /// Reorder tracks in the queue (move from one position to another)
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn queue_reorder(
+pub(crate) fn queue_reorder(
     app: AppHandle,
     db: State<'_, Database>,
     from_position: i64,
@@ -179,7 +179,7 @@ pub fn queue_reorder(
 /// Shuffle the queue using Fisher-Yates algorithm
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn queue_shuffle(
+pub(crate) fn queue_shuffle(
     app: AppHandle,
     db: State<'_, Database>,
     keep_current: Option<bool>,
@@ -237,7 +237,7 @@ pub fn queue_shuffle(
 /// Get queue playback state
 #[tracing::instrument(level = "trace", skip(db))]
 #[tauri::command]
-pub fn queue_get_playback_state(db: State<'_, Database>) -> Result<QueueState, String> {
+pub(crate) fn queue_get_playback_state(db: State<'_, Database>) -> Result<QueueState, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     let state: QueueState = queue::get_queue_state(&conn).map_err(|e| e.to_string())?;
     Ok(state)
@@ -246,7 +246,7 @@ pub fn queue_get_playback_state(db: State<'_, Database>) -> Result<QueueState, S
 /// Set current index in queue playback state
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn queue_set_current_index(
+pub(crate) fn queue_set_current_index(
     app: AppHandle,
     db: State<'_, Database>,
     index: i64,
@@ -268,7 +268,7 @@ pub fn queue_set_current_index(
 /// Set shuffle enabled in queue playback state
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn queue_set_shuffle(
+pub(crate) fn queue_set_shuffle(
     app: AppHandle,
     db: State<'_, Database>,
     enabled: bool,
@@ -290,7 +290,7 @@ pub fn queue_set_shuffle(
 /// Set loop mode in queue playback state
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn queue_set_loop(app: AppHandle, db: State<'_, Database>, mode: String) -> Result<(), String> {
+pub(crate) fn queue_set_loop(app: AppHandle, db: State<'_, Database>, mode: String) -> Result<(), String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     queue::set_loop_mode(&conn, &mode).map_err(|e| e.to_string())?;
 

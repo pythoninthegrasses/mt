@@ -7,7 +7,7 @@ use rusqlite::{Connection, params};
 use crate::db::{DbResult, WatchedFolder};
 
 /// Get all watched folders
-pub fn get_watched_folders(conn: &Connection) -> DbResult<Vec<WatchedFolder>> {
+pub(crate) fn get_watched_folders(conn: &Connection) -> DbResult<Vec<WatchedFolder>> {
     let mut stmt = conn.prepare("SELECT * FROM watched_folders ORDER BY created_at ASC")?;
 
     let folders: Vec<WatchedFolder> = stmt
@@ -30,7 +30,7 @@ pub fn get_watched_folders(conn: &Connection) -> DbResult<Vec<WatchedFolder>> {
 }
 
 /// Get a watched folder by ID
-pub fn get_watched_folder(conn: &Connection, folder_id: i64) -> DbResult<Option<WatchedFolder>> {
+pub(crate) fn get_watched_folder(conn: &Connection, folder_id: i64) -> DbResult<Option<WatchedFolder>> {
     match conn.query_row(
         "SELECT * FROM watched_folders WHERE id = ?",
         [folder_id],
@@ -54,7 +54,7 @@ pub fn get_watched_folder(conn: &Connection, folder_id: i64) -> DbResult<Option<
 }
 
 /// Add a watched folder
-pub fn add_watched_folder(
+pub(crate) fn add_watched_folder(
     conn: &Connection,
     path: &str,
     mode: &str,
@@ -79,7 +79,7 @@ pub fn add_watched_folder(
 }
 
 /// Update a watched folder
-pub fn update_watched_folder(
+pub(crate) fn update_watched_folder(
     conn: &Connection,
     folder_id: i64,
     mode: Option<&str>,
@@ -123,7 +123,7 @@ pub fn update_watched_folder(
 }
 
 /// Update the last_scanned_at timestamp for a watched folder
-pub fn update_watched_folder_last_scanned(conn: &Connection, folder_id: i64) -> DbResult<bool> {
+pub(crate) fn update_watched_folder_last_scanned(conn: &Connection, folder_id: i64) -> DbResult<bool> {
     let updated = conn.execute(
         "UPDATE watched_folders SET last_scanned_at = strftime('%s','now'), updated_at = strftime('%s','now') WHERE id = ?",
         [folder_id],
@@ -132,13 +132,13 @@ pub fn update_watched_folder_last_scanned(conn: &Connection, folder_id: i64) -> 
 }
 
 /// Remove a watched folder
-pub fn remove_watched_folder(conn: &Connection, folder_id: i64) -> DbResult<bool> {
+pub(crate) fn remove_watched_folder(conn: &Connection, folder_id: i64) -> DbResult<bool> {
     let deleted = conn.execute("DELETE FROM watched_folders WHERE id = ?", [folder_id])?;
     Ok(deleted > 0)
 }
 
 /// Get enabled watched folders only
-pub fn get_enabled_watched_folders(conn: &Connection) -> DbResult<Vec<WatchedFolder>> {
+pub(crate) fn get_enabled_watched_folders(conn: &Connection) -> DbResult<Vec<WatchedFolder>> {
     let mut stmt =
         conn.prepare("SELECT * FROM watched_folders WHERE enabled = 1 ORDER BY created_at ASC")?;
 
@@ -162,7 +162,7 @@ pub fn get_enabled_watched_folders(conn: &Connection) -> DbResult<Vec<WatchedFol
 }
 
 /// Get watched folder by path
-pub fn get_watched_folder_by_path(
+pub(crate) fn get_watched_folder_by_path(
     conn: &Connection,
     path: &str,
 ) -> DbResult<Option<WatchedFolder>> {

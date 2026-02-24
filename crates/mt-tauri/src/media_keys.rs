@@ -20,7 +20,7 @@ pub struct MediaKeyManager {
 }
 
 impl MediaKeyManager {
-    pub fn new(app: AppHandle) -> Result<Self, String> {
+    pub(crate) fn new(app: AppHandle) -> Result<Self, String> {
         // On Windows, souvlaki panics (not errors) if hwnd is None.
         // Extract the HWND from the main window via raw_window_handle.
         #[cfg(target_os = "windows")]
@@ -94,7 +94,7 @@ impl MediaKeyManager {
         })
     }
 
-    pub fn set_metadata(&self, info: NowPlayingInfo) -> Result<(), String> {
+    pub(crate) fn set_metadata(&self, info: NowPlayingInfo) -> Result<(), String> {
         debug!(
             title = ?info.title,
             artist = ?info.artist,
@@ -117,7 +117,7 @@ impl MediaKeyManager {
             })
     }
 
-    pub fn set_playing(&self, progress: Option<Duration>) -> Result<(), String> {
+    pub(crate) fn set_playing(&self, progress: Option<Duration>) -> Result<(), String> {
         debug!(progress_ms = ?progress.map(|d| d.as_millis()), "Setting media playback → Playing");
         let mut controls = self.controls.lock().map_err(|e| e.to_string())?;
         controls
@@ -130,7 +130,7 @@ impl MediaKeyManager {
             })
     }
 
-    pub fn set_paused(&self, progress: Option<Duration>) -> Result<(), String> {
+    pub(crate) fn set_paused(&self, progress: Option<Duration>) -> Result<(), String> {
         debug!(progress_ms = ?progress.map(|d| d.as_millis()), "Setting media playback → Paused");
         let mut controls = self.controls.lock().map_err(|e| e.to_string())?;
         controls
@@ -143,7 +143,7 @@ impl MediaKeyManager {
             })
     }
 
-    pub fn set_stopped(&self) -> Result<(), String> {
+    pub(crate) fn set_stopped(&self) -> Result<(), String> {
         debug!("Setting media playback → Stopped");
         let mut controls = self.controls.lock().map_err(|e| e.to_string())?;
         controls.set_playback(MediaPlayback::Stopped).map_err(|e| {

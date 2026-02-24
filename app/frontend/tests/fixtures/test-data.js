@@ -29,38 +29,6 @@ export function createMockTrack(overrides = {}) {
 }
 
 /**
- * Create multiple mock tracks
- * @param {number} count - Number of tracks to create
- * @param {Object} baseOverrides - Base properties for all tracks
- * @returns {Array} Array of mock track objects
- */
-export function createMockTracks(count, baseOverrides = {}) {
-  return Array.from({ length: count }, (_, i) =>
-    createMockTrack({
-      ...baseOverrides,
-      title: `${baseOverrides.title || 'Test Track'} ${i + 1}`,
-      id: `track-${i + 1}`,
-    })
-  );
-}
-
-/**
- * Create a mock playlist object
- * @param {Object} overrides - Properties to override
- * @returns {Object} Mock playlist object
- */
-export function createMockPlaylist(overrides = {}) {
-  const defaults = {
-    id: `playlist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    name: 'Test Playlist',
-    tracks: [],
-    created_date: new Date().toISOString(),
-  };
-
-  return { ...defaults, ...overrides };
-}
-
-/**
  * Common test tracks with diverse metadata for testing sorting, filtering
  */
 export const testTracks = [

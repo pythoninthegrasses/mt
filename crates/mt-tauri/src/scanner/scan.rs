@@ -39,7 +39,7 @@ pub type ProgressCallback = Box<dyn Fn(ScanProgress) + Send + Sync>;
 ///
 /// # Returns
 /// Scan result with categorized files and extracted metadata
-pub fn scan_2phase(
+pub(crate) fn scan_2phase(
     paths: &[String],
     db_fingerprints: &HashMap<String, FileFingerprint>,
     recursive: bool,
@@ -133,22 +133,9 @@ pub fn scan_2phase(
     })
 }
 
-/// Quick scan that only runs inventory (no metadata extraction)
-///
-/// Useful for fast change detection when you only need to know
-/// what changed, not the full metadata.
-///
-/// Note: This now uses the Zig FFI implementation for filesystem walking.
-pub fn scan_inventory_only(
-    paths: &[String],
-    db_fingerprints: &HashMap<String, FileFingerprint>,
-    recursive: bool,
-) -> ScanResult<InventoryResult> {
-    run_inventory(paths, db_fingerprints, recursive, None::<fn(usize)>)
-}
 
 /// Build a fingerprint map from database tracks
-pub fn build_fingerprint_map(
+pub(crate) fn build_fingerprint_map(
     tracks: &[(String, Option<i64>, i64)],
 ) -> HashMap<String, FileFingerprint> {
     tracks
@@ -254,7 +241,7 @@ mod tests {
     }
 
     #[test]
-    fn test_scan_inventory_only() {
+    fn test_run_inventory() {
         let dir = tempdir().unwrap();
 
         // Create test file
@@ -264,10 +251,11 @@ mod tests {
 
         let db_fingerprints: HashMap<String, FileFingerprint> = HashMap::new();
 
-        let result = scan_inventory_only(
+        let result = run_inventory(
             &[dir.path().to_string_lossy().to_string()],
             &db_fingerprints,
             true,
+            None::<fn(usize)>,
         )
         .unwrap();
 
@@ -276,7 +264,7 @@ mod tests {
     }
 
     #[test]
-    fn test_scan_inventory_only_multiple_files() {
+    fn test_run_inventory_multiple_files() {
         let dir = tempdir().unwrap();
 
         // Create multiple test files
@@ -289,10 +277,11 @@ mod tests {
 
         let db_fingerprints: HashMap<String, FileFingerprint> = HashMap::new();
 
-        let result = scan_inventory_only(
+        let result = run_inventory(
             &[dir.path().to_string_lossy().to_string()],
             &db_fingerprints,
             true,
+            None::<fn(usize)>,
         )
         .unwrap();
 
@@ -300,7 +289,7 @@ mod tests {
     }
 
     #[test]
-    fn test_scan_inventory_only_non_recursive() {
+    fn test_run_inventory_non_recursive() {
         let dir = tempdir().unwrap();
         let subdir = dir.path().join("subdir");
         std::fs::create_dir(&subdir).unwrap();
@@ -316,10 +305,11 @@ mod tests {
         let db_fingerprints: HashMap<String, FileFingerprint> = HashMap::new();
 
         // Non-recursive scan should only find root file
-        let result = scan_inventory_only(
+        let result = run_inventory(
             &[dir.path().to_string_lossy().to_string()],
             &db_fingerprints,
             false, // non-recursive
+            None::<fn(usize)>,
         )
         .unwrap();
 

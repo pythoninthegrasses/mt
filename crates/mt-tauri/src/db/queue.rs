@@ -7,7 +7,7 @@ use rusqlite::{Connection, params};
 use crate::db::{DbResult, QueueItem, QueueState, Track, library::get_track_by_filepath};
 
 /// Get all items in the queue with track metadata
-pub fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
+pub(crate) fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
     let mut stmt = conn.prepare(
         "SELECT q.id as queue_id, q.filepath,
                 l.id, l.title, l.artist, l.album, l.album_artist,
@@ -59,7 +59,7 @@ pub fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
 }
 
 /// Add tracks to the queue by track IDs
-pub fn add_to_queue(conn: &Connection, track_ids: &[i64], position: Option<i64>) -> DbResult<i64> {
+pub(crate) fn add_to_queue(conn: &Connection, track_ids: &[i64], position: Option<i64>) -> DbResult<i64> {
     // Get filepaths for track IDs
     let placeholders = track_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let sql = format!(
@@ -130,7 +130,7 @@ pub fn add_to_queue(conn: &Connection, track_ids: &[i64], position: Option<i64>)
 }
 
 /// Add files directly to the queue
-pub fn add_files_to_queue(
+pub(crate) fn add_files_to_queue(
     conn: &Connection,
     filepaths: &[String],
     position: Option<i64>,
@@ -196,7 +196,7 @@ pub fn add_files_to_queue(
 }
 
 /// Remove a track from the queue by position
-pub fn remove_from_queue(conn: &Connection, position: i64) -> DbResult<bool> {
+pub(crate) fn remove_from_queue(conn: &Connection, position: i64) -> DbResult<bool> {
     let mut stmt = conn.prepare("SELECT id FROM queue ORDER BY id")?;
     let items: Vec<i64> = stmt
         .query_map([], |row| row.get(0))?
@@ -213,13 +213,13 @@ pub fn remove_from_queue(conn: &Connection, position: i64) -> DbResult<bool> {
 }
 
 /// Clear the entire queue
-pub fn clear_queue(conn: &Connection) -> DbResult<()> {
+pub(crate) fn clear_queue(conn: &Connection) -> DbResult<()> {
     conn.execute("DELETE FROM queue", [])?;
     Ok(())
 }
 
 /// Reorder tracks in the queue
-pub fn reorder_queue(conn: &Connection, from_position: i64, to_position: i64) -> DbResult<bool> {
+pub(crate) fn reorder_queue(conn: &Connection, from_position: i64, to_position: i64) -> DbResult<bool> {
     let mut stmt = conn.prepare("SELECT id, filepath FROM queue ORDER BY id")?;
     let items: Vec<(i64, String)> = stmt
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
@@ -248,13 +248,13 @@ pub fn reorder_queue(conn: &Connection, from_position: i64, to_position: i64) ->
 }
 
 /// Get the number of items in the queue
-pub fn get_queue_length(conn: &Connection) -> DbResult<i64> {
+pub(crate) fn get_queue_length(conn: &Connection) -> DbResult<i64> {
     let count: i64 = conn.query_row("SELECT COUNT(*) FROM queue", [], |row| row.get(0))?;
     Ok(count)
 }
 
 /// Get queue playback state
-pub fn get_queue_state(conn: &Connection) -> DbResult<QueueState> {
+pub(crate) fn get_queue_state(conn: &Connection) -> DbResult<QueueState> {
     let result = conn.query_row(
         "SELECT current_index, shuffle_enabled, loop_mode, original_order_json
          FROM queue_state WHERE id = 1",
@@ -287,7 +287,7 @@ pub fn get_queue_state(conn: &Connection) -> DbResult<QueueState> {
 }
 
 /// Set queue playback state
-pub fn set_queue_state(conn: &Connection, state: &QueueState) -> DbResult<()> {
+pub(crate) fn set_queue_state(conn: &Connection, state: &QueueState) -> DbResult<()> {
     conn.execute(
         "INSERT OR REPLACE INTO queue_state (id, current_index, shuffle_enabled, loop_mode, original_order_json)
          VALUES (1, ?, ?, ?, ?)",
@@ -302,7 +302,7 @@ pub fn set_queue_state(conn: &Connection, state: &QueueState) -> DbResult<()> {
 }
 
 /// Update current index in queue state
-pub fn set_current_index(conn: &Connection, index: i64) -> DbResult<()> {
+pub(crate) fn set_current_index(conn: &Connection, index: i64) -> DbResult<()> {
     // Ensure state exists
     let _ = get_queue_state(conn)?;
 
@@ -314,7 +314,7 @@ pub fn set_current_index(conn: &Connection, index: i64) -> DbResult<()> {
 }
 
 /// Update shuffle enabled in queue state
-pub fn set_shuffle_enabled(conn: &Connection, enabled: bool) -> DbResult<()> {
+pub(crate) fn set_shuffle_enabled(conn: &Connection, enabled: bool) -> DbResult<()> {
     // Ensure state exists
     let _ = get_queue_state(conn)?;
 
@@ -326,7 +326,7 @@ pub fn set_shuffle_enabled(conn: &Connection, enabled: bool) -> DbResult<()> {
 }
 
 /// Update loop mode in queue state
-pub fn set_loop_mode(conn: &Connection, mode: &str) -> DbResult<()> {
+pub(crate) fn set_loop_mode(conn: &Connection, mode: &str) -> DbResult<()> {
     // Ensure state exists
     let _ = get_queue_state(conn)?;
 
@@ -338,7 +338,7 @@ pub fn set_loop_mode(conn: &Connection, mode: &str) -> DbResult<()> {
 }
 
 /// Update original order JSON in queue state
-pub fn set_original_order_json(conn: &Connection, json: Option<String>) -> DbResult<()> {
+pub(crate) fn set_original_order_json(conn: &Connection, json: Option<String>) -> DbResult<()> {
     // Ensure state exists
     let _ = get_queue_state(conn)?;
 

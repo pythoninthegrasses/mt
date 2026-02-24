@@ -35,7 +35,7 @@ pub struct InventoryResult {
 /// * `db_fingerprints` - Map of filepath -> (mtime_ns, file_size) from database
 /// * `recursive` - Whether to scan directories recursively
 /// * `progress_fn` - Optional progress callback (visited_count)
-pub fn run_inventory<F>(
+pub(crate) fn run_inventory<F>(
     paths: &[String],
     db_fingerprints: &HashMap<String, FileFingerprint>,
     recursive: bool,
@@ -133,18 +133,6 @@ where
     Ok(result)
 }
 
-/// Run inventory on a single path (convenience function)
-pub fn inventory_path<F>(
-    path: &str,
-    db_fingerprints: &HashMap<String, FileFingerprint>,
-    recursive: bool,
-    progress_fn: Option<F>,
-) -> ScanResult<InventoryResult>
-where
-    F: FnMut(usize),
-{
-    run_inventory(&[path.to_string()], db_fingerprints, recursive, progress_fn)
-}
 
 #[cfg(test)]
 mod tests {

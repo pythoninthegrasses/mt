@@ -10,7 +10,7 @@
 pub const DEFAULT_CACHE_SIZE: usize = 100;
 
 // Re-export Artwork for convenience
-pub use super::artwork::Artwork as ArtworkType;
+pub(crate) use super::artwork::Artwork as ArtworkType;
 
 mod rust_impl {
     use lru::LruCache;
@@ -27,12 +27,12 @@ mod rust_impl {
 
     impl RustArtworkCache {
         /// Create a new artwork cache with default size
-        pub fn new() -> Self {
+        pub(crate) fn new() -> Self {
             Self::with_capacity(DEFAULT_CACHE_SIZE)
         }
 
         /// Create a new artwork cache with specified capacity
-        pub fn with_capacity(capacity: usize) -> Self {
+        pub(crate) fn with_capacity(capacity: usize) -> Self {
             let size = NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(100).unwrap());
             Self {
                 cache: Mutex::new(LruCache::new(size)),
@@ -40,7 +40,7 @@ mod rust_impl {
         }
 
         /// Get artwork for a track, using cache if available
-        pub fn get_or_load(&self, track_id: i64, filepath: &str) -> Option<Artwork> {
+        pub(crate) fn get_or_load(&self, track_id: i64, filepath: &str) -> Option<Artwork> {
             // Check cache first
             {
                 let mut cache = self.cache.lock();
@@ -63,25 +63,25 @@ mod rust_impl {
 
         /// Invalidate cache entry for a specific track
         /// Called when track metadata is updated
-        pub fn invalidate(&self, track_id: i64) {
+        pub(crate) fn invalidate(&self, track_id: i64) {
             let mut cache = self.cache.lock();
             cache.pop(&track_id);
         }
 
         /// Clear all cache entries
-        pub fn clear(&self) {
+        pub(crate) fn clear(&self) {
             let mut cache = self.cache.lock();
             cache.clear();
         }
 
         /// Get current cache size
-        pub fn len(&self) -> usize {
+        pub(crate) fn len(&self) -> usize {
             let cache = self.cache.lock();
             cache.len()
         }
 
         /// Check if cache is empty
-        pub fn is_empty(&self) -> bool {
+        pub(crate) fn is_empty(&self) -> bool {
             let cache = self.cache.lock();
             cache.is_empty()
         }
@@ -94,7 +94,7 @@ mod rust_impl {
     }
 }
 
-pub use rust_impl::RustArtworkCache;
+pub(crate) use rust_impl::RustArtworkCache;
 
 /// Primary export — use `ArtworkCache` throughout the codebase
 pub type ArtworkCache = RustArtworkCache;

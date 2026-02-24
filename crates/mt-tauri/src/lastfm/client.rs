@@ -15,7 +15,7 @@ pub struct LastFmClient {
 
 impl LastFmClient {
     /// Create a new Last.fm API client
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             config: ApiKeyConfig::load(),
             rate_limiter: Arc::new(RateLimiter::new()),
@@ -25,7 +25,7 @@ impl LastFmClient {
     }
 
     /// Check if API is properly configured
-    pub fn is_configured(&self) -> bool {
+    pub(crate) fn is_configured(&self) -> bool {
         self.config.is_configured()
     }
 
@@ -36,7 +36,7 @@ impl LastFmClient {
     /// * `params` - Parameters to send (excluding method, api_key, format, sk, api_sig)
     /// * `session_key` - Optional session key for authenticated calls
     /// * `use_post` - Whether to use POST instead of GET (required for write operations)
-    pub async fn api_call(
+    pub(crate) async fn api_call(
         &self,
         method: &str,
         params: BTreeMap<String, String>,
@@ -129,7 +129,7 @@ impl LastFmClient {
     }
 
     /// Get authentication token and URL
-    pub async fn get_auth_url(&self) -> Result<(String, String), LastFmError> {
+    pub(crate) async fn get_auth_url(&self) -> Result<(String, String), LastFmError> {
         let params = BTreeMap::new();
         let response = self.api_call("auth.getToken", params, None, false).await?;
 
@@ -149,7 +149,7 @@ impl LastFmClient {
     }
 
     /// Exchange token for session key
-    pub async fn get_session(&self, token: &str) -> Result<SessionInfo, LastFmError> {
+    pub(crate) async fn get_session(&self, token: &str) -> Result<SessionInfo, LastFmError> {
         let mut params = BTreeMap::new();
         params.insert("token".to_string(), token.to_string());
 
@@ -185,7 +185,7 @@ impl LastFmClient {
     }
 
     /// Get user's loved tracks (paginated)
-    pub async fn get_loved_tracks(
+    pub(crate) async fn get_loved_tracks(
         &self,
         user: &str,
         limit: u32,
@@ -207,7 +207,7 @@ impl LastFmClient {
     }
 
     /// Update "Now Playing" status
-    pub async fn update_now_playing(
+    pub(crate) async fn update_now_playing(
         &self,
         session_key: &str,
         artist: &str,
@@ -237,7 +237,7 @@ impl LastFmClient {
     ///
     /// Calls `track.getInfo` (unauthenticated GET). Used for disambiguation
     /// when multiple library tracks match the same artist+title.
-    pub async fn get_track_info(
+    pub(crate) async fn get_track_info(
         &self,
         artist: &str,
         track: &str,
@@ -260,7 +260,7 @@ impl LastFmClient {
     }
 
     /// Love a track on Last.fm
-    pub async fn love_track(
+    pub(crate) async fn love_track(
         &self,
         session_key: &str,
         artist: &str,
@@ -277,7 +277,7 @@ impl LastFmClient {
     }
 
     /// Unlove a track on Last.fm
-    pub async fn unlove_track(
+    pub(crate) async fn unlove_track(
         &self,
         session_key: &str,
         artist: &str,
@@ -294,7 +294,7 @@ impl LastFmClient {
     }
 
     /// Scrobble a track
-    pub async fn scrobble(
+    pub(crate) async fn scrobble(
         &self,
         session_key: &str,
         artist: &str,

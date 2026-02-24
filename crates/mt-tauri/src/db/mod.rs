@@ -3,16 +3,16 @@
 //! This module provides SQLite database access with connection pooling,
 //! matching the schema and functionality of the Python backend.
 
-pub mod favorites;
-pub mod lastfm_loved;
-pub mod library;
-pub mod models;
-pub mod playlists;
-pub mod queue;
-pub mod schema;
-pub mod scrobble;
-pub mod settings;
-pub mod watched;
+pub(crate) mod favorites;
+pub(crate) mod lastfm_loved;
+pub(crate) mod library;
+pub(crate) mod models;
+pub(crate) mod playlists;
+pub(crate) mod queue;
+pub(crate) mod schema;
+pub(crate) mod scrobble;
+pub(crate) mod settings;
+pub(crate) mod watched;
 
 #[cfg(test)]
 mod benchmarks;
@@ -28,7 +28,7 @@ use std::sync::Arc;
 use thiserror::Error;
 use tracing::{error, info};
 
-pub use models::*;
+pub(crate) use models::*;
 
 /// Database error types
 #[derive(Error, Debug)]
@@ -98,7 +98,7 @@ impl Database {
     ///
     /// # Returns
     /// A new Database instance with initialized schema
-    pub fn new<P: AsRef<Path>>(db_path: P) -> DbResult<Self> {
+    pub(crate) fn new<P: AsRef<Path>>(db_path: P) -> DbResult<Self> {
         info!(path = %db_path.as_ref().display(), "Opening database");
         let manager = SqliteConnectionManager::file(db_path).with_init(|conn| {
             // Per-connection PRAGMAs: applied to every new connection from the pool.
@@ -131,7 +131,7 @@ impl Database {
     }
 
     /// Create an in-memory database (useful for testing)
-    pub fn new_in_memory() -> DbResult<Self> {
+    pub(crate) fn new_in_memory() -> DbResult<Self> {
         let manager = SqliteConnectionManager::memory().with_init(|conn| {
             conn.execute_batch(
                 "
@@ -172,12 +172,12 @@ impl Database {
     }
 
     /// Get a connection from the pool
-    pub fn conn(&self) -> DbResult<DbConnection> {
+    pub(crate) fn conn(&self) -> DbResult<DbConnection> {
         Ok(self.pool.get()?)
     }
 
     /// Execute a function with a connection, enabling foreign keys
-    pub fn with_conn<F, T>(&self, f: F) -> DbResult<T>
+    pub(crate) fn with_conn<F, T>(&self, f: F) -> DbResult<T>
     where
         F: FnOnce(&Connection) -> DbResult<T>,
     {
@@ -187,7 +187,7 @@ impl Database {
     }
 
     /// Execute a function within a transaction
-    pub fn transaction<F, T>(&self, f: F) -> DbResult<T>
+    pub(crate) fn transaction<F, T>(&self, f: F) -> DbResult<T>
     where
         F: FnOnce(&Connection) -> DbResult<T>,
     {

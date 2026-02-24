@@ -4,7 +4,7 @@ use tracing::debug;
 
 #[tracing::instrument(skip(app))]
 #[tauri::command]
-pub async fn open_file_dialog(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+pub(crate) async fn open_file_dialog(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     let (tx, rx) = oneshot::channel();
 
     app.dialog()
@@ -33,7 +33,7 @@ pub async fn open_file_dialog(app: tauri::AppHandle) -> Result<Vec<String>, Stri
 
 #[tracing::instrument(skip(app))]
 #[tauri::command]
-pub async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+pub(crate) async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     let (tx, rx) = oneshot::channel();
 
     app.dialog()
@@ -64,7 +64,7 @@ pub async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Vec<String>, St
 /// - Linux: Falls back to file-only selection since GTK does not support combined mode.
 #[tracing::instrument(skip(app))]
 #[tauri::command]
-pub async fn open_add_music_dialog(
+pub(crate) async fn open_add_music_dialog(
     #[allow(unused_variables)] app: tauri::AppHandle,
 ) -> Result<Vec<String>, String> {
     let paths = open_add_music_dialog_impl(app).await?;

@@ -29,7 +29,7 @@ pub struct FileFingerprint {
 
 impl FileFingerprint {
     /// Create a new fingerprint from file metadata
-    pub fn from_path(path: &Path) -> ScanResult<Self> {
+    pub(crate) fn from_path(path: &Path) -> ScanResult<Self> {
         let metadata = fs::metadata(path)?;
 
         let mtime_ns = metadata
@@ -54,7 +54,7 @@ impl FileFingerprint {
     }
 
     /// Create a fingerprint from database values
-    pub fn from_db(mtime_ns: Option<i64>, size: i64) -> Self {
+    pub(crate) fn from_db(mtime_ns: Option<i64>, size: i64) -> Self {
         FileFingerprint {
             mtime_ns,
             size,
@@ -63,7 +63,7 @@ impl FileFingerprint {
     }
 
     /// Create a fingerprint from database values including inode
-    pub fn from_db_with_inode(mtime_ns: Option<i64>, size: i64, inode: Option<u64>) -> Self {
+    pub(crate) fn from_db_with_inode(mtime_ns: Option<i64>, size: i64, inode: Option<u64>) -> Self {
         FileFingerprint {
             mtime_ns,
             size,
@@ -72,7 +72,7 @@ impl FileFingerprint {
     }
 
     /// Check if this fingerprint matches another (ignores inode)
-    pub fn matches(&self, other: &FileFingerprint) -> bool {
+    pub(crate) fn matches(&self, other: &FileFingerprint) -> bool {
         self.mtime_ns == other.mtime_ns && self.size == other.size
     }
 }
@@ -91,7 +91,7 @@ const HASH_CHUNK_SIZE: u64 = 64 * 1024;
 /// to be different files.
 ///
 /// Returns a hex-encoded SHA256 hash prefixed with "sha256:".
-pub fn compute_content_hash(path: &Path) -> std::io::Result<String> {
+pub(crate) fn compute_content_hash(path: &Path) -> std::io::Result<String> {
     let mut file = File::open(path)?;
     let file_size = file.metadata()?.len();
 

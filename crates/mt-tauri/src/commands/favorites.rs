@@ -97,7 +97,7 @@ fn sync_lastfm_love(db: &Database, artist: String, title: String, love: bool) {
 /// Get favorited tracks (Liked Songs) with pagination
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn favorites_get(
+pub(crate) fn favorites_get(
     db: State<'_, Database>,
     limit: Option<i64>,
     offset: Option<i64>,
@@ -120,7 +120,7 @@ pub fn favorites_get(
 /// Check if a track is favorited
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn favorites_check(
+pub(crate) fn favorites_check(
     db: State<'_, Database>,
     track_id: i64,
 ) -> Result<FavoriteCheckResponse, String> {
@@ -137,7 +137,7 @@ pub fn favorites_check(
 /// Add a track to favorites
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn favorites_add(
+pub(crate) fn favorites_add(
     app: AppHandle,
     db: State<'_, Database>,
     track_id: i64,
@@ -172,7 +172,7 @@ pub fn favorites_add(
 /// Remove a track from favorites
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn favorites_remove(
+pub(crate) fn favorites_remove(
     app: AppHandle,
     db: State<'_, Database>,
     track_id: i64,
@@ -204,7 +204,7 @@ pub fn favorites_remove(
 /// Get top 25 most played tracks
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn favorites_get_top25(db: State<'_, Database>) -> Result<TracksResponse, String> {
+pub(crate) fn favorites_get_top25(db: State<'_, Database>) -> Result<TracksResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     let tracks = favorites::get_top_25(&conn).map_err(|e| e.to_string())?;
 
@@ -214,7 +214,7 @@ pub fn favorites_get_top25(db: State<'_, Database>) -> Result<TracksResponse, St
 /// Get tracks played within the last N days
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn favorites_get_recently_played(
+pub(crate) fn favorites_get_recently_played(
     db: State<'_, Database>,
     days: Option<i64>,
     limit: Option<i64>,
@@ -231,7 +231,7 @@ pub fn favorites_get_recently_played(
 /// Get tracks added within the last N days
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn favorites_get_recently_added(
+pub(crate) fn favorites_get_recently_added(
     db: State<'_, Database>,
     days: Option<i64>,
     limit: Option<i64>,

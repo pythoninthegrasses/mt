@@ -43,7 +43,7 @@ pub struct Artwork {
 }
 
 /// Extract embedded artwork from an audio file
-pub fn get_embedded_artwork(filepath: &str) -> Option<Artwork> {
+pub(crate) fn get_embedded_artwork(filepath: &str) -> Option<Artwork> {
     let path = Path::new(filepath);
 
     let tagged_file = Probe::open(path).ok()?.read().ok()?;
@@ -80,7 +80,7 @@ pub fn get_embedded_artwork(filepath: &str) -> Option<Artwork> {
 }
 
 /// Find folder-based artwork in the same directory as the audio file
-pub fn get_folder_artwork(filepath: &str) -> Option<Artwork> {
+pub(crate) fn get_folder_artwork(filepath: &str) -> Option<Artwork> {
     let path = Path::new(filepath);
     let folder = path.parent()?;
 
@@ -147,7 +147,7 @@ pub fn get_folder_artwork(filepath: &str) -> Option<Artwork> {
 }
 
 /// Get artwork for an audio file, trying embedded first then folder-based
-pub fn get_artwork(filepath: &str) -> Option<Artwork> {
+pub(crate) fn get_artwork(filepath: &str) -> Option<Artwork> {
     // Try embedded artwork first
     if let Some(artwork) = get_embedded_artwork(filepath) {
         return Some(artwork);
@@ -158,7 +158,7 @@ pub fn get_artwork(filepath: &str) -> Option<Artwork> {
 }
 
 /// Get artwork data URL for use in HTML/CSS
-pub fn get_artwork_data_url(filepath: &str) -> Option<String> {
+pub(crate) fn get_artwork_data_url(filepath: &str) -> Option<String> {
     let artwork = get_artwork(filepath)?;
     Some(format!(
         "data:{};base64,{}",

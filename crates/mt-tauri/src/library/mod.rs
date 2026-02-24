@@ -3,6 +3,6 @@
 //! Provides Tauri commands for library browsing and management,
 //! replacing the Python FastAPI library routes.
 
-pub mod commands;
+pub(crate) mod commands;
 
-pub use commands::*;
+pub(crate) use commands::*;

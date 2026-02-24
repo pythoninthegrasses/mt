@@ -63,7 +63,7 @@ impl LibraryQuery {
 }
 
 /// Get tracks from the library with filtering and pagination
-pub fn get_all_tracks(conn: &Connection, query: &LibraryQuery) -> DbResult<PaginatedResult<Track>> {
+pub(crate) fn get_all_tracks(conn: &Connection, query: &LibraryQuery) -> DbResult<PaginatedResult<Track>> {
     let mut conditions = Vec::new();
     let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
@@ -137,7 +137,7 @@ pub fn get_all_tracks(conn: &Connection, query: &LibraryQuery) -> DbResult<Pagin
 ///
 /// Uses exact case-insensitive matching on title AND (artist OR album_artist).
 /// Returns all matches (e.g. same song on different albums) for disambiguation.
-pub fn find_tracks_by_artist_title(
+pub(crate) fn find_tracks_by_artist_title(
     conn: &Connection,
     artist: &str,
     title: &str,
@@ -164,7 +164,7 @@ pub fn find_tracks_by_artist_title(
 ///
 /// Convenience wrapper around `find_tracks_by_artist_title` that returns the
 /// first match. Use `find_tracks_by_artist_title` when disambiguation is needed.
-pub fn find_track_by_artist_title(
+pub(crate) fn find_track_by_artist_title(
     conn: &Connection,
     artist: &str,
     title: &str,
@@ -174,7 +174,7 @@ pub fn find_track_by_artist_title(
 }
 
 /// Get a single track by ID
-pub fn get_track_by_id(conn: &Connection, track_id: i64) -> DbResult<Option<Track>> {
+pub(crate) fn get_track_by_id(conn: &Connection, track_id: i64) -> DbResult<Option<Track>> {
     let mut stmt = conn.prepare(
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
@@ -192,7 +192,7 @@ pub fn get_track_by_id(conn: &Connection, track_id: i64) -> DbResult<Option<Trac
 }
 
 /// Get a track by filepath
-pub fn get_track_by_filepath(conn: &Connection, filepath: &str) -> DbResult<Option<Track>> {
+pub(crate) fn get_track_by_filepath(conn: &Connection, filepath: &str) -> DbResult<Option<Track>> {
     let mut stmt = conn.prepare(
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
@@ -210,7 +210,7 @@ pub fn get_track_by_filepath(conn: &Connection, filepath: &str) -> DbResult<Opti
 }
 
 /// Check which filepaths already exist in the library
-pub fn get_existing_filepaths(
+pub(crate) fn get_existing_filepaths(
     conn: &Connection,
     filepaths: &[String],
 ) -> DbResult<HashSet<String>> {
@@ -239,7 +239,7 @@ pub fn get_existing_filepaths(
 }
 
 /// Get fingerprints for all tracks (filepath, mtime, size)
-pub fn get_all_fingerprints(conn: &Connection) -> DbResult<HashMap<String, FileFingerprint>> {
+pub(crate) fn get_all_fingerprints(conn: &Connection) -> DbResult<HashMap<String, FileFingerprint>> {
     let mut stmt = conn.prepare("SELECT filepath, file_mtime_ns, file_size FROM library")?;
 
     let fingerprints: HashMap<String, FileFingerprint> = stmt
@@ -258,7 +258,7 @@ pub fn get_all_fingerprints(conn: &Connection) -> DbResult<HashMap<String, FileF
 }
 
 /// Add a track to the library
-pub fn add_track(conn: &Connection, filepath: &str, metadata: &TrackMetadata) -> DbResult<i64> {
+pub(crate) fn add_track(conn: &Connection, filepath: &str, metadata: &TrackMetadata) -> DbResult<i64> {
     conn.execute(
         "INSERT INTO library
          (filepath, title, artist, album, album_artist,
@@ -289,7 +289,7 @@ pub fn add_track(conn: &Connection, filepath: &str, metadata: &TrackMetadata) ->
 }
 
 /// Add multiple tracks in a single transaction
-pub fn add_tracks_bulk(conn: &Connection, tracks: &[(String, TrackMetadata)]) -> DbResult<i64> {
+pub(crate) fn add_tracks_bulk(conn: &Connection, tracks: &[(String, TrackMetadata)]) -> DbResult<i64> {
     if tracks.is_empty() {
         return Ok(0);
     }
@@ -332,7 +332,7 @@ pub fn add_tracks_bulk(conn: &Connection, tracks: &[(String, TrackMetadata)]) ->
 ///
 /// Returns a Vec of track IDs for the given filepaths (in the same order).
 /// Missing filepaths are skipped.
-pub fn get_track_ids_by_filepaths(conn: &Connection, filepaths: &[String]) -> DbResult<Vec<i64>> {
+pub(crate) fn get_track_ids_by_filepaths(conn: &Connection, filepaths: &[String]) -> DbResult<Vec<i64>> {
     if filepaths.is_empty() {
         return Ok(vec![]);
     }
@@ -355,7 +355,7 @@ pub fn get_track_ids_by_filepaths(conn: &Connection, filepaths: &[String]) -> Db
 }
 
 /// Update multiple tracks in a single transaction
-pub fn update_tracks_bulk(conn: &Connection, tracks: &[(String, TrackMetadata)]) -> DbResult<i64> {
+pub(crate) fn update_tracks_bulk(conn: &Connection, tracks: &[(String, TrackMetadata)]) -> DbResult<i64> {
     if tracks.is_empty() {
         return Ok(0);
     }
@@ -403,7 +403,7 @@ pub fn update_tracks_bulk(conn: &Connection, tracks: &[(String, TrackMetadata)])
 }
 
 /// Delete multiple tracks by filepath
-pub fn delete_tracks_bulk(conn: &Connection, filepaths: &[String]) -> DbResult<i64> {
+pub(crate) fn delete_tracks_bulk(conn: &Connection, filepaths: &[String]) -> DbResult<i64> {
     if filepaths.is_empty() {
         return Ok(0);
     }
@@ -438,7 +438,7 @@ pub fn delete_tracks_bulk(conn: &Connection, filepaths: &[String]) -> DbResult<i
 }
 
 /// Delete a track by ID
-pub fn delete_track(conn: &Connection, track_id: i64) -> DbResult<bool> {
+pub(crate) fn delete_track(conn: &Connection, track_id: i64) -> DbResult<bool> {
     conn.execute("DELETE FROM favorites WHERE track_id = ?", [track_id])?;
     conn.execute("DELETE FROM playlist_items WHERE track_id = ?", [track_id])?;
     let deleted = conn.execute("DELETE FROM library WHERE id = ?", [track_id])?;
@@ -446,7 +446,7 @@ pub fn delete_track(conn: &Connection, track_id: i64) -> DbResult<bool> {
 }
 
 /// Hard-delete all tracks marked as missing, including their favorites and playlist_items.
-pub fn delete_missing_tracks(conn: &Connection) -> DbResult<usize> {
+pub(crate) fn delete_missing_tracks(conn: &Connection) -> DbResult<usize> {
     conn.execute(
         "DELETE FROM favorites WHERE track_id IN (SELECT id FROM library WHERE missing = 1)",
         [],
@@ -461,7 +461,7 @@ pub fn delete_missing_tracks(conn: &Connection) -> DbResult<usize> {
 
 /// Delete multiple tracks by ID, including their favorites and playlist_items.
 /// Returns the number of library rows deleted.
-pub fn delete_tracks_by_ids(conn: &Connection, track_ids: &[i64]) -> DbResult<usize> {
+pub(crate) fn delete_tracks_by_ids(conn: &Connection, track_ids: &[i64]) -> DbResult<usize> {
     if track_ids.is_empty() {
         return Ok(0);
     }
@@ -488,7 +488,7 @@ pub fn delete_tracks_by_ids(conn: &Connection, track_ids: &[i64]) -> DbResult<us
 
 /// Delete ALL tracks from the library, including their favorites and playlist_items.
 /// Returns the number of library rows deleted.
-pub fn delete_all_tracks(conn: &Connection) -> DbResult<usize> {
+pub(crate) fn delete_all_tracks(conn: &Connection) -> DbResult<usize> {
     conn.execute("DELETE FROM favorites", [])?;
     conn.execute("DELETE FROM playlist_items", [])?;
     let deleted = conn.execute("DELETE FROM library", [])?;
@@ -496,7 +496,7 @@ pub fn delete_all_tracks(conn: &Connection) -> DbResult<usize> {
 }
 
 /// Update track metadata by ID
-pub fn update_track_metadata(
+pub(crate) fn update_track_metadata(
     conn: &Connection,
     track_id: i64,
     metadata: &TrackMetadata,
@@ -539,7 +539,7 @@ pub fn update_track_metadata(
 }
 
 /// Increment play count for a track
-pub fn update_play_count(conn: &Connection, track_id: i64) -> DbResult<Option<Track>> {
+pub(crate) fn update_play_count(conn: &Connection, track_id: i64) -> DbResult<Option<Track>> {
     conn.execute(
         "UPDATE library SET
             play_count = play_count + 1,
@@ -552,7 +552,7 @@ pub fn update_play_count(conn: &Connection, track_id: i64) -> DbResult<Option<Tr
 }
 
 /// Get library statistics
-pub fn get_library_stats(conn: &Connection) -> DbResult<LibraryStats> {
+pub(crate) fn get_library_stats(conn: &Connection) -> DbResult<LibraryStats> {
     // Only count non-missing tracks
     let total_tracks: i64 = conn.query_row(
         "SELECT COUNT(*) FROM library WHERE (missing = 0 OR missing IS NULL)",
@@ -595,7 +595,7 @@ pub fn get_library_stats(conn: &Connection) -> DbResult<LibraryStats> {
 }
 
 /// Update file sizes for tracks with file_size = 0
-pub fn update_file_sizes(conn: &Connection) -> DbResult<i64> {
+pub(crate) fn update_file_sizes(conn: &Connection) -> DbResult<i64> {
     let mut stmt =
         conn.prepare("SELECT id, filepath FROM library WHERE file_size = 0 OR file_size IS NULL")?;
 
@@ -617,13 +617,13 @@ pub fn update_file_sizes(conn: &Connection) -> DbResult<i64> {
 }
 
 /// Mark a track as missing by ID
-pub fn mark_track_missing(conn: &Connection, track_id: i64) -> DbResult<bool> {
+pub(crate) fn mark_track_missing(conn: &Connection, track_id: i64) -> DbResult<bool> {
     let updated = conn.execute("UPDATE library SET missing = 1 WHERE id = ?", [track_id])?;
     Ok(updated > 0)
 }
 
 /// Mark a track as missing by filepath
-pub fn mark_track_missing_by_filepath(conn: &Connection, filepath: &str) -> DbResult<bool> {
+pub(crate) fn mark_track_missing_by_filepath(conn: &Connection, filepath: &str) -> DbResult<bool> {
     let updated = conn.execute(
         "UPDATE library SET missing = 1 WHERE filepath = ?",
         [filepath],
@@ -632,7 +632,7 @@ pub fn mark_track_missing_by_filepath(conn: &Connection, filepath: &str) -> DbRe
 }
 
 /// Mark a track as present
-pub fn mark_track_present(conn: &Connection, track_id: i64) -> DbResult<bool> {
+pub(crate) fn mark_track_present(conn: &Connection, track_id: i64) -> DbResult<bool> {
     let updated = conn.execute(
         "UPDATE library SET missing = 0, last_seen_at = strftime('%s','now') WHERE id = ?",
         [track_id],
@@ -641,7 +641,7 @@ pub fn mark_track_present(conn: &Connection, track_id: i64) -> DbResult<bool> {
 }
 
 /// Mark a track as present by filepath (clears missing flag if file reappears)
-pub fn mark_track_present_by_filepath(conn: &Connection, filepath: &str) -> DbResult<bool> {
+pub(crate) fn mark_track_present_by_filepath(conn: &Connection, filepath: &str) -> DbResult<bool> {
     let updated = conn.execute(
         "UPDATE library SET missing = 0, last_seen_at = strftime('%s','now') WHERE filepath = ? AND missing = 1",
         [filepath],
@@ -651,7 +651,7 @@ pub fn mark_track_present_by_filepath(conn: &Connection, filepath: &str) -> DbRe
 
 /// Mark multiple tracks as present by their filepaths (batch operation)
 /// Returns the number of tracks that were updated
-pub fn mark_tracks_present_by_filepaths(
+pub(crate) fn mark_tracks_present_by_filepaths(
     conn: &Connection,
     filepaths: &[String],
 ) -> DbResult<usize> {
@@ -676,7 +676,7 @@ pub fn mark_tracks_present_by_filepaths(
 }
 
 /// Update track filepath
-pub fn update_track_filepath(conn: &Connection, track_id: i64, new_path: &str) -> DbResult<bool> {
+pub(crate) fn update_track_filepath(conn: &Connection, track_id: i64, new_path: &str) -> DbResult<bool> {
     let updated = conn.execute(
         "UPDATE library SET filepath = ?, missing = 0, last_seen_at = strftime('%s','now') WHERE id = ?",
         params![new_path, track_id],
@@ -687,7 +687,7 @@ pub fn update_track_filepath(conn: &Connection, track_id: i64, new_path: &str) -
 /// Get fingerprints (filepath, mtime, size) for tracks under the given paths.
 /// Scopes the query at SQL level instead of fetching all tracks and filtering in memory.
 /// Each path matches either as an exact filepath or as a directory prefix (path/).
-pub fn get_fingerprints_for_paths(
+pub(crate) fn get_fingerprints_for_paths(
     conn: &Connection,
     scan_paths: &[String],
 ) -> DbResult<Vec<(String, Option<i64>, i64)>> {
@@ -728,7 +728,7 @@ pub fn get_fingerprints_for_paths(
 }
 
 /// Get all missing tracks
-pub fn get_missing_tracks(conn: &Connection) -> DbResult<Vec<Track>> {
+pub(crate) fn get_missing_tracks(conn: &Connection) -> DbResult<Vec<Track>> {
     let mut stmt = conn.prepare(
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
@@ -746,7 +746,7 @@ pub fn get_missing_tracks(conn: &Connection) -> DbResult<Vec<Track>> {
 }
 
 /// Check and update track status based on file existence
-pub fn check_and_update_track_status(conn: &Connection, track_id: i64) -> DbResult<Option<Track>> {
+pub(crate) fn check_and_update_track_status(conn: &Connection, track_id: i64) -> DbResult<Option<Track>> {
     let track = get_track_by_id(conn, track_id)?;
 
     if let Some(ref t) = track {
@@ -761,7 +761,7 @@ pub fn check_and_update_track_status(conn: &Connection, track_id: i64) -> DbResu
     get_track_by_id(conn, track_id)
 }
 
-pub fn find_missing_track_by_inode(conn: &Connection, inode: u64) -> DbResult<Option<Track>> {
+pub(crate) fn find_missing_track_by_inode(conn: &Connection, inode: u64) -> DbResult<Option<Track>> {
     let mut stmt = conn.prepare(
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
@@ -778,7 +778,7 @@ pub fn find_missing_track_by_inode(conn: &Connection, inode: u64) -> DbResult<Op
     }
 }
 
-pub fn find_missing_track_by_content_hash(
+pub(crate) fn find_missing_track_by_content_hash(
     conn: &Connection,
     content_hash: &str,
 ) -> DbResult<Option<Track>> {
@@ -798,7 +798,7 @@ pub fn find_missing_track_by_content_hash(
     }
 }
 
-pub fn reconcile_moved_track(
+pub(crate) fn reconcile_moved_track(
     conn: &Connection,
     track_id: i64,
     new_filepath: &str,
@@ -825,7 +825,7 @@ pub struct TrackForBackfill {
 }
 
 /// Get tracks that need fingerprint backfill (missing inode or content_hash)
-pub fn get_tracks_needing_fingerprints(conn: &Connection) -> DbResult<Vec<TrackForBackfill>> {
+pub(crate) fn get_tracks_needing_fingerprints(conn: &Connection) -> DbResult<Vec<TrackForBackfill>> {
     let mut stmt = conn.prepare(
         "SELECT id, filepath FROM library
          WHERE (file_inode IS NULL OR content_hash IS NULL) AND missing = 0",
@@ -845,7 +845,7 @@ pub fn get_tracks_needing_fingerprints(conn: &Connection) -> DbResult<Vec<TrackF
 }
 
 /// Update a track's fingerprint (inode and content_hash)
-pub fn update_track_fingerprints(
+pub(crate) fn update_track_fingerprints(
     conn: &Connection,
     track_id: i64,
     inode: Option<u64>,
@@ -869,7 +869,7 @@ pub struct DuplicateCandidate {
 }
 
 /// Find duplicate tracks by inode (tracks with same inode)
-pub fn find_duplicates_by_inode(conn: &Connection) -> DbResult<Vec<Vec<DuplicateCandidate>>> {
+pub(crate) fn find_duplicates_by_inode(conn: &Connection) -> DbResult<Vec<Vec<DuplicateCandidate>>> {
     // Find inodes that appear more than once
     let mut stmt = conn.prepare(
         "SELECT file_inode FROM library
@@ -914,7 +914,7 @@ pub fn find_duplicates_by_inode(conn: &Connection) -> DbResult<Vec<Vec<Duplicate
 }
 
 /// Find duplicate tracks by content_hash (tracks with same hash)
-pub fn find_duplicates_by_content_hash(
+pub(crate) fn find_duplicates_by_content_hash(
     conn: &Connection,
 ) -> DbResult<Vec<Vec<DuplicateCandidate>>> {
     // Find content hashes that appear more than once
@@ -962,7 +962,7 @@ pub fn find_duplicates_by_content_hash(
 
 /// Merge duplicate tracks: transfer metadata from source to target, then delete source
 /// Preserves: play_count (summed), favorites, playlist memberships
-pub fn merge_duplicate_tracks(conn: &Connection, keep_id: i64, delete_id: i64) -> DbResult<bool> {
+pub(crate) fn merge_duplicate_tracks(conn: &Connection, keep_id: i64, delete_id: i64) -> DbResult<bool> {
     // Sum play counts
     conn.execute(
         "UPDATE library SET play_count = play_count + (

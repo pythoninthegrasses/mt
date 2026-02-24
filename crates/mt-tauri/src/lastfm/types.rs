@@ -202,7 +202,7 @@ pub struct LovedDate {
 
 impl LovedDate {
     /// Get the Unix timestamp as i64
-    pub fn timestamp(&self) -> Option<i64> {
+    pub(crate) fn timestamp(&self) -> Option<i64> {
         self.uts.parse().ok()
     }
 }
@@ -215,7 +215,7 @@ pub enum ArtistInfo {
 }
 
 impl ArtistInfo {
-    pub fn name(&self) -> &str {
+    pub(crate) fn name(&self) -> &str {
         match self {
             ArtistInfo::Simple(name) => name,
             ArtistInfo::Detailed { name } => name,

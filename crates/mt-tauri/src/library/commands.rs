@@ -34,7 +34,7 @@ pub struct MissingTracksResponse {
 #[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn library_get_all(
+pub(crate) fn library_get_all(
     db: State<'_, Database>,
     search: Option<String>,
     artist: Option<String>,
@@ -94,7 +94,7 @@ pub fn library_get_all(
 /// Get library statistics
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn library_get_stats(db: State<'_, Database>) -> Result<LibraryStats, String> {
+pub(crate) fn library_get_stats(db: State<'_, Database>) -> Result<LibraryStats, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     library::get_library_stats(&conn).map_err(|e| e.to_string())
 }
@@ -102,7 +102,7 @@ pub fn library_get_stats(db: State<'_, Database>) -> Result<LibraryStats, String
 /// Get a single track by ID
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn library_get_track(db: State<'_, Database>, track_id: i64) -> Result<Option<Track>, String> {
+pub(crate) fn library_get_track(db: State<'_, Database>, track_id: i64) -> Result<Option<Track>, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     library::get_track_by_id(&conn, track_id).map_err(|e| e.to_string())
 }
@@ -110,7 +110,7 @@ pub fn library_get_track(db: State<'_, Database>, track_id: i64) -> Result<Optio
 /// Get artwork for a track by ID (uses LRU cache)
 #[tracing::instrument(skip(db, cache))]
 #[tauri::command]
-pub fn library_get_artwork(
+pub(crate) fn library_get_artwork(
     db: State<'_, Database>,
     cache: State<'_, ArtworkCache>,
     track_id: i64,
@@ -128,7 +128,7 @@ pub fn library_get_artwork(
 /// Get artwork data URL for a track by ID (for use in img src, uses LRU cache)
 #[tracing::instrument(skip(db, cache))]
 #[tauri::command]
-pub fn library_get_artwork_url(
+pub(crate) fn library_get_artwork_url(
     db: State<'_, Database>,
     cache: State<'_, ArtworkCache>,
     track_id: i64,
@@ -149,7 +149,7 @@ pub fn library_get_artwork_url(
 /// Delete a track from the library
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn library_delete_track(
+pub(crate) fn library_delete_track(
     app: AppHandle,
     db: State<'_, Database>,
     track_id: i64,
@@ -169,7 +169,7 @@ pub fn library_delete_track(
 /// Purge all tracks marked as missing from the database
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn library_purge_missing(app: AppHandle, db: State<'_, Database>) -> Result<usize, String> {
+pub(crate) fn library_purge_missing(app: AppHandle, db: State<'_, Database>) -> Result<usize, String> {
     let start = std::time::Instant::now();
     let deleted = db
         .transaction(library::delete_missing_tracks)
@@ -185,7 +185,7 @@ pub fn library_purge_missing(app: AppHandle, db: State<'_, Database>) -> Result<
 /// Delete multiple tracks by ID in a single transaction
 #[tracing::instrument(skip(app, db, track_ids))]
 #[tauri::command]
-pub fn library_delete_tracks(
+pub(crate) fn library_delete_tracks(
     app: AppHandle,
     db: State<'_, Database>,
     track_ids: Vec<i64>,
@@ -205,7 +205,7 @@ pub fn library_delete_tracks(
 /// Delete ALL tracks from the library (favorites, playlist_items, library rows)
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn library_delete_all(app: AppHandle, db: State<'_, Database>) -> Result<usize, String> {
+pub(crate) fn library_delete_all(app: AppHandle, db: State<'_, Database>) -> Result<usize, String> {
     let start = std::time::Instant::now();
     let deleted = db
         .transaction(library::delete_all_tracks)
@@ -221,7 +221,7 @@ pub fn library_delete_all(app: AppHandle, db: State<'_, Database>) -> Result<usi
 /// Rescan a track's metadata from its file
 #[tracing::instrument(skip(app, db, cache))]
 #[tauri::command]
-pub fn library_rescan_track(
+pub(crate) fn library_rescan_track(
     app: AppHandle,
     db: State<'_, Database>,
     cache: State<'_, ArtworkCache>,
@@ -276,7 +276,7 @@ pub fn library_rescan_track(
 /// Increment play count for a track
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn library_update_play_count(
+pub(crate) fn library_update_play_count(
     app: AppHandle,
     db: State<'_, Database>,
     track_id: i64,
@@ -296,7 +296,7 @@ pub fn library_update_play_count(
 /// Get all tracks marked as missing
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn library_get_missing(db: State<'_, Database>) -> Result<MissingTracksResponse, String> {
+pub(crate) fn library_get_missing(db: State<'_, Database>) -> Result<MissingTracksResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
 
     let tracks = library::get_missing_tracks(&conn).map_err(|e| e.to_string())?;
@@ -310,7 +310,7 @@ pub fn library_get_missing(db: State<'_, Database>) -> Result<MissingTracksRespo
 /// and the original track's path is updated (preserving play history, favorites, etc.)
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn library_locate_track(
+pub(crate) fn library_locate_track(
     app: AppHandle,
     db: State<'_, Database>,
     track_id: i64,
@@ -371,7 +371,7 @@ pub fn library_locate_track(
 /// Check if a track's file exists and update its missing status
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn library_check_status(
+pub(crate) fn library_check_status(
     app: AppHandle,
     db: State<'_, Database>,
     track_id: i64,
@@ -391,7 +391,7 @@ pub fn library_check_status(
 /// Manually mark a track as missing
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn library_mark_missing(
+pub(crate) fn library_mark_missing(
     app: AppHandle,
     db: State<'_, Database>,
     track_id: i64,
@@ -417,7 +417,7 @@ pub fn library_mark_missing(
 /// Manually mark a track as present (not missing)
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn library_mark_present(
+pub(crate) fn library_mark_present(
     app: AppHandle,
     db: State<'_, Database>,
     track_id: i64,
@@ -449,7 +449,7 @@ pub struct ReconcileScanResult {
 
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub async fn library_reconcile_scan(
+pub(crate) async fn library_reconcile_scan(
     app: AppHandle,
     db: State<'_, Database>,
 ) -> Result<ReconcileScanResult, String> {

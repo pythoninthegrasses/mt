@@ -33,7 +33,7 @@ fn parse_threshold(value: Option<String>, default: u8) -> u8 {
 /// Get Last.fm settings
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn lastfm_get_settings(db: State<Database>) -> Result<LastfmSettings, String> {
+pub(crate) fn lastfm_get_settings(db: State<Database>) -> Result<LastfmSettings, String> {
     let client = LastFmClient::new();
 
     db.with_conn(|conn| {
@@ -59,7 +59,7 @@ pub fn lastfm_get_settings(db: State<Database>) -> Result<LastfmSettings, String
 /// Update Last.fm settings
 #[tracing::instrument(skip(db, settings_update))]
 #[tauri::command]
-pub fn lastfm_update_settings(
+pub(crate) fn lastfm_update_settings(
     db: State<Database>,
     settings_update: LastfmSettingsUpdate,
 ) -> Result<serde_json::Value, String> {
@@ -92,7 +92,7 @@ pub fn lastfm_update_settings(
 /// Get Last.fm authentication URL and token
 #[tracing::instrument(skip(app))]
 #[tauri::command]
-pub async fn lastfm_get_auth_url(app: AppHandle) -> Result<AuthUrlResponse, String> {
+pub(crate) async fn lastfm_get_auth_url(app: AppHandle) -> Result<AuthUrlResponse, String> {
     let client = LastFmClient::new();
 
     if !client.is_configured() {
@@ -117,7 +117,7 @@ pub async fn lastfm_get_auth_url(app: AppHandle) -> Result<AuthUrlResponse, Stri
 /// Complete Last.fm authentication with token
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub async fn lastfm_auth_callback(
+pub(crate) async fn lastfm_auth_callback(
     app: AppHandle,
     db: State<'_, Database>,
     token: String,
@@ -163,7 +163,7 @@ pub async fn lastfm_auth_callback(
 /// Disconnect from Last.fm
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub fn lastfm_disconnect(
+pub(crate) fn lastfm_disconnect(
     app: AppHandle,
     db: State<Database>,
 ) -> Result<DisconnectResponse, String> {
@@ -215,7 +215,7 @@ fn should_scrobble(duration: f64, played_time: f64, threshold_percent: u8) -> bo
 /// Update "Now Playing" status on Last.fm
 #[tracing::instrument(skip(db, request))]
 #[tauri::command]
-pub async fn lastfm_now_playing(
+pub(crate) async fn lastfm_now_playing(
     db: State<'_, Database>,
     request: NowPlayingRequest,
 ) -> Result<serde_json::Value, String> {
@@ -271,7 +271,7 @@ pub async fn lastfm_now_playing(
 /// Scrobble a track to Last.fm
 #[tracing::instrument(skip(app, db, request))]
 #[tauri::command]
-pub async fn lastfm_scrobble(
+pub(crate) async fn lastfm_scrobble(
     app: AppHandle,
     db: State<'_, Database>,
     request: ScrobbleRequest,
@@ -468,7 +468,7 @@ pub(crate) fn scrobble_from_audio_thread(
 /// Get status of scrobble queue
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn lastfm_queue_status(db: State<Database>) -> Result<QueueStatusResponse, String> {
+pub(crate) fn lastfm_queue_status(db: State<Database>) -> Result<QueueStatusResponse, String> {
     let queued_scrobbles = db
         .with_conn(|conn| scrobble::get_queued_scrobbles(conn, 1000))
         .map_err(|e: crate::db::DbError| format!("Failed to get queue status: {}", e))?;
@@ -481,7 +481,7 @@ pub fn lastfm_queue_status(db: State<Database>) -> Result<QueueStatusResponse, S
 /// Manually retry queued scrobbles
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub async fn lastfm_queue_retry(
+pub(crate) async fn lastfm_queue_retry(
     app: AppHandle,
     db: State<'_, Database>,
 ) -> Result<QueueRetryResponse, String> {
@@ -613,7 +613,7 @@ pub async fn lastfm_queue_retry(
 /// Import loved tracks from Last.fm and add them to favorites
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub async fn lastfm_import_loved_tracks(
+pub(crate) async fn lastfm_import_loved_tracks(
     db: State<'_, Database>,
 ) -> Result<ImportLovedTracksResponse, String> {
     let start = std::time::Instant::now();
@@ -779,7 +779,7 @@ pub async fn lastfm_import_loved_tracks(
 /// or add to favorites - use `lastfm_match_loved_tracks` for that.
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub async fn lastfm_cache_loved_tracks(
+pub(crate) async fn lastfm_cache_loved_tracks(
     db: State<'_, Database>,
     incremental: Option<bool>,
 ) -> Result<CacheLovedTracksResponse, String> {
@@ -909,7 +909,7 @@ pub async fn lastfm_cache_loved_tracks(
 ///
 /// Extracted so it can be called from both the Tauri command and from
 /// background tasks without going through the command system.
-pub async fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksResponse, String> {
+pub(crate) async fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksResponse, String> {
     // Get all unmatched loved tracks from cache
     let unmatched = db
         .with_conn(|conn| lastfm_loved::get_unmatched_loved_tracks(conn, None))
@@ -1028,7 +1028,7 @@ pub async fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksRe
 /// Runs on a blocking thread to avoid freezing the UI.
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub async fn lastfm_match_loved_tracks(
+pub(crate) async fn lastfm_match_loved_tracks(
     db: State<'_, Database>,
 ) -> Result<MatchLovedTracksResponse, String> {
     let start = std::time::Instant::now();
@@ -1043,7 +1043,7 @@ pub async fn lastfm_match_loved_tracks(
 /// Get statistics about cached loved tracks
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn lastfm_loved_stats(db: State<Database>) -> Result<LovedTracksStatsResponse, String> {
+pub(crate) fn lastfm_loved_stats(db: State<Database>) -> Result<LovedTracksStatsResponse, String> {
     let stats = db
         .with_conn(lastfm_loved::get_loved_stats)
         .map_err(|e| format!("Failed to get loved stats: {}", e))?;
@@ -1067,7 +1067,7 @@ pub fn lastfm_loved_stats(db: State<Database>) -> Result<LovedTracksStatsRespons
 /// tracks are not affected.
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub fn lastfm_reset_loved_cache(db: State<Database>) -> Result<ResetLovedCacheResponse, String> {
+pub(crate) fn lastfm_reset_loved_cache(db: State<Database>) -> Result<ResetLovedCacheResponse, String> {
     let (cleared, unfavorited) = db
         .with_conn(|conn| {
             // Get tracks auto-favorited by Last.fm sync before clearing
@@ -1110,7 +1110,7 @@ pub fn lastfm_reset_loved_cache(db: State<Database>) -> Result<ResetLovedCacheRe
 ///
 /// This is called internally after scanner adds new tracks to automatically
 /// favorite tracks that match the loved tracks cache.
-pub fn match_new_tracks_against_loved(
+pub(crate) fn match_new_tracks_against_loved(
     conn: &rusqlite::Connection,
     new_track_ids: &[i64],
 ) -> Result<usize, String> {

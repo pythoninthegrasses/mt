@@ -21,7 +21,7 @@ fn get_defaults() -> HashMap<&'static str, JsonValue> {
 }
 
 /// Get all settings as a JSON-like HashMap
-pub fn get_all_settings(conn: &Connection) -> DbResult<HashMap<String, JsonValue>> {
+pub(crate) fn get_all_settings(conn: &Connection) -> DbResult<HashMap<String, JsonValue>> {
     let mut stmt = conn.prepare("SELECT key, value FROM settings")?;
 
     let mut settings: HashMap<String, JsonValue> = stmt
@@ -58,7 +58,7 @@ pub fn get_all_settings(conn: &Connection) -> DbResult<HashMap<String, JsonValue
 }
 
 /// Get a single setting value
-pub fn get_setting(conn: &Connection, key: &str) -> DbResult<Option<String>> {
+pub(crate) fn get_setting(conn: &Connection, key: &str) -> DbResult<Option<String>> {
     match conn.query_row("SELECT value FROM settings WHERE key = ?", [key], |row| {
         row.get(0)
     }) {
@@ -69,7 +69,7 @@ pub fn get_setting(conn: &Connection, key: &str) -> DbResult<Option<String>> {
 }
 
 /// Set a single setting
-pub fn set_setting(conn: &Connection, key: &str, value: &JsonValue) -> DbResult<()> {
+pub(crate) fn set_setting(conn: &Connection, key: &str, value: &JsonValue) -> DbResult<()> {
     let str_value = match value {
         JsonValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
         JsonValue::Number(n) => n.to_string(),
@@ -87,7 +87,7 @@ pub fn set_setting(conn: &Connection, key: &str, value: &JsonValue) -> DbResult<
 }
 
 /// Update multiple settings at once
-pub fn update_settings(
+pub(crate) fn update_settings(
     conn: &Connection,
     settings: &HashMap<String, JsonValue>,
 ) -> DbResult<Vec<String>> {

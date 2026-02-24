@@ -44,26 +44,6 @@ export function formatBytes(bytes) {
 }
 
 /**
- * Format bitrate as kbps
- * @param {number} bitrate - Bitrate in bits per second
- * @returns {string} Formatted bitrate (e.g., "320 kbps")
- */
-export function formatBitrate(bitrate) {
-  if (!bitrate) return '—';
-  return `${bitrate} kbps`;
-}
-
-/**
- * Format sample rate as Hz
- * @param {number} sampleRate - Sample rate in Hz
- * @returns {string} Formatted sample rate (e.g., "44100 Hz")
- */
-export function formatSampleRate(sampleRate) {
-  if (!sampleRate) return '—';
-  return `${sampleRate} Hz`;
-}
-
-/**
  * Format seconds as M:SS, returning '--:--' for falsy values
  * @param {number} seconds - Duration in seconds
  * @returns {string} Formatted time (e.g., "3:45") or "--:--"

@@ -17,7 +17,7 @@ static LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
 ///
 /// - macOS: `~/Library/Logs/{id}`
 /// - Linux: `$XDG_DATA_HOME/{id}/logs` (falls back to `~/.local/share/{id}/logs`)
-pub fn compute_log_dir(app_identifier: &str) -> PathBuf {
+pub(crate) fn compute_log_dir(app_identifier: &str) -> PathBuf {
     #[cfg(target_os = "macos")]
     {
         dirs::home_dir()
@@ -77,7 +77,7 @@ fn cleanup_old_logs(log_dir: &Path, max_age_days: u64) {
 ///
 /// Returns a [`WorkerGuard`] that **must** be held alive for the lifetime of the
 /// application — dropping it flushes and closes the file appender.
-pub fn init_tracing(log_dir: &Path) -> WorkerGuard {
+pub(crate) fn init_tracing(log_dir: &Path) -> WorkerGuard {
     std::fs::create_dir_all(log_dir).expect("failed to create log directory");
 
     // Clean up log files older than 3 days
@@ -128,12 +128,12 @@ pub fn init_tracing(log_dir: &Path) -> WorkerGuard {
 /// Accessor for the resolved log directory.
 ///
 /// Returns `None` if [`init_tracing`] has not been called yet.
-pub fn log_dir_path() -> Option<&'static Path> {
+pub(crate) fn log_dir_path() -> Option<&'static Path> {
     LOG_DIR.get().map(|p| p.as_path())
 }
 
 /// Log a warning if an IPC command took longer than 500 ms.
-pub fn log_slow_command(name: &str, start: Instant) {
+pub(crate) fn log_slow_command(name: &str, start: Instant) {
     let elapsed = start.elapsed();
     if elapsed > std::time::Duration::from_millis(500) {
         tracing::warn!(
