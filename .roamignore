@@ -1,1 +1,7 @@
 **/gen/schemas/**
+
+# Exclude specific test files that create false cross-language dependency cycles
+# in roam's symbol resolution (common JS variable names like 'tracks', 'state'
+# match Rust struct fields, creating phantom edges)
+app/frontend/tests/browsing-track-sorting.spec.js
+app/frontend/__tests__/context-menu-favorites.test.js

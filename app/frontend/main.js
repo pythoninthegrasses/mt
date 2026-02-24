@@ -19,13 +19,6 @@ installGlobalErrorHandlers();
 // Report Core Web Vitals to backend structured logs
 initWebVitals();
 
-// Register Alpine plugins
-Alpine.plugin(persist);
-Alpine.plugin(intersect);
-Alpine.plugin(focus);
-
-window.Alpine = Alpine;
-
 // Make formatting utilities globally available for HTML templates
 window.formatTime = formatTime;
 window.formatDuration = formatDuration;
@@ -214,6 +207,12 @@ function applyInitialTheme() {
 
 // Initialize application
 async function initApp() {
+  // Register Alpine plugins and expose globally (before any Alpine usage)
+  Alpine.plugin(persist);
+  Alpine.plugin(intersect);
+  Alpine.plugin(focus);
+  window.Alpine = Alpine;
+
   const t = { start: performance.now() };
   window._perfTimings = t;
 
