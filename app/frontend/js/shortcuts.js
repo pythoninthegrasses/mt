@@ -94,86 +94,88 @@ export function initKeyboardShortcuts() {
   document.addEventListener('keydown', handleKeydown);
 }
 
-function handleKeydown(event) {
-  const player = Alpine.store('player');
-  const queue = Alpine.store('queue');
+/**
+ * Handle modifier shortcuts (Cmd/Ctrl+key). Active even in inputs.
+ * @returns {boolean} true if a modifier shortcut was handled
+ */
+function handleModifierShortcut(event, hasMod) {
+  if (!hasMod) return false;
+
   const ui = Alpine.store('ui');
-  const hasMod = event.metaKey || event.ctrlKey;
+  const queue = Alpine.store('queue');
+  const player = Alpine.store('player');
 
-  // --- Modifier shortcuts (always active, even in inputs) ---
-
-  // Cmd/Ctrl+, : Toggle settings
-  if (hasMod && event.key === ',') {
+  if (event.key === ',') {
     event.preventDefault();
     ui.toggleSettings();
-    return;
+    return true;
   }
 
-  // Cmd/Ctrl+F : Focus search
-  if (hasMod && event.code === 'KeyF') {
+  if (event.code === 'KeyF') {
     event.preventDefault();
     const searchInput = document.querySelector('[data-testid="sidebar-search"]');
     if (searchInput) {
       searchInput.focus();
       searchInput.select();
     }
-    return;
+    return true;
   }
 
   // Cmd/Ctrl+D : Queue selected track next (library/playlist only)
-  // Dispatches a custom event handled by the library browser component,
-  // ensuring the method runs in the correct Alpine.js scope.
-  if (hasMod && event.code === 'KeyD') {
+  if (event.code === 'KeyD') {
     event.preventDefault();
     if (isLibraryOrPlaylistView()) {
       window.dispatchEvent(new CustomEvent('mt:queue-next-shortcut'));
     }
-    return;
+    return true;
   }
 
-  // Cmd/Ctrl+Shift+S : Toggle shuffle
-  if (hasMod && event.shiftKey && event.code === 'KeyS') {
+  // Cmd/Ctrl+Shift+S : Toggle shuffle (must check before Cmd+S)
+  if (event.shiftKey && event.code === 'KeyS') {
     event.preventDefault();
     queue.toggleShuffle();
-    return;
+    return true;
   }
 
-  // Cmd/Ctrl+S (without Shift) : Stop after current track (library/playlist only)
-  if (hasMod && !event.shiftKey && event.code === 'KeyS') {
+  // Cmd/Ctrl+S (without Shift) : Stop after current track
+  if (!event.shiftKey && event.code === 'KeyS') {
     event.preventDefault();
     if (isLibraryOrPlaylistView() && !isNowPlayingView()) {
       queue.stopAfterCurrent = !queue.stopAfterCurrent;
       const state = queue.stopAfterCurrent ? 'enabled' : 'disabled';
       ui.toast(`Stop after current track ${state}`, 'info');
     }
-    return;
+    return true;
   }
 
-  // Cmd/Ctrl+Shift+M : Mute/Unmute
-  if (hasMod && event.shiftKey && event.code === 'KeyM') {
+  if (event.shiftKey && event.code === 'KeyM') {
     event.preventDefault();
     player.toggleMute();
-    return;
+    return true;
   }
 
-  // Cmd/Ctrl+L : Cycle loop mode
-  if (hasMod && event.code === 'KeyL') {
+  if (event.code === 'KeyL') {
     event.preventDefault();
     queue.cycleLoop();
-    return;
+    return true;
   }
 
-  // --- Non-modifier shortcuts: suppress when typing in inputs ---
-  if (isTypingInInput(event)) return;
+  return false;
+}
+
+/**
+ * Handle non-modifier shortcuts (suppressed when typing in inputs).
+ */
+function handlePlaybackShortcut(event, hasMod) {
+  const player = Alpine.store('player');
+  const ui = Alpine.store('ui');
 
   switch (event.code) {
-    // Space: Play/Pause
     case 'Space':
       event.preventDefault();
       player.togglePlay();
       break;
 
-    // Arrow Right: Next track / Seek forward
     case 'ArrowRight':
       event.preventDefault();
       if (hasMod) {
@@ -183,7 +185,6 @@ function handleKeydown(event) {
       }
       break;
 
-    // Arrow Left: Previous track / Seek back
     case 'ArrowLeft':
       event.preventDefault();
       if (hasMod) {
@@ -193,19 +194,16 @@ function handleKeydown(event) {
       }
       break;
 
-    // Arrow Up: Volume up
     case 'ArrowUp':
       event.preventDefault();
       player.setVolume(player.volume + VOLUME_STEP);
       break;
 
-    // Arrow Down: Volume down
     case 'ArrowDown':
       event.preventDefault();
       player.setVolume(player.volume - VOLUME_STEP);
       break;
 
-    // Escape: Clear search, close settings, close dialogs
     case 'Escape':
       if (ui.view === 'settings') {
         event.preventDefault();
@@ -214,7 +212,6 @@ function handleKeydown(event) {
         event.preventDefault();
         ui.closeModal();
       } else {
-        // Clear search if active
         const library = Alpine.store('library');
         if (library.searchQuery) {
           library.searchQuery = '';
@@ -226,4 +223,14 @@ function handleKeydown(event) {
     default:
       break;
   }
+}
+
+function handleKeydown(event) {
+  const hasMod = event.metaKey || event.ctrlKey;
+
+  if (handleModifierShortcut(event, hasMod)) return;
+
+  if (isTypingInInput(event)) return;
+
+  handlePlaybackShortcut(event, hasMod);
 }

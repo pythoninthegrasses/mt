@@ -304,6 +304,25 @@ export async function scanPaths(store, paths, recursive = true) {
 }
 
 /**
+ * Show a toast summarizing scan results.
+ */
+function showScanResultToast(ui, result) {
+  if (result.added > 0) {
+    ui.toast(
+      `Added ${result.added} track${result.added === 1 ? '' : 's'} to library`,
+      'success',
+    );
+  } else if (result.skipped > 0) {
+    ui.toast(
+      `All ${result.skipped} track${result.skipped === 1 ? '' : 's'} already in library`,
+      'info',
+    );
+  } else {
+    ui.toast('No audio files found', 'info');
+  }
+}
+
+/**
  * Open native file dialog and scan selected paths.
  * @param {object} store - Library store instance
  * @param {object} Alpine - Alpine.js instance
@@ -321,37 +340,23 @@ export async function openAddMusicDialogOp(store, Alpine) {
 
     console.log('[library] dialog returned paths:', paths);
 
-    if (paths && (Array.isArray(paths) ? paths.length > 0 : paths)) {
-      const pathArray = Array.isArray(paths) ? paths : [paths];
-      const result = await store.scan(pathArray);
-      const ui = Alpine.store('ui');
-      if (result.added > 0) {
-        ui.toast(
-          `Added ${result.added} track${result.added === 1 ? '' : 's'} to library`,
-          'success',
-        );
-      } else if (result.skipped > 0) {
-        ui.toast(
-          `All ${result.skipped} track${result.skipped === 1 ? '' : 's'} already in library`,
-          'info',
-        );
-      } else {
-        ui.toast('No audio files found', 'info');
-      }
-
-      // Prompt to add parent directories to watched folders
-      try {
-        await promptToAddWatchedFolders(pathArray);
-      } catch (error) {
-        console.error('[library] Failed to add watched folders:', error);
-        // Don't block - scan already succeeded
-      }
-
-      return result;
-    } else {
+    if (!paths || (Array.isArray(paths) && paths.length === 0)) {
       console.log('[library] dialog cancelled or no paths selected');
+      return null;
     }
-    return null;
+
+    const pathArray = Array.isArray(paths) ? paths : [paths];
+    const result = await store.scan(pathArray);
+    showScanResultToast(Alpine.store('ui'), result);
+
+    // Prompt to add parent directories to watched folders
+    try {
+      await promptToAddWatchedFolders(pathArray);
+    } catch (error) {
+      console.error('[library] Failed to add watched folders:', error);
+    }
+
+    return result;
   } catch (error) {
     console.error('[library] openAddMusicDialog failed:', error);
     Alpine.store('ui').toast('Failed to add music', 'error');

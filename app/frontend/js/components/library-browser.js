@@ -8,6 +8,7 @@ import { columnSettingsMixin } from '../mixins/column-settings.js';
 import { playlistDragMixin } from '../mixins/playlist-drag.js';
 import { contextMenuActionsMixin } from '../mixins/context-menu-actions.js';
 import { virtualScrollMixin } from '../mixins/virtual-scroll.js';
+import { handleDoubleClickPlay } from '../utils/queue-builder.js';
 
 export function createLibraryBrowser(Alpine) {
   Alpine.data('libraryBrowser', () => ({
@@ -417,84 +418,20 @@ export function createLibraryBrowser(Alpine) {
     },
 
     async handleDoubleClick(track, index) {
-      this.queue._updating = true;
-      // Cancel any in-flight background queue build
-      this._buildQueueGeneration++;
-      const generation = this._buildQueueGeneration;
-      let backgroundBuildStarted = false;
-
-      try {
-        if (this.queue.shuffle) {
-          await this.queue.clear();
-          await this.queue.add(this.library.filteredTracks, false);
-          if (index >= 0 && index < this.queue.items.length) {
-            this.queue.currentIndex = index;
-            this.queue._shuffleItems();
-            await this.queue._syncQueueToBackend();
-            await this.queue.playIndex(0);
-          } else {
-            await this.player.playTrack(track);
-          }
-        } else if (index >= 0 && index < this.library.filteredTracks.length) {
-          backgroundBuildStarted = true;
-
-          // Preserve current track in history before replacing queue
-          if (this.queue.currentIndex >= 0) {
-            this.queue._pushToHistory(this.queue.currentIndex);
-          }
-
-          // Start playback immediately
-          this.queue.items.splice(0, this.queue.items.length, track);
-          this.queue._originalOrder.splice(0, this.queue._originalOrder.length, track);
-          this.queue.currentIndex = 0;
-          this.queue._playNextOffset = 0;
-          await this.player.playTrack(track);
-
-          // Build full queue in background
-          const allTracks = this.library.filteredTracks;
-          const buildQueue = async () => {
-            try {
-              await api.queue.clear();
-              if (this._buildQueueGeneration !== generation) return;
-
-              const subsequent = allTracks.slice(index);
-              const preceding = allTracks.slice(0, index);
-              const fullQueue = [...subsequent, ...preceding];
-
-              if (this._buildQueueGeneration !== generation) return;
-
-              this.queue.items.splice(0, this.queue.items.length, ...fullQueue);
-              this.queue._originalOrder.splice(0, this.queue._originalOrder.length, ...fullQueue);
-              this.queue.currentIndex = 0;
-
-              const trackIds = fullQueue.map((t) => t.id);
-              await api.queue.add(trackIds);
-              if (this._buildQueueGeneration !== generation) return;
-
-              await api.queue.setCurrentIndex(0);
-            } catch (err) {
-              if (this._buildQueueGeneration === generation) {
-                console.error('[library-browser] Failed to build queue:', err);
-              }
-            } finally {
-              if (this._buildQueueGeneration === generation) {
-                setTimeout(() => {
-                  this.queue._updating = false;
-                }, 200);
-              }
+      await handleDoubleClickPlay(
+        this,
+        track,
+        this.library.filteredTracks,
+        index,
+        'library-browser',
+        {
+          beforePlay: () => {
+            if (this.queue.currentIndex >= 0) {
+              this.queue._pushToHistory(this.queue.currentIndex);
             }
-          };
-          buildQueue();
-        } else {
-          await this.player.playTrack(track);
-        }
-      } finally {
-        if (!backgroundBuildStarted) {
-          setTimeout(() => {
-            this.queue._updating = false;
-          }, 200);
-        }
-      }
+          },
+        },
+      );
     },
 
     /**

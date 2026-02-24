@@ -1,5 +1,12 @@
 import { api } from '../api.js';
 import { formatDuration } from '../utils/formatting.js';
+import {
+  buildArtistDisplayNames,
+  buildCanonicalArtistMap,
+  groupTracksIntoAlbums,
+} from '../utils/artist-utils.js';
+import { handleDoubleClickPlay } from '../utils/queue-builder.js';
+import { singleTrackContextMenuMixin } from '../mixins/single-track-context-menu.js';
 
 export function createArtistsBrowser(Alpine) {
   Alpine.data('artistsBrowser', () => ({
@@ -18,6 +25,9 @@ export function createArtistsBrowser(Alpine) {
     submenuOnLeft: false,
     submenuY: 0,
     submenuCloseTimeout: null,
+
+    // Merge context menu mixin
+    ...singleTrackContextMenuMixin(),
 
     init() {
       this._loadPlaylists();
@@ -56,93 +66,18 @@ export function createArtistsBrowser(Alpine) {
       return this.$store.ui;
     },
 
-    /**
-     * Build a map of album → canonical artist. Uses the most common non-null
-     * album_artist per album. Albums where any track has null album_artist
-     * are treated as compilations and excluded, so each track maps to its
-     * own artist independently.
-     */
     get _canonicalArtistMap() {
       const v = this.$store.library._dataVersion;
       if (this._canonicalMapVersion === v) return this._cachedCanonicalMap;
 
-      // Collect album_artist counts per album; flag if any track has null album_artist
-      const albumInfo = new Map();
-      for (const track of this._allTracks) {
-        const album = track.album || '';
-        const aa = (track.album_artist || '').replace(/;+$/, '').trim() || null;
-        if (!albumInfo.has(album)) {
-          albumInfo.set(album, { counts: new Map(), hasNull: false });
-        }
-        const info = albumInfo.get(album);
-        if (!aa) {
-          info.hasNull = true;
-        } else {
-          info.counts.set(aa, (info.counts.get(aa) || 0) + 1);
-        }
-      }
-      // Use most common album_artist; skip albums with any null album_artist
-      const map = new Map();
-      for (const [album, info] of albumInfo) {
-        if (info.hasNull || info.counts.size === 0) continue;
-        let bestArtist = '';
-        let bestCount = 0;
-        for (const [artist, count] of info.counts) {
-          if (count > bestCount) {
-            bestCount = count;
-            bestArtist = artist;
-          }
-        }
-        if (bestArtist) map.set(album, bestArtist);
-      }
+      const map = buildCanonicalArtistMap(this._allTracks);
       this._cachedCanonicalMap = map;
       this._canonicalMapVersion = v;
       return map;
     },
 
-    /**
-     * Case-insensitive dedup: collect all artists (canonical + per-track for
-     * compilations), pick the most-frequent casing as the display name.
-     */
     get _artistDisplayNames() {
-      const canonicalMap = this._canonicalArtistMap;
-      const countMap = new Map();
-
-      const addArtist = (name) => {
-        if (!name) return;
-        const lower = name.toLowerCase();
-        if (!countMap.has(lower)) countMap.set(lower, new Map());
-        const formCounts = countMap.get(lower);
-        formCounts.set(name, (formCounts.get(name) || 0) + 1);
-      };
-
-      // Add canonical artists (from albums with consistent album_artist)
-      for (const canonical of canonicalMap.values()) {
-        addArtist(canonical);
-      }
-
-      // Add per-track artists for compilations (albums not in canonicalMap)
-      for (const track of this._allTracks) {
-        const album = track.album || '';
-        if (!canonicalMap.has(album)) {
-          const artist = (track.album_artist || track.artist || '').replace(/;+$/, '').trim();
-          addArtist(artist);
-        }
-      }
-
-      const displayMap = new Map();
-      for (const [lower, formCounts] of countMap) {
-        let bestForm = '';
-        let bestCount = 0;
-        for (const [form, count] of formCounts) {
-          if (count > bestCount) {
-            bestCount = count;
-            bestForm = form;
-          }
-        }
-        displayMap.set(lower, bestForm);
-      }
-      return displayMap;
+      return buildArtistDisplayNames(this._allTracks, this._canonicalArtistMap);
     },
 
     get artists() {
@@ -208,9 +143,7 @@ export function createArtistsBrowser(Alpine) {
       return this._allTracks
         .filter((t) => {
           const album = t.album || '';
-          // Album with consistent album_artist: include all its tracks
           if (matchingAlbums.has(album)) return true;
-          // Compilation or non-canonical album: match by individual track artist
           if (!canonicalMap.has(album)) {
             const trackArtist = (t.album_artist || t.artist || '').replace(/;+$/, '').trim();
             return trackArtist.toLowerCase() === selectedLower;
@@ -229,59 +162,11 @@ export function createArtistsBrowser(Alpine) {
     },
 
     get selectedArtistAlbums() {
-      const tracks = this.selectedArtistTracks;
-      const albumMap = {};
-
-      for (const track of tracks) {
-        const albumName = track.album || 'Unknown Album';
-        // Group by album name only — we're already scoped to one artist's tracks,
-        // so same-name entries with different album_artist variants are the same album.
-        if (!albumMap[albumName]) {
-          albumMap[albumName] = {
-            name: albumName,
-            year: track.date || '',
-            genre: track.genre || '',
-            tracks: [],
-            representativeTrackId: track.id,
-          };
-        }
-        albumMap[albumName].tracks.push(track);
-        if (track.date && !albumMap[albumName].year) {
-          albumMap[albumName].year = track.date;
-        }
-        if (track.genre && !albumMap[albumName].genre) {
-          albumMap[albumName].genre = track.genre;
-        }
-      }
-
-      // Sort each album's tracks: disc → track, with null disc inheriting
-      // the album's most common disc number so tracks interleave correctly.
-      for (const album of Object.values(albumMap)) {
-        const discCounts = {};
-        for (const t of album.tracks) {
-          if (t.disc_number != null) {
-            const d = this._parseDiscNumber(t.disc_number);
-            discCounts[d] = (discCounts[d] || 0) + 1;
-          }
-        }
-        const dominantDisc = Number(
-          Object.entries(discCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 1,
-        );
-        album.tracks.sort((a, b) => {
-          const discA = a.disc_number != null ? this._parseDiscNumber(a.disc_number) : dominantDisc;
-          const discB = b.disc_number != null ? this._parseDiscNumber(b.disc_number) : dominantDisc;
-          if (discA !== discB) return discA - discB;
-          return this._parseTrackNumber(a.track_number) -
-            this._parseTrackNumber(b.track_number);
-        });
-      }
-
-      return Object.values(albumMap).sort((a, b) => {
-        const yearA = parseInt(a.year) || 0;
-        const yearB = parseInt(b.year) || 0;
-        if (yearA !== yearB) return yearB - yearA;
-        return a.name.localeCompare(b.name);
-      });
+      return groupTracksIntoAlbums(
+        this.selectedArtistTracks,
+        this._parseDiscNumber,
+        this._parseTrackNumber,
+      );
     },
 
     get selectedArtistAlbumCount() {
@@ -338,255 +223,7 @@ export function createArtistsBrowser(Alpine) {
     },
 
     async handleTrackDoubleClick(track, allTracks, index) {
-      this.queue._updating = true;
-      this._buildQueueGeneration++;
-      const generation = this._buildQueueGeneration;
-      let backgroundBuildStarted = false;
-
-      try {
-        if (this.queue.shuffle) {
-          await this.queue.clear();
-          await this.queue.add(allTracks, false);
-          if (index >= 0 && index < this.queue.items.length) {
-            this.queue.currentIndex = index;
-            this.queue._shuffleItems();
-            await this.queue._syncQueueToBackend();
-            await this.queue.playIndex(0);
-          } else {
-            await this.player.playTrack(track);
-          }
-        } else if (index >= 0 && index < allTracks.length) {
-          backgroundBuildStarted = true;
-
-          this.queue.items.splice(0, this.queue.items.length, track);
-          this.queue._originalOrder.splice(0, this.queue._originalOrder.length, track);
-          this.queue.currentIndex = 0;
-          this.queue._playHistory = [];
-          this.queue._playNextOffset = 0;
-          await this.player.playTrack(track);
-
-          const buildQueue = async () => {
-            try {
-              await api.queue.clear();
-              if (this._buildQueueGeneration !== generation) return;
-
-              const subsequent = allTracks.slice(index);
-              const preceding = allTracks.slice(0, index);
-              const fullQueue = [...subsequent, ...preceding];
-
-              if (this._buildQueueGeneration !== generation) return;
-
-              this.queue.items.splice(0, this.queue.items.length, ...fullQueue);
-              this.queue._originalOrder.splice(0, this.queue._originalOrder.length, ...fullQueue);
-              this.queue.currentIndex = 0;
-
-              await api.queue.add(fullQueue.map((t) => t.id));
-              if (this._buildQueueGeneration !== generation) return;
-
-              await api.queue.setCurrentIndex(0);
-            } catch (err) {
-              if (this._buildQueueGeneration === generation) {
-                console.error('[artists-browser] Failed to build queue:', err);
-              }
-            } finally {
-              if (this._buildQueueGeneration === generation) {
-                setTimeout(() => {
-                  this.queue._updating = false;
-                }, 200);
-              }
-            }
-          };
-          buildQueue();
-        } else {
-          await this.player.playTrack(track);
-        }
-      } finally {
-        if (!backgroundBuildStarted) {
-          setTimeout(() => {
-            this.queue._updating = false;
-          }, 200);
-        }
-      }
-    },
-
-    async _loadPlaylists() {
-      try {
-        const playlists = await api.playlists.getAll();
-        this.playlists = playlists.map((p) => ({ id: p.id, name: p.name }));
-      } catch {
-        this.playlists = [];
-      }
-    },
-
-    handleContextMenu(event, track) {
-      event.preventDefault();
-
-      const menuItems = [
-        {
-          label: 'Play Now',
-          action: () => this._playTrack(track),
-        },
-        {
-          label: 'Add to Queue',
-          action: () => this._addToQueue(track),
-        },
-        { type: 'separator' },
-        {
-          label: 'Play Next',
-          action: () => this._playNext(track),
-        },
-        {
-          label: 'Add to Playlist',
-          hasSubmenu: true,
-          action: () => {
-            this.showPlaylistSubmenu = !this.showPlaylistSubmenu;
-          },
-        },
-        {
-          label: 'Add to Liked Songs',
-          action: () => this._toggleFavorite(track),
-        },
-        { type: 'separator' },
-        {
-          label: 'Show in Finder',
-          action: () => this._showInFinder(track),
-        },
-      ];
-
-      // Check favorite status and update label asynchronously
-      api.favorites.check(track.id).then((result) => {
-        if (!this.contextMenu) return;
-        const favoriteItem = this.contextMenu.items.find(
-          (i) => i.label === 'Add to Liked Songs' || i.label === 'Remove from Liked Songs',
-        );
-        if (favoriteItem) {
-          favoriteItem.label = result.is_favorite
-            ? 'Remove from Liked Songs'
-            : 'Add to Liked Songs';
-        }
-      }).catch(() => {});
-
-      const menuHeight = 220;
-      const menuWidth = 200;
-      const submenuWidth = 200;
-      let x = event.clientX;
-      let y = event.clientY;
-
-      if (x + menuWidth > window.innerWidth) {
-        x = window.innerWidth - menuWidth - 10;
-      }
-      if (y + menuHeight > window.innerHeight) {
-        y = window.innerHeight - menuHeight - 10;
-      }
-
-      this.contextMenu = { x, y, track, items: menuItems };
-      this.showPlaylistSubmenu = false;
-      this.submenuOnLeft = (x + menuWidth + 45 + submenuWidth) > window.innerWidth;
-    },
-
-    closeContextMenu() {
-      this.contextMenu = null;
-      this.showPlaylistSubmenu = false;
-    },
-
-    async _playTrack(track) {
-      this.closeContextMenu();
-      await this.queue.clear();
-      await this.queue.add([track], false);
-      await this.queue.playIndex(0);
-    },
-
-    async _addToQueue(track) {
-      this.closeContextMenu();
-      await this.queue.add([track], false);
-      this.$store.ui.toast('Added to queue', 'success');
-    },
-
-    async _playNext(track) {
-      this.closeContextMenu();
-      const pos = this.queue.currentIndex >= 0 ? this.queue.currentIndex + 1 : 0;
-      await api.queue.add([track.id], pos);
-      await this.queue._loadFromBackend();
-      this.$store.ui.toast('Playing next', 'success');
-    },
-
-    async _toggleFavorite(track) {
-      this.closeContextMenu();
-      try {
-        const result = await api.favorites.check(track.id);
-        if (result.is_favorite) {
-          await api.favorites.remove(track.id);
-        } else {
-          await api.favorites.add(track.id);
-        }
-        const player = this.$store.player;
-        if (player.currentTrack?.id === track.id) {
-          player.isFavorite = !result.is_favorite;
-        }
-        this.library.refreshIfLikedSongs();
-      } catch (error) {
-        console.error('[context-menu]', 'toggle_favorite_error', {
-          trackId: track.id,
-          error: error.message,
-        });
-        this.$store.ui.toast('Failed to update liked songs', 'error');
-      }
-    },
-
-    async addToPlaylist(playlistId) {
-      const track = this.contextMenu?.track;
-      this.closeContextMenu();
-      if (!track) return;
-
-      try {
-        const result = await api.playlists.addTracks(playlistId, [track.id]);
-        const playlist = this.playlists.find((p) => p.id === playlistId);
-        const playlistName = playlist?.name || 'playlist';
-
-        if (result.added > 0) {
-          this.$store.ui.toast(`Added to "${playlistName}"`, 'success');
-        } else {
-          this.$store.ui.toast(`Already in "${playlistName}"`, 'info');
-        }
-
-        window.dispatchEvent(new CustomEvent('mt:playlists-updated'));
-      } catch {
-        this.$store.ui.toast('Failed to add to playlist', 'error');
-      }
-    },
-
-    createPlaylistWithTracks() {
-      const track = this.contextMenu?.track;
-      this.closeContextMenu();
-      if (!track) return;
-
-      window.dispatchEvent(
-        new CustomEvent('mt:create-playlist-with-tracks', { detail: { trackIds: [track.id] } }),
-      );
-    },
-
-    async _showInFinder(track) {
-      this.closeContextMenu();
-      if (window.__TAURI__?.core?.invoke && track.filepath) {
-        try {
-          await window.__TAURI__.core.invoke('show_in_folder', { path: track.filepath });
-        } catch (err) {
-          console.error('[artists] Failed to show in finder:', err);
-        }
-      }
-    },
-
-    handleSubmenuEnter() {
-      if (this.submenuCloseTimeout) {
-        clearTimeout(this.submenuCloseTimeout);
-        this.submenuCloseTimeout = null;
-      }
-    },
-
-    handleSubmenuLeave() {
-      this.submenuCloseTimeout = setTimeout(() => {
-        this.showPlaylistSubmenu = false;
-      }, 200);
+      await handleDoubleClickPlay(this, track, allTracks, index, 'artists-browser');
     },
   }));
 }

@@ -110,44 +110,87 @@ export async function getNewWatchedFolderCandidates(candidatePaths) {
 }
 
 /**
+ * Add directories to watched folders via Tauri invoke.
+ * @param {string[]} dirs - Directory paths to add
+ * @returns {Promise<{added: number, failed: number, errors: Array}>}
+ */
+async function addWatchedFoldersBatch(dirs) {
+  const { invoke } = window.__TAURI__.core;
+  const results = { added: 0, failed: 0, errors: [] };
+
+  for (const path of dirs) {
+    try {
+      await invoke('watched_folders_add', {
+        request: {
+          path,
+          mode: 'continuous',
+          cadence_minutes: 10,
+          enabled: true,
+        },
+      });
+      results.added++;
+      console.log('[watched-folders] Added watched folder:', path);
+    } catch (error) {
+      results.failed++;
+      results.errors.push({ path, error: error.message || String(error) });
+      console.error('[watched-folders] Failed to add watched folder:', path, error);
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Show a toast summarizing watched folder add results.
+ */
+function showWatchedFolderResultToast(results, totalCount) {
+  const uiStore = window.Alpine?.store('ui');
+  if (!uiStore) return;
+
+  if (results.added > 0 && results.failed === 0) {
+    uiStore.toast(
+      `Added ${results.added} ${
+        results.added === 1 ? 'directory' : 'directories'
+      } to watched folders`,
+      'success',
+    );
+  } else if (results.added > 0 && results.failed > 0) {
+    uiStore.toast(
+      `Added ${results.added} of ${totalCount} directories (${results.failed} failed)`,
+      'warning',
+    );
+  } else if (results.failed > 0) {
+    uiStore.toast(
+      `Failed to add watched folders: ${results.errors[0]?.error || 'Unknown error'}`,
+      'error',
+    );
+  }
+}
+
+/**
  * Prompt user to add directories to watched folders
  * @param {string[]} paths - Original paths from drag/drop or file picker
  * @returns {Promise<void>}
  */
 export async function promptToAddWatchedFolders(paths) {
-  // Skip if no paths provided
-  if (!paths || paths.length === 0) {
-    return;
-  }
-
-  // Skip if not in Tauri environment
-  if (!window.__TAURI__?.core?.invoke || !window.__TAURI__?.dialog?.confirm) {
-    return;
-  }
+  if (!paths || paths.length === 0) return;
+  if (!window.__TAURI__?.core?.invoke || !window.__TAURI__?.dialog?.confirm) return;
 
   try {
-    // Extract parent directories from paths
     const parentDirs = extractParentDirectories(paths);
+    if (parentDirs.length === 0) return;
 
-    if (parentDirs.length === 0) {
-      return;
-    }
-
-    // Filter out already-watched directories
     const newDirs = await getNewWatchedFolderCandidates(parentDirs);
-
     if (newDirs.length === 0) {
       console.log('[watched-folders] All directories already watched, skipping prompt');
       return;
     }
 
-    // Build confirmation message
-    const dirList = newDirs.map((dir) => `• ${dir}`).join('\n');
+    const dirList = newDirs.map((dir) => `\u2022 ${dir}`).join('\n');
     const message = `Add ${
       newDirs.length === 1 ? 'this directory' : 'these directories'
     } to watched folders?\n\nWatched folders are automatically scanned for new music.\n\n${dirList}`;
 
-    // Show confirmation dialog
     const { confirm } = window.__TAURI__.dialog;
     const confirmed = await confirm(message, {
       title: 'Add to Watched Folders?',
@@ -159,57 +202,9 @@ export async function promptToAddWatchedFolders(paths) {
       return;
     }
 
-    // Add each directory to watched folders
-    const { invoke } = window.__TAURI__.core;
-    const results = {
-      added: 0,
-      failed: 0,
-      errors: [],
-    };
-
-    for (const path of newDirs) {
-      try {
-        await invoke('watched_folders_add', {
-          request: {
-            path,
-            mode: 'continuous',
-            cadence_minutes: 10,
-            enabled: true,
-          },
-        });
-        results.added++;
-        console.log('[watched-folders] Added watched folder:', path);
-      } catch (error) {
-        results.failed++;
-        results.errors.push({ path, error: error.message || String(error) });
-        console.error('[watched-folders] Failed to add watched folder:', path, error);
-      }
-    }
-
-    // Show result toast
-    const uiStore = window.Alpine?.store('ui');
-    if (uiStore) {
-      if (results.added > 0 && results.failed === 0) {
-        uiStore.toast(
-          `Added ${results.added} ${
-            results.added === 1 ? 'directory' : 'directories'
-          } to watched folders`,
-          'success',
-        );
-      } else if (results.added > 0 && results.failed > 0) {
-        uiStore.toast(
-          `Added ${results.added} of ${newDirs.length} directories (${results.failed} failed)`,
-          'warning',
-        );
-      } else if (results.failed > 0) {
-        uiStore.toast(
-          `Failed to add watched folders: ${results.errors[0]?.error || 'Unknown error'}`,
-          'error',
-        );
-      }
-    }
+    const results = await addWatchedFoldersBatch(newDirs);
+    showWatchedFolderResultToast(results, newDirs.length);
   } catch (error) {
     console.error('[watched-folders] Unexpected error in promptToAddWatchedFolders:', error);
-    // Don't throw - we don't want to block the scan success
   }
 }
