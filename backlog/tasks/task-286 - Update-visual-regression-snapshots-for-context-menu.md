@@ -1,9 +1,10 @@
 ---
 id: TASK-286
 title: Update visual regression snapshots for context menu
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-24 17:54'
+updated_date: '2026-02-24 18:07'
 labels:
   - testing
   - visual-regression
@@ -27,6 +28,12 @@ These failures predate the library-browser mixin refactor (TASK-285.04) but were
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 All 3 visual regression screenshots updated to match current UI
-- [ ] #2 visual-regression.spec.js passes with 0 failures
+- [x] #1 All 3 visual regression screenshots updated to match current UI
+- [x] #2 visual-regression.spec.js passes with 0 failures
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Regenerated 3 stale visual regression snapshots using `npx playwright test visual-regression --grep "..." --update-snapshots`:\n- `context-menu-track-webkit-darwin.png` (227x294 -> 227x331, reflects "Add to Liked Songs" menu item)\n- `settings-panel-general-webkit-darwin.png` (reflects watched folders moved to Library panel)\n- `settings-panel-library-webkit-darwin.png` (reflects watched folders addition)\n\nFull suite: 38/38 passed.
+<!-- SECTION:FINAL_SUMMARY:END -->
