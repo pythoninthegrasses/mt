@@ -14,6 +14,7 @@ import { createMetadataModal } from './metadata-modal.js';
 import { createArtistsBrowser } from './artists-browser.js';
 import { createAlbumsBrowser } from './albums-browser.js';
 import { createQueueView } from './queue-view.js';
+import { createMainContent } from './main-content.js';
 
 export function initComponents(Alpine) {
   createLibraryBrowser(Alpine);
@@ -26,6 +27,7 @@ export function initComponents(Alpine) {
   createArtistsBrowser(Alpine);
   createAlbumsBrowser(Alpine);
   createQueueView(Alpine);
+  createMainContent(Alpine);
 
   console.log('[components] All components registered');
 }

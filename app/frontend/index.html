@@ -31,30 +31,12 @@
       <!-- Main content -->
       <main
         class="flex-1 min-h-0 overflow-hidden relative"
-        x-data="{ isDragging: false }"
-        @dragover.prevent="isDragging = true"
-        @dragleave.prevent="isDragging = false"
-        @drop.prevent="isDragging = false; handleFileDrop($event)"
+        x-data="mainContent"
+        @dragover.prevent="handleDragOver"
+        @dragleave.prevent="handleDragLeave"
+        @drop.prevent="handleDrop($event)"
       >
-        <!-- Drop overlay -->
-        <div
-          x-show="isDragging"
-          x-transition:enter="transition ease-out duration-200"
-          x-transition:enter-start="opacity-0"
-          x-transition:enter-end="opacity-100"
-          x-transition:leave="transition ease-in duration-150"
-          x-transition:leave-start="opacity-100"
-          x-transition:leave-end="opacity-0"
-          class="absolute inset-0 z-50 bg-primary/20 border-4 border-dashed border-primary rounded-lg flex items-center justify-center pointer-events-none"
-        >
-          <div class="text-center">
-            <svg class="w-16 h-16 mx-auto mb-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-            </svg>
-            <p class="text-xl font-semibold text-primary">Drop audio files or folders</p>
-            <p class="text-sm text-primary/70 mt-1">to add them to your library</p>
-          </div>
-        </div>
+        {{> drop-overlay}}
 
         {{> library}}
 
