@@ -62,3 +62,38 @@ export function formatSampleRate(sampleRate) {
   if (!sampleRate) return '—';
   return `${sampleRate} Hz`;
 }
+
+/**
+ * Format seconds as M:SS, returning '--:--' for falsy values
+ * @param {number} seconds - Duration in seconds
+ * @returns {string} Formatted time (e.g., "3:45") or "--:--"
+ */
+export function formatDurationDash(seconds) {
+  if (!seconds) return '--:--';
+  const totalSeconds = Math.floor(seconds);
+  const minutes = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Format a timestamp as a relative time string (e.g., "5m ago", "3d ago")
+ * @param {string|number|Date} timestamp - Timestamp to format
+ * @returns {string} Relative time string or '--' for falsy values
+ */
+export function formatRelativeTime(timestamp) {
+  if (!timestamp) return '--';
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}

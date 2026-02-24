@@ -126,6 +126,22 @@ Modern web UI:
 - Settings panel
 - Metadata editor
 
+**Mixin Architecture:**
+
+Large Alpine.js components use a mixin factory pattern to keep files under 500 LOC. Each mixin is a function that returns a plain object spread into the component:
+
+| Mixin | File | Responsibility |
+|-------|------|----------------|
+| `typeToJumpMixin` | `js/mixins/type-to-jump.js` | Keyboard-driven artist navigation |
+| `columnGeometryMixin` | `js/mixins/column-geometry.js` | Column widths, resize, auto-fit |
+| `columnReorderMixin` | `js/mixins/column-reorder.js` | Column drag-and-drop reordering |
+| `columnSettingsMixin` | `js/mixins/column-settings.js` | Column visibility, persistence, header context menu |
+| `playlistDragMixin` | `js/mixins/playlist-drag.js` | Playlist track reorder via drag |
+| `contextMenuActionsMixin` | `js/mixins/context-menu-actions.js` | Context menu, playback, track management |
+| `virtualScrollMixin` | `js/mixins/virtual-scroll.js` | Scroll tracking, scroll-to-track |
+
+Mixins use regular `function` syntax so `this` binds to the Alpine component at runtime. Getters must stay in the main component since `...spread` loses getter descriptors. Shared pure utilities live in `js/utils/` and constants in `js/constants.js`.
+
 **View Caching:**
 
 The library store implements persistent caching to eliminate loading spinners when switching between views:
