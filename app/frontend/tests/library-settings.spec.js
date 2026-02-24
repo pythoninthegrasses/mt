@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { waitForAlpine } from './fixtures/helpers.js';
 
 test.describe('Library Settings UI', () => {
