@@ -2,78 +2,73 @@
  * Library Store - manages music library state
  *
  * Handles track loading, searching, sorting, and
- * library scanning via Python backend.
+ * library scanning via Tauri backend.
  */
 
 import { api } from '../api.js';
-import { promptToAddWatchedFolders } from '../utils/watched-folders.js';
+import {
+  buildCacheEntry,
+  createCacheSaver,
+  loadCacheFromSettings,
+} from '../utils/library-cache.js';
+import {
+  applySectionData,
+  backgroundRefreshLibrary,
+  backgroundRefreshSection,
+  getInitialSection,
+  loadLibraryData,
+  loadSection,
+  openAddMusicDialogOp,
+  removeFromQueue,
+  removeTracksLocallyOp,
+  scanPaths,
+} from '../utils/library-operations.js';
 
 const { listen } = window.__TAURI__?.event ?? { listen: () => Promise.resolve(() => {}) };
 
+// Re-export for use in library-operations.js (they call store._updateCache etc.)
+export { applySectionData };
+
 export function createLibraryStore(Alpine) {
-  const getInitialSection = () => {
-    let section = 'all';
-
-    if (window.settings?.initialized) {
-      section = window.settings.get('sidebar:activeSection', section);
-    } else {
-      const legacySidebar = localStorage.getItem('mt:sidebar');
-      if (legacySidebar) {
-        try {
-          const parsed = JSON.parse(legacySidebar);
-          if (parsed?.activeSection) {
-            section = parsed.activeSection;
-          }
-        } catch (_e) {
-          // Ignore malformed legacy sidebar storage
-        }
-      }
-    }
-
-    return section;
-  };
-
   Alpine.store('library', {
     // Track data
-    tracks: [], // Tracks for current section view
-    filteredTracks: [], // Tracks after search/filter
-    allTracks: [], // Complete library (source of truth for Artists/Albums browsers)
+    tracks: [],
+    filteredTracks: [],
+    allTracks: [],
 
     // Search and filter state
     searchQuery: '',
-    sortBy: 'default', // 'default', 'artist', 'album', 'title', 'index', 'dateAdded', 'duration'
-    sortOrder: 'asc', // 'asc', 'desc'
+    sortBy: 'default',
+    sortOrder: 'asc',
     currentSection: getInitialSection(),
 
     // Loading state
     loading: false,
     scanning: false,
-    scanProgress: 0, // 0-100
-    scanStatus: null, // Current scan status string
-    scanJobId: null, // Current scan job ID
+    scanProgress: 0,
+    scanStatus: null,
+    scanJobId: null,
 
     // Statistics
     totalTracks: 0,
-    totalDuration: 0, // milliseconds
+    totalDuration: 0,
 
     // Internal
     _searchDebounce: null,
-    _saveCacheDebounce: null, // Debounce timer for cache persistence
+    _saveCacheDebounce: null,
     _watchedFolderListener: null,
-    _lastLoadedSection: null, // Track which section the current data belongs to
-    _sectionCache: {}, // { sectionId: { totalTracks, totalDuration, timestamp } } — summary only, no track arrays
-    _backgroundRefreshing: false, // Prevent concurrent background refreshes
-    _dataVersion: 0, // Monotonic counter incremented on any data mutation (used by browser memoization)
+    _lastLoadedSection: null,
+    _sectionCache: {},
+    _backgroundRefreshing: false,
+    _dataVersion: 0,
+    _saveCache: null,
 
-    /**
-     * Initialize library from backend
-     */
     async init() {
-      // Load persistent cache first - shows cached data immediately (no spinner)
-      const hasCachedData = this._loadCacheFromSettings();
+      this._saveCache = createCacheSaver(window.settings);
+      const { cache, loaded: hasCachedData } = loadCacheFromSettings(window.settings);
 
       if (hasCachedData) {
-        // Show cached summary stats immediately (sidebar totals)
+        this._sectionCache = cache;
         const cached = this._sectionCache[this.currentSection];
         if (cached) {
           this.totalTracks = cached.totalTracks;
@@ -84,61 +79,45 @@ export function createLibraryStore(Alpine) {
             totalTracks: cached.totalTracks,
           });
         }
-        // Fetch actual tracks from backend (spinner shows only if tracks truly empty)
-        await this.load({ forceReload: true });
-      } else {
-        // No cache - do a full load (will show spinner)
-        await this.load({ forceReload: true });
       }
 
+      await this.load({ forceReload: true });
       await this._setupWatchedFolderListener();
     },
 
-    /**
-     * Listen for watched folder scan results to auto-reload library
-     */
     async _setupWatchedFolderListener() {
       this._watchedFolderListener = await listen('watched-folder:results', (event) => {
         const { added, updated, deleted } = event.payload || {};
         console.log('[library] watched-folder:results', { added, updated, deleted });
 
-        // Reload library if any tracks were added, updated, or deleted
         if (added > 0 || updated > 0 || deleted > 0) {
           console.log('[library] Reloading library after watched folder scan');
-          this._clearCache(); // Clear cache so fresh data is fetched
+          this._clearCache();
           this.load({ forceReload: true });
         }
       });
     },
 
-    /**
-     * Update cache for a section with fresh data
-     */
     _updateCache(section, data) {
-      const tracks = data.tracks || [];
-      this._sectionCache[section] = {
-        totalTracks: data.total || tracks.length,
-        totalDuration: tracks.reduce((sum, t) => sum + (t.duration || 0), 0),
-        timestamp: Date.now(),
-      };
-      // Persist cache to settings (non-blocking)
-      this._saveCacheToSettings();
+      this._sectionCache[section] = buildCacheEntry(data);
+      this._persistCache();
     },
 
-    /**
-     * Filter tracks to only those present in allTracks (the source of truth).
-     * Ensures optimistically-deleted tracks don't reappear when section
-     * loaders fetch from the backend before IPC deletes complete.
-     */
+    _persistCache() {
+      if (this._saveCache) {
+        this._saveCacheDebounce = this._saveCache(
+          this._sectionCache,
+          this._saveCacheDebounce,
+        );
+      }
+    },
+
     _filterByLibrary(tracks) {
       if (this.allTracks.length === 0) return [];
       const ids = new Set(this.allTracks.map((t) => t.id));
       return tracks.filter((t) => ids.has(t.id));
     },
 
-    /**
-     * Clear all cached section data
-     */
     _clearCache(section = null) {
       if (section) {
         delete this._sectionCache[section];
@@ -147,85 +126,10 @@ export function createLibraryStore(Alpine) {
         this._sectionCache = {};
         console.log('[library] cache cleared (all sections)');
       }
-      // Persist cleared cache to settings (non-blocking)
-      this._saveCacheToSettings();
+      this._persistCache();
     },
 
-    /**
-     * Load cached section data from persistent settings
-     * Called during init() to show cached data immediately
-     */
-    _loadCacheFromSettings() {
-      if (!window.settings?.initialized) {
-        console.log('[library] settings not initialized, skipping cache load');
-        return false;
-      }
-
-      try {
-        const cached = window.settings.get('library:sectionCache', null);
-        if (cached && typeof cached === 'object') {
-          // Validate cache structure - include library sections and playlists
-          const validSections = ['all', 'liked', 'recent', 'added', 'top25'];
-          let loadedCount = 0;
-
-          for (const [section, data] of Object.entries(cached)) {
-            // Accept standard sections or playlist-* sections
-            const isValidSection = validSections.includes(section) ||
-              section.startsWith('playlist-');
-            if (isValidSection && data?.totalTracks > 0) {
-              // Strip any legacy tracks array from persisted cache to save memory
-              const { tracks: _tracks, ...summary } = data;
-              this._sectionCache[section] = summary;
-              loadedCount++;
-            }
-          }
-
-          if (loadedCount > 0) {
-            console.log('[library] loaded persistent cache:', {
-              sections: Object.keys(this._sectionCache),
-              totalTracks: Object.values(this._sectionCache).reduce(
-                (sum, s) => sum + (s.totalTracks || 0),
-                0,
-              ),
-            });
-            return true;
-          }
-        }
-      } catch (error) {
-        console.error('[library] failed to load cache from settings:', error);
-      }
-      return false;
-    },
-
-    /**
-     * Save cached section data to persistent settings
-     * Called after cache updates to persist across app restarts
-     */
-    _saveCacheToSettings() {
-      if (!window.settings?.initialized) {
-        return;
-      }
-
-      // Debounce saves to avoid excessive writes
-      if (this._saveCacheDebounce) {
-        clearTimeout(this._saveCacheDebounce);
-      }
-
-      this._saveCacheDebounce = setTimeout(async () => {
-        try {
-          await window.settings.set('library:sectionCache', this._sectionCache);
-          console.log('[library] cache persisted to settings');
-        } catch (error) {
-          console.error('[library] failed to save cache to settings:', error);
-        }
-      }, 500); // 500ms debounce
-    },
-
-    /**
-     * Fetch library data from backend API
-     */
     async _fetchLibraryData() {
-      // Map frontend sort keys to backend column names
       const sortKeyMap = {
         default: 'artist',
         index: 'track_number',
@@ -251,431 +155,138 @@ export function createLibraryStore(Alpine) {
       });
     },
 
-    /**
-     * Silently refresh data in background without showing spinner
-     */
-    async _backgroundRefresh(section) {
-      // Prevent concurrent background refreshes for same section
-      if (this._backgroundRefreshing) {
-        return;
-      }
+    // -----------------------------------------------------------------------
+    // Section loading — thin wrappers delegating to library-operations.js
+    // -----------------------------------------------------------------------
 
-      this._backgroundRefreshing = true;
-
-      try {
-        console.log('[library] background refresh starting for:', section);
-        const data = await this._fetchLibraryData();
-
-        // _fetchLibraryData always returns the full library
-        this.allTracks = data.tracks || [];
-        this._dataVersion++;
-
-        // Only update section-specific state if still on same section
-        if (this.currentSection === section) {
-          this.tracks = this.allTracks;
-          this.totalTracks = data.total || this.tracks.length;
-          this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-          this._updateCache(section, data);
-          this.applyFilters();
-
-          console.log('[library] background refresh complete:', {
-            section,
-            trackCount: this.tracks.length,
-          });
-        }
-      } catch (error) {
-        // Silent fail for background refresh
-        console.log('[library] background refresh failed:', error.message);
-      } finally {
-        this._backgroundRefreshing = false;
-      }
+    _loadSection(section, fetchFn, opts = {}) {
+      return loadSection(this, section, fetchFn, opts);
     },
 
-    /**
-     * Load library tracks from backend
-     * @param {Object} options - Load options
-     * @param {boolean} options.forceReload - Force reload even if data exists (default: false)
-     */
-    async load({ forceReload = false } = {}) {
-      if (this.currentSection?.startsWith('playlist-')) {
-        console.log('[library]', 'load_skipped', {
-          reason: 'playlist_view',
-          section: this.currentSection,
-        });
-        return;
-      }
-
-      const loadSection = this.currentSection;
-      const cached = this._sectionCache[loadSection];
-
-      // Show cached summary stats if available (previous tracks stay visible during fetch)
-      if (cached && !forceReload) {
-        console.log('[library]', 'load_with_cache_summary', {
-          section: loadSection,
-          totalTracks: cached.totalTracks,
-          cacheAge: Math.round((Date.now() - cached.timestamp) / 1000) + 's',
-        });
-        this.totalTracks = cached.totalTracks;
-        this.totalDuration = cached.totalDuration;
-        this._lastLoadedSection = loadSection;
-        // Fall through to fetch below — tracks stay from previous section (no flash)
-      }
-
-      console.log('[library]', 'load', {
-        action: 'loading_library',
-        section: loadSection,
-        forceReload,
-        hasCachedData: !!cached,
-      });
-
-      this.loading = true;
-      // DON'T clear tracks - keep showing previous data while loading
-      // This prevents spinner from showing when switching between sections
-      // The spinner only shows when library.loading && library.tracks.length === 0
-
-      try {
-        const _t0 = performance.now();
-        const data = await this._fetchLibraryData();
-        const _t1 = performance.now();
-
-        if (this.currentSection !== loadSection || this.currentSection?.startsWith('playlist-')) {
-          console.log('[library]', 'load_discarded', {
-            startedIn: loadSection,
-            currentSection: this.currentSection,
-          });
-          return;
-        }
-
-        this.tracks = data.tracks || [];
-        const _t2 = performance.now();
-        this.totalTracks = data.total || this.tracks.length;
-        this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-        this._lastLoadedSection = loadSection;
-        this._updateCache(loadSection, data);
-
-        // _fetchLibraryData always returns the full library, so keep allTracks in sync
-        this.allTracks = this.tracks;
-        this._dataVersion++;
-        const _t3 = performance.now();
-
-        this.applyFilters();
-        const _t4 = performance.now();
-
-        window._perfLibLoad = {
-          fetch_ms: Math.round(_t1 - _t0),
-          assign_tracks_ms: Math.round(_t2 - _t1),
-          process_ms: Math.round(_t3 - _t2),
-          applyFilters_ms: Math.round(_t4 - _t3),
-          total_ms: Math.round(_t4 - _t0),
-        };
-        console.log('[perf] library.load breakdown:', window._perfLibLoad);
-        console.log('[library]', 'load_complete', {
-          trackCount: this.tracks.length,
-          totalDuration: Math.round(this.totalDuration / 1000) + 's',
-          section: loadSection,
-        });
-      } catch (error) {
-        console.error('[library]', 'load_error', { error: error.message });
-        // Ensure tracks stay cleared on error
-        this.tracks = [];
-        this.filteredTracks = [];
-      } finally {
-        this.loading = false;
-      }
+    _backgroundRefreshSection(section, fetchFn, opts = {}) {
+      return backgroundRefreshSection(this, section, fetchFn, opts);
     },
 
-    async loadFavorites() {
-      const section = 'liked';
-      const cached = this._sectionCache[section];
-
-      // Show cached summary stats if available (previous tracks stay visible during fetch)
-      if (cached) {
-        console.log('[library]', 'loadFavorites_with_cache_summary', {
-          totalTracks: cached.totalTracks,
-        });
-        this.totalTracks = cached.totalTracks;
-        this.totalDuration = cached.totalDuration;
-        this._lastLoadedSection = section;
-      }
-
-      this.loading = true;
-      // DON'T clear tracks - keep showing previous data while loading
-      try {
-        const data = await api.favorites.get({ limit: 1000 });
-        this.tracks = this._filterByLibrary(data.tracks || []);
-        this.totalTracks = this.tracks.length;
-        this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-        this._lastLoadedSection = section;
-        this._updateCache(section, { tracks: this.tracks, total: this.totalTracks });
-        this.applyFilters();
-      } catch (error) {
-        console.error('Failed to load favorites:', error);
-        this.tracks = [];
-        this.filteredTracks = [];
-      } finally {
-        this.loading = false;
-      }
+    _backgroundRefresh(section) {
+      return backgroundRefreshLibrary(this, section);
     },
 
-    async _backgroundRefreshFavorites() {
-      if (this._backgroundRefreshing) return;
-      this._backgroundRefreshing = true;
-      try {
-        const data = await api.favorites.get({ limit: 1000 });
-        if (this.currentSection === 'liked' || this._lastLoadedSection === 'liked') {
-          this.tracks = this._filterByLibrary(data.tracks || []);
-          this.totalTracks = this.tracks.length;
-          this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-          this._updateCache('liked', { tracks: this.tracks, total: this.totalTracks });
-          this.applyFilters();
-        }
-      } catch (e) {
-        console.log('[library] background refresh favorites failed:', e.message);
-      } finally {
-        this._backgroundRefreshing = false;
-      }
+    load(opts) {
+      return loadLibraryData(this, opts);
     },
 
-    async loadRecentlyPlayed(days = 14) {
-      const section = 'recent';
-      const cached = this._sectionCache[section];
-
-      // Show cached summary stats if available (previous tracks stay visible during fetch)
-      if (cached) {
-        console.log('[library]', 'loadRecentlyPlayed_with_cache_summary', {
-          totalTracks: cached.totalTracks,
-        });
-        this.totalTracks = cached.totalTracks;
-        this.totalDuration = cached.totalDuration;
-        this._lastLoadedSection = section;
-      }
-
-      this.loading = true;
-      // DON'T clear tracks - keep showing previous data while loading
-      try {
-        const data = await api.favorites.getRecentlyPlayed({ days, limit: 100 });
-        this.tracks = this._filterByLibrary(data.tracks || []);
-        this.totalTracks = this.tracks.length;
-        this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-        this._lastLoadedSection = section;
-        this._updateCache(section, { tracks: this.tracks, total: this.totalTracks });
-        this.applyFilters();
-      } catch (error) {
-        console.error('Failed to load recently played:', error);
-        this.tracks = [];
-        this.filteredTracks = [];
-      } finally {
-        this.loading = false;
-      }
+    loadFavorites() {
+      return this._loadSection('liked', () => api.favorites.get({ limit: 1000 }));
     },
 
-    async _backgroundRefreshRecentlyPlayed(days = 14) {
-      if (this._backgroundRefreshing) return;
-      this._backgroundRefreshing = true;
-      try {
-        const data = await api.favorites.getRecentlyPlayed({ days, limit: 100 });
-        if (this._lastLoadedSection === 'recent') {
-          this.tracks = this._filterByLibrary(data.tracks || []);
-          this.totalTracks = this.tracks.length;
-          this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-          this._updateCache('recent', { tracks: this.tracks, total: this.totalTracks });
-          this.applyFilters();
-        }
-      } catch (e) {
-        console.log('[library] background refresh recently played failed:', e.message);
-      } finally {
-        this._backgroundRefreshing = false;
-      }
+    _backgroundRefreshFavorites() {
+      // Preserve original matching: currentSection === 'liked' OR _lastLoadedSection === 'liked'
+      const section = (this.currentSection === 'liked' || this._lastLoadedSection === 'liked')
+        ? 'liked'
+        : null;
+      if (!section) return;
+      return this._backgroundRefreshSection(
+        'liked',
+        () => api.favorites.get({ limit: 1000 }),
+      );
     },
 
-    async loadRecentlyAdded(days = 14) {
-      const section = 'added';
-      const cached = this._sectionCache[section];
-
-      // Show cached summary stats if available (previous tracks stay visible during fetch)
-      if (cached) {
-        console.log('[library]', 'loadRecentlyAdded_with_cache_summary', {
-          totalTracks: cached.totalTracks,
-        });
-        this.totalTracks = cached.totalTracks;
-        this.totalDuration = cached.totalDuration;
-        this._lastLoadedSection = section;
-      }
-
-      this.loading = true;
-      // DON'T clear tracks - keep showing previous data while loading
-      try {
-        const data = await api.favorites.getRecentlyAdded({ days, limit: 100 });
-        this.tracks = this._filterByLibrary(data.tracks || []);
-        this.totalTracks = this.tracks.length;
-        this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-        this._lastLoadedSection = section;
-        this._updateCache(section, { tracks: this.tracks, total: this.totalTracks });
-        this.applyFilters();
-      } catch (error) {
-        console.error('Failed to load recently added:', error);
-        this.tracks = [];
-        this.filteredTracks = [];
-      } finally {
-        this.loading = false;
-      }
+    loadRecentlyPlayed(days = 14) {
+      return this._loadSection(
+        'recent',
+        () => api.favorites.getRecentlyPlayed({ days, limit: 100 }),
+      );
     },
 
-    async _backgroundRefreshRecentlyAdded(days = 14) {
-      if (this._backgroundRefreshing) return;
-      this._backgroundRefreshing = true;
-      try {
-        const data = await api.favorites.getRecentlyAdded({ days, limit: 100 });
-        if (this._lastLoadedSection === 'added') {
-          this.tracks = this._filterByLibrary(data.tracks || []);
-          this.totalTracks = this.tracks.length;
-          this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-          this._updateCache('added', { tracks: this.tracks, total: this.totalTracks });
-          this.applyFilters();
-        }
-      } catch (e) {
-        console.log('[library] background refresh recently added failed:', e.message);
-      } finally {
-        this._backgroundRefreshing = false;
-      }
+    _backgroundRefreshRecentlyPlayed(days = 14) {
+      return this._backgroundRefreshSection(
+        'recent',
+        () => api.favorites.getRecentlyPlayed({ days, limit: 100 }),
+      );
     },
 
-    async loadTop25() {
-      const section = 'top25';
-      const cached = this._sectionCache[section];
-
-      // Show cached summary stats if available (previous tracks stay visible during fetch)
-      if (cached) {
-        console.log('[library]', 'loadTop25_with_cache_summary', {
-          totalTracks: cached.totalTracks,
-        });
-        this.totalTracks = cached.totalTracks;
-        this.totalDuration = cached.totalDuration;
-        this._lastLoadedSection = section;
-      }
-
-      this.loading = true;
-      // DON'T clear tracks - keep showing previous data while loading
-      try {
-        const data = await api.favorites.getTop25();
-        this.tracks = this._filterByLibrary(data.tracks || []);
-        this.totalTracks = this.tracks.length;
-        this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-        this._lastLoadedSection = section;
-        this._updateCache(section, { tracks: this.tracks, total: this.totalTracks });
-        this.applyFilters();
-      } catch (error) {
-        console.error('Failed to load top 25:', error);
-        this.tracks = [];
-        this.filteredTracks = [];
-      } finally {
-        this.loading = false;
-      }
+    loadRecentlyAdded(days = 14) {
+      return this._loadSection(
+        'added',
+        () => api.favorites.getRecentlyAdded({ days, limit: 100 }),
+      );
     },
 
-    async _backgroundRefreshTop25() {
-      if (this._backgroundRefreshing) return;
-      this._backgroundRefreshing = true;
-      try {
-        const data = await api.favorites.getTop25();
-        if (this._lastLoadedSection === 'top25') {
-          this.tracks = this._filterByLibrary(data.tracks || []);
-          this.totalTracks = this.tracks.length;
-          this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-          this._updateCache('top25', { tracks: this.tracks, total: this.totalTracks });
-          this.applyFilters();
-        }
-      } catch (e) {
-        console.log('[library] background refresh top25 failed:', e.message);
-      } finally {
-        this._backgroundRefreshing = false;
-      }
+    _backgroundRefreshRecentlyAdded(days = 14) {
+      return this._backgroundRefreshSection(
+        'added',
+        () => api.favorites.getRecentlyAdded({ days, limit: 100 }),
+      );
     },
 
-    async loadPlaylist(playlistId) {
+    loadTop25() {
+      return this._loadSection('top25', () => api.favorites.getTop25());
+    },
+
+    _backgroundRefreshTop25() {
+      return this._backgroundRefreshSection(
+        'top25',
+        () => api.favorites.getTop25(),
+      );
+    },
+
+    loadPlaylist(playlistId) {
       const section = `playlist-${playlistId}`;
-      const cached = this._sectionCache[section];
+      const transformPlaylist = (_rawTracks, data) =>
+        (data.tracks || []).map((item) => item.track || item);
 
-      // Show cached summary stats if available (previous tracks stay visible during fetch)
-      if (cached) {
-        console.log('[navigation]', 'load_playlist_with_cache_summary', {
-          playlistId,
-          totalTracks: cached.totalTracks,
-        });
-        this.totalTracks = cached.totalTracks;
-        this.totalDuration = cached.totalDuration;
-        this._lastLoadedSection = section;
-      }
-
-      console.log('[navigation]', 'load_playlist', {
-        playlistId,
-      });
-
-      this.loading = true;
-      // DON'T clear tracks - keep showing previous data while loading
-      try {
-        const data = await api.playlists.get(playlistId);
-        this.tracks = (data.tracks || []).map((item) => item.track || item);
-        this.totalTracks = this.tracks.length;
-        this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-        this._lastLoadedSection = section;
-
-        // Cache playlist summary (no track arrays — saves memory)
+      const cachePlaylist = (data) => {
         this._sectionCache[section] = {
           totalTracks: this.totalTracks,
           totalDuration: this.totalDuration,
           playlistName: data.name,
           timestamp: Date.now(),
         };
-        this._saveCacheToSettings();
-
-        this.applyFilters();
+        this._persistCache();
 
         console.log('[navigation]', 'load_playlist_complete', {
           playlistId,
           playlistName: data.name,
           trackCount: this.tracks.length,
         });
-
         return data;
-      } catch (error) {
-        console.error('[navigation]', 'load_playlist_error', {
-          playlistId,
-          error: error.message,
-        });
-        this.tracks = [];
-        this.filteredTracks = [];
-        return null;
-      } finally {
-        this.loading = false;
-      }
+      };
+
+      console.log('[navigation]', 'load_playlist', { playlistId });
+
+      return this._loadSection(section, () => api.playlists.get(playlistId), {
+        transform: transformPlaylist,
+        onSuccess: cachePlaylist,
+        logTag: 'navigation',
+      });
     },
 
-    async _backgroundRefreshPlaylist(playlistId) {
-      if (this._backgroundRefreshing) return;
-      this._backgroundRefreshing = true;
+    _backgroundRefreshPlaylist(playlistId) {
       const section = `playlist-${playlistId}`;
-      try {
-        const data = await api.playlists.get(playlistId);
-        if (this._lastLoadedSection === section) {
-          this.tracks = (data.tracks || []).map((item) => item.track || item);
-          this.totalTracks = this.tracks.length;
-          this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-          this._sectionCache[section] = {
-            totalTracks: this.totalTracks,
-            totalDuration: this.totalDuration,
-            playlistName: data.name,
-            timestamp: Date.now(),
-          };
-          this._saveCacheToSettings();
-          this.applyFilters();
-        }
-      } catch (e) {
-        console.log('[library] background refresh playlist failed:', e.message);
-      } finally {
-        this._backgroundRefreshing = false;
-      }
+      const transformPlaylist = (_rawTracks, data) =>
+        (data.tracks || []).map((item) => item.track || item);
+
+      return this._backgroundRefreshSection(
+        section,
+        () => api.playlists.get(playlistId),
+        {
+          transform: transformPlaylist,
+          onSuccess: (data) => {
+            this._sectionCache[section] = {
+              totalTracks: this.totalTracks,
+              totalDuration: this.totalDuration,
+              playlistName: data.name,
+              timestamp: Date.now(),
+            };
+            this._persistCache();
+          },
+        },
+      );
     },
+
+    // -----------------------------------------------------------------------
+    // Navigation and search
+    // -----------------------------------------------------------------------
 
     setSection(section) {
       console.log('[navigation]', 'switch_section', {
@@ -693,10 +304,6 @@ export function createLibraryStore(Alpine) {
       }
     },
 
-    /**
-     * Search tracks with debounce
-     * @param {string} query - Search query
-     */
     search(query) {
       this.searchQuery = query;
 
@@ -704,25 +311,15 @@ export function createLibraryStore(Alpine) {
         clearTimeout(this._searchDebounce);
       }
 
-      // Debounce and reload from backend with search parameter
       this._searchDebounce = setTimeout(() => {
         this.load({ forceReload: true });
       }, 150);
     },
 
-    /**
-     * Apply client-side filters.
-     * Backend handles all sorting including ignore-words prefix stripping via
-     * the strip_sort_prefix() SQLite function.
-     */
     applyFilters() {
       this.filteredTracks = [...this.tracks];
     },
 
-    /**
-     * Set sort field
-     * @param {string} field - Field to sort by
-     */
     setSortBy(field) {
       console.log('[library]', 'setSortBy', { field });
 
@@ -733,160 +330,33 @@ export function createLibraryStore(Alpine) {
         this.sortOrder = 'asc';
       }
 
-      // Reload from backend with new sort parameters
       this.load({ forceReload: true });
     },
 
-    /**
-     * Scan paths for music files
-     * @param {string[]} paths - File or directory paths to scan
-     * @param {boolean} [recursive=true] - Scan subdirectories
-     */
-    async scan(paths, recursive = true) {
-      if (!paths || paths.length === 0) {
-        console.log('[library] scan: no paths provided');
-        return { added: 0, skipped: 0, errors: 0 };
-      }
+    // -----------------------------------------------------------------------
+    // Scan operations — thin wrappers
+    // -----------------------------------------------------------------------
 
-      console.log('[library] scan: scanning', paths.length, 'paths:', paths);
-      this.scanning = true;
-      this.scanProgress = 0;
-
-      try {
-        const result = await api.library.scan(paths, recursive);
-        console.log('[library] scan result:', result);
-
-        await this.load({ forceReload: true });
-
-        return result;
-      } catch (error) {
-        console.error('[library] scan failed:', error);
-        throw error;
-      } finally {
-        this.scanning = false;
-        this.scanProgress = 0;
-      }
+    scan(paths, recursive = true) {
+      return scanPaths(this, paths, recursive);
     },
 
-    async openAddMusicDialog() {
-      try {
-        console.log('[library] opening add music dialog...');
-
-        if (!window.__TAURI__) {
-          throw new Error('Tauri not available');
-        }
-
-        const { invoke } = window.__TAURI__.core;
-        const paths = await invoke('open_add_music_dialog');
-
-        console.log('[library] dialog returned paths:', paths);
-
-        if (paths && (Array.isArray(paths) ? paths.length > 0 : paths)) {
-          const pathArray = Array.isArray(paths) ? paths : [paths];
-          const result = await this.scan(pathArray);
-          const ui = Alpine.store('ui');
-          if (result.added > 0) {
-            ui.toast(
-              `Added ${result.added} track${result.added === 1 ? '' : 's'} to library`,
-              'success',
-            );
-          } else if (result.skipped > 0) {
-            ui.toast(
-              `All ${result.skipped} track${result.skipped === 1 ? '' : 's'} already in library`,
-              'info',
-            );
-          } else {
-            ui.toast('No audio files found', 'info');
-          }
-
-          // Prompt to add parent directories to watched folders
-          try {
-            await promptToAddWatchedFolders(pathArray);
-          } catch (error) {
-            console.error('[library] Failed to add watched folders:', error);
-            // Don't block - scan already succeeded
-          }
-
-          return result;
-        } else {
-          console.log('[library] dialog cancelled or no paths selected');
-        }
-        return null;
-      } catch (error) {
-        console.error('[library] openAddMusicDialog failed:', error);
-        Alpine.store('ui').toast('Failed to add music', 'error');
-        throw error;
-      }
+    openAddMusicDialog() {
+      return openAddMusicDialogOp(this, Alpine);
     },
 
-    /**
-     * Remove tracks from local state without IPC calls.
-     * Used by the event system and optimistic UI updates.
-     * @param {number[]} trackIds - Track IDs to remove
-     */
+    // -----------------------------------------------------------------------
+    // Track state management — thin wrappers
+    // -----------------------------------------------------------------------
+
     removeTracksLocally(trackIds) {
-      if (!trackIds || trackIds.length === 0) return;
-
-      // Fast path: clearing the entire library — skip reactive filtering
-      if (trackIds.length >= this.allTracks.length) {
-        this.allTracks = [];
-        this._dataVersion++;
-        this.tracks = [];
-        this.filteredTracks = [];
-        this.totalTracks = 0;
-        this.totalDuration = 0;
-        this._clearCache();
-
-        const queue = Alpine.store('queue');
-        queue.items = [];
-        queue._originalOrder = [];
-        queue.currentIndex = -1;
-        Alpine.store('player').stop();
-        return;
-      }
-
-      const idSet = new Set(trackIds);
-      this.allTracks = this.allTracks.filter((t) => !idSet.has(t.id));
-      this._dataVersion++;
-      this.tracks = this.tracks.filter((t) => !idSet.has(t.id));
-      this.totalTracks = this.tracks.length;
-      this.totalDuration = this.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-      this._clearCache();
-      // Filter filteredTracks directly — removing items from a sorted list preserves
-      // sort order, so re-running applyFilters() (O(n log n) sort) is unnecessary.
-      this.filteredTracks = this.filteredTracks.filter((t) => !idSet.has(t.id));
-
-      // Remove from queue if present
-      const queue = Alpine.store('queue');
-      const indicesToRemove = [];
-      for (let i = queue.items.length - 1; i >= 0; i--) {
-        if (idSet.has(queue.items[i].id)) {
-          indicesToRemove.push(i);
-        }
-      }
-      // Remove in reverse order so indices stay valid
-      for (const idx of indicesToRemove) {
-        queue.items.splice(idx, 1);
-        if (idx < queue.currentIndex) {
-          queue.currentIndex--;
-        } else if (idx === queue.currentIndex) {
-          if (queue.items.length === 0) {
-            queue.currentIndex = -1;
-            Alpine.store('player').stop();
-          } else if (queue.currentIndex >= queue.items.length) {
-            queue.currentIndex = queue.items.length - 1;
-          }
-        }
-      }
-      if (queue._originalOrder) {
-        queue._originalOrder = queue._originalOrder.filter((t) => !idSet.has(t.id));
-      }
+      return removeTracksLocallyOp(this, Alpine, trackIds);
     },
 
-    /**
-     * Remove track from library
-     * @param {string} trackId - Track ID to remove
-     */
+    _removeFromQueue(idSet) {
+      return removeFromQueue(Alpine, idSet);
+    },
+
     async remove(trackId) {
       try {
         await api.library.deleteTrack(trackId);
@@ -897,45 +367,32 @@ export function createLibraryStore(Alpine) {
       }
     },
 
-    /**
-     * Get track by ID
-     * @param {string} trackId - Track ID
-     * @returns {Object|null} Track object or null
-     */
     getTrack(trackId) {
       return this.tracks.find((t) => t.id === trackId) || null;
     },
 
-    /**
-     * Add track to queue
-     * @param {Object} track - Track to add
-     * @param {boolean} playNow - Start playing immediately
-     */
+    // -----------------------------------------------------------------------
+    // Queue operations
+    // -----------------------------------------------------------------------
+
     async addToQueue(track, playNow = false) {
       await Alpine.store('queue').add(track, playNow);
     },
 
-    /**
-     * Add all filtered tracks to queue
-     * @param {boolean} playNow - Start playing immediately
-     */
     async addAllToQueue(playNow = false) {
       await Alpine.store('queue').add(this.filteredTracks, playNow);
     },
 
-    /**
-     * Play track immediately (clears queue and plays)
-     * @param {Object} track - Track to play
-     */
     async playNow(track) {
       const queue = Alpine.store('queue');
       await queue.clear();
       await queue.add(track, true);
     },
 
-    /**
-     * Format total duration for display
-     */
+    // -----------------------------------------------------------------------
+    // Computed properties
+    // -----------------------------------------------------------------------
+
     get formattedTotalDuration() {
       const hours = Math.floor(this.totalDuration / 3600000);
       const minutes = Math.floor((this.totalDuration % 3600000) / 60000);
@@ -946,25 +403,16 @@ export function createLibraryStore(Alpine) {
       return `${minutes} min`;
     },
 
-    /**
-     * Get unique artists
-     */
     get artists() {
       const artistSet = new Set(this.tracks.map((t) => t.artist).filter(Boolean));
       return Array.from(artistSet).sort();
     },
 
-    /**
-     * Get unique albums
-     */
     get albums() {
       const albumSet = new Set(this.tracks.map((t) => t.album).filter(Boolean));
       return Array.from(albumSet).sort();
     },
 
-    /**
-     * Get tracks grouped by artist
-     */
     get tracksByArtist() {
       const grouped = {};
       for (const track of this.filteredTracks) {
@@ -989,6 +437,10 @@ export function createLibraryStore(Alpine) {
       return grouped;
     },
 
+    // -----------------------------------------------------------------------
+    // Rescan and scan progress
+    // -----------------------------------------------------------------------
+
     async rescanTrack(trackId) {
       try {
         const updatedTrack = await api.library.rescanTrack(trackId);
@@ -1004,10 +456,6 @@ export function createLibraryStore(Alpine) {
       }
     },
 
-    /**
-     * Set scan progress from Tauri event
-     * @param {Object} progress - Scan progress data
-     */
     setScanProgress(progress) {
       const { jobId, status, scanned, found, errors, currentPath } = progress;
 
@@ -1015,10 +463,8 @@ export function createLibraryStore(Alpine) {
       this.scanJobId = jobId;
       this.scanStatus = status;
 
-      // Calculate progress percentage if we have total info
-      // For now, just indicate we're scanning
       if (scanned > 0) {
-        this.scanProgress = Math.min(99, scanned); // Cap at 99% until complete
+        this.scanProgress = Math.min(99, scanned);
       }
 
       console.log('[library] scan progress:', {
@@ -1031,9 +477,6 @@ export function createLibraryStore(Alpine) {
       });
     },
 
-    /**
-     * Clear scan progress state (called when scan completes)
-     */
     clearScanProgress() {
       this.scanning = false;
       this.scanProgress = 0;
@@ -1041,12 +484,8 @@ export function createLibraryStore(Alpine) {
       this.scanJobId = null;
     },
 
-    /**
-     * Fetch tracks from backend (alias for load with forceReload)
-     * Used by event system for responding to external changes
-     */
     async fetchTracks() {
-      this._clearCache(); // Clear cache to ensure fresh data
+      this._clearCache();
       await this.load({ forceReload: true });
     },
   });

@@ -1,10 +1,10 @@
 ---
 id: TASK-285.06
 title: Reduce complexity of createLibraryStore (CC 291)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-24 00:05'
-updated_date: '2026-02-24 20:13'
+updated_date: '2026-02-24 20:53'
 labels:
   - tech-debt
   - code-health
@@ -33,7 +33,37 @@ Run `roam context createLibraryStore --task refactor` to understand its role. It
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 createLibraryStore CC reduced below 100
-- [ ] #2 All existing library-related tests pass
-- [ ] #3 No regressions in library store behavior (sorting, filtering, search, etc.)
+- [x] #1 createLibraryStore CC reduced below 100
+- [x] #2 All existing library-related tests pass
+- [x] #3 No regressions in library store behavior (sorting, filtering, search, etc.)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Summary
+
+Reduced `createLibraryStore` cognitive complexity from **291 to 50** (target was <100).
+
+### Changes
+
+**Phase 1 (CC 291→216):**
+- Created `app/frontend/js/utils/library-cache.js` (98 lines) — extracted `buildCacheEntry()`, `loadCacheFromSettings()`, `createCacheSaver()` as pure functions
+- Created generic `_loadSection()` and `_backgroundRefreshSection()` methods replacing 5 duplicated section loaders each
+
+**Phase 2 (CC 216→50):**
+- Created `app/frontend/js/utils/library-operations.js` (~440 lines) — extracted all heavy method bodies as top-level exported functions: `loadSection()`, `backgroundRefreshSection()`, `loadLibraryData()`, `backgroundRefreshLibrary()`, `scanPaths()`, `openAddMusicDialogOp()`, `removeTracksLocallyOp()`, `removeFromQueue()`, `getInitialSection()`, `applySectionData()`
+- Rewrote `library.js` store (~490 lines, down from 1053) with thin 1-line wrapper methods delegating to library-operations.js
+
+### Verification
+- **CC**: 291 → 50 (83% reduction, well below 100 target)
+- **vitest**: 55 tests pass, 0 regressions (28 pre-existing fast-check/Playwright failures unchanged)
+- **deno lint**: Clean on both new files and library.js
+- **deno fmt**: Clean
+- **Codebase health**: Improved from 44 to 51/100
+
+### Architecture
+- Top-level functions in `library-operations.js` take `store` (Alpine proxy) as first parameter
+- Store methods are thin wrappers: `load(opts) { return loadLibraryData(this, opts); }`
+- All public API signatures preserved — zero breaking changes
+<!-- SECTION:FINAL_SUMMARY:END -->
