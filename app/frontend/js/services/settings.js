@@ -6,8 +6,8 @@
  * Replaces Alpine.$persist for unified settings management.
  */
 
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+const invoke = window.__TAURI__?.core?.invoke;
+const { listen } = window.__TAURI__?.event ?? { listen: () => Promise.resolve(() => {}) };
 
 class SettingsService {
   constructor() {
