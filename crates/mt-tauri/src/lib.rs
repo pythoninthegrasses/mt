@@ -209,6 +209,12 @@ fn setup_global_shortcuts(app: &tauri::App) -> Result<(), Box<dyn std::error::Er
     let next_track = Shortcut::new(Some(Modifiers::empty()), Code::MediaTrackNext);
     let prev_track = Shortcut::new(Some(Modifiers::empty()), Code::MediaTrackPrevious);
     let stop = Shortcut::new(Some(Modifiers::empty()), Code::MediaStop);
+    // macOS keyboard F7/F9 send NX_KEYTYPE_REWIND (20) / NX_KEYTYPE_FAST (19),
+    // not NX_KEYTYPE_PREVIOUS (18) / NX_KEYTYPE_NEXT (17).
+    // The latter come from AirPods/Bluetooth headphone buttons.
+    // Register both to handle keyboard and headphone controls.
+    let fast_forward = Shortcut::new(Some(Modifiers::empty()), Code::MediaFastForward);
+    let rewind = Shortcut::new(Some(Modifiers::empty()), Code::MediaRewind);
 
     app.handle().plugin(
         tauri_plugin_global_shortcut::Builder::new()
@@ -220,11 +226,11 @@ fn setup_global_shortcuts(app: &tauri::App) -> Result<(), Box<dyn std::error::Er
                 let event_name = if shortcut == &play_pause {
                     debug!("Global shortcut: MediaPlayPause");
                     Some("mediakey://toggle")
-                } else if shortcut == &next_track {
-                    debug!("Global shortcut: MediaTrackNext");
+                } else if shortcut == &next_track || shortcut == &fast_forward {
+                    debug!("Global shortcut: MediaTrackNext/FastForward");
                     Some("mediakey://next")
-                } else if shortcut == &prev_track {
-                    debug!("Global shortcut: MediaTrackPrevious");
+                } else if shortcut == &prev_track || shortcut == &rewind {
+                    debug!("Global shortcut: MediaTrackPrevious/Rewind");
                     Some("mediakey://previous")
                 } else if shortcut == &stop {
                     debug!("Global shortcut: MediaStop");
@@ -250,6 +256,12 @@ fn setup_global_shortcuts(app: &tauri::App) -> Result<(), Box<dyn std::error::Er
     }
     if let Err(e) = global_shortcut.register(prev_track) {
         warn!(error = %e, "Failed to register MediaTrackPrevious shortcut");
+    }
+    if let Err(e) = global_shortcut.register(fast_forward) {
+        warn!(error = %e, "Failed to register MediaFastForward shortcut");
+    }
+    if let Err(e) = global_shortcut.register(rewind) {
+        warn!(error = %e, "Failed to register MediaRewind shortcut");
     }
     if let Err(e) = global_shortcut.register(stop) {
         warn!(error = %e, "Failed to register MediaStop shortcut");

@@ -12,7 +12,7 @@ MT uses a modern pure-Rust architecture:
 | Backend | Native Rust (91 Tauri commands) |
 | Audio | Rust audio engine (symphonia + rodio) |
 | Database | SQLite via rusqlite |
-| Media Keys | souvlaki (MPRIS/SMTC) + tauri-plugin-global-shortcut |
+| Media Keys | souvlaki (Now Playing/MPRIS/SMTC) + tauri-plugin-global-shortcut (keyboard F7/F8/F9) |
 
 ## Architecture Diagram
 
@@ -69,7 +69,7 @@ The Rust backend handles all functionality:
 |-----------|----------------|
 | **Window Lifecycle** | Create, resize, minimize, close, fullscreen |
 | **Native Menus** | Application menu, context menus |
-| **Media Keys** | OS media integration via `souvlaki` (MPRIS/SMTC) + `tauri-plugin-global-shortcut` |
+| **Media Keys** | OS media integration via `souvlaki` (Now Playing/MPRIS/SMTC) + `tauri-plugin-global-shortcut` for keyboard media keys (F7/F8/F9). macOS keyboard sends `NX_KEYTYPE_REWIND`/`FAST` (not `PREVIOUS`/`NEXT`), so both code families are registered. |
 | **Audio Engine** | Decode and play audio with sub-millisecond latency |
 | **Database** | SQLite operations via rusqlite |
 | **Library Scanner** | Directory traversal, metadata extraction |
@@ -192,7 +192,7 @@ User clicks "Add Music" button
 | Feature | Implementation |
 |---------|----------------|
 | Window chrome | Native titlebar with traffic lights |
-| Media keys | `souvlaki` (Now Playing widget) + `tauri-plugin-global-shortcut` |
+| Media keys | `souvlaki` (Now Playing widget) + `tauri-plugin-global-shortcut` (`MediaRewind`/`MediaFastForward` for F7/F9, `MediaTrackPrevious`/`MediaTrackNext` for AirPods/Bluetooth) |
 | Menu bar | Native application menu |
 | File associations | Info.plist configuration |
 
