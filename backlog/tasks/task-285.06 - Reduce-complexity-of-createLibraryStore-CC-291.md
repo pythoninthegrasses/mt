@@ -1,9 +1,10 @@
 ---
 id: TASK-285.06
 title: Reduce complexity of createLibraryStore (CC 291)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-24 00:05'
+updated_date: '2026-02-24 20:13'
 labels:
   - tech-debt
   - code-health
@@ -13,6 +14,7 @@ references:
   - app/frontend/js/stores/library.js
 parent_task_id: TASK-285
 priority: medium
+ordinal: 7000
 ---
 
 ## Description

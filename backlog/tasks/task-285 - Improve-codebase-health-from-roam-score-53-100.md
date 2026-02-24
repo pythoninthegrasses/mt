@@ -1,9 +1,10 @@
 ---
 id: TASK-285
 title: Improve codebase health from roam score 53/100
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-24 00:04'
+updated_date: '2026-02-24 20:13'
 labels:
   - tech-debt
   - code-health
@@ -14,6 +15,7 @@ references:
   - app/frontend/js/stores/library.js
   - app/frontend/main.js
 priority: medium
+ordinal: 5000
 ---
 
 ## Description

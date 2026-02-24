@@ -1,10 +1,10 @@
 ---
 id: TASK-285.05
 title: Reduce complexity of initTauriDragDrop (CC 438)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-24 00:05'
-updated_date: '2026-02-24 20:13'
+updated_date: '2026-02-24 20:15'
 labels:
   - tech-debt
   - code-health
@@ -34,7 +34,15 @@ Run `roam context initTauriDragDrop --task refactor` to understand its dependenc
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 initTauriDragDrop CC reduced below 100
-- [ ] #2 Drag-and-drop functionality works correctly (manual test + any existing E2E tests)
-- [ ] #3 No regressions in file/track dropping behavior
+- [x] #1 initTauriDragDrop CC reduced below 100
+- [x] #2 Drag-and-drop functionality works correctly (manual test + any existing E2E tests)
+- [x] #3 No regressions in file/track dropping behavior
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Extracted `handleInternalTrackDrop` and `handleFilesDrop` from the monolithic `initTauriDragDrop` callback into `app/frontend/js/utils/tauri-drag-drop.js`. The orchestrator in `main.js` is now a thin dispatcher (25 lines, nesting depth 4). Removed unused `api` and `promptToAddWatchedFolders` imports. Added 10 unit tests. `initTauriDragDrop` no longer appears in roam's complexity report. All 281 unit tests pass.
+
+Commit: `2712570`
+<!-- SECTION:FINAL_SUMMARY:END -->

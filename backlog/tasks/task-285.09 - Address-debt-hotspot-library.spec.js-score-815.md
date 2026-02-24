@@ -1,9 +1,10 @@
 ---
 id: TASK-285.09
 title: 'Address debt hotspot: library.spec.js (score 815)'
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-24 00:05'
+updated_date: '2026-02-24 20:13'
 labels:
   - tech-debt
   - code-health
@@ -13,6 +14,7 @@ references:
   - app/frontend/tests/library.spec.js
 parent_task_id: TASK-285
 priority: low
+ordinal: 10000
 ---
 
 ## Description
