@@ -427,39 +427,47 @@ export function createQueueStore(Alpine) {
         return;
       }
 
-      if (this.loop === 'one') {
+      // Prevent QUEUE_STATE_CHANGED event from overwriting state during playNext
+      this._updating = true;
+      try {
         if (this._repeatOnePending) {
+          // Second call after repeat-one replay — clear flag and advance normally
           this._repeatOnePending = false;
-          this.loop = 'none';
-          // Loop state is session-only, no persistence needed
-        } else {
+        } else if (this.loop === 'one') {
+          // First call with loop-one — replay track and untoggle icon immediately
           this._repeatOnePending = true;
+          this.loop = 'none';
+          await api.queue.setLoop(this.loop);
           await this.playIndex(this.currentIndex, true);
           return;
         }
-      }
 
-      // Push current track to history before advancing
-      if (this.currentIndex >= 0) {
-        this._pushToHistory(this.currentIndex);
-      }
-
-      let nextIndex = this.currentIndex + 1;
-
-      if (nextIndex >= this.items.length) {
-        if (this.loop === 'all') {
-          if (this.shuffle) {
-            // Use special reshuffle that puts just-played track at END (task-222)
-            this._reshuffleForLoopRestart();
-          }
-          nextIndex = 0;
-        } else {
-          Alpine.store('player').isPlaying = false;
-          return;
+        // Push current track to history before advancing
+        if (this.currentIndex >= 0) {
+          this._pushToHistory(this.currentIndex);
         }
-      }
 
-      await this.playIndex(nextIndex, true);
+        let nextIndex = this.currentIndex + 1;
+
+        if (nextIndex >= this.items.length) {
+          if (this.loop === 'all') {
+            if (this.shuffle) {
+              // Use special reshuffle that puts just-played track at END (task-222)
+              this._reshuffleForLoopRestart();
+            }
+            nextIndex = 0;
+          } else {
+            Alpine.store('player').isPlaying = false;
+            return;
+          }
+        }
+
+        await this.playIndex(nextIndex, true);
+      } finally {
+        setTimeout(() => {
+          this._updating = false;
+        }, 50);
+      }
     },
 
     async playPrevious() {

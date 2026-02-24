@@ -52,8 +52,40 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
       return -1;
     },
 
+    playNext() {
+      if (this.items.length === 0) return;
+
+      if (this._repeatOnePending) {
+        this._repeatOnePending = false;
+      } else if (this.loop === 'one') {
+        this._repeatOnePending = true;
+        this.loop = 'none';
+        this.playIndex(this.currentIndex, true);
+        return;
+      }
+
+      if (this.currentIndex >= 0) {
+        this._pushToHistory(this.currentIndex);
+      }
+
+      let nextIndex = this.currentIndex + 1;
+      if (nextIndex >= this.items.length) {
+        if (this.loop === 'all') {
+          nextIndex = 0;
+        } else {
+          return; // End of queue, no loop
+        }
+      }
+
+      this.playIndex(nextIndex, true);
+    },
+
     skipNext() {
       if (this.items.length === 0) return;
+      if (this.loop === 'one') {
+        this.loop = 'all';
+        this._repeatOnePending = false;
+      }
       if (this.currentIndex >= 0) {
         this._pushToHistory(this.currentIndex);
       }
@@ -771,5 +803,104 @@ describe('Queue Store - Play History Preservation', () => {
     store.playPrevious();
     expect(store._playHistory.length).toBe(0);
     expect(store.currentIndex).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Deterministic Tests: Loop-One (Repeat Once) Behavior
+// -----------------------------------------------------------------------------
+
+describe('Queue Store - Loop-One (Repeat Once)', () => {
+  function makeTracks(names) {
+    return names.map((name, i) => ({
+      id: `loop-track-${i}-${name}`,
+      title: name,
+      artist: 'Test',
+      album: 'Test',
+      duration: 180000,
+      filepath: `/music/${name}.mp3`,
+    }));
+  }
+
+  test('playNext with loop=one replays current track and untogles icon on first call', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.loop = 'one';
+
+    store.playNext();
+
+    expect(store.currentIndex).toBe(0);
+    expect(store.currentTrack.title).toBe('A');
+    expect(store._repeatOnePending).toBe(true);
+    // Icon untoggled immediately when repeat starts
+    expect(store.loop).toBe('none');
+  });
+
+  test('playNext with loop=one advances to next track on second call', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.loop = 'one';
+
+    store.playNext(); // First: replays A, untoggles icon
+    store.playNext(); // Second: advances to B
+
+    expect(store.currentIndex).toBe(1);
+    expect(store.currentTrack.title).toBe('B');
+    expect(store._repeatOnePending).toBe(false);
+    expect(store.loop).toBe('none');
+  });
+
+  test('loop=one clears to none when repeat starts, not when it completes', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(1); // Playing B
+    store.loop = 'one';
+
+    store.playNext(); // First: replays B
+    expect(store.loop).toBe('none');
+
+    store.playNext(); // Second: clears loop, advances to C
+    expect(store.loop).toBe('none');
+    expect(store.currentIndex).toBe(2);
+  });
+
+  test('cycleLoop resets _repeatOnePending', () => {
+    const tracks = makeTracks(['A', 'B']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.loop = 'one';
+
+    store.playNext(); // Sets _repeatOnePending = true
+    expect(store._repeatOnePending).toBe(true);
+
+    store.cycleLoop(); // Cycle loop resets pending flag
+    expect(store._repeatOnePending).toBe(false);
+  });
+
+  test('other loop modes unaffected - loop=all wraps around', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(2); // Last track
+    store.loop = 'all';
+
+    store.playNext();
+
+    expect(store.currentIndex).toBe(0);
+    expect(store.loop).toBe('all');
+  });
+
+  test('other loop modes unaffected - loop=none stops at end', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(2); // Last track
+    store.loop = 'none';
+
+    store.playNext();
+
+    // Should not advance (returns without changing index)
+    expect(store.currentIndex).toBe(2);
+    expect(store.loop).toBe('none');
   });
 });
