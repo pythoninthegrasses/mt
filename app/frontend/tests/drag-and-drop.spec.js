@@ -509,3 +509,165 @@ test.describe('Drag Visual Feedback', () => {
     expect(sidebarDragState).toBeFalsy();
   });
 });
+
+test.describe('Now Playing Queue Drag Ghost Position', () => {
+  test.beforeEach(async ({ page }) => {
+    const libraryState = createLibraryState();
+    await setupLibraryMocks(page, libraryState);
+
+    await page.goto('/');
+    await waitForAlpine(page);
+    await page.waitForSelector('[data-track-id]', { state: 'visible' });
+
+    // Add multiple tracks to queue
+    await page.keyboard.press('Meta+a');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(500);
+
+    // Navigate to Now Playing view
+    await page.evaluate(() => {
+      window.Alpine.store('ui').view = 'nowPlaying';
+    });
+
+    // Wait for Now Playing view to be active and queue items visible
+    await page.waitForSelector('[x-data="nowPlayingView"] .queue-item', { state: 'visible', timeout: 5000 });
+  });
+
+  test('drag ghost should track cursor position (no offset gap)', async ({ page }) => {
+    // Find the drag handle on the first queue item (this triggers startDrag)
+    const dragHandle = page.locator('[x-data="nowPlayingView"] .queue-item .drag-handle').first();
+    await expect(dragHandle).toBeVisible({ timeout: 5000 });
+
+    // Get the parent queue-item's bounding box for reference
+    const queueItem = page.locator('[x-data="nowPlayingView"] .queue-item').first();
+    const itemBox = await queueItem.boundingBox();
+    if (!itemBox) {
+      test.skip();
+      return;
+    }
+
+    const handleBox = await dragHandle.boundingBox();
+    if (!handleBox) {
+      test.skip();
+      return;
+    }
+
+    // Start drag on the drag handle
+    const startX = handleBox.x + handleBox.width / 2;
+    const startY = handleBox.y + handleBox.height / 2;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+
+    // Move cursor by a known delta
+    const deltaY = 150;
+    await page.mouse.move(startX, startY + deltaY);
+
+    // Get the computed transform and verify it matches cursor movement
+    const result = await page.evaluate(() => {
+      const nowPlayingView = document.querySelector('[x-data="nowPlayingView"]');
+      if (!nowPlayingView) return { error: 'nowPlayingView not found' };
+
+      const viewData = window.Alpine.$data(nowPlayingView);
+      if (!viewData) return { error: 'Alpine data not found' };
+
+      // Get the transform that would be applied
+      const transform = viewData.getDragTransform?.();
+      const dragY = viewData.dragY;
+      const dragStartY = viewData.dragStartY;
+      const draggingOriginalIdx = viewData.draggingOriginalIdx;
+
+      return {
+        transform,
+        dragY,
+        dragStartY,
+        draggingOriginalIdx,
+        expectedOffset: dragY - dragStartY,
+      };
+    });
+
+    // End drag
+    await page.mouse.up();
+
+    // Verify drag state was active
+    expect(result.error).toBeUndefined();
+    expect(result.draggingOriginalIdx).not.toBeNull();
+    expect(result.transform).toBeDefined();
+    expect(result.transform).not.toBe('');
+
+    // Extract translateY value from transform string
+    const match = result.transform.match(/translateY\(([\d.-]+)px\)/);
+    expect(match).toBeTruthy();
+
+    const actualOffset = parseFloat(match[1]);
+    const expectedOffset = result.expectedOffset;
+
+    // The transform offset should equal dragY - dragStartY
+    // Allow small floating point tolerance
+    expect(Math.abs(actualOffset - expectedOffset)).toBeLessThan(1);
+
+    // The offset should be approximately equal to our cursor delta
+    // (not exact due to item midpoint calculation, but should be close)
+    expect(Math.abs(actualOffset - deltaY)).toBeLessThan(itemBox.height);
+  });
+
+  test('drag ghost offset should be relative to grab point, not absolute position', async ({ page }) => {
+    // This test verifies the fix: offset = dragY - dragStartY (relative)
+    // NOT computed from absolute item position (which caused the bug)
+
+    const dragHandle = page.locator('[x-data="nowPlayingView"] .queue-item .drag-handle').first();
+    await expect(dragHandle).toBeVisible({ timeout: 5000 });
+
+    const queueItem = page.locator('[x-data="nowPlayingView"] .queue-item').first();
+    const itemBox = await queueItem.boundingBox();
+    if (!itemBox) {
+      test.skip();
+      return;
+    }
+
+    const handleBox = await dragHandle.boundingBox();
+    if (!handleBox) {
+      test.skip();
+      return;
+    }
+
+    // Start drag
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+
+    // Get drag state immediately after mousedown (no movement)
+    const result = await page.evaluate(() => {
+      const nowPlayingView = document.querySelector('[x-data="nowPlayingView"]');
+      const viewData = window.Alpine.$data(nowPlayingView);
+      return {
+        dragY: viewData.dragY,
+        dragStartY: viewData.dragStartY,
+        transform: viewData.getDragTransform?.(),
+        draggingOriginalIdx: viewData.draggingOriginalIdx,
+      };
+    });
+
+    await page.mouse.up();
+
+    // Verify drag was initiated
+    expect(result.draggingOriginalIdx).not.toBeNull();
+
+    // dragStartY should be approximately the item's midpoint (rect.top + rect.height / 2)
+    // Allow some tolerance for different element bounds
+    const expectedDragStartY = itemBox.y + itemBox.height / 2;
+    expect(Math.abs(result.dragStartY - expectedDragStartY)).toBeLessThan(20);
+
+    // The transform should be defined and parse correctly
+    expect(result.transform).toBeDefined();
+    const match = result.transform.match(/translateY\(([\d.-]+)px\)/);
+    expect(match).toBeTruthy();
+
+    // Since we grab at the handle position but dragStartY is item midpoint,
+    // the initial offset will be based on where cursor is vs item midpoint
+    const offset = parseFloat(match[1]);
+
+    // The offset should be small initially (cursor near item center)
+    // This tests that the offset is relative, not some large absolute value
+    expect(Math.abs(offset)).toBeLessThan(itemBox.height);
+  });
+});

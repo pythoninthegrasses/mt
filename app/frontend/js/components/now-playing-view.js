@@ -93,7 +93,7 @@ export function createNowPlayingView(Alpine) {
 
       const rect = target.getBoundingClientRect();
       this.dragItemHeight = rect.height;
-      this.dragStartY = rect.top;
+      this.dragStartY = rect.top + rect.height / 2;
       this.dragY = event.clientY || event.touches?.[0]?.clientY || rect.top;
 
       this.draggingOriginalIdx = originalIdx;
@@ -267,22 +267,7 @@ export function createNowPlayingView(Alpine) {
     getDragTransform() {
       if (this.draggingOriginalIdx === null) return '';
 
-      const playOrderItems = this.$store.queue.playOrderItems;
-      const displayIdx = playOrderItems.findIndex((item) =>
-        item.originalIndex === this.draggingOriginalIdx
-      );
-      if (displayIdx === -1) return '';
-
-      const container = this.$refs.queueList;
-      if (!container) return '';
-
-      // Calculate element position from math instead of DOM query
-      const containerRect = container.getBoundingClientRect();
-      const itemViewportTop = containerRect.top + displayIdx * this._rowHeight -
-        container.scrollTop;
-      const itemMidY = itemViewportTop + this._rowHeight / 2;
-      const offsetY = this.dragY - itemMidY;
-
+      const offsetY = this.dragY - this.dragStartY;
       return `translateY(${offsetY}px)`;
     },
   }));

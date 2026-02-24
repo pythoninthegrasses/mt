@@ -1,10 +1,10 @@
 ---
 id: TASK-287
 title: Fix drag ghost offset in Now Playing queue — item renders below cursor
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-24 20:13'
-updated_date: '2026-02-24 20:14'
+updated_date: '2026-02-24 20:24'
 labels:
   - bug
   - frontend
@@ -80,8 +80,43 @@ Here `dragStartY` is set to `rect.top + rect.height / 2` (the item's midpoint at
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Dragged queue item tracks inline with cursor position (no visible gap between cursor and ghost element)
-- [ ] #2 Drag positioning works correctly regardless of scroll position in the queue
-- [ ] #3 Drag positioning works correctly with virtual scrolling (large queues)
-- [ ] #4 Existing E2E tests pass: npx playwright test app/frontend/tests/drag-and-drop.spec.js
+- [x] #1 Dragged queue item tracks inline with cursor position (no visible gap between cursor and ghost element)
+- [x] #2 Drag positioning works correctly regardless of scroll position in the queue
+- [x] #3 Drag positioning works correctly with virtual scrolling (large queues)
+- [x] #4 Existing E2E tests pass: npx playwright test app/frontend/tests/drag-and-drop.spec.js
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Summary
+
+Fixed drag ghost offset in Now Playing queue by switching from absolute position calculation to relative offset approach.
+
+## Root Cause
+
+The original `getDragTransform()` computed the item's viewport position from scratch using `containerRect.top + displayIdx * _rowHeight - container.scrollTop`. This calculation didn't account for the virtual scroll offset (`queueOffsetY`) parent transform applied to the DOM, resulting in incorrect offset between cursor and ghost.
+
+## Fix
+
+Adopted the same simple relative approach used by the working `playlist-drag.js` mixin:
+
+1. **`startDrag()`**: Changed `dragStartY = rect.top` to `dragStartY = rect.top + rect.height / 2` (item's midpoint at drag start)
+
+2. **`getDragTransform()`**: Simplified from 20 lines of absolute position calculation to 4 lines:
+   ```js
+   const offsetY = this.dragY - this.dragStartY;
+   return `translateY(${offsetY}px)`;
+   ```
+
+This relative approach is immune to virtual scroll issues because it only tracks how far the mouse moved from the initial grab point, not the item's absolute position.
+
+## Files Changed
+
+- `app/frontend/js/components/now-playing-view.js`: Lines 96 and 267-272
+
+## Verification
+
+- All 18 drag-and-drop E2E tests pass
+- No LSP diagnostics
+<!-- SECTION:FINAL_SUMMARY:END -->
