@@ -1,9 +1,10 @@
 ---
 id: TASK-285.05
 title: Reduce complexity of initTauriDragDrop (CC 438)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-24 00:05'
+updated_date: '2026-02-24 20:13'
 labels:
   - tech-debt
   - code-health
@@ -14,6 +15,7 @@ references:
   - app/frontend/index.html
 parent_task_id: TASK-285
 priority: medium
+ordinal: 6000
 ---
 
 ## Description
