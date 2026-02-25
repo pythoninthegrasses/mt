@@ -268,7 +268,7 @@ impl PlaylistsUpdatedEvent {
 
 /// Emitted when a setting value changes
 #[derive(Clone, Debug, Serialize)]
-#[allow(dead_code)]
+#[allow(dead_code)] // TODO: wire up settings change notifications
 pub struct SettingsUpdatedEvent {
     /// The setting key that changed
     pub key: String,
@@ -278,7 +278,7 @@ pub struct SettingsUpdatedEvent {
     pub previous_value: Option<serde_json::Value>,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] // TODO: wire up settings change notifications
 impl SettingsUpdatedEvent {
     pub const EVENT_NAME: &'static str = "settings:updated";
 

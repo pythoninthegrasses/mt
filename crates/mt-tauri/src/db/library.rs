@@ -869,7 +869,7 @@ pub(crate) fn update_track_fingerprints(
 
 /// Duplicate track info for merge decisions
 #[derive(Debug)]
-#[allow(dead_code)]
+#[allow(dead_code)] // Fields read in find_duplicates_by_inode callers
 pub struct DuplicateCandidate {
     pub id: i64,
     pub filepath: String,

@@ -99,7 +99,7 @@ pub struct PlaylistTrack {
 
 /// Favorite entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
+#[allow(dead_code)] // Fields populated via Deserialize
 pub struct Favorite {
     pub id: i64,
     pub track_id: i64,
@@ -116,7 +116,7 @@ pub struct FavoriteTrack {
 
 /// Setting entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
+#[allow(dead_code)] // Fields populated via Deserialize
 pub struct Setting {
     pub key: String,
     pub value: Option<String>,
@@ -149,7 +149,7 @@ pub struct WatchedFolder {
 
 /// Lyrics cache entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
+#[allow(dead_code)] // Fields populated via Deserialize
 pub struct LyricsCache {
     pub id: i64,
     pub artist: String,
@@ -192,7 +192,7 @@ pub struct LibraryStats {
 
 /// File fingerprint for change detection
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(dead_code)] // Constructed in db queries, fields read by scanner
 pub struct FileFingerprint {
     pub filepath: String,
     pub file_mtime_ns: Option<i64>,

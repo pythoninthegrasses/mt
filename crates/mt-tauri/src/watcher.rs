@@ -55,7 +55,7 @@ pub struct WatcherStatus {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[allow(dead_code)]
+#[allow(dead_code)] // TODO: emit scan progress events to frontend
 pub struct ScanProgress {
     pub folder_id: i64,
     pub percent: Option<u8>,
@@ -88,10 +88,10 @@ pub struct WatcherManager {
 }
 
 struct WatcherHandle {
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Kept for debug logging
     folder_id: i64,
     cancel_tx: mpsc::Sender<()>,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Held to keep the watcher alive via Drop
     fs_watcher: Option<Debouncer<notify::RecommendedWatcher, RecommendedCache>>,
 }
 

@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use crate::db::DbResult;
 
 /// Default settings values
+// Used by get_all_settings (test-only callers: benchmarks, compat_test)
 #[allow(dead_code)]
 fn get_defaults() -> HashMap<&'static str, JsonValue> {
     let mut defaults = HashMap::new();
@@ -22,6 +23,7 @@ fn get_defaults() -> HashMap<&'static str, JsonValue> {
 }
 
 /// Get all settings as a JSON-like HashMap
+// Only called from tests (benchmarks, compat_test, unit tests)
 #[allow(dead_code)]
 pub(crate) fn get_all_settings(conn: &Connection) -> DbResult<HashMap<String, JsonValue>> {
     let mut stmt = conn.prepare("SELECT key, value FROM settings")?;
@@ -89,6 +91,7 @@ pub(crate) fn set_setting(conn: &Connection, key: &str, value: &JsonValue) -> Db
 }
 
 /// Update multiple settings at once
+// Only called from tests (unit tests)
 #[allow(dead_code)]
 pub(crate) fn update_settings(
     conn: &Connection,

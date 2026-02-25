@@ -9,8 +9,6 @@
 /// Default cache size (number of tracks)
 pub const DEFAULT_CACHE_SIZE: usize = 100;
 
-// Re-export Artwork for convenience
-
 mod rust_impl {
     use lru::LruCache;
     use parking_lot::Mutex;
