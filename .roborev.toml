@@ -1,0 +1,6 @@
+# * Overrides ~/.roborev/config.toml
+# https://www.roborev.io/configuration/
+
+agent = "claude-code"
+default_model = "claude-opus-4-6"
+default_backup_agent = "opencode"
