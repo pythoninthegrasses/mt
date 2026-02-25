@@ -4,6 +4,8 @@ import {
   buildArtistDisplayNames,
   buildCanonicalArtistMap,
   groupTracksIntoAlbums,
+  parseDiscNumber,
+  parseTrackNumber,
 } from '../utils/artist-utils.js';
 import { handleDoubleClickPlay } from '../utils/queue-builder.js';
 import { singleTrackContextMenuMixin } from '../mixins/single-track-context-menu.js';
@@ -155,14 +157,6 @@ export function createArtistsBrowser(Alpine) {
       return str;
     },
 
-    _parseDiscNumber(val) {
-      return parseInt(String(val || '1').split('/')[0], 10) || 1;
-    },
-
-    _parseTrackNumber(val) {
-      return parseInt(String(val || '').split('/')[0], 10) || 999999;
-    },
-
     get selectedArtistTracks() {
       if (!this.selectedArtist) return [];
       const canonicalMap = this._canonicalArtistMap;
@@ -189,19 +183,19 @@ export function createArtistsBrowser(Alpine) {
         .sort((a, b) => {
           const albumCmp = (a.album || '').localeCompare(b.album || '');
           if (albumCmp !== 0) return albumCmp;
-          const discCmp = this._parseDiscNumber(a.disc_number) -
-            this._parseDiscNumber(b.disc_number);
+          const discCmp = parseDiscNumber(a.disc_number) -
+            parseDiscNumber(b.disc_number);
           if (discCmp !== 0) return discCmp;
-          return this._parseTrackNumber(a.track_number) -
-            this._parseTrackNumber(b.track_number);
+          return parseTrackNumber(a.track_number) -
+            parseTrackNumber(b.track_number);
         });
     },
 
     get selectedArtistAlbums() {
       return groupTracksIntoAlbums(
         this.selectedArtistTracks,
-        this._parseDiscNumber,
-        this._parseTrackNumber,
+        parseDiscNumber,
+        parseTrackNumber,
       );
     },
 

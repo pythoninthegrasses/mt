@@ -91,6 +91,28 @@ export function buildArtistDisplayNames(tracks, canonicalMap) {
 }
 
 /**
+ * Parse a disc number value, handling "X/Y" format.
+ * Returns 1 for missing or unparseable values.
+ *
+ * @param {*} val - Raw disc number from track metadata
+ * @returns {number}
+ */
+export function parseDiscNumber(val) {
+  return parseInt(String(val || '1').split('/')[0], 10) || 1;
+}
+
+/**
+ * Parse a track number value, handling "X/Y" format.
+ * Returns 999999 for missing or unparseable values (sorts to end).
+ *
+ * @param {*} val - Raw track number from track metadata
+ * @returns {number}
+ */
+export function parseTrackNumber(val) {
+  return parseInt(String(val || '').split('/')[0], 10) || 999999;
+}
+
+/**
  * Group sorted tracks into album objects with per-album track sorting.
  *
  * @param {Array} tracks - Tracks already filtered to one artist
@@ -143,8 +165,8 @@ export function groupTracksIntoAlbums(tracks, parseDiscNumber, parseTrackNumber)
   }
 
   return Object.values(albumMap).sort((a, b) => {
-    const yearA = parseInt(a.year) || 0;
-    const yearB = parseInt(b.year) || 0;
+    const yearA = parseInt(a.year, 10) || 0;
+    const yearB = parseInt(b.year, 10) || 0;
     // Albums without year go to end
     if (yearA === 0 && yearB !== 0) return 1;
     if (yearA !== 0 && yearB === 0) return -1;

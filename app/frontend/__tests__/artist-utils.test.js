@@ -9,7 +9,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { groupTracksIntoAlbums } from '../js/utils/artist-utils.js';
+import {
+  groupTracksIntoAlbums,
+  parseDiscNumber,
+  parseTrackNumber,
+} from '../js/utils/artist-utils.js';
 
 function createMockTrack(id, overrides = {}) {
   return {
@@ -26,14 +30,6 @@ function createMockTrack(id, overrides = {}) {
     genre: '',
     ...overrides,
   };
-}
-
-function parseDiscNumber(val) {
-  return parseInt(String(val || '1').split('/')[0], 10) || 1;
-}
-
-function parseTrackNumber(val) {
-  return parseInt(String(val || '').split('/')[0], 10) || 999999;
 }
 
 describe('groupTracksIntoAlbums', () => {
