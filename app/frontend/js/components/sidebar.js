@@ -170,8 +170,8 @@ export function createSidebar(Alpine) {
 
     async loadPlaylists() {
       try {
-        const playlists = await playlists.getAll();
-        this.playlists = playlists.map((p) => ({
+        const data = await playlists.getAll();
+        this.playlists = data.map((p) => ({
           id: `playlist-${p.id}`,
           playlistId: p.id,
           name: p.name,

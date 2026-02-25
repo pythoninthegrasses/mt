@@ -8,12 +8,6 @@
 
 import { request } from './shared.js';
 export { ApiError } from './shared.js';
-export { library } from './library.js';
-export { queue } from './queue.js';
-export { favorites } from './favorites.js';
-export { playlists } from './playlists.js';
-export { lastfm } from './lastfm.js';
-export { settings } from './settings.js';
 
 import { library } from './library.js';
 import { queue } from './queue.js';
@@ -21,6 +15,8 @@ import { favorites } from './favorites.js';
 import { playlists } from './playlists.js';
 import { lastfm } from './lastfm.js';
 import { settings } from './settings.js';
+
+export { library, queue, favorites, playlists, lastfm, settings };
 
 /**
  * Unified API object (backward compatibility).

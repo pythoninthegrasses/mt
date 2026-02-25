@@ -13,8 +13,8 @@ export function singleTrackContextMenuMixin() {
   return {
     _loadPlaylists: async function () {
       try {
-        const playlists = await playlists.getAll();
-        this.playlists = playlists.map((p) => ({ id: p.id, name: p.name }));
+        const data = await playlists.getAll();
+        this.playlists = data.map((p) => ({ id: p.id, name: p.name }));
       } catch {
         this.playlists = [];
       }
