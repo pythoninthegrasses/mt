@@ -14,16 +14,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::scanner::fingerprint::FileFingerprint;
 use crate::scanner::{ExtractedMetadata, ScanResult};
 
-/// Convert empty or whitespace-only tag strings to None.
-fn non_empty(s: &str) -> Option<String> {
-    let trimmed = s.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
-}
-
 /// Extract metadata from a single audio file
 pub(crate) fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> {
     let path = Path::new(filepath);
@@ -88,10 +78,13 @@ pub(crate) fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> 
         .primary_tag()
         .or_else(|| tagged_file.first_tag())
     {
-        metadata.title = tag.title().and_then(|s| non_empty(&s));
-        metadata.artist = tag.artist().and_then(|s| non_empty(&s));
-        metadata.album = tag.album().and_then(|s| non_empty(&s));
-        metadata.album_artist = tag.get_string(&ItemKey::AlbumArtist).and_then(non_empty);
+        metadata.title = tag.title().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        metadata.artist = tag.artist().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        metadata.album = tag.album().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        metadata.album_artist = tag
+            .get_string(&ItemKey::AlbumArtist)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
 
         // Track number can be in format "1" or "1/10"
         metadata.track_number = tag.track().map(|n| n.to_string());
@@ -103,7 +96,7 @@ pub(crate) fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> 
         // Year/date
         metadata.date = tag.year().map(|y| y.to_string());
 
-        metadata.genre = tag.genre().and_then(|s| non_empty(&s));
+        metadata.genre = tag.genre().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     }
 
     // Use filename as title if no title found
@@ -145,6 +138,36 @@ pub(crate) fn extract_metadata_or_default(filepath: &str) -> ExtractedMetadata {
 }
 
 /// Extract metadata from multiple files in parallel using rayon
+fn extract_metadata_parallel<F>(
+    filepaths: &[(String, FileFingerprint)],
+    progress_fn: Option<F>,
+) -> Vec<ExtractedMetadata>
+where
+    F: Fn(usize, usize) + Sync,
+{
+    let total = filepaths.len();
+    let completed = Arc::new(AtomicUsize::new(0));
+
+    filepaths
+        .par_iter()
+        .map(|(filepath, fingerprint)| {
+            let mut metadata = extract_metadata_or_default(filepath);
+
+            metadata.file_size = fingerprint.size;
+            metadata.file_mtime_ns = fingerprint.mtime_ns;
+            metadata.file_inode = fingerprint.inode;
+
+            let count = completed.fetch_add(1, Ordering::Relaxed) + 1;
+            if let Some(ref f) = progress_fn {
+                f(count, total);
+            }
+
+            metadata
+        })
+        .collect()
+}
+
+/// Extract metadata from multiple files, choosing parallel or serial based on batch size
 ///
 /// # Arguments
 /// * `filepaths` - List of file paths to process
@@ -152,7 +175,7 @@ pub(crate) fn extract_metadata_or_default(filepath: &str) -> ExtractedMetadata {
 ///
 /// # Returns
 /// Vector of extracted metadata (one per file, in same order as input)
-pub(crate) fn extract_metadata_parallel<F>(
+pub(crate) fn extract_metadata_batch<F>(
     filepaths: &[(String, FileFingerprint)],
     progress_fn: Option<F>,
 ) -> Vec<ExtractedMetadata>
@@ -164,51 +187,15 @@ where
     }
 
     let total = filepaths.len();
-    let completed = Arc::new(AtomicUsize::new(0));
 
-    let results: Vec<ExtractedMetadata> = filepaths
-        .par_iter()
-        .map(|(filepath, fingerprint)| {
-            let mut metadata = extract_metadata_or_default(filepath);
-
-            // Ensure fingerprint is set from inventory
-            metadata.file_size = fingerprint.size;
-            metadata.file_mtime_ns = fingerprint.mtime_ns;
-            metadata.file_inode = fingerprint.inode;
-
-            // Update progress
-            let count = completed.fetch_add(1, Ordering::Relaxed) + 1;
-            if let Some(ref f) = progress_fn {
-                f(count, total);
-            }
-
-            metadata
-        })
-        .collect();
-
-    results
-}
-
-
-/// Smart extraction that chooses parallel or serial based on batch size
-pub(crate) fn extract_metadata_batch<F>(
-    filepaths: &[(String, FileFingerprint)],
-    progress_fn: Option<F>,
-) -> Vec<ExtractedMetadata>
-where
-    F: Fn(usize, usize) + Sync,
-{
     // Use serial for small batches (rayon overhead not worth it)
-    if filepaths.len() < 20 {
-        // Convert progress fn to FnMut for serial
+    if total < 20 {
         let progress = progress_fn.map(|f| {
             move |current: usize, total: usize| {
                 f(current, total);
             }
         });
 
-        // Need to use a different approach for serial since we have Fn not FnMut
-        let total = filepaths.len();
         let mut results = Vec::with_capacity(total);
 
         for (idx, (filepath, fingerprint)) in filepaths.iter().enumerate() {
@@ -249,8 +236,8 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_metadata_parallel_empty() {
-        let results = extract_metadata_parallel(&[], None::<fn(usize, usize)>);
+    fn test_extract_metadata_batch_empty() {
+        let results = extract_metadata_batch(&[], None::<fn(usize, usize)>);
         assert!(results.is_empty());
     }
 }

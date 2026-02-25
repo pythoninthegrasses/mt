@@ -1,4 +1,4 @@
-use crate::audio::error::AudioError;
+use crate::audio::audio_error::AudioError;
 use rodio::{Decoder, OutputStream, OutputStreamBuilder, Sink, Source};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
