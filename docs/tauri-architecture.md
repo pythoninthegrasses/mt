@@ -99,7 +99,7 @@ All data operations in native Rust:
 
 | Component | Responsibility |
 |-----------|----------------|
-| **rusqlite** | SQLite database operations |
+| **rusqlite** | SQLite database (`mt.db` in Tauri app data dir) |
 | **lofty-rs** | Audio metadata extraction |
 | **Library Scanner** | Recursive directory traversal |
 | **Watched Folders** | File system monitoring |

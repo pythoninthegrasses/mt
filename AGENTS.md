@@ -53,8 +53,17 @@ MT uses a pure Rust + Tauri architecture:
 - **Frontend**: Tauri WebView (Alpine.js + Basecoat/Tailwind CSS)
 - **Backend**: Native Rust (91 Tauri commands)
 - **Audio**: Rodio/Symphonia
-- **Database**: SQLite via rusqlite
+- **Database**: SQLite via rusqlite (`mt.db` in Tauri app data dir)
 - **Build Cache**: sccache (shared across worktrees/workspaces)
+
+### App Data Paths
+
+| Platform | App Data Dir                                         |
+|----------|------------------------------------------------------|
+| macOS    | `~/Library/Application Support/com.mt.desktop/`      |
+| Linux    | `$XDG_DATA_HOME/com.mt.desktop/`                     |
+
+Database: `mt.db`, Logs: see [Observability](docs/observability.md)
 
 See [Tauri Architecture](docs/tauri-architecture.md) for full details.
 

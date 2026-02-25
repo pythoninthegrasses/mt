@@ -19,7 +19,16 @@ Structured logging and diagnostics for mt.
 
 Both layers share a single `EnvFilter`.
 
-## Log File Location
+## File Locations
+
+### Database
+
+| Platform | Path                                                  |
+|----------|-------------------------------------------------------|
+| macOS    | `~/Library/Application Support/com.mt.desktop/mt.db`  |
+| Linux    | `$XDG_DATA_HOME/com.mt.desktop/mt.db`                 |
+
+### Log Files
 
 | Platform | Path                                         |
 |----------|----------------------------------------------|
