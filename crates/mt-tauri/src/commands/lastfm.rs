@@ -909,7 +909,9 @@ pub(crate) async fn lastfm_cache_loved_tracks(
 ///
 /// Extracted so it can be called from both the Tauri command and from
 /// background tasks without going through the command system.
-pub(crate) async fn match_loved_tracks_impl(db: &Database) -> Result<MatchLovedTracksResponse, String> {
+pub(crate) async fn match_loved_tracks_impl(
+    db: &Database,
+) -> Result<MatchLovedTracksResponse, String> {
     // Get all unmatched loved tracks from cache
     let unmatched = db
         .with_conn(|conn| lastfm_loved::get_unmatched_loved_tracks(conn, None))
@@ -1067,7 +1069,9 @@ pub(crate) fn lastfm_loved_stats(db: State<Database>) -> Result<LovedTracksStats
 /// tracks are not affected.
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub(crate) fn lastfm_reset_loved_cache(db: State<Database>) -> Result<ResetLovedCacheResponse, String> {
+pub(crate) fn lastfm_reset_loved_cache(
+    db: State<Database>,
+) -> Result<ResetLovedCacheResponse, String> {
     let (cleared, unfavorited) = db
         .with_conn(|conn| {
             // Get tracks auto-favorited by Last.fm sync before clearing

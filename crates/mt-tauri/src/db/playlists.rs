@@ -64,7 +64,10 @@ pub(crate) fn create_playlist(conn: &Connection, name: &str) -> DbResult<Option<
 }
 
 /// Get a playlist with its tracks
-pub(crate) fn get_playlist(conn: &Connection, playlist_id: i64) -> DbResult<Option<PlaylistWithTracks>> {
+pub(crate) fn get_playlist(
+    conn: &Connection,
+    playlist_id: i64,
+) -> DbResult<Option<PlaylistWithTracks>> {
     // Get playlist metadata
     let playlist = match conn.query_row(
         "SELECT * FROM playlists WHERE id = ?",

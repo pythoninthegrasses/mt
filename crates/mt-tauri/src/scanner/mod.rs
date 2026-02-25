@@ -105,7 +105,6 @@ pub(crate) fn is_audio_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -30,7 +30,10 @@ pub(crate) fn get_watched_folders(conn: &Connection) -> DbResult<Vec<WatchedFold
 }
 
 /// Get a watched folder by ID
-pub(crate) fn get_watched_folder(conn: &Connection, folder_id: i64) -> DbResult<Option<WatchedFolder>> {
+pub(crate) fn get_watched_folder(
+    conn: &Connection,
+    folder_id: i64,
+) -> DbResult<Option<WatchedFolder>> {
     match conn.query_row(
         "SELECT * FROM watched_folders WHERE id = ?",
         [folder_id],
@@ -123,7 +126,10 @@ pub(crate) fn update_watched_folder(
 }
 
 /// Update the last_scanned_at timestamp for a watched folder
-pub(crate) fn update_watched_folder_last_scanned(conn: &Connection, folder_id: i64) -> DbResult<bool> {
+pub(crate) fn update_watched_folder_last_scanned(
+    conn: &Connection,
+    folder_id: i64,
+) -> DbResult<bool> {
     let updated = conn.execute(
         "UPDATE watched_folders SET last_scanned_at = strftime('%s','now'), updated_at = strftime('%s','now') WHERE id = ?",
         [folder_id],

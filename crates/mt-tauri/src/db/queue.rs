@@ -59,7 +59,11 @@ pub(crate) fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
 }
 
 /// Add tracks to the queue by track IDs
-pub(crate) fn add_to_queue(conn: &Connection, track_ids: &[i64], position: Option<i64>) -> DbResult<i64> {
+pub(crate) fn add_to_queue(
+    conn: &Connection,
+    track_ids: &[i64],
+    position: Option<i64>,
+) -> DbResult<i64> {
     // Get filepaths for track IDs
     let placeholders = track_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let sql = format!(
@@ -219,7 +223,11 @@ pub(crate) fn clear_queue(conn: &Connection) -> DbResult<()> {
 }
 
 /// Reorder tracks in the queue
-pub(crate) fn reorder_queue(conn: &Connection, from_position: i64, to_position: i64) -> DbResult<bool> {
+pub(crate) fn reorder_queue(
+    conn: &Connection,
+    from_position: i64,
+    to_position: i64,
+) -> DbResult<bool> {
     let mut stmt = conn.prepare("SELECT id, filepath FROM queue ORDER BY id")?;
     let items: Vec<(i64, String)> = stmt
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?

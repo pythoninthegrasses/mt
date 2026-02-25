@@ -112,7 +112,11 @@ pub(crate) fn get_top_25(conn: &Connection) -> DbResult<Vec<Track>> {
 }
 
 /// Get tracks played within the last N days
-pub(crate) fn get_recently_played(conn: &Connection, days: i64, limit: i64) -> DbResult<Vec<Track>> {
+pub(crate) fn get_recently_played(
+    conn: &Connection,
+    days: i64,
+    limit: i64,
+) -> DbResult<Vec<Track>> {
     let modifier = format!("-{} days", days);
 
     let mut stmt = conn.prepare(

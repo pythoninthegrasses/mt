@@ -78,9 +78,18 @@ pub(crate) fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> 
         .primary_tag()
         .or_else(|| tagged_file.first_tag())
     {
-        metadata.title = tag.title().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-        metadata.artist = tag.artist().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-        metadata.album = tag.album().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        metadata.title = tag
+            .title()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        metadata.artist = tag
+            .artist()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        metadata.album = tag
+            .album()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
         metadata.album_artist = tag
             .get_string(&ItemKey::AlbumArtist)
             .map(|s| s.trim().to_string())
@@ -96,7 +105,10 @@ pub(crate) fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> 
         // Year/date
         metadata.date = tag.year().map(|y| y.to_string());
 
-        metadata.genre = tag.genre().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        metadata.genre = tag
+            .genre()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
     }
 
     // Use filename as title if no title found

@@ -132,7 +132,6 @@ pub(crate) fn scan_2phase(
     })
 }
 
-
 /// Build a fingerprint map from database tracks
 #[allow(dead_code)]
 pub(crate) fn build_fingerprint_map(

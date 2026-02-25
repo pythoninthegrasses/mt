@@ -6,8 +6,8 @@ mod queue;
 mod settings;
 
 pub(crate) use audio::{
-    AudioState, audio_get_status, audio_get_volume, audio_load,
-    audio_load_and_play, audio_pause, audio_play, audio_seek, audio_set_volume, audio_stop,
+    AudioState, audio_get_status, audio_get_volume, audio_load, audio_load_and_play, audio_pause,
+    audio_play, audio_seek, audio_set_volume, audio_stop,
 };
 
 pub(crate) use favorites::{
@@ -34,4 +34,6 @@ pub(crate) use queue::{
     queue_reorder, queue_set_current_index, queue_set_loop, queue_set_shuffle, queue_shuffle,
 };
 
-pub(crate) use settings::{settings_get, settings_get_all, settings_reset, settings_set, settings_update};
+pub(crate) use settings::{
+    settings_get, settings_get_all, settings_reset, settings_set, settings_update,
+};

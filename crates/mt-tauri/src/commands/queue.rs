@@ -115,7 +115,11 @@ pub(crate) fn queue_add_files(
 /// Remove a track from the queue by position
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub(crate) fn queue_remove(app: AppHandle, db: State<'_, Database>, position: i64) -> Result<(), String> {
+pub(crate) fn queue_remove(
+    app: AppHandle,
+    db: State<'_, Database>,
+    position: i64,
+) -> Result<(), String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     let removed = queue::remove_from_queue(&conn, position).map_err(|e| e.to_string())?;
 
@@ -290,7 +294,11 @@ pub(crate) fn queue_set_shuffle(
 /// Set loop mode in queue playback state
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub(crate) fn queue_set_loop(app: AppHandle, db: State<'_, Database>, mode: String) -> Result<(), String> {
+pub(crate) fn queue_set_loop(
+    app: AppHandle,
+    db: State<'_, Database>,
+    mode: String,
+) -> Result<(), String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     queue::set_loop_mode(&conn, &mode).map_err(|e| e.to_string())?;
 

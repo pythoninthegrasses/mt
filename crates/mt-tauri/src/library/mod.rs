@@ -4,4 +4,3 @@
 //! replacing the Python FastAPI library routes.
 
 pub(crate) mod commands;
-
