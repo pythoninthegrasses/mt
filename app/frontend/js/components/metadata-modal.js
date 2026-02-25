@@ -39,7 +39,11 @@ export function createMetadataModal(Alpine) {
     init() {
       this.$watch('$store.ui.modal', (modal) => {
         if (modal?.type === 'editMetadata') {
-          if (this.isOpen && this._sessionId === modal.data?.sessionId) {
+          // Guard against re-opening: if already open, only proceed if sessionId changed
+          // (both undefined and null are treated as "no session")
+          const currentSession = this._sessionId ?? undefined;
+          const newSession = modal.data?.sessionId ?? undefined;
+          if (this.isOpen && currentSession === newSession) {
             return;
           }
           this.open(modal.data);
