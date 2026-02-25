@@ -206,16 +206,8 @@ pub(crate) fn library_delete_tracks(
     let start = std::time::Instant::now();
     let deleted = db
         .transaction(|conn| {
-            // Fetch track info before deleting to record removals
-            let removals: Vec<(String, Option<String>)> = track_ids
-                .iter()
-                .filter_map(|&id| {
-                    library::get_track_by_id(conn, id)
-                        .ok()
-                        .flatten()
-                        .map(|t| (t.filepath, t.content_hash))
-                })
-                .collect();
+            // Fetch track info before deleting to record removals (single bulk query)
+            let removals = removed::get_track_removal_info_bulk(conn, &track_ids)?;
 
             let deleted = library::delete_tracks_by_ids(conn, &track_ids)?;
 

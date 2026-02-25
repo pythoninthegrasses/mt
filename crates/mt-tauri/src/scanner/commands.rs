@@ -259,37 +259,14 @@ pub(crate) async fn scan_paths_to_library(
     };
 
     // Filter out tracks that the user has previously removed from the library.
-    // Check both filepath (always available) and content_hash (when available).
     let truly_new = {
         let conn = db.conn().map_err(|e| e.to_string())?;
-        let removed_paths = removed::get_removed_filepaths(&conn).map_err(|e| e.to_string())?;
-        let removed_hashes =
-            removed::get_removed_content_hashes(&conn).map_err(|e| e.to_string())?;
-
-        if removed_paths.is_empty() && removed_hashes.is_empty() {
-            truly_new
-        } else {
-            let before = truly_new.len();
-            let filtered: Vec<_> = truly_new
-                .into_iter()
-                .filter(|(filepath, meta)| {
-                    if removed_paths.contains(filepath) {
-                        return false;
-                    }
-                    if let Some(ref hash) = meta.content_hash
-                        && removed_hashes.contains(hash)
-                    {
-                        return false;
-                    }
-                    true
-                })
-                .collect();
-            let skipped = before - filtered.len();
-            if skipped > 0 {
-                info!(skipped, "Skipped previously removed tracks during scan");
-            }
-            filtered
+        let (filtered, skipped) =
+            removed::filter_removed_tracks(&conn, truly_new).map_err(|e| e.to_string())?;
+        if skipped > 0 {
+            info!(skipped, "Skipped previously removed tracks during scan");
         }
+        filtered
     };
 
     // Chunked bulk inserts. Committing every ~500 tracks releases the write lock

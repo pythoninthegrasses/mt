@@ -623,29 +623,8 @@ impl WatcherManager {
 
         // Filter out tracks that the user has previously removed from the library.
         let truly_new = match db.conn() {
-            Ok(conn) => {
-                let removed_paths = removed::get_removed_filepaths(&conn).unwrap_or_default();
-                let removed_hashes = removed::get_removed_content_hashes(&conn).unwrap_or_default();
-
-                if removed_paths.is_empty() && removed_hashes.is_empty() {
-                    truly_new
-                } else {
-                    let before = truly_new.len();
-                    let filtered: Vec<_> = truly_new
-                        .into_iter()
-                        .filter(|(filepath, meta)| {
-                            if removed_paths.contains(filepath) {
-                                return false;
-                            }
-                            if let Some(ref hash) = meta.content_hash
-                                && removed_hashes.contains(hash)
-                            {
-                                return false;
-                            }
-                            true
-                        })
-                        .collect();
-                    let skipped = before - filtered.len();
+            Ok(conn) => match removed::filter_removed_tracks(&conn, truly_new) {
+                Ok((filtered, skipped)) => {
                     if skipped > 0 {
                         info!(
                             folder_id,
@@ -654,8 +633,15 @@ impl WatcherManager {
                     }
                     filtered
                 }
+                Err(e) => {
+                    error!(folder_id, error = %e, "Failed to filter removed tracks");
+                    return;
+                }
+            },
+            Err(e) => {
+                error!(folder_id, error = %e, "Failed to get DB connection for removed tracks filter");
+                return;
             }
-            Err(_) => truly_new,
         };
 
         // Chunked bulk inserts. Committing every ~500 tracks releases the write lock

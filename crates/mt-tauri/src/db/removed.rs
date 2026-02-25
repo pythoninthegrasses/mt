@@ -24,6 +24,7 @@ pub(crate) fn record_removal(
 }
 
 /// Record multiple track removals in bulk.
+/// Caller must ensure this runs inside a transaction for atomicity.
 pub(crate) fn record_removals_bulk(
     conn: &Connection,
     tracks: &[(String, Option<String>)],
@@ -89,6 +90,68 @@ pub(crate) fn clear_removal(conn: &Connection, filepath: &str) -> DbResult<bool>
 pub(crate) fn clear_all_removals(conn: &Connection) -> DbResult<usize> {
     let deleted = conn.execute("DELETE FROM removed_tracks", [])?;
     Ok(deleted)
+}
+
+/// Filter a list of `(filepath, TrackMetadata)` pairs, removing any that match
+/// previously-removed filepaths or content hashes. Returns the filtered vec and
+/// the number of tracks that were skipped.
+pub(crate) fn filter_removed_tracks(
+    conn: &Connection,
+    tracks: Vec<(String, crate::db::TrackMetadata)>,
+) -> DbResult<(Vec<(String, crate::db::TrackMetadata)>, usize)> {
+    let removed_paths = get_removed_filepaths(conn)?;
+    let removed_hashes = get_removed_content_hashes(conn)?;
+
+    if removed_paths.is_empty() && removed_hashes.is_empty() {
+        return Ok((tracks, 0));
+    }
+
+    let before = tracks.len();
+    let filtered: Vec<_> = tracks
+        .into_iter()
+        .filter(|(filepath, meta)| {
+            if removed_paths.contains(filepath) {
+                return false;
+            }
+            if let Some(ref hash) = meta.content_hash
+                && removed_hashes.contains(hash)
+            {
+                return false;
+            }
+            true
+        })
+        .collect();
+    let skipped = before - filtered.len();
+    Ok((filtered, skipped))
+}
+
+/// Fetch filepath and content_hash for multiple track IDs in a single query.
+pub(crate) fn get_track_removal_info_bulk(
+    conn: &Connection,
+    track_ids: &[i64],
+) -> DbResult<Vec<(String, Option<String>)>> {
+    if track_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let placeholders = track_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT filepath, content_hash FROM library WHERE id IN ({})",
+        placeholders
+    );
+    let params: Vec<&dyn rusqlite::ToSql> = track_ids
+        .iter()
+        .map(|id| id as &dyn rusqlite::ToSql)
+        .collect();
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(params.as_slice(), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(rows)
 }
 
 #[cfg(test)]
@@ -307,5 +370,93 @@ mod tests {
         let hashes = get_removed_content_hashes(&conn).unwrap();
         assert_eq!(hashes.len(), 1);
         assert!(hashes.contains("hash_b"));
+    }
+
+    #[test]
+    fn test_filter_removed_tracks() {
+        use crate::db::TrackMetadata;
+
+        let conn = setup_test_db();
+
+        record_removal(&conn, "/music/removed.mp3", None).unwrap();
+        record_removal(&conn, "/music/old.mp3", Some("hash_moved")).unwrap();
+
+        let tracks = vec![
+            ("/music/removed.mp3".to_string(), TrackMetadata::default()),
+            (
+                "/music/new_path.mp3".to_string(),
+                TrackMetadata {
+                    content_hash: Some("hash_moved".to_string()),
+                    ..Default::default()
+                },
+            ),
+            ("/music/keeper.mp3".to_string(), TrackMetadata::default()),
+        ];
+
+        let (filtered, skipped) = filter_removed_tracks(&conn, tracks).unwrap();
+        assert_eq!(skipped, 2);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].0, "/music/keeper.mp3");
+    }
+
+    #[test]
+    fn test_filter_removed_tracks_empty_removals() {
+        use crate::db::TrackMetadata;
+
+        let conn = setup_test_db();
+
+        let tracks = vec![("/music/track.mp3".to_string(), TrackMetadata::default())];
+
+        let (filtered, skipped) = filter_removed_tracks(&conn, tracks).unwrap();
+        assert_eq!(skipped, 0);
+        assert_eq!(filtered.len(), 1);
+    }
+
+    #[test]
+    fn test_get_track_removal_info_bulk() {
+        use crate::db::{TrackMetadata, library};
+
+        let conn = setup_test_db();
+
+        let meta1 = TrackMetadata {
+            title: Some("Track 1".to_string()),
+            content_hash: Some("h1".to_string()),
+            ..Default::default()
+        };
+        let meta2 = TrackMetadata {
+            title: Some("Track 2".to_string()),
+            ..Default::default()
+        };
+        library::add_tracks_bulk(
+            &conn,
+            &[
+                ("/music/a.mp3".to_string(), meta1),
+                ("/music/b.mp3".to_string(), meta2),
+            ],
+        )
+        .unwrap();
+
+        let ids: Vec<i64> = conn
+            .prepare("SELECT id FROM library ORDER BY id")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        let info = get_track_removal_info_bulk(&conn, &ids).unwrap();
+        assert_eq!(info.len(), 2);
+        assert!(
+            info.iter()
+                .any(|(p, h)| p == "/music/a.mp3" && h.as_deref() == Some("h1"))
+        );
+        assert!(info.iter().any(|(p, h)| p == "/music/b.mp3" && h.is_none()));
+    }
+
+    #[test]
+    fn test_get_track_removal_info_bulk_empty() {
+        let conn = setup_test_db();
+        let info = get_track_removal_info_bulk(&conn, &[]).unwrap();
+        assert!(info.is_empty());
     }
 }
