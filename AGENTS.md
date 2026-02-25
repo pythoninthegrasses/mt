@@ -18,7 +18,6 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 ### Libraries
 
 - alpinejs/alpine
-- cranot/roam-code
 - dubzzz/fast-check
 - hunvreus/basecoat
 - jdx/mise
@@ -120,24 +119,6 @@ cargo check --manifest-path src-tauri/Cargo.toml  # Fast type check (no binary)
 3. **File Organization**: Frontend in `app/frontend/`, backend in `src-tauri/src/`. Keep files under 500 LOC.
 4. **Testing**: Unit tests + Playwright E2E. All integration tests MUST use Playwright.
 5. **Code Style**: `deno lint` + `deno fmt` (frontend), `cargo fmt` + `cargo clippy` (backend). Run formatters before committing.
-
-## Codebase navigation
-
-This project uses `roam` for codebase comprehension. Always prefer roam over Glob/Grep/Read exploration.
-
-Before modifying any code:
-
-1. First time in the repo: `roam understand` then `roam tour`
-2. Find a symbol: `roam search <pattern>`
-3. Before changing a symbol: `roam preflight <name>` (blast radius + tests + fitness)
-4. Need files to read: `roam context <name>` (files + line ranges, prioritized)
-5. Debugging a failure: `roam diagnose <name>` (root cause ranking)
-6. After making changes: `roam diff` (blast radius of uncommitted changes)
-
-Additional: `roam health` (0-100 score), `roam impact <name>` (what breaks),
-`roam pr-risk` (PR risk), `roam file <path>` (file skeleton).
-
-Run `roam --help` for all commands. Use `roam --json <cmd>` for structured output.
 
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 
