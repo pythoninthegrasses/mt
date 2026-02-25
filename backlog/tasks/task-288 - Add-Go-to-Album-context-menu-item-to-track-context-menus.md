@@ -1,10 +1,10 @@
 ---
 id: TASK-288
 title: Add "Go to Album" context menu item to track context menus
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-24 22:31'
-updated_date: '2026-02-25 21:58'
+updated_date: '2026-02-25 22:05'
 labels:
   - frontend
   - ux
@@ -88,14 +88,14 @@ Albums are identified by composite key: `track.album` + `track.album_artist` (fa
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Right-clicking a track in the Music (library) view shows 'Go to Album' between 'Add to Liked Songs' and the separator before 'Show in Finder'
-- [ ] #2 Clicking 'Go to Album' switches to Albums view and opens the correct album detail (matching album name + album artist)
-- [ ] #3 Right-clicking a track in Liked Songs view shows 'Go to Album' with same behavior
-- [ ] #4 Right-clicking a track in Recently Played view shows 'Go to Album' with same behavior
-- [ ] #5 Right-clicking a track in Recently Added view shows 'Go to Album' with same behavior
-- [ ] #6 Right-clicking a track in Top 25 view shows 'Go to Album' with same behavior
-- [ ] #7 Right-clicking a track in a Playlist detail view shows 'Go to Album' with same behavior
-- [ ] #8 'Go to Album' is disabled when multiple tracks are selected
-- [ ] #9 'Go to Album' is disabled or hidden when the track has no album metadata
-- [ ] #10 Context menu closes after clicking 'Go to Album'
+- [x] #1 Right-clicking a track in the Music (library) view shows 'Go to Album' between 'Add to Liked Songs' and the separator before 'Show in Finder'
+- [x] #2 Clicking 'Go to Album' switches to Albums view and opens the correct album detail (matching album name + album artist)
+- [x] #3 Right-clicking a track in Liked Songs view shows 'Go to Album' with same behavior
+- [x] #4 Right-clicking a track in Recently Played view shows 'Go to Album' with same behavior
+- [x] #5 Right-clicking a track in Recently Added view shows 'Go to Album' with same behavior
+- [x] #6 Right-clicking a track in Top 25 view shows 'Go to Album' with same behavior
+- [x] #7 Right-clicking a track in a Playlist detail view shows 'Go to Album' with same behavior
+- [x] #8 'Go to Album' is disabled when multiple tracks are selected
+- [x] #9 'Go to Album' is disabled or hidden when the track has no album metadata
+- [x] #10 Context menu closes after clicking 'Go to Album'
 <!-- AC:END -->

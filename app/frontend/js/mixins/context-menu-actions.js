@@ -104,6 +104,11 @@ export function contextMenuActionsMixin() {
           action: () => this.toggleFavoriteFromMenu(track),
         },
         {
+          label: 'Go to Artist',
+          action: () => this.goToArtist(track),
+          disabled: selectedCount > 1 || (!track.artist && !track.album_artist),
+        },
+        {
           label: 'Go to Album',
           action: () => this.goToAlbum(track),
           disabled: selectedCount > 1 || !track.album,
@@ -299,6 +304,19 @@ export function contextMenuActionsMixin() {
             album: track.album,
             albumArtist: track.album_artist || track.artist,
           },
+        }),
+      );
+    },
+
+    goToArtist(track) {
+      this.contextMenu = null;
+      const artist = track.album_artist || track.artist;
+      if (!artist) return;
+
+      // Dispatch event - artists-browser handles view switch and artist selection
+      window.dispatchEvent(
+        new CustomEvent('mt:navigate-to-artist', {
+          detail: { artist },
         }),
       );
     },

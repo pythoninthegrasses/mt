@@ -29,9 +29,33 @@ export function createArtistsBrowser(Alpine) {
     // Merge context menu mixin
     ...singleTrackContextMenuMixin(),
 
+    // Bound event handlers for cleanup
+    _onNavigateToArtist: null,
+    _onPlaylistsUpdated: null,
+
     init() {
-      this._loadPlaylists();
-      window.addEventListener('mt:playlists-updated', () => this._loadPlaylists());
+      this._onPlaylistsUpdated = () => this._loadPlaylists();
+      window.addEventListener('mt:playlists-updated', this._onPlaylistsUpdated);
+
+      // Handle cross-view navigation to artist
+      this._onNavigateToArtist = (e) => {
+        const { artist } = e.detail;
+        const matchedArtist = this.artists.find(
+          (a) => a.toLowerCase() === artist.toLowerCase(),
+        );
+        if (matchedArtist) {
+          this.ui.setView('artists');
+          this.selectedArtist = matchedArtist;
+          // Scroll detail panel to top after DOM updates
+          this.$nextTick(() => {
+            const detailPanel = document.querySelector('[data-testid="artist-detail"]');
+            if (detailPanel) detailPanel.scrollTop = 0;
+          });
+        } else {
+          this.ui.toast(`Artist not found: "${artist}"`, 'error');
+        }
+      };
+      window.addEventListener('mt:navigate-to-artist', this._onNavigateToArtist);
 
       // Auto-select first artist when view becomes active
       this.$watch('$store.ui.view', (view) => {
@@ -43,6 +67,17 @@ export function createArtistsBrowser(Alpine) {
       // Select first artist on init if already on artists view
       if (this.$store.ui.view === 'artists' && this.artists.length > 0) {
         this.selectedArtist = this.artists[0];
+      }
+    },
+
+    destroy() {
+      if (this._onNavigateToArtist) {
+        window.removeEventListener('mt:navigate-to-artist', this._onNavigateToArtist);
+        this._onNavigateToArtist = null;
+      }
+      if (this._onPlaylistsUpdated) {
+        window.removeEventListener('mt:playlists-updated', this._onPlaylistsUpdated);
+        this._onPlaylistsUpdated = null;
       }
     },
 
