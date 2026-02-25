@@ -1,4 +1,5 @@
-import { api } from '../api.js';
+import { favorites } from '../api/favorites.js';
+import { playlists } from '../api/playlists.js';
 
 /**
  * Context menu and playback actions mixin for library browser.
@@ -105,7 +106,7 @@ export function contextMenuActionsMixin() {
       ];
 
       // Check favorite status and update label asynchronously
-      api.favorites
+      favorites
         .check(track.id)
         .then((result) => {
           if (!this.contextMenu) return;
@@ -230,7 +231,7 @@ export function contextMenuActionsMixin() {
 
       try {
         const trackIds = tracks.map((t) => t.id);
-        const result = await api.playlists.addTracks(playlistId, trackIds);
+        const result = await playlists.addTracks(playlistId, trackIds);
         const playlist = this.playlists.find((p) => p.id === playlistId);
         const playlistName = playlist?.name || 'playlist';
 
@@ -262,11 +263,11 @@ export function contextMenuActionsMixin() {
     async toggleFavoriteFromMenu(track) {
       this.contextMenu = null;
       try {
-        const result = await api.favorites.check(track.id);
+        const result = await favorites.check(track.id);
         if (result.is_favorite) {
-          await api.favorites.remove(track.id);
+          await favorites.remove(track.id);
         } else {
-          await api.favorites.add(track.id);
+          await favorites.add(track.id);
         }
         const player = this.$store.player;
         if (player.currentTrack?.id === track.id) {
@@ -310,7 +311,7 @@ export function contextMenuActionsMixin() {
         positions.sort((a, b) => b - a);
 
         for (const position of positions) {
-          await api.playlists.removeTrack(this.currentPlaylistId, position);
+          await playlists.removeTrack(this.currentPlaylistId, position);
         }
 
         this.$store.ui.toast(
@@ -318,7 +319,7 @@ export function contextMenuActionsMixin() {
           'success',
         );
 
-        const playlist = await api.playlists.get(this.currentPlaylistId);
+        const playlist = await playlists.get(this.currentPlaylistId);
         const newTracks = (playlist.tracks || []).map((item) => item.track);
         this.library.tracks = newTracks;
         this.library.totalTracks = newTracks.length;

@@ -5,7 +5,7 @@
  * Expects component to have: playlists, reorderDraggingIndex, reorderDragOverIndex,
  * reorderDragY, reorderDragStartY, ui, and api access via loadPlaylists().
  */
-import { api } from '../api.js';
+import { playlists } from '../api/playlists.js';
 
 export function playlistReorderMixin() {
   return {
@@ -130,7 +130,7 @@ export function playlistReorderMixin() {
 
         if (this.reorderDraggingIndex !== toPosition) {
           try {
-            await api.playlists.reorderPlaylists(this.reorderDraggingIndex, toPosition);
+            await playlists.reorderPlaylists(this.reorderDraggingIndex, toPosition);
             await this.loadPlaylists();
           } catch (error) {
             console.error('Failed to reorder playlists:', error);

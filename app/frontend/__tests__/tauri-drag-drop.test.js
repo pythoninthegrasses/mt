@@ -42,11 +42,9 @@ vi.stubGlobal(
   },
 );
 
-vi.mock('../js/api.js', () => ({
-  default: {
-    playlists: {
-      addTracks: vi.fn(),
-    },
+vi.mock('../js/api/playlists.js', () => ({
+  playlists: {
+    addTracks: vi.fn(),
   },
 }));
 
@@ -58,7 +56,7 @@ vi.mock('../js/utils/watched-folders.js', () => ({
 const { handleInternalTrackDrop, handleFilesDrop } = await import(
   '../js/utils/tauri-drag-drop.js'
 );
-const api = (await import('../js/api.js')).default;
+const { playlists } = await import('../js/api/playlists.js');
 const { promptToAddWatchedFolders } = await import('../js/utils/watched-folders.js');
 
 describe('handleInternalTrackDrop', () => {
@@ -90,17 +88,17 @@ describe('handleInternalTrackDrop', () => {
     const result = await handleInternalTrackDrop({ x: 200, y: 400 });
 
     expect(result).toBe(false);
-    expect(api.playlists.addTracks).not.toHaveBeenCalled();
+    expect(playlists.addTracks).not.toHaveBeenCalled();
   });
 
   it('adds tracks to the playlist and shows success toast', async () => {
-    api.playlists.addTracks.mockResolvedValue({ added: 3 });
+    playlists.addTracks.mockResolvedValue({ added: 3 });
 
     const result = await handleInternalTrackDrop({ x: 200, y: 400 });
 
     expect(result).toBe(true);
     expect(document.elementFromPoint).toHaveBeenCalledWith(100, 200);
-    expect(api.playlists.addTracks).toHaveBeenCalledWith(42, [1, 2, 3]);
+    expect(playlists.addTracks).toHaveBeenCalledWith(42, [1, 2, 3]);
     expect(mockUi.toast).toHaveBeenCalledWith(
       'Added 3 tracks to "My Playlist"',
       'success',
@@ -111,7 +109,7 @@ describe('handleInternalTrackDrop', () => {
   });
 
   it('shows info toast when all tracks already exist', async () => {
-    api.playlists.addTracks.mockResolvedValue({ added: 0 });
+    playlists.addTracks.mockResolvedValue({ added: 0 });
 
     await handleInternalTrackDrop({ x: 200, y: 400 });
 
@@ -123,7 +121,7 @@ describe('handleInternalTrackDrop', () => {
 
   it('shows singular toast for single track added', async () => {
     window._mtDraggedTrackIds = [1];
-    api.playlists.addTracks.mockResolvedValue({ added: 1 });
+    playlists.addTracks.mockResolvedValue({ added: 1 });
 
     await handleInternalTrackDrop({ x: 200, y: 400 });
 
@@ -134,7 +132,7 @@ describe('handleInternalTrackDrop', () => {
   });
 
   it('shows error toast on API failure', async () => {
-    api.playlists.addTracks.mockRejectedValue(new Error('network error'));
+    playlists.addTracks.mockRejectedValue(new Error('network error'));
 
     const result = await handleInternalTrackDrop({ x: 200, y: 400 });
 

@@ -1,4 +1,4 @@
-import { api } from '../api.js';
+import { playlists } from '../api/playlists.js';
 
 /**
  * Playlist drag mixin for library browser.
@@ -78,9 +78,9 @@ export function playlistDragMixin() {
 
         if (this.draggingIndex !== toPosition) {
           try {
-            await api.playlists.reorder(this.currentPlaylistId, this.draggingIndex, toPosition);
+            await playlists.reorder(this.currentPlaylistId, this.draggingIndex, toPosition);
 
-            const playlist = await api.playlists.get(this.currentPlaylistId);
+            const playlist = await playlists.get(this.currentPlaylistId);
             const tracks = (playlist.tracks || []).map((item) => item.track);
             this.library.tracks = tracks;
             this.library.applyFilters();

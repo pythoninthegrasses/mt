@@ -1,4 +1,4 @@
-import { api } from '../api.js';
+import { playlists } from '../api/playlists.js';
 import { playlistReorderMixin } from '../mixins/playlist-reorder.js';
 import { playlistCrudMixin } from '../mixins/playlist-crud.js';
 
@@ -170,7 +170,7 @@ export function createSidebar(Alpine) {
 
     async loadPlaylists() {
       try {
-        const playlists = await api.playlists.getAll();
+        const playlists = await playlists.getAll();
         this.playlists = playlists.map((p) => ({
           id: `playlist-${p.id}`,
           playlistId: p.id,
@@ -326,12 +326,12 @@ export function createSidebar(Alpine) {
           return;
         }
 
-        console.log('[Sidebar] Calling api.playlists.addTracks', {
+        console.log('[Sidebar] Calling playlists.addTracks', {
           playlistId: playlist.playlistId,
           trackIds: trackIds,
         });
-        const result = await api.playlists.addTracks(playlist.playlistId, trackIds);
-        console.log('[Sidebar] api.playlists.addTracks result:', result);
+        const result = await playlists.addTracks(playlist.playlistId, trackIds);
+        console.log('[Sidebar] playlists.addTracks result:', result);
 
         if (result.added > 0) {
           this.ui.toast(

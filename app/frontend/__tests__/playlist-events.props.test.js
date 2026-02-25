@@ -11,28 +11,22 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { test, fc } from '@fast-check/vitest';
 
 // Mock API - must be defined before vi.mock due to hoisting
-vi.mock('../js/api.js', () => ({
-  api: {
-    playlists: {
-      getAll: vi.fn().mockResolvedValue([]),
-      create: vi.fn().mockImplementation((name) =>
-        Promise.resolve({ playlistId: Date.now(), name, position: 0 })
-      ),
-      rename: vi.fn().mockResolvedValue({}),
-      delete: vi.fn().mockResolvedValue({}),
-      addTracks: vi.fn().mockResolvedValue({}),
-      reorderPlaylists: vi.fn().mockResolvedValue({}),
-    },
-    settings: {
-      get: vi.fn().mockResolvedValue(null),
-      set: vi.fn().mockResolvedValue({}),
-    },
+vi.mock('../js/api/playlists.js', () => ({
+  playlists: {
+    getAll: vi.fn().mockResolvedValue([]),
+    create: vi.fn().mockImplementation((name) =>
+      Promise.resolve({ playlistId: Date.now(), name, position: 0 })
+    ),
+    rename: vi.fn().mockResolvedValue({}),
+    delete: vi.fn().mockResolvedValue({}),
+    addTracks: vi.fn().mockResolvedValue({}),
+    reorderPlaylists: vi.fn().mockResolvedValue({}),
   },
 }));
 
 // Import after mocks
 import { createSidebar } from '../js/components/sidebar.js';
-import { api } from '../js/api.js';
+import { playlists } from '../js/api/playlists.js';
 
 // Arbitraries for generating test data
 const playlistNameArbitrary = fc.string({ minLength: 1, maxLength: 100 }).filter(
@@ -128,7 +122,7 @@ describe('Playlist Event Propagation - Property-Based Tests', () => {
         await sidebar.commitInlineRename();
 
         // Assert: API was called
-        expect(api.playlists.rename).toHaveBeenCalledWith(
+        expect(playlists.rename).toHaveBeenCalledWith(
           playlist.playlistId,
           newName.trim()
         );
@@ -157,7 +151,7 @@ describe('Playlist Event Propagation - Property-Based Tests', () => {
         await sidebar.commitInlineRename();
 
         // Assert: API was NOT called
-        expect(api.playlists.rename).not.toHaveBeenCalled();
+        expect(playlists.rename).not.toHaveBeenCalled();
 
         // Assert: event was NOT dispatched
         expect(eventsFired).not.toContain('mt:playlists-updated');
@@ -182,7 +176,7 @@ describe('Playlist Event Propagation - Property-Based Tests', () => {
         await sidebar.commitInlineRename();
 
         // Assert: API was NOT called
-        expect(api.playlists.rename).not.toHaveBeenCalled();
+        expect(playlists.rename).not.toHaveBeenCalled();
 
         // Assert: event was NOT dispatched
         expect(eventsFired).not.toContain('mt:playlists-updated');
@@ -195,7 +189,7 @@ describe('Playlist Event Propagation - Property-Based Tests', () => {
         fc.pre(newName.trim() !== playlist.name);
 
         // Setup: API will fail
-        api.playlists.rename.mockRejectedValueOnce(new Error('Network error'));
+        playlists.rename.mockRejectedValueOnce(new Error('Network error'));
 
         sidebar.editingPlaylist = { ...playlist };
         sidebar.editingName = newName;
@@ -297,7 +291,7 @@ describe('Playlist Event Propagation - Property-Based Tests', () => {
         await sidebar.commitInlineRename();
 
         // Assert: API was called with new name
-        expect(api.playlists.rename).toHaveBeenCalledWith(999, name.trim());
+        expect(playlists.rename).toHaveBeenCalledWith(999, name.trim());
 
         // Assert: event was dispatched
         expect(eventsFired).toContain('mt:playlists-updated');
@@ -314,14 +308,14 @@ describe('Playlist Event Propagation - Property-Based Tests', () => {
       await expect(sidebar.commitInlineRename()).resolves.not.toThrow();
 
       // API should not be called
-      expect(api.playlists.rename).not.toHaveBeenCalled();
+      expect(playlists.rename).not.toHaveBeenCalled();
     });
 
     test.prop([playlistArbitrary])(
       'handles UNIQUE constraint error without dispatching event',
       async (playlist) => {
         // Setup: API will fail with duplicate name error
-        api.playlists.rename.mockRejectedValueOnce(
+        playlists.rename.mockRejectedValueOnce(
           new Error('UNIQUE constraint failed')
         );
 
@@ -362,7 +356,7 @@ describe('Playlist Event Propagation - Property-Based Tests', () => {
       await sidebar.commitInlineRename();
 
       // Assert: API was called with trimmed name
-      expect(api.playlists.rename).toHaveBeenCalledWith(1, longName.trim());
+      expect(playlists.rename).toHaveBeenCalledWith(1, longName.trim());
 
       // Assert: event was dispatched
       expect(eventsFired).toContain('mt:playlists-updated');

@@ -6,14 +6,14 @@
  * selectedPlaylistIds, selectionAnchorIndex, activeSection, ui, loadPlaylists(),
  * loadPlaylist(), loadSection().
  */
-import { api } from '../api.js';
+import { playlists } from '../api/playlists.js';
 
 export function playlistCrudMixin() {
   return {
     async createPlaylist() {
       try {
-        const { name: uniqueName } = await api.playlists.generateName();
-        const playlist = await api.playlists.create(uniqueName);
+        const { name: uniqueName } = await playlists.generateName();
+        const playlist = await playlists.create(uniqueName);
         await this.loadPlaylists();
 
         window.dispatchEvent(new CustomEvent('mt:playlists-updated'));
@@ -30,11 +30,11 @@ export function playlistCrudMixin() {
 
     async createPlaylistWithTracks(trackIds) {
       try {
-        const { name: uniqueName } = await api.playlists.generateName();
-        const playlist = await api.playlists.create(uniqueName);
+        const { name: uniqueName } = await playlists.generateName();
+        const playlist = await playlists.create(uniqueName);
 
         if (trackIds.length > 0) {
-          await api.playlists.addTracks(playlist.id, trackIds);
+          await playlists.addTracks(playlist.id, trackIds);
         }
 
         await this.loadPlaylists();
@@ -87,7 +87,7 @@ export function playlistCrudMixin() {
       }
 
       try {
-        await api.playlists.rename(this.editingPlaylist.playlistId, newName);
+        await playlists.rename(this.editingPlaylist.playlistId, newName);
         const wasNew = this.editingIsNew;
         const playlistId = this.editingPlaylist.playlistId;
         this.editingPlaylist = null;
@@ -113,7 +113,7 @@ export function playlistCrudMixin() {
     async cancelInlineRename() {
       if (this.editingIsNew && this.editingPlaylist) {
         try {
-          await api.playlists.delete(this.editingPlaylist.playlistId);
+          await playlists.delete(this.editingPlaylist.playlistId);
           await this.loadPlaylists();
         } catch (error) {
           console.error('Failed to delete cancelled playlist:', error);
@@ -222,7 +222,7 @@ export function playlistCrudMixin() {
 
       for (const playlist of selectedPlaylists) {
         try {
-          await api.playlists.delete(playlist.playlistId);
+          await playlists.delete(playlist.playlistId);
           deletedIds.push(playlist.playlistId);
         } catch (error) {
           console.error(`Failed to delete playlist ${playlist.name}:`, error);

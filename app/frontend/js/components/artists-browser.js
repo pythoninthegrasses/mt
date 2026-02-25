@@ -1,4 +1,4 @@
-import { api } from '../api.js';
+import { library } from '../api/library.js';
 import { formatDuration } from '../utils/formatting.js';
 import {
   buildArtistDisplayNames,
@@ -204,7 +204,7 @@ export function createArtistsBrowser(Alpine) {
         return this.artworkCache[trackId];
       }
       try {
-        const url = await api.library.getArtworkUrl(trackId);
+        const url = await library.getArtworkUrl(trackId);
         this.artworkCache[trackId] = url;
         return url;
       } catch {

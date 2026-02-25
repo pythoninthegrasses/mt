@@ -6,7 +6,7 @@
  * here keeps cognitive complexity out of the store factory function.
  */
 
-import { api } from '../api.js';
+import { library } from '../api/library.js';
 import { promptToAddWatchedFolders } from '../utils/watched-folders.js';
 
 // ---------------------------------------------------------------------------
@@ -288,7 +288,7 @@ export async function scanPaths(store, paths, recursive = true) {
   store.scanProgress = 0;
 
   try {
-    const result = await api.library.scan(paths, recursive);
+    const result = await library.scan(paths, recursive);
     console.log('[library] scan result:', result);
 
     await store.load({ forceReload: true });

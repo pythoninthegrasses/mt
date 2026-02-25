@@ -1,10 +1,10 @@
 ---
 id: TASK-285.13
 title: Reduce api.js god component degree and bottleneck betweenness
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-24 22:40'
-updated_date: '2026-02-24 22:42'
+updated_date: '2026-02-25 16:42'
 labels:
   - tech-debt
   - code-health
@@ -35,8 +35,37 @@ Run `roam impact api` and `roam uses api` to see all consumers before refactorin
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 api.js god component degree reduced below 20
-- [ ] #2 api.js bottleneck betweenness reduced below 500
-- [ ] #3 All frontend tests pass
-- [ ] #4 No behavioral changes
+- [x] #1 api.js god component degree reduced below 20
+- [x] #2 api.js bottleneck betweenness reduced below 500
+- [x] #3 All frontend tests pass
+- [x] #4 No behavioral changes
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Split monolithic `api.js` (1475 LOC, degree 35, betweenness 1509) into domain modules under `app/frontend/js/api/`:
+
+**New files:**
+- `api/shared.js` - ApiError, request(), invoke constant
+- `api/library.js` - 16 library methods
+- `api/queue.js` - 12 queue methods  
+- `api/favorites.js` - 8 favorites methods
+- `api/playlists.js` - 10 playlist methods
+- `api/lastfm.js` - 14 Last.fm methods
+- `api/settings.js` - 5 settings methods
+- `api/index.js` - barrel re-export for backward compatibility
+
+**Updated consumers (18 files):**
+- Components: albums-browser, artists-browser, library-browser, settings-view, sidebar
+- Mixins: context-menu-actions, playlist-crud, playlist-drag, playlist-reorder, single-track-context-menu
+- Stores: library, player, queue, ui
+- Utils: library-operations, queue-builder, tauri-drag-drop
+- Tests: playlist-events, context-menu-favorites, tauri-drag-drop, queue.props
+
+**Metrics:**
+- api.js no longer appears in god components (was degree 35)
+- api.js no longer appears in bottlenecks (was betweenness 1509)
+- Highest domain module betweenness: playlists at 78 (well below 500 threshold)
+- All 281 frontend tests pass
+<!-- SECTION:FINAL_SUMMARY:END -->

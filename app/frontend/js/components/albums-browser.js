@@ -5,7 +5,9 @@
  * Two states: grid (responsive album cards) and detail (single album with track list).
  */
 
-import { api } from '../api.js';
+import { library } from '../api/library.js';
+import { favorites } from '../api/favorites.js';
+import { playlists } from '../api/playlists.js';
 import { formatDuration } from '../utils/formatting.js';
 
 export function createAlbumsBrowser(Alpine) {
@@ -153,7 +155,7 @@ export function createAlbumsBrowser(Alpine) {
       if (this.artworkCache[trackId]) return;
 
       try {
-        const url = await api.library.getArtworkUrl(trackId);
+        const url = await library.getArtworkUrl(trackId);
         this.artworkCache[trackId] = url || null;
       } catch {
         this.artworkCache[trackId] = null;
@@ -240,7 +242,7 @@ export function createAlbumsBrowser(Alpine) {
 
     async _loadDetailArtwork(trackId) {
       try {
-        this.selectedAlbumArtwork = await api.library.getArtworkUrl(trackId);
+        this.selectedAlbumArtwork = await library.getArtworkUrl(trackId);
       } catch {
         this.selectedAlbumArtwork = null;
       }
@@ -404,7 +406,7 @@ export function createAlbumsBrowser(Alpine) {
       ];
 
       // Check favorite status and update label asynchronously
-      api.favorites.check(track.id).then((result) => {
+      favorites.check(track.id).then((result) => {
         if (!this.contextMenu) return;
         const favoriteItem = this.contextMenu.items.find(
           (i) => i.label === 'Add to Liked Songs' || i.label === 'Remove from Liked Songs',
@@ -438,7 +440,7 @@ export function createAlbumsBrowser(Alpine) {
 
     async _loadPlaylists() {
       try {
-        const playlists = await api.playlists.getAll();
+        const playlists = await playlists.getAll();
         this.playlists = playlists.map((p) => ({ id: p.id, name: p.name }));
       } catch {
         this.playlists = [];
@@ -448,11 +450,11 @@ export function createAlbumsBrowser(Alpine) {
     async _toggleFavorite(track) {
       this.closeContextMenu();
       try {
-        const result = await api.favorites.check(track.id);
+        const result = await favorites.check(track.id);
         if (result.is_favorite) {
-          await api.favorites.remove(track.id);
+          await favorites.remove(track.id);
         } else {
-          await api.favorites.add(track.id);
+          await favorites.add(track.id);
         }
         const player = this.$store.player;
         if (player.currentTrack?.id === track.id) {
@@ -475,7 +477,7 @@ export function createAlbumsBrowser(Alpine) {
 
       try {
         const trackIds = tracks.map((t) => t.id);
-        const result = await api.playlists.addTracks(playlistId, trackIds);
+        const result = await playlists.addTracks(playlistId, trackIds);
         const playlist = this.playlists.find((p) => p.id === playlistId);
         const playlistName = playlist?.name || 'playlist';
 

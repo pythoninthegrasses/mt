@@ -7,7 +7,7 @@
  * 2. External file drops into the library
  */
 
-import api from '../api.js';
+import { playlists } from '../api/playlists.js';
 import { promptToAddWatchedFolders } from './watched-folders.js';
 
 /**
@@ -33,7 +33,7 @@ export async function handleInternalTrackDrop(position) {
   const playlistName = playlistButton.querySelector('span')?.textContent || 'playlist';
 
   try {
-    const result = await api.playlists.addTracks(playlistId, window._mtDraggedTrackIds);
+    const result = await playlists.addTracks(playlistId, window._mtDraggedTrackIds);
     const ui = window.Alpine.store('ui');
 
     if (result.added > 0) {

@@ -5,7 +5,9 @@
  * library scanning via Tauri backend.
  */
 
-import { api } from '../api.js';
+import { library as libraryApi } from '../api/library.js';
+import { favorites } from '../api/favorites.js';
+import { playlists } from '../api/playlists.js';
 import {
   buildCacheEntry,
   createCacheSaver,
@@ -145,7 +147,7 @@ export function createLibraryStore(Alpine) {
       const uiStore = Alpine.store('ui');
       const ignoreWords = uiStore.sortIgnoreWords ? uiStore.sortIgnoreWordsList : null;
 
-      return await api.library.getTracks({
+      return await libraryApi.getTracks({
         search: this.searchQuery.trim() || null,
         sort: sortKeyMap[this.sortBy] || this.sortBy,
         order: this.sortOrder,
@@ -176,7 +178,7 @@ export function createLibraryStore(Alpine) {
     },
 
     loadFavorites() {
-      return this._loadSection('liked', () => api.favorites.get({ limit: 1000 }));
+      return this._loadSection('liked', () => favorites.get({ limit: 1000 }));
     },
 
     _backgroundRefreshFavorites() {
@@ -187,46 +189,46 @@ export function createLibraryStore(Alpine) {
       if (!section) return;
       return this._backgroundRefreshSection(
         'liked',
-        () => api.favorites.get({ limit: 1000 }),
+        () => favorites.get({ limit: 1000 }),
       );
     },
 
     loadRecentlyPlayed(days = 14) {
       return this._loadSection(
         'recent',
-        () => api.favorites.getRecentlyPlayed({ days, limit: 100 }),
+        () => favorites.getRecentlyPlayed({ days, limit: 100 }),
       );
     },
 
     _backgroundRefreshRecentlyPlayed(days = 14) {
       return this._backgroundRefreshSection(
         'recent',
-        () => api.favorites.getRecentlyPlayed({ days, limit: 100 }),
+        () => favorites.getRecentlyPlayed({ days, limit: 100 }),
       );
     },
 
     loadRecentlyAdded(days = 14) {
       return this._loadSection(
         'added',
-        () => api.favorites.getRecentlyAdded({ days, limit: 100 }),
+        () => favorites.getRecentlyAdded({ days, limit: 100 }),
       );
     },
 
     _backgroundRefreshRecentlyAdded(days = 14) {
       return this._backgroundRefreshSection(
         'added',
-        () => api.favorites.getRecentlyAdded({ days, limit: 100 }),
+        () => favorites.getRecentlyAdded({ days, limit: 100 }),
       );
     },
 
     loadTop25() {
-      return this._loadSection('top25', () => api.favorites.getTop25());
+      return this._loadSection('top25', () => favorites.getTop25());
     },
 
     _backgroundRefreshTop25() {
       return this._backgroundRefreshSection(
         'top25',
-        () => api.favorites.getTop25(),
+        () => favorites.getTop25(),
       );
     },
 
@@ -254,7 +256,7 @@ export function createLibraryStore(Alpine) {
 
       console.log('[navigation]', 'load_playlist', { playlistId });
 
-      return this._loadSection(section, () => api.playlists.get(playlistId), {
+      return this._loadSection(section, () => playlists.get(playlistId), {
         transform: transformPlaylist,
         onSuccess: cachePlaylist,
         logTag: 'navigation',
@@ -268,7 +270,7 @@ export function createLibraryStore(Alpine) {
 
       return this._backgroundRefreshSection(
         section,
-        () => api.playlists.get(playlistId),
+        () => playlists.get(playlistId),
         {
           transform: transformPlaylist,
           onSuccess: (data) => {
@@ -359,7 +361,7 @@ export function createLibraryStore(Alpine) {
 
     async remove(trackId) {
       try {
-        await api.library.deleteTrack(trackId);
+        await libraryApi.deleteTrack(trackId);
         this.removeTracksLocally([trackId]);
       } catch (error) {
         console.error('Failed to remove track:', error);
@@ -443,7 +445,7 @@ export function createLibraryStore(Alpine) {
 
     async rescanTrack(trackId) {
       try {
-        const updatedTrack = await api.library.rescanTrack(trackId);
+        const updatedTrack = await libraryApi.rescanTrack(trackId);
         if (updatedTrack) {
           const index = this.tracks.findIndex((t) => t.id === trackId);
           if (index >= 0) {

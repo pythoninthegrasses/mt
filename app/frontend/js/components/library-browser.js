@@ -1,4 +1,4 @@
-import { api } from '../api.js';
+import { playlists } from '../api/playlists.js';
 import { formatDurationDash, formatRelativeTime } from '../utils/formatting.js';
 import { isTypingInInput } from '../utils/dom.js';
 import { typeToJumpMixin } from '../mixins/type-to-jump.js';
@@ -294,7 +294,7 @@ export function createLibraryBrowser(Alpine) {
 
     async loadPlaylists() {
       try {
-        const data = await api.playlists.getAll();
+        const data = await playlists.getAll();
         this.playlists = Array.isArray(data) ? data : [];
       } catch (error) {
         console.error('Failed to load playlists:', error);

@@ -1,4 +1,6 @@
-import { api } from '../api.js';
+import { playlists } from '../api/playlists.js';
+import { favorites } from '../api/favorites.js';
+import { queue } from '../api/queue.js';
 
 /**
  * Context menu mixin for single-track context menus (artists, albums, now-playing views).
@@ -11,7 +13,7 @@ export function singleTrackContextMenuMixin() {
   return {
     _loadPlaylists: async function () {
       try {
-        const playlists = await api.playlists.getAll();
+        const playlists = await playlists.getAll();
         this.playlists = playlists.map((p) => ({ id: p.id, name: p.name }));
       } catch {
         this.playlists = [];
@@ -39,7 +41,7 @@ export function singleTrackContextMenuMixin() {
       ];
 
       // Check favorite status and update label asynchronously
-      api.favorites.check(track.id).then((result) => {
+      favorites.check(track.id).then((result) => {
         if (!this.contextMenu) return;
         const favoriteItem = this.contextMenu.items.find(
           (i) => i.label === 'Add to Liked Songs' || i.label === 'Remove from Liked Songs',
@@ -90,7 +92,7 @@ export function singleTrackContextMenuMixin() {
     async _ctxPlayNext(track) {
       this.closeContextMenu();
       const pos = this.queue.currentIndex >= 0 ? this.queue.currentIndex + 1 : 0;
-      await api.queue.add([track.id], pos);
+      await queue.add([track.id], pos);
       await this.queue._loadFromBackend();
       this.$store.ui.toast('Playing next', 'success');
     },
@@ -98,11 +100,11 @@ export function singleTrackContextMenuMixin() {
     async _ctxToggleFavorite(track) {
       this.closeContextMenu();
       try {
-        const result = await api.favorites.check(track.id);
+        const result = await favorites.check(track.id);
         if (result.is_favorite) {
-          await api.favorites.remove(track.id);
+          await favorites.remove(track.id);
         } else {
-          await api.favorites.add(track.id);
+          await favorites.add(track.id);
         }
         const player = this.$store.player;
         if (player.currentTrack?.id === track.id) {
@@ -124,7 +126,7 @@ export function singleTrackContextMenuMixin() {
       if (!track) return;
 
       try {
-        const result = await api.playlists.addTracks(playlistId, [track.id]);
+        const result = await playlists.addTracks(playlistId, [track.id]);
         const playlist = this.playlists.find((p) => p.id === playlistId);
         const playlistName = playlist?.name || 'playlist';
 

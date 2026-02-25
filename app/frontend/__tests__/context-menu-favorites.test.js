@@ -10,28 +10,36 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('../js/api.js', () => ({
-  api: {
-    favorites: {
-      check: vi.fn(),
-      add: vi.fn().mockResolvedValue({ success: true }),
-      remove: vi.fn().mockResolvedValue(undefined),
-    },
-    playlists: {
-      getAll: vi.fn().mockResolvedValue([]),
-      addTracks: vi.fn().mockResolvedValue({ added: 1 }),
-    },
-    queue: {
-      add: vi.fn().mockResolvedValue({}),
-    },
-    settings: {
-      get: vi.fn().mockResolvedValue(null),
-      set: vi.fn().mockResolvedValue({}),
-    },
+vi.mock('../js/api/favorites.js', () => ({
+  favorites: {
+    check: vi.fn(),
+    add: vi.fn().mockResolvedValue({ success: true }),
+    remove: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
-import { api } from '../js/api.js';
+vi.mock('../js/api/playlists.js', () => ({
+  playlists: {
+    getAll: vi.fn().mockResolvedValue([]),
+    addTracks: vi.fn().mockResolvedValue({ added: 1 }),
+  },
+}));
+
+vi.mock('../js/api/queue.js', () => ({
+  queue: {
+    add: vi.fn().mockResolvedValue({}),
+  },
+}));
+
+vi.mock('../js/api/library.js', () => ({
+  library: {
+    getArtworkUrl: vi.fn().mockResolvedValue(null),
+  },
+}));
+
+import { favorites } from '../js/api/favorites.js';
+import { playlists } from '../js/api/playlists.js';
+import { queue } from '../js/api/queue.js';
 
 // Minimal Alpine mock
 function createAlpineMock() {
@@ -122,7 +130,7 @@ describe('Context Menu - Liked Songs Toggle', () => {
     });
 
     it('shows "Add to Liked Songs" for an unliked track', async () => {
-      api.favorites.check.mockResolvedValue({ is_favorite: false });
+      favorites.check.mockResolvedValue({ is_favorite: false });
       const track = createMockTrack(1);
       const event = createMockEvent();
 
@@ -135,11 +143,11 @@ describe('Context Menu - Liked Songs Toggle', () => {
         expect(item).toBeDefined();
       });
 
-      expect(api.favorites.check).toHaveBeenCalledWith(1);
+      expect(favorites.check).toHaveBeenCalledWith(1);
     });
 
     it('shows "Remove from Liked Songs" for a liked track', async () => {
-      api.favorites.check.mockResolvedValue({ is_favorite: true });
+      favorites.check.mockResolvedValue({ is_favorite: true });
       const track = createMockTrack(1);
       const event = createMockEvent();
 
@@ -152,8 +160,8 @@ describe('Context Menu - Liked Songs Toggle', () => {
       });
     });
 
-    it('calls api.favorites.add when toggling an unliked track', async () => {
-      api.favorites.check.mockResolvedValue({ is_favorite: false });
+    it('calls favorites.add when toggling an unliked track', async () => {
+      favorites.check.mockResolvedValue({ is_favorite: false });
       const track = createMockTrack(1);
       const event = createMockEvent();
 
@@ -170,11 +178,11 @@ describe('Context Menu - Liked Songs Toggle', () => {
       );
       await item.action();
 
-      expect(api.favorites.add).toHaveBeenCalledWith(1);
+      expect(favorites.add).toHaveBeenCalledWith(1);
     });
 
-    it('calls api.favorites.remove when toggling a liked track', async () => {
-      api.favorites.check.mockResolvedValue({ is_favorite: true });
+    it('calls favorites.remove when toggling a liked track', async () => {
+      favorites.check.mockResolvedValue({ is_favorite: true });
       const track = createMockTrack(1);
       const event = createMockEvent();
 
@@ -191,11 +199,11 @@ describe('Context Menu - Liked Songs Toggle', () => {
       );
       await item.action();
 
-      expect(api.favorites.remove).toHaveBeenCalledWith(1);
+      expect(favorites.remove).toHaveBeenCalledWith(1);
     });
 
     it('refreshes library liked songs view after toggling', async () => {
-      api.favorites.check.mockResolvedValue({ is_favorite: false });
+      favorites.check.mockResolvedValue({ is_favorite: false });
       const track = createMockTrack(1);
       const event = createMockEvent();
 
@@ -218,7 +226,7 @@ describe('Context Menu - Liked Songs Toggle', () => {
     });
 
     it('updates player.isFavorite when toggling the currently playing track', async () => {
-      api.favorites.check.mockResolvedValue({ is_favorite: false });
+      favorites.check.mockResolvedValue({ is_favorite: false });
       const track = createMockTrack(1);
       const event = createMockEvent();
 
@@ -239,7 +247,7 @@ describe('Context Menu - Liked Songs Toggle', () => {
     });
 
     it('does not update player.isFavorite when toggling a different track', async () => {
-      api.favorites.check.mockResolvedValue({ is_favorite: false });
+      favorites.check.mockResolvedValue({ is_favorite: false });
       const track = createMockTrack(2);
       const event = createMockEvent();
 
@@ -290,7 +298,7 @@ describe('Context Menu - Liked Songs Toggle', () => {
     });
 
     it('shows "Add to Liked Songs" for an unliked track', async () => {
-      api.favorites.check.mockResolvedValue({ is_favorite: false });
+      favorites.check.mockResolvedValue({ is_favorite: false });
       const track = createMockTrack(1);
       const event = createMockEvent();
 
@@ -302,11 +310,11 @@ describe('Context Menu - Liked Songs Toggle', () => {
         expect(item).toBeDefined();
       });
 
-      expect(api.favorites.check).toHaveBeenCalledWith(1);
+      expect(favorites.check).toHaveBeenCalledWith(1);
     });
 
     it('shows "Remove from Liked Songs" for a liked track', async () => {
-      api.favorites.check.mockResolvedValue({ is_favorite: true });
+      favorites.check.mockResolvedValue({ is_favorite: true });
       const track = createMockTrack(1);
       const event = createMockEvent();
 
@@ -320,7 +328,7 @@ describe('Context Menu - Liked Songs Toggle', () => {
     });
 
     it('calls correct API when toggling favorite', async () => {
-      api.favorites.check.mockResolvedValue({ is_favorite: false });
+      favorites.check.mockResolvedValue({ is_favorite: false });
       const track = createMockTrack(1);
       const event = createMockEvent();
 
@@ -337,7 +345,7 @@ describe('Context Menu - Liked Songs Toggle', () => {
       );
       await item.action();
 
-      expect(api.favorites.add).toHaveBeenCalledWith(1);
+      expect(favorites.add).toHaveBeenCalledWith(1);
     });
   });
 
@@ -372,7 +380,7 @@ describe('Context Menu - Liked Songs Toggle', () => {
     });
 
     it('shows "Add to Liked Songs" for an unliked track', async () => {
-      api.favorites.check.mockResolvedValue({ is_favorite: false });
+      favorites.check.mockResolvedValue({ is_favorite: false });
       const track = createMockTrack(1);
       const event = createMockEvent();
 
@@ -384,11 +392,11 @@ describe('Context Menu - Liked Songs Toggle', () => {
         expect(item).toBeDefined();
       });
 
-      expect(api.favorites.check).toHaveBeenCalledWith(1);
+      expect(favorites.check).toHaveBeenCalledWith(1);
     });
 
     it('shows "Remove from Liked Songs" for a liked track', async () => {
-      api.favorites.check.mockResolvedValue({ is_favorite: true });
+      favorites.check.mockResolvedValue({ is_favorite: true });
       const track = createMockTrack(1);
       const event = createMockEvent();
 
@@ -402,7 +410,7 @@ describe('Context Menu - Liked Songs Toggle', () => {
     });
 
     it('calls correct API when toggling favorite', async () => {
-      api.favorites.check.mockResolvedValue({ is_favorite: false });
+      favorites.check.mockResolvedValue({ is_favorite: false });
       const track = createMockTrack(1);
       const event = createMockEvent();
 
@@ -419,7 +427,7 @@ describe('Context Menu - Liked Songs Toggle', () => {
       );
       await item.action();
 
-      expect(api.favorites.add).toHaveBeenCalledWith(1);
+      expect(favorites.add).toHaveBeenCalledWith(1);
     });
   });
 });

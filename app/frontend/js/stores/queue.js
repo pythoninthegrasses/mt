@@ -6,7 +6,7 @@
  * the items array is physically reordered.
  */
 
-import { api } from '../api.js';
+import { queue as queueApi } from '../api/queue.js';
 
 export function createQueueStore(Alpine) {
   Alpine.store('queue', {
@@ -69,9 +69,9 @@ export function createQueueStore(Alpine) {
 
       // Persist the reset state to backend
       try {
-        await api.queue.setCurrentIndex(this.currentIndex);
-        await api.queue.setShuffle(this.shuffle);
-        await api.queue.setLoop(this.loop);
+        await queueApi.setCurrentIndex(this.currentIndex);
+        await queueApi.setShuffle(this.shuffle);
+        await queueApi.setLoop(this.loop);
       } catch (error) {
         console.error('Failed to initialize playback state:', error);
       }
@@ -80,7 +80,7 @@ export function createQueueStore(Alpine) {
     async load() {
       this.loading = true;
       try {
-        const data = await api.queue.get();
+        const data = await queueApi.get();
         const rawItems = data.items || [];
         this.items = rawItems.map((item) => item.track || item);
         this.currentIndex = data.currentIndex ?? -1;
@@ -125,7 +125,7 @@ export function createQueueStore(Alpine) {
     async _refreshPreservingIndex(currentTrackId) {
       this.loading = true;
       try {
-        const data = await api.queue.get();
+        const data = await queueApi.get();
         const rawItems = data.items || [];
         this.items = rawItems.map((item) => item.track || item);
         if (!this.shuffle) {
@@ -156,7 +156,7 @@ export function createQueueStore(Alpine) {
      */
     async save() {
       try {
-        await api.queue.save({
+        await queueApi.save({
           items: this.items,
           currentIndex: this.currentIndex,
           shuffle: this.shuffle,
@@ -173,10 +173,10 @@ export function createQueueStore(Alpine) {
      */
     async _syncQueueToBackend() {
       try {
-        await api.queue.clear();
+        await queueApi.clear();
         if (this.items.length > 0) {
           const trackIds = this.items.map((t) => t.id);
-          await api.queue.add(trackIds);
+          await queueApi.add(trackIds);
         }
       } catch (error) {
         console.error('[queue] Failed to sync to backend:', error);
@@ -206,7 +206,7 @@ export function createQueueStore(Alpine) {
       // Persist to backend
       try {
         const trackIds = tracksArray.map((t) => t.id);
-        await api.queue.add(trackIds);
+        await queueApi.add(trackIds);
       } catch (error) {
         console.error('[queue] Failed to persist add:', error);
       }
@@ -256,7 +256,7 @@ export function createQueueStore(Alpine) {
         // Persist to backend
         try {
           const trackIds = tracksArray.map((t) => t.id);
-          await api.queue.add(trackIds, index);
+          await queueApi.add(trackIds, index);
         } catch (error) {
           console.error('[queue] Failed to persist insert:', error);
         }
@@ -326,7 +326,7 @@ export function createQueueStore(Alpine) {
 
       // Persist to backend
       try {
-        await api.queue.remove(index);
+        await queueApi.remove(index);
       } catch (error) {
         console.error('[queue] Failed to persist remove:', error);
       }
@@ -348,7 +348,7 @@ export function createQueueStore(Alpine) {
 
       // Persist to backend
       try {
-        await api.queue.clear();
+        await queueApi.clear();
       } catch (error) {
         console.error('[queue] Failed to persist clear:', error);
       }
@@ -388,7 +388,7 @@ export function createQueueStore(Alpine) {
 
       // Persist to backend
       try {
-        await api.queue.move(from, to);
+        await queueApi.move(from, to);
       } catch (error) {
         console.error('[queue] Failed to persist reorder:', error);
       }
@@ -414,7 +414,7 @@ export function createQueueStore(Alpine) {
       const track = this.items[index];
 
       await Alpine.store('player').playTrack(track);
-      await api.queue.setCurrentIndex(this.currentIndex);
+      await queueApi.setCurrentIndex(this.currentIndex);
     },
 
     async playNext() {
@@ -437,7 +437,7 @@ export function createQueueStore(Alpine) {
           // First call with loop-one — replay track and untoggle icon immediately
           this._repeatOnePending = true;
           this.loop = 'none';
-          await api.queue.setLoop(this.loop);
+          await queueApi.setLoop(this.loop);
           await this.playIndex(this.currentIndex, true);
           return;
         }
@@ -587,8 +587,8 @@ export function createQueueStore(Alpine) {
         }
 
         // Persist shuffle state and current index to backend
-        await api.queue.setShuffle(this.shuffle);
-        await api.queue.setCurrentIndex(this.currentIndex);
+        await queueApi.setShuffle(this.shuffle);
+        await queueApi.setCurrentIndex(this.currentIndex);
 
         // Sync queue order to backend
         await this._syncQueueToBackend();
@@ -723,7 +723,7 @@ export function createQueueStore(Alpine) {
 
       this.loop = newMode;
       this._repeatOnePending = false;
-      await api.queue.setLoop(this.loop);
+      await queueApi.setLoop(this.loop);
     },
 
     /**
@@ -739,7 +739,7 @@ export function createQueueStore(Alpine) {
 
         this.loop = mode;
         this._repeatOnePending = false;
-        await api.queue.setLoop(this.loop);
+        await queueApi.setLoop(this.loop);
       }
     },
 

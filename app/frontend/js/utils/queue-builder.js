@@ -1,4 +1,4 @@
-import { api } from '../api.js';
+import { queue } from '../api/queue.js';
 
 /**
  * Handle double-click play with background queue building.
@@ -63,7 +63,7 @@ async function _handleSequentialPlay(ctx, track, allTracks, index, generation, l
   // Build full queue in background
   const buildQueue = async () => {
     try {
-      await api.queue.clear();
+      await queue.clear();
       if (ctx._buildQueueGeneration !== generation) return;
 
       const subsequent = allTracks.slice(index);
@@ -76,10 +76,10 @@ async function _handleSequentialPlay(ctx, track, allTracks, index, generation, l
       ctx.queue._originalOrder.splice(0, ctx.queue._originalOrder.length, ...fullQueue);
       ctx.queue.currentIndex = 0;
 
-      await api.queue.add(fullQueue.map((t) => t.id));
+      await queue.add(fullQueue.map((t) => t.id));
       if (ctx._buildQueueGeneration !== generation) return;
 
-      await api.queue.setCurrentIndex(0);
+      await queue.setCurrentIndex(0);
     } catch (err) {
       if (ctx._buildQueueGeneration === generation) {
         console.error(`[${logPrefix}] Failed to build queue:`, err);

@@ -20,20 +20,18 @@ const Alpine = {
 };
 
 // Mock API
-vi.mock('../js/api.js', () => ({
-  api: {
-    queue: {
-      get: vi.fn().mockResolvedValue({ items: [], currentIndex: -1 }),
-      save: vi.fn().mockResolvedValue({}),
-      add: vi.fn().mockResolvedValue({}),
-      remove: vi.fn().mockResolvedValue({}),
-      clear: vi.fn().mockResolvedValue({}),
-      move: vi.fn().mockResolvedValue({}),
-      setShuffle: vi.fn().mockResolvedValue({}),
-      setLoop: vi.fn().mockResolvedValue({}),
-      setCurrentIndex: vi.fn().mockResolvedValue({}),
-    }
-  }
+vi.mock('../js/api/queue.js', () => ({
+  queue: {
+    get: vi.fn().mockResolvedValue({ items: [], currentIndex: -1 }),
+    save: vi.fn().mockResolvedValue({}),
+    add: vi.fn().mockResolvedValue({}),
+    remove: vi.fn().mockResolvedValue({}),
+    clear: vi.fn().mockResolvedValue({}),
+    move: vi.fn().mockResolvedValue({}),
+    setShuffle: vi.fn().mockResolvedValue({}),
+    setLoop: vi.fn().mockResolvedValue({}),
+    setCurrentIndex: vi.fn().mockResolvedValue({}),
+  },
 }));
 
 // Mock Tauri

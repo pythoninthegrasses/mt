@@ -1,4 +1,6 @@
-import { api } from '../api.js';
+import { favorites } from '../api/favorites.js';
+import { library } from '../api/library.js';
+import { lastfm } from '../api/lastfm.js';
 import { formatTime } from '../utils/formatting.js';
 
 const { invoke } = window.__TAURI__?.core ??
@@ -347,7 +349,7 @@ export function createPlayerStore(Alpine) {
       }
 
       try {
-        const result = await api.favorites.check(this.currentTrack.id);
+        const result = await favorites.check(this.currentTrack.id);
         this.isFavorite = result.is_favorite;
       } catch (error) {
         console.error('Failed to check favorite status:', error);
@@ -367,10 +369,10 @@ export function createPlayerStore(Alpine) {
 
       try {
         if (this.isFavorite) {
-          await api.favorites.remove(this.currentTrack.id);
+          await favorites.remove(this.currentTrack.id);
           this.isFavorite = false;
         } else {
-          await api.favorites.add(this.currentTrack.id);
+          await favorites.add(this.currentTrack.id);
           this.isFavorite = true;
         }
 
@@ -390,7 +392,7 @@ export function createPlayerStore(Alpine) {
       }
 
       try {
-        this.artwork = await api.library.getArtwork(this.currentTrack.id);
+        this.artwork = await library.getArtwork(this.currentTrack.id);
       } catch (error) {
         // Silently fail if artwork not found (404 is expected for tracks without artwork)
         if (error.status !== 404) {
@@ -430,7 +432,7 @@ export function createPlayerStore(Alpine) {
           duration: Math.floor(this.duration / 1000), // Convert ms to seconds
         };
 
-        api.lastfm.updateNowPlaying(nowPlayingData).then((result) => {
+        lastfm.updateNowPlaying(nowPlayingData).then((result) => {
           if (result.status === 'disabled' || result.status === 'not_authenticated') {
             // Silently ignore if not configured
             return;
