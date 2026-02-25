@@ -279,6 +279,7 @@ describe('Go to Artist', () => {
         watchCallbacks.push(cb);
       };
       component.$nextTick = (fn) => fn();
+      component._loadPlaylists = vi.fn();
 
       component.init();
     });
@@ -342,6 +343,18 @@ describe('Go to Artist', () => {
       expect(mockDetailPanel.scrollTop).toBe(0);
 
       document.querySelector = originalQuerySelector;
+    });
+
+    it('calls _loadPlaylists on init', () => {
+      expect(component._loadPlaylists).toHaveBeenCalled();
+    });
+
+    it('calls _loadPlaylists when mt:playlists-updated fires', () => {
+      component._loadPlaylists.mockClear();
+
+      window.dispatchEvent(new CustomEvent('mt:playlists-updated'));
+
+      expect(component._loadPlaylists).toHaveBeenCalledTimes(1);
     });
 
     it('removes event listener on destroy', () => {

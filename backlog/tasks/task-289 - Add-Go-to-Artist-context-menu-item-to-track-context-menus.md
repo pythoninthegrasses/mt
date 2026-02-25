@@ -82,7 +82,7 @@ Added "Go to Artist" context menu item to track context menus in all views using
 - Added `destroy()` method for proper event listener cleanup
 
 ### `app/frontend/__tests__/go-to-artist.test.js`
-- Added 11 unit tests covering:
+- Added 14 unit tests covering:
   - Event dispatch with correct artist name
   - Fallback from album_artist to artist
   - No dispatch when track has no artist metadata

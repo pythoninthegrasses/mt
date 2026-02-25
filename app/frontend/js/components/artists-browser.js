@@ -34,6 +34,7 @@ export function createArtistsBrowser(Alpine) {
     _onPlaylistsUpdated: null,
 
     init() {
+      this._loadPlaylists();
       this._onPlaylistsUpdated = () => this._loadPlaylists();
       window.addEventListener('mt:playlists-updated', this._onPlaylistsUpdated);
 
