@@ -7,7 +7,7 @@ use std::path::Path;
 use tauri::{AppHandle, State};
 use tracing::{debug, info};
 
-use crate::db::{Database, LibraryStats, SortOrder, Track, TrackMetadata, library};
+use crate::db::{Database, LibraryStats, SortOrder, Track, TrackMetadata, library, removed};
 use crate::events::{EventEmitter, LibraryUpdatedEvent};
 use crate::scanner::artwork::Artwork;
 use crate::scanner::artwork_cache::ArtworkCache;
@@ -102,7 +102,10 @@ pub(crate) fn library_get_stats(db: State<'_, Database>) -> Result<LibraryStats,
 /// Get a single track by ID
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub(crate) fn library_get_track(db: State<'_, Database>, track_id: i64) -> Result<Option<Track>, String> {
+pub(crate) fn library_get_track(
+    db: State<'_, Database>,
+    track_id: i64,
+) -> Result<Option<Track>, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
     library::get_track_by_id(&conn, track_id).map_err(|e| e.to_string())
 }
@@ -146,7 +149,7 @@ pub(crate) fn library_get_artwork_url(
     }
 }
 
-/// Delete a track from the library
+/// Delete a track from the library and record the removal to prevent re-addition on scan
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub(crate) fn library_delete_track(
@@ -154,12 +157,19 @@ pub(crate) fn library_delete_track(
     db: State<'_, Database>,
     track_id: i64,
 ) -> Result<bool, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-
-    let deleted = library::delete_track(&conn, track_id).map_err(|e| e.to_string())?;
+    let deleted = db
+        .transaction(|conn| {
+            // Fetch track info before deleting so we can record the removal
+            let track = library::get_track_by_id(conn, track_id)?;
+            let deleted = library::delete_track(conn, track_id)?;
+            if deleted && let Some(track) = track {
+                removed::record_removal(conn, &track.filepath, track.content_hash.as_deref())?;
+            }
+            Ok(deleted)
+        })
+        .map_err(|e| e.to_string())?;
 
     if deleted {
-        // Emit standardized library updated event
         let _ = app.emit_library_updated(LibraryUpdatedEvent::deleted(vec![track_id]));
     }
 
@@ -169,7 +179,10 @@ pub(crate) fn library_delete_track(
 /// Purge all tracks marked as missing from the database
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
-pub(crate) fn library_purge_missing(app: AppHandle, db: State<'_, Database>) -> Result<usize, String> {
+pub(crate) fn library_purge_missing(
+    app: AppHandle,
+    db: State<'_, Database>,
+) -> Result<usize, String> {
     let start = std::time::Instant::now();
     let deleted = db
         .transaction(library::delete_missing_tracks)
@@ -182,7 +195,7 @@ pub(crate) fn library_purge_missing(app: AppHandle, db: State<'_, Database>) -> 
     Ok(deleted)
 }
 
-/// Delete multiple tracks by ID in a single transaction
+/// Delete multiple tracks by ID in a single transaction and record removals
 #[tracing::instrument(skip(app, db, track_ids))]
 #[tauri::command]
 pub(crate) fn library_delete_tracks(
@@ -192,7 +205,26 @@ pub(crate) fn library_delete_tracks(
 ) -> Result<usize, String> {
     let start = std::time::Instant::now();
     let deleted = db
-        .transaction(|conn| library::delete_tracks_by_ids(conn, &track_ids))
+        .transaction(|conn| {
+            // Fetch track info before deleting to record removals
+            let removals: Vec<(String, Option<String>)> = track_ids
+                .iter()
+                .filter_map(|&id| {
+                    library::get_track_by_id(conn, id)
+                        .ok()
+                        .flatten()
+                        .map(|t| (t.filepath, t.content_hash))
+                })
+                .collect();
+
+            let deleted = library::delete_tracks_by_ids(conn, &track_ids)?;
+
+            if !removals.is_empty() {
+                removed::record_removals_bulk(conn, &removals)?;
+            }
+
+            Ok(deleted)
+        })
         .map_err(|e| e.to_string())?;
     info!(count = deleted, "Batch deleted tracks");
     crate::logging::log_slow_command("library_delete_tracks", start);
@@ -202,13 +234,18 @@ pub(crate) fn library_delete_tracks(
     Ok(deleted)
 }
 
-/// Delete ALL tracks from the library (favorites, playlist_items, library rows)
+/// Delete ALL tracks from the library (favorites, playlist_items, library rows).
+/// Also clears the removed tracks list for a clean slate.
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub(crate) fn library_delete_all(app: AppHandle, db: State<'_, Database>) -> Result<usize, String> {
     let start = std::time::Instant::now();
     let deleted = db
-        .transaction(library::delete_all_tracks)
+        .transaction(|conn| {
+            let deleted = library::delete_all_tracks(conn)?;
+            removed::clear_all_removals(conn)?;
+            Ok(deleted)
+        })
         .map_err(|e| e.to_string())?;
     info!(count = deleted, "Deleted all tracks from library");
     crate::logging::log_slow_command("library_delete_all", start);
@@ -296,7 +333,9 @@ pub(crate) fn library_update_play_count(
 /// Get all tracks marked as missing
 #[tracing::instrument(skip(db))]
 #[tauri::command]
-pub(crate) fn library_get_missing(db: State<'_, Database>) -> Result<MissingTracksResponse, String> {
+pub(crate) fn library_get_missing(
+    db: State<'_, Database>,
+) -> Result<MissingTracksResponse, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
 
     let tracks = library::get_missing_tracks(&conn).map_err(|e| e.to_string())?;

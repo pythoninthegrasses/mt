@@ -141,6 +141,16 @@ pub const CREATE_TABLES: &[(&str, &str)] = &[
             FOREIGN KEY (matched_track_id) REFERENCES library(id) ON DELETE SET NULL
         )",
     ),
+    (
+        "removed_tracks",
+        "CREATE TABLE IF NOT EXISTS removed_tracks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filepath TEXT NOT NULL,
+            content_hash TEXT,
+            removed_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+            UNIQUE(filepath)
+        )",
+    ),
 ];
 
 /// Create all database tables
@@ -332,6 +342,42 @@ pub(crate) fn run_migrations(conn: &Connection) -> DbResult<()> {
         info!("genre column added");
     }
 
+    // Migration: Create removed_tracks table for existing databases
+    if !table_exists(conn, "removed_tracks")? {
+        info!("Creating removed_tracks table");
+        conn.execute(
+            "CREATE TABLE removed_tracks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filepath TEXT NOT NULL,
+                content_hash TEXT,
+                removed_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+                UNIQUE(filepath)
+            )",
+            [],
+        )?;
+        info!("removed_tracks table created");
+    }
+
+    // Migration: Add index on removed_tracks filepath for fast lookups
+    if !index_exists(conn, "idx_removed_tracks_filepath")? {
+        info!("Creating filepath index on removed_tracks table");
+        conn.execute(
+            "CREATE INDEX idx_removed_tracks_filepath ON removed_tracks(filepath)",
+            [],
+        )?;
+        info!("removed_tracks filepath index created");
+    }
+
+    // Migration: Add index on removed_tracks content_hash for hash-based lookups
+    if !index_exists(conn, "idx_removed_tracks_content_hash")? {
+        info!("Creating content_hash index on removed_tracks table");
+        conn.execute(
+            "CREATE INDEX idx_removed_tracks_content_hash ON removed_tracks(content_hash) WHERE content_hash IS NOT NULL",
+            [],
+        )?;
+        info!("removed_tracks content_hash index created");
+    }
+
     // Migration: Add composite index for artist sort (canonical album_artist subquery)
     // and the default secondary sort. Without this, ORDER BY with the correlated
     // CANONICAL_ALBUM_ARTIST subquery does a full table scan per row — O(n^2).
@@ -396,7 +442,7 @@ mod tests {
             .filter_map(|r| r.ok())
             .collect();
 
-        assert_eq!(tables.len(), 11);
+        assert_eq!(tables.len(), 12);
         assert!(tables.contains(&"library".to_string()));
         assert!(tables.contains(&"queue".to_string()));
         assert!(tables.contains(&"queue_state".to_string()));
@@ -408,6 +454,7 @@ mod tests {
         assert!(tables.contains(&"watched_folders".to_string()));
         assert!(tables.contains(&"lyrics_cache".to_string()));
         assert!(tables.contains(&"lastfm_loved_tracks".to_string()));
+        assert!(tables.contains(&"removed_tracks".to_string()));
     }
 
     #[test]

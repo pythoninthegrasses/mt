@@ -17,7 +17,9 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
-use crate::db::{Database, TrackMetadata, WatchedFolder as DbWatchedFolder, library, watched};
+use crate::db::{
+    Database, TrackMetadata, WatchedFolder as DbWatchedFolder, library, removed, watched,
+};
 use crate::events::{EventEmitter, LibraryUpdatedEvent, ScanCompleteEvent, ScanProgressEvent};
 use crate::scanner::ExtractedMetadata;
 use crate::scanner::fingerprint::{FileFingerprint, compute_content_hash};
@@ -617,6 +619,43 @@ impl WatcherManager {
                     (m.filepath.clone(), to_track_metadata_with_hash(m, None))
                 })
                 .collect()
+        };
+
+        // Filter out tracks that the user has previously removed from the library.
+        let truly_new = match db.conn() {
+            Ok(conn) => {
+                let removed_paths = removed::get_removed_filepaths(&conn).unwrap_or_default();
+                let removed_hashes = removed::get_removed_content_hashes(&conn).unwrap_or_default();
+
+                if removed_paths.is_empty() && removed_hashes.is_empty() {
+                    truly_new
+                } else {
+                    let before = truly_new.len();
+                    let filtered: Vec<_> = truly_new
+                        .into_iter()
+                        .filter(|(filepath, meta)| {
+                            if removed_paths.contains(filepath) {
+                                return false;
+                            }
+                            if let Some(ref hash) = meta.content_hash
+                                && removed_hashes.contains(hash)
+                            {
+                                return false;
+                            }
+                            true
+                        })
+                        .collect();
+                    let skipped = before - filtered.len();
+                    if skipped > 0 {
+                        info!(
+                            folder_id,
+                            skipped, "Skipped previously removed tracks during watcher scan"
+                        );
+                    }
+                    filtered
+                }
+            }
+            Err(_) => truly_new,
         };
 
         // Chunked bulk inserts. Committing every ~500 tracks releases the write lock
