@@ -1,10 +1,10 @@
 ---
 id: TASK-290
 title: Sort artist view album listings by year ascending
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-25 22:39'
-updated_date: '2026-02-25 22:40'
+updated_date: '2026-02-25 23:00'
 labels:
   - frontend
   - ux
@@ -34,7 +34,31 @@ Sort albums in the Artists browser detail view by release year in ascending orde
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Albums in artist detail view are sorted by year ascending (oldest first)
-- [ ] #2 Albums without year metadata appear at the end of the list
-- [ ] #3 Sort order persists when switching between artists
+- [x] #1 Albums in artist detail view are sorted by year ascending (oldest first)
+- [x] #2 Albums without year metadata appear at the end of the list
+- [x] #3 Sort order persists when switching between artists
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Summary
+
+Changed album sorting in artist detail view from year descending to year ascending (oldest first), with albums lacking year metadata appearing at the end.
+
+## Changes
+
+- `app/frontend/js/utils/artist-utils.js`: Modified `groupTracksIntoAlbums()` sort logic
+  - Albums with year now sort ascending (oldest first)
+  - Albums without year metadata now appear at the end of the list
+  - Albums without year still sort alphabetically among themselves
+  - Updated JSDoc to reflect new behavior
+
+## Test Coverage
+
+- Added `app/frontend/__tests__/artist-utils.test.js` with 4 test cases covering:
+  - Year ascending sort order
+  - Albums without year at end
+  - Alphabetical sort among albums without year
+  - Alphabetical tiebreaker for same year
+<!-- SECTION:FINAL_SUMMARY:END -->

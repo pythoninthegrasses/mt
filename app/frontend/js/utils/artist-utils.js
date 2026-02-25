@@ -96,7 +96,7 @@ export function buildArtistDisplayNames(tracks, canonicalMap) {
  * @param {Array} tracks - Tracks already filtered to one artist
  * @param {Function} parseDiscNumber - Disc number parser
  * @param {Function} parseTrackNumber - Track number parser
- * @returns {Array} Album objects sorted by year descending, then name
+ * @returns {Array} Album objects sorted by year ascending (oldest first), albums without year at end
  */
 export function groupTracksIntoAlbums(tracks, parseDiscNumber, parseTrackNumber) {
   const albumMap = {};
@@ -145,7 +145,11 @@ export function groupTracksIntoAlbums(tracks, parseDiscNumber, parseTrackNumber)
   return Object.values(albumMap).sort((a, b) => {
     const yearA = parseInt(a.year) || 0;
     const yearB = parseInt(b.year) || 0;
-    if (yearA !== yearB) return yearB - yearA;
+    // Albums without year go to end
+    if (yearA === 0 && yearB !== 0) return 1;
+    if (yearA !== 0 && yearB === 0) return -1;
+    // Sort by year ascending (oldest first)
+    if (yearA !== yearB) return yearA - yearB;
     return a.name.localeCompare(b.name);
   });
 }
