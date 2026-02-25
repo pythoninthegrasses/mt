@@ -16,7 +16,7 @@ import { playlists } from './playlists.js';
 import { lastfm } from './lastfm.js';
 import { settings } from './settings.js';
 
-export { library, queue, favorites, playlists, lastfm, settings };
+export { favorites, lastfm, library, playlists, queue, settings };
 
 /**
  * Unified API object (backward compatibility).

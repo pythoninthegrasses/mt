@@ -44,13 +44,19 @@ export function createAlbumsBrowser(Alpine) {
     // Flag to skip grid reset during programmatic navigation
     _skipGridReset: false,
 
+    // Bound event handlers for cleanup
+    _onNavigateToAlbum: null,
+    _onPlaylistsUpdated: null,
+
     init() {
       this._setupLazyLoading();
       this._loadPlaylists();
-      window.addEventListener('mt:playlists-updated', () => this._loadPlaylists());
+
+      this._onPlaylistsUpdated = () => this._loadPlaylists();
+      window.addEventListener('mt:playlists-updated', this._onPlaylistsUpdated);
 
       // Handle cross-view navigation to album
-      window.addEventListener('mt:navigate-to-album', (e) => {
+      this._onNavigateToAlbum = (e) => {
         const { album, albumArtist } = e.detail;
         const targetAlbum = this.albumList.find(
           (a) => a.name === album && a.albumArtist === albumArtist,
@@ -59,15 +65,18 @@ export function createAlbumsBrowser(Alpine) {
           this._skipGridReset = true;
           this.ui.setView('albums');
           this.openAlbumDetail(targetAlbum);
+          this._skipGridReset = false;
+        } else {
+          this.ui.toast(`Album not found: "${album}"`, 'error');
         }
-      });
+      };
+      window.addEventListener('mt:navigate-to-album', this._onNavigateToAlbum);
 
       // Reset to grid view when navigating back to albums (via sidebar)
       this.$watch('$store.ui.view', (view) => {
         if (view === 'albums' && this.subView === 'detail' && !this._skipGridReset) {
           this.backToGrid();
         }
-        this._skipGridReset = false;
       });
     },
 
@@ -75,6 +84,14 @@ export function createAlbumsBrowser(Alpine) {
       if (this._observer) {
         this._observer.disconnect();
         this._observer = null;
+      }
+      if (this._onNavigateToAlbum) {
+        window.removeEventListener('mt:navigate-to-album', this._onNavigateToAlbum);
+        this._onNavigateToAlbum = null;
+      }
+      if (this._onPlaylistsUpdated) {
+        window.removeEventListener('mt:playlists-updated', this._onPlaylistsUpdated);
+        this._onPlaylistsUpdated = null;
       }
     },
 
