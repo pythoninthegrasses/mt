@@ -41,16 +41,33 @@ export function createAlbumsBrowser(Alpine) {
     submenuY: 0,
     submenuCloseTimeout: null,
 
+    // Flag to skip grid reset during programmatic navigation
+    _skipGridReset: false,
+
     init() {
       this._setupLazyLoading();
       this._loadPlaylists();
       window.addEventListener('mt:playlists-updated', () => this._loadPlaylists());
 
-      // Reset to grid view when navigating back to albums
+      // Handle cross-view navigation to album
+      window.addEventListener('mt:navigate-to-album', (e) => {
+        const { album, albumArtist } = e.detail;
+        const targetAlbum = this.albumList.find(
+          (a) => a.name === album && a.albumArtist === albumArtist,
+        );
+        if (targetAlbum) {
+          this._skipGridReset = true;
+          this.ui.setView('albums');
+          this.openAlbumDetail(targetAlbum);
+        }
+      });
+
+      // Reset to grid view when navigating back to albums (via sidebar)
       this.$watch('$store.ui.view', (view) => {
-        if (view === 'albums' && this.subView === 'detail') {
+        if (view === 'albums' && this.subView === 'detail' && !this._skipGridReset) {
           this.backToGrid();
         }
+        this._skipGridReset = false;
       });
     },
 

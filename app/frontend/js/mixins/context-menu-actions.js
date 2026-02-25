@@ -103,6 +103,11 @@ export function contextMenuActionsMixin() {
           label: 'Add to Liked Songs',
           action: () => this.toggleFavoriteFromMenu(track),
         },
+        {
+          label: 'Go to Album',
+          action: () => this.goToAlbum(track),
+          disabled: selectedCount > 1 || !track.album,
+        },
       ];
 
       // Check favorite status and update label asynchronously
@@ -281,6 +286,21 @@ export function contextMenuActionsMixin() {
         });
         this.$store.ui.toast('Failed to update liked songs', 'error');
       }
+    },
+
+    goToAlbum(track) {
+      this.contextMenu = null;
+      if (!track.album) return;
+
+      // Dispatch event - albums-browser handles view switch and album opening
+      window.dispatchEvent(
+        new CustomEvent('mt:navigate-to-album', {
+          detail: {
+            album: track.album,
+            albumArtist: track.album_artist || track.artist,
+          },
+        }),
+      );
     },
 
     createPlaylistWithTracks() {
