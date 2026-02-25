@@ -1,10 +1,10 @@
 ---
 id: TASK-285.11
 title: Reduce 22 critical-complexity symbols (CC > threshold)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-24 00:05'
-updated_date: '2026-02-24 22:40'
+updated_date: '2026-02-25 21:51'
 labels:
   - tech-debt
   - code-health
