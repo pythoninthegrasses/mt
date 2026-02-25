@@ -211,6 +211,22 @@ export function createLibraryBrowser(Alpine) {
         }
       });
 
+      // Force virtual scroll refresh when library view becomes visible
+      // This fixes a rendering issue where tracks don't paint after returning
+      // from another view (e.g., albums). Triggering a scroll event forces
+      // both Alpine reactivity update and WebKit repaint.
+      this.$watch('$store.ui.view', (view) => {
+        if (view === 'library') {
+          this.$nextTick(() => {
+            const container = this.$refs.scrollContainer;
+            if (container) {
+              // Force scroll event to trigger _onScroll and repaint
+              container.dispatchEvent(new Event('scroll'));
+            }
+          });
+        }
+      });
+
       document.addEventListener('click', (e) => {
         if (this.contextMenu && !e.target.closest('.context-menu')) {
           this.contextMenu = null;
