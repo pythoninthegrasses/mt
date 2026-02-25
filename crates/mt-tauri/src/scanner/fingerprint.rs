@@ -63,6 +63,7 @@ impl FileFingerprint {
     }
 
     /// Create a fingerprint from database values including inode
+    #[allow(dead_code)]
     pub(crate) fn from_db_with_inode(mtime_ns: Option<i64>, size: i64, inode: Option<u64>) -> Self {
         FileFingerprint {
             mtime_ns,

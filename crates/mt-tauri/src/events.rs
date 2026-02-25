@@ -268,6 +268,7 @@ impl PlaylistsUpdatedEvent {
 
 /// Emitted when a setting value changes
 #[derive(Clone, Debug, Serialize)]
+#[allow(dead_code)]
 pub struct SettingsUpdatedEvent {
     /// The setting key that changed
     pub key: String,
@@ -277,6 +278,7 @@ pub struct SettingsUpdatedEvent {
     pub previous_value: Option<serde_json::Value>,
 }
 
+#[allow(dead_code)]
 impl SettingsUpdatedEvent {
     pub const EVENT_NAME: &'static str = "settings:updated";
 
@@ -365,6 +367,7 @@ impl ScrobbleStatusEvent {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn failed(artist: String, track: String, message: String) -> Self {
         Self {
             status: "failed".to_string(),
@@ -446,6 +449,7 @@ pub trait EventEmitter {
     fn emit_queue_state_changed(&self, event: QueueStateChangedEvent) -> Result<(), String>;
     fn emit_favorites_updated(&self, event: FavoritesUpdatedEvent) -> Result<(), String>;
     fn emit_playlists_updated(&self, event: PlaylistsUpdatedEvent) -> Result<(), String>;
+    #[allow(dead_code)]
     fn emit_settings_updated(&self, event: SettingsUpdatedEvent) -> Result<(), String>;
     fn emit_reconcile_progress(&self, event: ReconcileProgressEvent) -> Result<(), String>;
 }

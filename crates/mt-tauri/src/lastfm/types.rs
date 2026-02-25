@@ -20,6 +20,7 @@ pub struct LastfmSettingsUpdate {
 
 /// Response from updating settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct LastfmSettingsUpdateResponse {
     pub updated: Vec<String>,
 }
@@ -136,6 +137,7 @@ pub struct LovedTracksStatsResponse {
 
 /// Last.fm API token response
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct TokenResponse {
     pub token: String,
 }
@@ -156,6 +158,7 @@ pub struct SessionInfo {
 
 /// Last.fm API error response
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ErrorResponse {
     pub error: u32,
     pub message: String,
@@ -244,6 +247,7 @@ pub struct ScrobblesAttr {
 
 /// Now playing response from Last.fm API
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct NowPlayingApiResponse {
     pub nowplaying: HashMap<String, serde_json::Value>,
 }

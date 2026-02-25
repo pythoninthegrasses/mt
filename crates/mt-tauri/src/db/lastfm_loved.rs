@@ -11,6 +11,7 @@ use crate::db::{DbResult, LastfmLovedStats, LastfmLovedTrack};
 ///
 /// Uses INSERT OR REPLACE to handle duplicates via the UNIQUE(artist, track) constraint.
 /// Returns the row id.
+#[allow(dead_code)]
 pub(crate) fn upsert_loved_track(
     conn: &Connection,
     artist: &str,
@@ -85,6 +86,7 @@ pub(crate) fn get_unmatched_loved_tracks(
 }
 
 /// Get all cached loved tracks (both matched and unmatched)
+#[allow(dead_code)]
 pub(crate) fn get_all_loved_tracks(
     conn: &Connection,
     limit: Option<i64>,
@@ -135,6 +137,7 @@ pub(crate) fn mark_checked(conn: &Connection, loved_track_id: i64) -> DbResult<b
 }
 
 /// Clear a match (useful when a library track is removed)
+#[allow(dead_code)]
 pub(crate) fn clear_match(conn: &Connection, library_track_id: i64) -> DbResult<i64> {
     let updated = conn.execute(
         "UPDATE lastfm_loved_tracks SET matched_track_id = NULL WHERE matched_track_id = ?",
@@ -164,6 +167,7 @@ pub(crate) fn get_loved_stats(conn: &Connection) -> DbResult<LastfmLovedStats> {
 }
 
 /// Check if a specific artist/track is in the loved cache
+#[allow(dead_code)]
 pub(crate) fn is_loved_cached(conn: &Connection, artist: &str, track: &str) -> DbResult<bool> {
     let count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM lastfm_loved_tracks WHERE artist = ? AND track = ?",
@@ -174,6 +178,7 @@ pub(crate) fn is_loved_cached(conn: &Connection, artist: &str, track: &str) -> D
 }
 
 /// Get a loved track by artist and track name
+#[allow(dead_code)]
 pub(crate) fn get_loved_by_name(
     conn: &Connection,
     artist: &str,
@@ -195,6 +200,7 @@ pub(crate) fn get_loved_by_name(
 }
 
 /// Remove a loved track from the cache
+#[allow(dead_code)]
 pub(crate) fn remove_loved_track(conn: &Connection, loved_track_id: i64) -> DbResult<bool> {
     let deleted = conn.execute(
         "DELETE FROM lastfm_loved_tracks WHERE id = ?",
@@ -228,6 +234,7 @@ pub(crate) fn get_most_recent_loved_at(conn: &Connection) -> DbResult<Option<i64
 }
 
 /// Count of cached loved tracks
+#[allow(dead_code)]
 pub(crate) fn get_loved_count(conn: &Connection) -> DbResult<i64> {
     let count: i64 = conn.query_row("SELECT COUNT(*) FROM lastfm_loved_tracks", [], |row| {
         row.get(0)

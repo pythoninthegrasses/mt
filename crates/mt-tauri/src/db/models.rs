@@ -99,6 +99,7 @@ pub struct PlaylistTrack {
 
 /// Favorite entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct Favorite {
     pub id: i64,
     pub track_id: i64,
@@ -115,6 +116,7 @@ pub struct FavoriteTrack {
 
 /// Setting entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct Setting {
     pub key: String,
     pub value: Option<String>,
@@ -147,6 +149,7 @@ pub struct WatchedFolder {
 
 /// Lyrics cache entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct LyricsCache {
     pub id: i64,
     pub artist: String,
@@ -189,6 +192,7 @@ pub struct LibraryStats {
 
 /// File fingerprint for change detection
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct FileFingerprint {
     pub filepath: String,
     pub file_mtime_ns: Option<i64>,
@@ -272,6 +276,7 @@ impl LibrarySortColumn {
     }
 
     /// Static SQL expression for backward compatibility (no ignore-words)
+    #[allow(dead_code)]
     pub(crate) fn as_sql(&self) -> &'static str {
         match self {
             LibrarySortColumn::Title => "title COLLATE NOCASE",
@@ -317,6 +322,7 @@ impl LibrarySortColumn {
     /// Returns secondary ORDER BY columns for deterministic album track ordering.
     /// Ensures tracks within the same album are sorted by disc number then track number.
     /// Uses CAST(... AS INTEGER) because track_number and disc_number are TEXT columns.
+    #[allow(dead_code)]
     pub(crate) fn secondary_sort_sql(&self) -> &'static str {
         match self {
             LibrarySortColumn::Artist => {

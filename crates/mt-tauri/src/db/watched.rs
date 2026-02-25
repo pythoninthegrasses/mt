@@ -162,6 +162,7 @@ pub(crate) fn get_enabled_watched_folders(conn: &Connection) -> DbResult<Vec<Wat
 }
 
 /// Get watched folder by path
+#[allow(dead_code)]
 pub(crate) fn get_watched_folder_by_path(
     conn: &Connection,
     path: &str,

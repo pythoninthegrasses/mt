@@ -166,7 +166,7 @@ pub(crate) fn get_track_metadata(path: String) -> Result<TrackMetadata, String> 
 pub(crate) fn get_tracks_metadata_batch(paths: Vec<String>) -> Result<Vec<TrackMetadata>, String> {
     let results: Vec<TrackMetadata> = paths
         .into_par_iter()
-        .map(|path| get_track_metadata(path))
+        .map(get_track_metadata)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(results)
 }

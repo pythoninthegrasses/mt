@@ -74,6 +74,7 @@ pub(crate) fn increment_scrobble_retry(conn: &Connection, scrobble_id: i64) -> D
 }
 
 /// Remove old queued scrobbles that are unlikely to succeed
+#[allow(dead_code)]
 pub(crate) fn clean_old_scrobbles(conn: &Connection, max_age_days: i64) -> DbResult<i64> {
     let modifier = format!("-{} days", max_age_days);
 
@@ -86,6 +87,7 @@ pub(crate) fn clean_old_scrobbles(conn: &Connection, max_age_days: i64) -> DbRes
 }
 
 /// Get the count of queued scrobbles
+#[allow(dead_code)]
 pub(crate) fn get_scrobble_queue_count(conn: &Connection) -> DbResult<i64> {
     let count: i64 = conn.query_row("SELECT COUNT(*) FROM scrobble_queue", [], |row| row.get(0))?;
     Ok(count)

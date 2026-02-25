@@ -39,9 +39,11 @@ pub enum DbError {
     #[error("Connection pool error: {0}")]
     Pool(#[from] r2d2::Error),
 
+    #[allow(dead_code)]
     #[error("Record not found: {0}")]
     NotFound(String),
 
+    #[allow(dead_code)]
     #[error("Constraint violation: {0}")]
     Constraint(String),
 
@@ -131,6 +133,7 @@ impl Database {
     }
 
     /// Create an in-memory database (useful for testing)
+    #[allow(dead_code)]
     pub(crate) fn new_in_memory() -> DbResult<Self> {
         let manager = SqliteConnectionManager::memory().with_init(|conn| {
             conn.execute_batch(

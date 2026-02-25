@@ -6,7 +6,6 @@
 use std::collections::HashMap;
 
 use crate::scanner::fingerprint::FileFingerprint;
-use crate::scanner::inventory::InventoryResult;
 use crate::scanner::inventory::run_inventory;
 use crate::scanner::metadata::extract_metadata_batch;
 use crate::scanner::{ExtractedMetadata, ScanProgress, ScanResult, ScanStats};
@@ -135,6 +134,7 @@ pub(crate) fn scan_2phase(
 
 
 /// Build a fingerprint map from database tracks
+#[allow(dead_code)]
 pub(crate) fn build_fingerprint_map(
     tracks: &[(String, Option<i64>, i64)],
 ) -> HashMap<String, FileFingerprint> {

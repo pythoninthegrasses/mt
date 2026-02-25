@@ -338,6 +338,7 @@ pub(crate) fn set_loop_mode(conn: &Connection, mode: &str) -> DbResult<()> {
 }
 
 /// Update original order JSON in queue state
+#[allow(dead_code)]
 pub(crate) fn set_original_order_json(conn: &Connection, json: Option<String>) -> DbResult<()> {
     // Ensure state exists
     let _ = get_queue_state(conn)?;

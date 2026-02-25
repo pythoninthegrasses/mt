@@ -10,7 +10,6 @@
 pub const DEFAULT_CACHE_SIZE: usize = 100;
 
 // Re-export Artwork for convenience
-pub(crate) use super::artwork::Artwork as ArtworkType;
 
 mod rust_impl {
     use lru::LruCache;
@@ -69,18 +68,21 @@ mod rust_impl {
         }
 
         /// Clear all cache entries
+        #[allow(dead_code)]
         pub(crate) fn clear(&self) {
             let mut cache = self.cache.lock();
             cache.clear();
         }
 
         /// Get current cache size
+        #[allow(dead_code)]
         pub(crate) fn len(&self) -> usize {
             let cache = self.cache.lock();
             cache.len()
         }
 
         /// Check if cache is empty
+        #[allow(dead_code)]
         pub(crate) fn is_empty(&self) -> bool {
             let cache = self.cache.lock();
             cache.is_empty()

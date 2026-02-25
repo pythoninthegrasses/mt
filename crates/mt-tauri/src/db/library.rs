@@ -54,6 +54,7 @@ pub struct LibraryQuery {
 }
 
 impl LibraryQuery {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             limit: 100,
@@ -164,6 +165,7 @@ pub(crate) fn find_tracks_by_artist_title(
 ///
 /// Convenience wrapper around `find_tracks_by_artist_title` that returns the
 /// first match. Use `find_tracks_by_artist_title` when disambiguation is needed.
+#[allow(dead_code)]
 pub(crate) fn find_track_by_artist_title(
     conn: &Connection,
     artist: &str,
@@ -210,6 +212,7 @@ pub(crate) fn get_track_by_filepath(conn: &Connection, filepath: &str) -> DbResu
 }
 
 /// Check which filepaths already exist in the library
+#[allow(dead_code)]
 pub(crate) fn get_existing_filepaths(
     conn: &Connection,
     filepaths: &[String],
@@ -239,6 +242,7 @@ pub(crate) fn get_existing_filepaths(
 }
 
 /// Get fingerprints for all tracks (filepath, mtime, size)
+#[allow(dead_code)]
 pub(crate) fn get_all_fingerprints(conn: &Connection) -> DbResult<HashMap<String, FileFingerprint>> {
     let mut stmt = conn.prepare("SELECT filepath, file_mtime_ns, file_size FROM library")?;
 
@@ -258,6 +262,7 @@ pub(crate) fn get_all_fingerprints(conn: &Connection) -> DbResult<HashMap<String
 }
 
 /// Add a track to the library
+#[allow(dead_code)]
 pub(crate) fn add_track(conn: &Connection, filepath: &str, metadata: &TrackMetadata) -> DbResult<i64> {
     conn.execute(
         "INSERT INTO library
@@ -403,6 +408,7 @@ pub(crate) fn update_tracks_bulk(conn: &Connection, tracks: &[(String, TrackMeta
 }
 
 /// Delete multiple tracks by filepath
+#[allow(dead_code)]
 pub(crate) fn delete_tracks_bulk(conn: &Connection, filepaths: &[String]) -> DbResult<i64> {
     if filepaths.is_empty() {
         return Ok(0);
@@ -641,6 +647,7 @@ pub(crate) fn mark_track_present(conn: &Connection, track_id: i64) -> DbResult<b
 }
 
 /// Mark a track as present by filepath (clears missing flag if file reappears)
+#[allow(dead_code)]
 pub(crate) fn mark_track_present_by_filepath(conn: &Connection, filepath: &str) -> DbResult<bool> {
     let updated = conn.execute(
         "UPDATE library SET missing = 0, last_seen_at = strftime('%s','now') WHERE filepath = ? AND missing = 1",
@@ -761,6 +768,7 @@ pub(crate) fn check_and_update_track_status(conn: &Connection, track_id: i64) ->
     get_track_by_id(conn, track_id)
 }
 
+#[allow(dead_code)]
 pub(crate) fn find_missing_track_by_inode(conn: &Connection, inode: u64) -> DbResult<Option<Track>> {
     let mut stmt = conn.prepare(
         "SELECT id, filepath, title, artist, album, album_artist,
@@ -778,6 +786,7 @@ pub(crate) fn find_missing_track_by_inode(conn: &Connection, inode: u64) -> DbRe
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn find_missing_track_by_content_hash(
     conn: &Connection,
     content_hash: &str,
@@ -860,6 +869,7 @@ pub(crate) fn update_track_fingerprints(
 
 /// Duplicate track info for merge decisions
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct DuplicateCandidate {
     pub id: i64,
     pub filepath: String,

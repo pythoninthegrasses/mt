@@ -55,6 +55,7 @@ pub struct WatcherStatus {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[allow(dead_code)]
 pub struct ScanProgress {
     pub folder_id: i64,
     pub percent: Option<u8>,
@@ -120,6 +121,7 @@ impl WatcherManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn stop(&self) {
         let cancel_txs: Vec<_> = {
             let watchers = self.active_watchers.read();

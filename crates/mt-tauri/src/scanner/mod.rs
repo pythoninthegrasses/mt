@@ -34,9 +34,11 @@ pub enum ScanError {
     #[error("Metadata extraction error: {0}")]
     Metadata(String),
 
+    #[allow(dead_code)]
     #[error("Database error: {0}")]
     Database(String),
 
+    #[allow(dead_code)]
     #[error("Path not found: {0}")]
     PathNotFound(String),
 }
