@@ -261,8 +261,8 @@ pub(crate) async fn scan_paths_to_library(
     // Filter out tracks that the user has previously removed from the library.
     let truly_new = {
         let conn = db.conn().map_err(|e| e.to_string())?;
-        let (filtered, skipped) =
-            removed::filter_removed_tracks(&conn, truly_new).map_err(|e| e.to_string())?;
+        let (filtered, skipped) = removed::filter_removed_tracks(&conn, truly_new)
+            .map_err(|(e, _tracks)| e.to_string())?;
         if skipped > 0 {
             info!(skipped, "Skipped previously removed tracks during scan");
         }

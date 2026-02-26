@@ -1,9 +1,10 @@
 ---
 id: TASK-292
 title: Fix watcher error path dropping new tracks instead of proceeding unfiltered
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-26 00:10'
+updated_date: '2026-02-26 16:05'
 labels:
   - bug
   - roborev

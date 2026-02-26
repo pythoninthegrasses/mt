@@ -635,11 +635,9 @@ impl WatcherManager {
                     }
                     filtered
                 }
-                Err(e) => {
+                Err((e, unfiltered)) => {
                     error!(folder_id, error = %e, "Failed to filter removed tracks, proceeding unfiltered");
-                    // filter_removed_tracks consumed truly_new but failed before
-                    // filtering; tracks on disk will be picked up on next scan cycle.
-                    vec![]
+                    unfiltered
                 }
             },
             Err(e) => {

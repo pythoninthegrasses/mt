@@ -6,7 +6,9 @@
 use rusqlite::{Connection, params};
 use std::collections::HashSet;
 
-use crate::db::DbResult;
+use crate::db::{DbError, DbResult};
+
+type TrackVec = Vec<(String, crate::db::TrackMetadata)>;
 
 /// Record a track removal by filepath and optional content hash.
 /// Uses INSERT OR REPLACE so re-removing the same filepath just updates the timestamp.
@@ -93,12 +95,21 @@ pub(crate) fn clear_all_removals(conn: &Connection) -> DbResult<usize> {
 /// Filter a list of `(filepath, TrackMetadata)` pairs, removing any that match
 /// previously-removed filepaths or content hashes. Returns the filtered vec and
 /// the number of tracks that were skipped.
+///
+/// On DB errors, the original `tracks` vec is returned alongside the error so
+/// the caller can fall back to unfiltered insertion.
 pub(crate) fn filter_removed_tracks(
     conn: &Connection,
-    tracks: Vec<(String, crate::db::TrackMetadata)>,
-) -> DbResult<(Vec<(String, crate::db::TrackMetadata)>, usize)> {
-    let removed_paths = get_removed_filepaths(conn)?;
-    let removed_hashes = get_removed_content_hashes(conn)?;
+    tracks: TrackVec,
+) -> Result<(TrackVec, usize), (DbError, TrackVec)> {
+    let removed_paths = match get_removed_filepaths(conn) {
+        Ok(v) => v,
+        Err(e) => return Err((e, tracks)),
+    };
+    let removed_hashes = match get_removed_content_hashes(conn) {
+        Ok(v) => v,
+        Err(e) => return Err((e, tracks)),
+    };
 
     if removed_paths.is_empty() && removed_hashes.is_empty() {
         return Ok((tracks, 0));
@@ -455,5 +466,27 @@ mod tests {
         let conn = setup_test_db();
         let info = get_track_removal_info_bulk(&conn, &[]).unwrap();
         assert!(info.is_empty());
+    }
+
+    #[test]
+    fn test_filter_removed_tracks_returns_tracks_on_error() {
+        use crate::db::TrackMetadata;
+
+        // Use a closed connection to force a DB error.
+        let conn = setup_test_db();
+        conn.execute_batch("DROP TABLE removed_tracks").unwrap();
+
+        let tracks = vec![
+            ("/music/a.mp3".to_string(), TrackMetadata::default()),
+            ("/music/b.mp3".to_string(), TrackMetadata::default()),
+        ];
+
+        let result = filter_removed_tracks(&conn, tracks);
+        assert!(result.is_err());
+
+        let (_, returned_tracks) = result.unwrap_err();
+        assert_eq!(returned_tracks.len(), 2);
+        assert_eq!(returned_tracks[0].0, "/music/a.mp3");
+        assert_eq!(returned_tracks[1].0, "/music/b.mp3");
     }
 }
