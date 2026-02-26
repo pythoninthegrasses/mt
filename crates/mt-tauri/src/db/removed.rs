@@ -62,8 +62,7 @@ pub(crate) fn get_removed_filepaths(conn: &Connection) -> DbResult<HashSet<Strin
     let mut stmt = conn.prepare("SELECT filepath FROM removed_tracks")?;
     let paths: HashSet<String> = stmt
         .query_map([], |row| row.get(0))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<HashSet<_>, _>>()?;
     Ok(paths)
 }
 
@@ -73,8 +72,7 @@ pub(crate) fn get_removed_content_hashes(conn: &Connection) -> DbResult<HashSet<
         conn.prepare("SELECT content_hash FROM removed_tracks WHERE content_hash IS NOT NULL")?;
     let hashes: HashSet<String> = stmt
         .query_map([], |row| row.get(0))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<HashSet<_>, _>>()?;
     Ok(hashes)
 }
 
@@ -149,8 +147,7 @@ pub(crate) fn get_track_removal_info_bulk(
         .query_map(params.as_slice(), |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
         })?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
 }
 

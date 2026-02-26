@@ -622,9 +622,33 @@ impl WatcherManager {
         };
 
         // Filter out tracks that the user has previously removed from the library.
-        let truly_new = match db.conn() {
-            Ok(conn) => match removed::filter_removed_tracks(&conn, truly_new) {
-                Ok((filtered, skipped)) => {
+        // On DB errors, fall back to unfiltered insertion so new tracks aren't lost
+        // due to transient issues.
+        let truly_new = match db.conn().map(|conn| {
+            let paths = removed::get_removed_filepaths(&conn)?;
+            let hashes = removed::get_removed_content_hashes(&conn)?;
+            Ok::<_, crate::db::DbError>((paths, hashes))
+        }) {
+            Ok(Ok((removed_paths, removed_hashes))) => {
+                if removed_paths.is_empty() && removed_hashes.is_empty() {
+                    truly_new
+                } else {
+                    let before = truly_new.len();
+                    let filtered: Vec<_> = truly_new
+                        .into_iter()
+                        .filter(|(filepath, meta)| {
+                            if removed_paths.contains(filepath) {
+                                return false;
+                            }
+                            if let Some(ref hash) = meta.content_hash
+                                && removed_hashes.contains(hash)
+                            {
+                                return false;
+                            }
+                            true
+                        })
+                        .collect();
+                    let skipped = before - filtered.len();
                     if skipped > 0 {
                         info!(
                             folder_id,
@@ -633,14 +657,14 @@ impl WatcherManager {
                     }
                     filtered
                 }
-                Err(e) => {
-                    error!(folder_id, error = %e, "Failed to filter removed tracks");
-                    return;
-                }
-            },
+            }
+            Ok(Err(e)) => {
+                error!(folder_id, error = %e, "Failed to query removed tracks, proceeding unfiltered");
+                truly_new
+            }
             Err(e) => {
-                error!(folder_id, error = %e, "Failed to get DB connection for removed tracks filter");
-                return;
+                error!(folder_id, error = %e, "Failed to get DB connection for removed tracks filter, proceeding unfiltered");
+                truly_new
             }
         };
 
