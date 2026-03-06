@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD033 -->
+
 # Security Policy
 
 * [Security Policy](#security-policy)
@@ -9,12 +11,14 @@
     * [3. Remediation](#3-remediation)
 
 <a name="reporting"></a>
+
 ## Reporting Security Problems
 
 **DO NOT CREATE AN ISSUE** to report a security problem. Instead, please
-send an email to burrows_remix6p@icloud.com.
+send an email to [burrows_remix6p@icloud.com](mailto:burrows_remix6p@icloud.com).
 
 <a name="contact"></a>
+
 ## Security Point of Contact
 
 The security point of contact is Lance Stephens. Lance responds to security incident reports as fast as possible, within one business day 
@@ -23,6 +27,7 @@ at the latest.
 If they don't respond within two days, please try emailing again.
 
 <a name="process"></a>
+
 ## Incident Response Process
 
 In case an incident is discovered or reported, I will follow the following
@@ -32,10 +37,10 @@ process to contain, respond and remediate:
 
 The first step is to find out the root cause, nature and scope of the incident.
 
-- Is still ongoing? If yes, first priority is to stop it.
-- Is the incident outside of my influence? If yes, first priority is to contain it.
-- Find out knows about the incident and who is affected.
-- Find out what data was potentially exposed.
+* Is still ongoing? If yes, first priority is to stop it.
+* Is the incident outside of my influence? If yes, first priority is to contain it.
+* Find out knows about the incident and who is affected.
+* Find out what data was potentially exposed.
 
 ### 2. Response
 
