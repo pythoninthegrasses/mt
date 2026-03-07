@@ -111,7 +111,7 @@ encoding: utf-8
 # Note that when using the JetBrains backend, language servers are not used and this list is correspondingly ignored.
 languages:
 - rust
-- typescript  # For JavaScript/Alpine.js
+- typescript
 
 # time budget (seconds) per tool call for the retrieval of additional symbol information
 # such as docstrings or parameter information.
@@ -125,3 +125,7 @@ symbol_info_budget:
 # Note: the backend is fixed at startup. If a project with a different backend
 # is activated post-init, an error will be returned.
 language_backend:
+
+# list of regex patterns which, when matched, mark a memory entry as read‑only.
+# Extends the list from the global configuration, merging the two lists.
+read_only_memory_patterns: []
