@@ -3,6 +3,7 @@
 //! This module provides SQLite database access with connection pooling,
 //! matching the schema and functionality of the Python backend.
 
+pub(crate) mod dedup;
 pub(crate) mod favorites;
 pub(crate) mod lastfm_loved;
 pub(crate) mod library;

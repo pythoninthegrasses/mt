@@ -21,6 +21,7 @@ pub(crate) fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> 
     // Get file fingerprint
     let fingerprint = FileFingerprint::from_path(path).unwrap_or(FileFingerprint {
         mtime_ns: None,
+        ctime_ns: None,
         size: 0,
         inode: None,
     });
@@ -29,6 +30,7 @@ pub(crate) fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> 
         filepath: filepath.to_string(),
         file_size: fingerprint.size,
         file_mtime_ns: fingerprint.mtime_ns,
+        file_ctime_ns: fingerprint.ctime_ns,
         file_inode: fingerprint.inode,
         ..Default::default()
     };
@@ -143,6 +145,7 @@ pub(crate) fn extract_metadata_or_default(filepath: &str) -> ExtractedMetadata {
                 ),
                 file_size: fingerprint.size,
                 file_mtime_ns: fingerprint.mtime_ns,
+                file_ctime_ns: fingerprint.ctime_ns,
                 ..Default::default()
             }
         }

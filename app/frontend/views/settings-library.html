@@ -177,8 +177,12 @@
                 <div class="text-xs text-muted-foreground">Backfilled</div>
               </div>
               <div class="text-center">
-                <div class="font-medium" x-text="reconcileScan.lastResult.duplicates_merged"></div>
+                <div class="font-medium" x-text="reconcileScan.lastResult.duplicates_merged + (reconcileScan.lastResult.cross_directory_suppressed || 0)"></div>
                 <div class="text-xs text-muted-foreground">Duplicates Merged</div>
+              </div>
+              <div class="text-center" x-show="reconcileScan.lastResult.reinstated > 0">
+                <div class="font-medium" x-text="reconcileScan.lastResult.reinstated"></div>
+                <div class="text-xs text-muted-foreground">Reinstated</div>
               </div>
               <div class="text-center">
                 <div class="font-medium" x-text="reconcileScan.lastResult.errors"></div>
@@ -188,6 +192,24 @@
           </div>
         </template>
       </div>
+
+      <!-- Cross-directory dedup toggle -->
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          class="rounded"
+          x-model="deduplicateAcrossDirectories"
+          @change="toggleDeduplicateAcrossDirectories()"
+          data-testid="settings-dedup-across-dirs"
+        />
+        <div class="flex-1">
+          <div class="text-sm font-medium">Deduplicate tracks across directories</div>
+          <div class="text-xs text-muted-foreground">
+            When the same track exists in multiple watched directories, show only one copy.
+            Prefers the oldest source file.
+          </div>
+        </div>
+      </label>
 
       <p class="text-xs text-muted-foreground">
         Updates file fingerprints (inode and content hash) to enable move detection,
