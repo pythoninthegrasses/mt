@@ -141,7 +141,7 @@ export function createUIStore(Alpine) {
     },
 
     setThemePreset(preset) {
-      if (['light', 'metro-teal'].includes(preset)) {
+      if (['light', 'metro-teal', 'neon-love'].includes(preset)) {
         console.log('[settings]', 'set_theme_preset', {
           previousPreset: this.themePreset,
           newPreset: preset,
@@ -183,9 +183,9 @@ export function createUIStore(Alpine) {
       let titleBarTheme;
       let contentTheme;
 
-      if (this.themePreset === 'metro-teal') {
+      if (this.themePreset === 'metro-teal' || this.themePreset === 'neon-love') {
         document.documentElement.classList.add('dark');
-        document.documentElement.dataset.themePreset = 'metro-teal';
+        document.documentElement.dataset.themePreset = this.themePreset;
         titleBarTheme = 'dark';
       } else {
         titleBarTheme = 'light';

@@ -130,7 +130,7 @@ function createTestUIStore() {
     },
 
     setThemePreset(preset) {
-      if (['light', 'metro-teal'].includes(preset)) {
+      if (['light', 'metro-teal', 'neon-love'].includes(preset)) {
         this.themePreset = preset;
       }
     },
@@ -338,6 +338,9 @@ describe('UI Store - Theme Management', () => {
   it('should set valid theme presets', () => {
     store.setThemePreset('metro-teal');
     expect(store.themePreset).toBe('metro-teal');
+
+    store.setThemePreset('neon-love');
+    expect(store.themePreset).toBe('neon-love');
 
     store.setThemePreset('light');
     expect(store.themePreset).toBe('light');
