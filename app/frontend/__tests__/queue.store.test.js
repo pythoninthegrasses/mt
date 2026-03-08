@@ -11,8 +11,8 @@
  * 3. Operation sequences: invariants hold after arbitrary operation sequences
  */
 
-import { test, fc } from '@fast-check/vitest';
-import { describe, expect, beforeEach, vi } from 'vitest';
+import { fc, test } from '@fast-check/vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 // -----------------------------------------------------------------------------
 // Test Helpers: Create isolated queue store instances for testing
@@ -31,6 +31,7 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
     _originalOrder: [...initialItems],
     _repeatOnePending: false,
     _playNextOffset: 0,
+    _buildQueuePromise: null,
     _playHistory: [],
     _maxHistorySize: 100,
 
@@ -126,11 +127,18 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
       }
     },
 
-    playNextTracks(tracks) {
+    async playNextTracks(tracks) {
       const tracksArray = Array.isArray(tracks) ? tracks : [tracks];
       if (tracksArray.length === 0) return;
+
+      // Wait for any background queue build to complete before inserting
+      if (this._buildQueuePromise) {
+        await this._buildQueuePromise;
+      }
+
       if (!this._playNextOffset) this._playNextOffset = 0;
-      const insertIndex = (this.currentIndex >= 0 ? this.currentIndex + 1 : 0) + this._playNextOffset;
+      const insertIndex = (this.currentIndex >= 0 ? this.currentIndex + 1 : 0) +
+        this._playNextOffset;
       this._playNextOffset += tracksArray.length;
       this.insert(insertIndex, tracksArray);
     },
@@ -299,9 +307,9 @@ describe('Queue Store - Index Bounds Invariants', () => {
       // Invariant: currentIndex is always valid or -1
       expect(
         store.currentIndex === -1 ||
-          (store.currentIndex >= 0 && store.currentIndex < store.items.length)
+          (store.currentIndex >= 0 && store.currentIndex < store.items.length),
       ).toBe(true);
-    }
+    },
   );
 
   test.prop([nonEmptyTracksArb, fc.integer({ min: 0, max: 19 })])(
@@ -323,7 +331,7 @@ describe('Queue Store - Index Bounds Invariants', () => {
         expect(store.currentIndex).toBeGreaterThanOrEqual(0);
         expect(store.currentIndex).toBeLessThan(store.items.length);
       }
-    }
+    },
   );
 
   test.prop([nonEmptyTracksArb, fc.integer({ min: 0, max: 19 }), fc.integer({ min: 0, max: 19 })])(
@@ -349,7 +357,7 @@ describe('Queue Store - Index Bounds Invariants', () => {
       // Invariant: currentIndex is within bounds
       expect(store.currentIndex).toBeGreaterThanOrEqual(0);
       expect(store.currentIndex).toBeLessThan(store.items.length);
-    }
+    },
   );
 });
 
@@ -375,7 +383,7 @@ describe('Queue Store - Permutation Preservation', () => {
       for (const id of originalIds) {
         expect(shuffledIds.has(id)).toBe(true);
       }
-    }
+    },
   );
 
   test.prop([nonEmptyTracksArb])(
@@ -393,7 +401,7 @@ describe('Queue Store - Permutation Preservation', () => {
 
       // Same IDs in same order
       expect(restoredIds).toEqual(originalIds);
-    }
+    },
   );
 
   test.prop([nonEmptyTracksArb])(
@@ -410,7 +418,7 @@ describe('Queue Store - Permutation Preservation', () => {
       // Current track should now be at index 0
       expect(store.currentIndex).toBe(0);
       expect(store.currentTrack?.id).toBe(currentTrackId);
-    }
+    },
   );
 
   test.prop([nonEmptyTracksArb])(
@@ -426,7 +434,7 @@ describe('Queue Store - Permutation Preservation', () => {
 
       // Current track should still be the same
       expect(store.currentTrack?.id).toBe(currentTrackId);
-    }
+    },
   );
 });
 
@@ -452,7 +460,14 @@ describe('Queue Store - playNextTracks (Queue Next)', () => {
     const store = createTestQueueStore(tracks);
     store.playIndex(0); // Playing A
 
-    const newTrack = { id: 'new-1', title: 'X', artist: 'T', album: 'T', duration: 1000, filepath: '/x.mp3' };
+    const newTrack = {
+      id: 'new-1',
+      title: 'X',
+      artist: 'T',
+      album: 'T',
+      duration: 1000,
+      filepath: '/x.mp3',
+    };
     store.playNextTracks([newTrack]);
 
     expect(store.items[1].id).toBe('new-1');
@@ -464,7 +479,14 @@ describe('Queue Store - playNextTracks (Queue Next)', () => {
     const store = createTestQueueStore(tracks);
     store.playIndex(0);
 
-    const newTrack = { id: 'new-1', title: 'X', artist: 'T', album: 'T', duration: 1000, filepath: '/x.mp3' };
+    const newTrack = {
+      id: 'new-1',
+      title: 'X',
+      artist: 'T',
+      album: 'T',
+      duration: 1000,
+      filepath: '/x.mp3',
+    };
     store.playNextTracks([newTrack]);
 
     expect(store.currentIndex).toBe(0);
@@ -574,7 +596,7 @@ describe('Queue Store - Operation Sequence Invariants', () => {
       // Cycle loop
       fc.record({ type: fc.constant('cycleLoop') }),
       // Clear
-      fc.record({ type: fc.constant('clear') })
+      fc.record({ type: fc.constant('clear') }),
     );
 
   /** Apply a command to the store */
@@ -618,7 +640,7 @@ describe('Queue Store - Operation Sequence Invariants', () => {
     } else {
       expect(
         store.currentIndex === -1 ||
-          (store.currentIndex >= 0 && store.currentIndex < store.items.length)
+          (store.currentIndex >= 0 && store.currentIndex < store.items.length),
       ).toBe(true);
     }
 
@@ -648,7 +670,7 @@ describe('Queue Store - Operation Sequence Invariants', () => {
         applyCommand(store, cmd);
         checkInvariants(store);
       }
-    }
+    },
   );
 
   test.prop([nonEmptyTracksArb, fc.array(queueCommandArb(20), { minLength: 5, maxLength: 20 })])(
@@ -667,7 +689,7 @@ describe('Queue Store - Operation Sequence Invariants', () => {
           expect(store.currentTrack).toBe(store.items[store.currentIndex]);
         }
       }
-    }
+    },
   );
 });
 
@@ -768,11 +790,46 @@ describe('Queue Store - Play History Preservation', () => {
 
     // Simulate queue rebuild (double-click D): new queue [D, E, A, B, C]
     const newQueue = [
-      { id: 'history-track-3-D', title: 'D', artist: 'Test', album: 'Test', duration: 180000, filepath: '/music/D.mp3' },
-      { id: 'history-track-4-E', title: 'E', artist: 'Test', album: 'Test', duration: 180000, filepath: '/music/E.mp3' },
-      { id: 'history-track-0-A', title: 'A', artist: 'Test', album: 'Test', duration: 180000, filepath: '/music/A.mp3' },
-      { id: 'history-track-1-B', title: 'B', artist: 'Test', album: 'Test', duration: 180000, filepath: '/music/B.mp3' },
-      { id: 'history-track-2-C', title: 'C', artist: 'Test', album: 'Test', duration: 180000, filepath: '/music/C.mp3' },
+      {
+        id: 'history-track-3-D',
+        title: 'D',
+        artist: 'Test',
+        album: 'Test',
+        duration: 180000,
+        filepath: '/music/D.mp3',
+      },
+      {
+        id: 'history-track-4-E',
+        title: 'E',
+        artist: 'Test',
+        album: 'Test',
+        duration: 180000,
+        filepath: '/music/E.mp3',
+      },
+      {
+        id: 'history-track-0-A',
+        title: 'A',
+        artist: 'Test',
+        album: 'Test',
+        duration: 180000,
+        filepath: '/music/A.mp3',
+      },
+      {
+        id: 'history-track-1-B',
+        title: 'B',
+        artist: 'Test',
+        album: 'Test',
+        duration: 180000,
+        filepath: '/music/B.mp3',
+      },
+      {
+        id: 'history-track-2-C',
+        title: 'C',
+        artist: 'Test',
+        album: 'Test',
+        duration: 180000,
+        filepath: '/music/C.mp3',
+      },
     ];
     store.items = newQueue;
     store.currentIndex = 0; // D is playing
@@ -902,5 +959,100 @@ describe('Queue Store - Loop-One (Repeat Once)', () => {
     // Should not advance (returns without changing index)
     expect(store.currentIndex).toBe(2);
     expect(store.loop).toBe('none');
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Deterministic Tests: playNextTracks during background queue build
+// -----------------------------------------------------------------------------
+
+describe('Queue Store - playNextTracks during background queue build', () => {
+  function makeTracks(names) {
+    return names.map((name, i) => ({
+      id: `build-track-${i}-${name}`,
+      title: name,
+      artist: 'Test',
+      album: 'Test',
+      duration: 180000,
+      filepath: `/music/${name}.mp3`,
+    }));
+  }
+
+  test('playNextTracks awaits _buildQueuePromise before inserting', async () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0); // Playing A
+
+    // Simulate a pending background queue build
+    let resolvePromise;
+    store._buildQueuePromise = new Promise((resolve) => {
+      resolvePromise = resolve;
+    });
+
+    const newTrack = {
+      id: 'play-next-1',
+      title: 'X',
+      artist: 'T',
+      album: 'T',
+      duration: 1000,
+      filepath: '/x.mp3',
+    };
+
+    // Start playNextTracks - it should await the promise
+    const playNextPromise = store.playNextTracks([newTrack]);
+
+    // Before resolving, X should NOT be in the queue yet
+    expect(store.items.find((t) => t.id === 'play-next-1')).toBeUndefined();
+
+    // Resolve the build promise
+    resolvePromise();
+    await playNextPromise;
+
+    // Now X should be inserted at index 1
+    expect(store.items[1].id).toBe('play-next-1');
+    expect(store.items.map((t) => t.title)).toEqual(['A', 'X', 'B', 'C', 'D', 'E']);
+  });
+
+  test('playNextTracks works normally when no build in progress', async () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    // _buildQueuePromise is null (no build in progress)
+    expect(store._buildQueuePromise).toBeNull();
+
+    const newTrack = {
+      id: 'play-next-1',
+      title: 'X',
+      artist: 'T',
+      album: 'T',
+      duration: 1000,
+      filepath: '/x.mp3',
+    };
+
+    await store.playNextTracks([newTrack]);
+
+    expect(store.items[1].id).toBe('play-next-1');
+    expect(store.items.map((t) => t.title)).toEqual(['A', 'X', 'B', 'C']);
+    expect(store.currentIndex).toBe(0);
+  });
+
+  test('successive playNextTracks calls after build completion', async () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    // Simulate a build promise that resolves immediately
+    store._buildQueuePromise = Promise.resolve();
+
+    const x = { id: 'x', title: 'X', artist: 'T', album: 'T', duration: 1000, filepath: '/x.mp3' };
+    const y = { id: 'y', title: 'Y', artist: 'T', album: 'T', duration: 1000, filepath: '/y.mp3' };
+
+    await store.playNextTracks([x]);
+    await store.playNextTracks([y]);
+
+    // Expected order: [A (playing), X, Y, B, C]
+    expect(store.items.map((t) => t.title)).toEqual(['A', 'X', 'Y', 'B', 'C']);
+    expect(store.currentIndex).toBe(0);
   });
 });

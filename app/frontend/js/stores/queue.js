@@ -38,6 +38,9 @@ export function createQueueStore(Alpine) {
     // Flag to prevent event listener from overriding during queue operations
     _updating: false,
 
+    // Promise tracking background queue build (set by queue-builder, awaited by playNextTracks)
+    _buildQueuePromise: null,
+
     /**
      * Initialize queue from backend
      */
@@ -274,6 +277,11 @@ export function createQueueStore(Alpine) {
     async playNextTracks(tracks) {
       const tracksArray = Array.isArray(tracks) ? tracks : [tracks];
       if (tracksArray.length === 0) return;
+
+      // Wait for any background queue build to complete before inserting
+      if (this._buildQueuePromise) {
+        await this._buildQueuePromise;
+      }
 
       // Append after any previously queued-next tracks (not before them)
       if (!this._playNextOffset) this._playNextOffset = 0;

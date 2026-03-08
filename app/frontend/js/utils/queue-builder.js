@@ -92,5 +92,11 @@ async function _handleSequentialPlay(ctx, track, allTracks, index, generation, l
       }
     }
   };
-  buildQueue();
+  const promise = buildQueue();
+  ctx.queue._buildQueuePromise = promise;
+  promise.finally(() => {
+    if (ctx.queue._buildQueuePromise === promise) {
+      ctx.queue._buildQueuePromise = null;
+    }
+  });
 }
