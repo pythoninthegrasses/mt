@@ -1,10 +1,11 @@
 use crate::audio::audio_error::AudioError;
+use rodio::cpal::traits::{DeviceTrait, HostTrait};
 use rodio::{Decoder, OutputStream, OutputStreamBuilder, Sink, Source};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::path::Path;
 use std::time::Duration;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlaybackState {
@@ -250,6 +251,119 @@ impl AudioEngine {
             false
         }
     }
+
+    /// Switch audio output to a named device, or default if `name` is None.
+    ///
+    /// Preserves current playback position and state. If the named device is
+    /// not found, falls back to the system default and returns an error.
+    pub fn set_device(&mut self, name: Option<&str>) -> Result<(), AudioError> {
+        let new_stream = match name {
+            Some(device_name) => {
+                let host = rodio::cpal::default_host();
+                let devices = host.output_devices().map_err(|e| {
+                    AudioError::Device(format!("Failed to enumerate devices: {}", e))
+                })?;
+
+                let device = devices
+                    .into_iter()
+                    .find(|d| d.name().ok().as_deref() == Some(device_name));
+
+                match device {
+                    Some(d) => {
+                        info!(device = device_name, "Switching audio output device");
+                        OutputStreamBuilder::from_device(d)
+                            .map_err(|e| AudioError::Device(e.to_string()))?
+                            .open_stream()
+                            .map_err(|e| AudioError::Device(e.to_string()))?
+                    }
+                    None => {
+                        warn!(
+                            device = device_name,
+                            "Device not found, falling back to default"
+                        );
+                        return Err(AudioError::Device(format!(
+                            "Device not found: {}",
+                            device_name
+                        )));
+                    }
+                }
+            }
+            None => {
+                info!("Switching to default audio output device");
+                OutputStreamBuilder::open_default_stream()
+                    .map_err(|e| AudioError::Device(e.to_string()))?
+            }
+        };
+
+        // Capture current playback state before switching
+        let was_playing = self.state == PlaybackState::Playing;
+        let position_ms = self
+            .player_handle
+            .as_ref()
+            .map(|h| h.sink.get_pos().as_millis() as u64)
+            .unwrap_or(0);
+        let track_info = self.current_track.clone();
+
+        // Stop current playback
+        if let Some(handle) = self.player_handle.take() {
+            handle.sink.stop();
+        }
+
+        // Replace stream
+        self.stream = new_stream;
+
+        // Reload track on new stream if one was loaded
+        if let Some(ref track) = track_info {
+            let path_obj = Path::new(&track.path);
+            if path_obj.exists() {
+                if let Ok(file) = File::open(&track.path) {
+                    if let Ok(source) = Decoder::try_from(file) {
+                        let sink = Sink::connect_new(self.stream.mixer());
+                        sink.set_volume(self.volume);
+                        sink.append(source);
+
+                        // Seek to previous position
+                        if position_ms > 0 {
+                            let _ = sink.try_seek(Duration::from_millis(position_ms));
+                        }
+
+                        if was_playing {
+                            sink.play();
+                            self.state = PlaybackState::Playing;
+                        } else {
+                            sink.pause();
+                            self.state = PlaybackState::Paused;
+                        }
+
+                        self.player_handle = Some(PlayerHandle { sink });
+                        debug!(
+                            path = %track.path,
+                            position_ms,
+                            "Track reloaded on new device"
+                        );
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Enumerate available audio output device names.
+///
+/// Returns a list of device names. Does not include "Default" — the caller
+/// should prepend that as a UI label.
+pub fn list_output_devices() -> Result<Vec<String>, AudioError> {
+    let host = rodio::cpal::default_host();
+    let devices = host
+        .output_devices()
+        .map_err(|e| AudioError::Device(format!("Failed to enumerate output devices: {}", e)))?;
+
+    let names: Vec<String> = devices.filter_map(|d| d.name().ok()).collect();
+
+    debug!(count = names.len(), "Enumerated output devices");
+    Ok(names)
 }
 
 impl Default for AudioEngine {

@@ -6,8 +6,9 @@ mod queue;
 mod settings;
 
 pub(crate) use audio::{
-    AudioState, audio_get_status, audio_get_volume, audio_load, audio_load_and_play, audio_pause,
-    audio_play, audio_seek, audio_set_volume, audio_stop,
+    AudioState, audio_get_status, audio_get_volume, audio_list_devices, audio_load,
+    audio_load_and_play, audio_pause, audio_play, audio_seek, audio_set_device, audio_set_volume,
+    audio_stop,
 };
 
 pub(crate) use favorites::{

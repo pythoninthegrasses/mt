@@ -371,4 +371,74 @@ mod tests {
         assert_eq!(progress.position_ms, deserialized.position_ms);
         assert_eq!(progress.duration_ms, deserialized.duration_ms);
     }
+
+    // ==================== Device Enumeration Tests ====================
+
+    #[test]
+    fn test_list_output_devices_returns_vec() {
+        use crate::audio::list_output_devices;
+
+        let result = list_output_devices();
+        // Should succeed on any machine with audio hardware (CI may not have devices)
+        match result {
+            Ok(devices) => {
+                // Each device name should be non-empty
+                for name in &devices {
+                    assert!(!name.is_empty(), "Device name should not be empty");
+                }
+            }
+            Err(e) => {
+                // Acceptable on headless CI: no audio host available
+                let msg = e.to_string();
+                assert!(
+                    msg.contains("Device") || msg.contains("enumerate"),
+                    "Unexpected error: {}",
+                    msg
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_set_device_nonexistent_returns_error() {
+        use crate::audio::AudioEngine;
+
+        let engine = AudioEngine::new();
+        match engine {
+            Ok(mut engine) => {
+                let result = engine.set_device(Some("__nonexistent_device_12345__"));
+                assert!(result.is_err(), "set_device with bogus name should fail");
+                let err_msg = result.unwrap_err().to_string();
+                assert!(
+                    err_msg.contains("not found"),
+                    "Error should mention 'not found': {}",
+                    err_msg
+                );
+            }
+            Err(_) => {
+                // No audio output available (headless CI) — skip
+            }
+        }
+    }
+
+    #[test]
+    fn test_set_device_none_switches_to_default() {
+        use crate::audio::AudioEngine;
+
+        let engine = AudioEngine::new();
+        match engine {
+            Ok(mut engine) => {
+                // Switching to default (None) should succeed
+                let result = engine.set_device(None);
+                assert!(
+                    result.is_ok(),
+                    "set_device(None) should succeed: {:?}",
+                    result.err()
+                );
+            }
+            Err(_) => {
+                // No audio output available (headless CI) — skip
+            }
+        }
+    }
 }
