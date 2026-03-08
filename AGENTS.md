@@ -18,6 +18,7 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 ### Libraries
 
 - alpinejs/alpine
+- basharovv/musicat
 - dubzzz/fast-check
 - hunvreus/basecoat
 - jdx/mise
@@ -27,7 +28,9 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 - roborev-dev/roborev
 - serial-ata/lofty-rs
 - sharkdp/hyperfine
+- taiko2k/tauon
 - tailwindlabs/tailwindcss
+- tranxuanthang/lrclib
 - websites/deno
 - websites/last_fm_api
 - websites/rs_tauri_2_9_5
