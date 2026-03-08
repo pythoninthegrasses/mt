@@ -80,7 +80,7 @@ deno install --node-modules-dir=auto --frozen
 ### Superset
 
 Superset exposes `$SUPERSET_ROOT_PATH` pointing to the parent repo.
-It creates a `config.json` at the repo root:
+It creates a `config.json` under `.superset/`:
 
 ```json
 {
