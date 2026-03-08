@@ -629,7 +629,7 @@ test.describe('Settings Error Handling', () => {
 
   test('should handle settings API failure gracefully', async ({ page }) => {
     // Mock settings endpoint to fail
-    await page.route(/\/api\/settings/, async (route) => {
+    await page.route(/\/api\/settings(\?.*)?$/, async (route) => {
       await route.fulfill({
         status: 500,
         contentType: 'application/json',
