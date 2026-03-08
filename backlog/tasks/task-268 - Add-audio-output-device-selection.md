@@ -1,25 +1,33 @@
 ---
 id: TASK-268
 title: Add audio output device selection
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-02-16 15:08'
-updated_date: '2026-02-16 21:10'
+updated_date: '2026-03-08 02:03'
 labels:
   - audio
   - feature
-  - musicat-comparison
+  - tauon-reference
 dependencies: []
+references:
+  - >-
+    screenshot:
+    ~/Library/CloudStorage/Dropbox/mt/tauon/settings/audio/Screenshot 2026-03-07
+    at 4.19.22 PM.png
+  - 'https://github.com/taiko2k/tauon'
 priority: low
-ordinal: 43500
+ordinal: 5000
 ---
 
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Allow users to enumerate and switch audio output devices without restarting the app. Musicat comparison revealed this as a gap.
+Allow users to enumerate and switch audio output devices without restarting the app. Located under Settings > Audio > "Set audio output device".
 
-Use cpal (already in dependency tree via rodio) to enumerate devices via `cpal::default_host().output_devices()`. Add `AudioCommand::SetDevice` variant, recreate OutputStream on selected device (preserving playback position), persist selection in settings with fallback to default, and add device selector dropdown in settings view.
+**Reference implementation**: Tauon Music Box (Settings > Audio). Tauon displays a device list with "Default" as the first entry (maps to system default output), followed by all enumerated output devices by name. Selecting a device switches output immediately.
+
+Use cpal (already in dependency tree via rodio) to enumerate devices via `cpal::default_host().output_devices()`. Add `AudioCommand::SetDevice` variant, recreate OutputStream on selected device (preserving playback position), persist selection in settings with fallback to default, and add device selector dropdown in settings view. "Default" (system output) should be the default selection.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

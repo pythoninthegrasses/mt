@@ -1,10 +1,10 @@
 ---
 id: TASK-292
 title: Fix watcher error path dropping new tracks instead of proceeding unfiltered
-status: In Progress
+status: To Do
 assignee: []
 created_date: '2026-02-26 00:10'
-updated_date: '2026-02-26 16:05'
+updated_date: '2026-03-08 02:02'
 labels:
   - bug
   - roborev
@@ -14,6 +14,7 @@ references:
   - crates/mt-tauri/src/db/removed.rs
   - 'roborev job #29'
 priority: high
+ordinal: 47500
 ---
 
 ## Description

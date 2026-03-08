@@ -1,15 +1,17 @@
 ---
-id: task-277
+id: TASK-277
 title: Genius playlist creator
 status: To Do
 assignee: []
 created_date: '2026-02-18 05:58'
+updated_date: '2026-03-08 01:34'
 labels:
   - feature
   - playlists
   - recommendation
 dependencies: []
 priority: low
+ordinal: 45500
 ---
 
 ## Description
