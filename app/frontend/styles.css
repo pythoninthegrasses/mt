@@ -343,6 +343,158 @@ aside button:hover svg {
   background-color: hsl(184 100% 38%) !important;
 }
 
+/* Neon Love theme — Love color palette (https://love.holllo.cc)
+   Dark purple backgrounds with neon rainbow accents, inspired by Tauon Music Box */
+[data-theme-preset='neon-love'] {
+  --background: 268 37% 14%;
+  --foreground: 251 100% 97%;
+  --card: 268 34% 19%;
+  --card-foreground: 251 100% 97%;
+  --popover: 268 34% 19%;
+  --popover-foreground: 251 100% 97%;
+  --primary: 191 76% 58%;
+  --primary-foreground: 268 37% 14%;
+  --secondary: 268 30% 22%;
+  --secondary-foreground: 251 100% 97%;
+  --muted: 268 30% 22%;
+  --muted-foreground: 0 0% 67%;
+  --accent: 191 76% 58%;
+  --accent-foreground: 268 37% 14%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 251 100% 97%;
+  --border: 268 25% 25%;
+  --input: 268 30% 22%;
+  --ring: 191 76% 58%;
+
+  --mt-playing-bg: 268 40% 18%;
+  --mt-playing-fg: 81 55% 51%;
+  --mt-row-even: 268 37% 14%;
+  --mt-row-odd: 268 34% 16%;
+  --mt-row-hover: 268 30% 22%;
+  --mt-progress-bg: 268 25% 25%;
+  --mt-progress-fill: 191 76% 58%;
+  --mt-toast-bg: hsl(191 76% 58%);
+  --mt-toast-fg: #1F1731;
+}
+
+[data-theme-preset='neon-love'] .track-row-even {
+  background-color: hsl(var(--mt-row-even));
+}
+
+[data-theme-preset='neon-love'] .track-row-odd {
+  background-color: hsl(var(--mt-row-odd));
+}
+
+[data-theme-preset='neon-love'] .track-row-selected {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border-bottom: none !important;
+}
+
+[data-theme-preset='neon-love'] .track-row-playing {
+  background-color: hsl(var(--mt-playing-bg)) !important;
+  box-shadow: inset 2px 0 0 0 hsl(var(--mt-playing-fg)) !important;
+  color: hsl(var(--mt-playing-fg)) !important;
+}
+
+[data-theme-preset='neon-love'] .track-row-playing .text-muted-foreground {
+  color: hsl(var(--mt-playing-fg)) !important;
+}
+
+[data-theme-preset='neon-love'] footer {
+  background-color: #130e1e;
+  border-color: #3C2864;
+}
+
+[data-theme-preset='neon-love'] .border-border {
+  border-color: #3C2864;
+}
+
+[data-theme-preset='neon-love'] footer button {
+  color: #E6DEFF !important;
+}
+
+[data-theme-preset='neon-love'] footer button:hover {
+  color: #41C8E5 !important;
+}
+
+[data-theme-preset='neon-love'] footer button.text-primary,
+[data-theme-preset='neon-love'] footer button.text-red-500 {
+  color: #41C8E5 !important;
+}
+
+[data-theme-preset='neon-love'] [data-testid='player-progressbar'] {
+  background-color: #3C2864 !important;
+}
+
+[data-theme-preset='neon-love'] [data-testid='player-progressbar'] > div:first-child {
+  background-color: #41C8E5 !important;
+}
+
+[data-theme-preset='neon-love'] [data-testid='player-progressbar'] > div:last-child {
+  background-color: #41C8E5 !important;
+}
+
+[data-theme-preset='neon-love'] footer .bg-\[\#8E8E93\]\/20 {
+  background-color: #3C2864 !important;
+}
+
+[data-theme-preset='neon-love'] .track-row-even,
+[data-theme-preset='neon-love'] .track-row-odd {
+  border-bottom: none !important;
+}
+
+[data-theme-preset='neon-love'] aside > div:last-child {
+  border-top: none !important;
+}
+
+[data-theme-preset='neon-love'] [data-testid='library-header'] {
+  background-color: #2A2041 !important;
+}
+
+[data-theme-preset='neon-love'] [data-testid='library-header'] .column-header-active {
+  background: transparent !important;
+}
+
+[data-theme-preset='neon-love'] aside {
+  background-color: #2A2041 !important;
+}
+
+[data-theme-preset='neon-love'] .bg-card\/50,
+[data-theme-preset='neon-love'] .bg-card {
+  background-color: #2A2041 !important;
+}
+
+[data-theme-preset='neon-love'] .bg-background {
+  background-color: #1F1731 !important;
+}
+
+[data-theme-preset='neon-love'] .titlebar-drag-region {
+  background-color: #2A2041 !important;
+}
+
+[data-theme-preset='neon-love'] [data-testid='settings-view'] .bg-muted\/30 {
+  background-color: rgba(60, 40, 100, 0.6) !important;
+  border: 1px solid #3C2864;
+}
+
+[data-theme-preset='neon-love'] [data-testid='settings-view'] .border-border\/50 {
+  border-color: #3C2864 !important;
+}
+
+[data-theme-preset='neon-love'] [data-testid='settings-view'] button.border-border:hover {
+  background-color: rgba(65, 200, 229, 0.15) !important;
+  border-color: rgba(65, 200, 229, 0.4) !important;
+}
+
+[data-theme-preset='neon-love'] [data-testid='lastfm-toggle'].bg-muted {
+  background-color: hsl(268 30% 25%) !important;
+}
+
+[data-theme-preset='neon-love'] [data-testid='lastfm-toggle'].bg-primary {
+  background-color: hsl(191 76% 58%) !important;
+}
+
 @layer components {
   /* Disable grid layout animations - instant column sizing at startup and view switch
    * This ensures columns snap to their widths immediately rather than animating.

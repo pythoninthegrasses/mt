@@ -18,7 +18,8 @@
             @click="$store.ui.setSettingsSection(section.id)"
             :data-testid="'settings-nav-' + section.id"
             x-text="section.label"
-          ></button>
+          >
+          </button>
         </li>
       </template>
     </ul>
@@ -60,8 +61,18 @@
             >
               Metro Teal
             </button>
+            <button
+              class="px-4 py-2 rounded-md border text-sm transition-colors"
+              :class="themeButtonClass('neon-love')"
+              @click="$store.ui.setThemePreset('neon-love')"
+              data-testid="settings-theme-neon-love"
+            >
+              Neon Love
+            </button>
           </div>
-          <p class="text-xs text-muted-foreground mt-2">Metro Teal uses a dark theme with teal accents.</p>
+          <p class="text-xs text-muted-foreground mt-2">
+            Metro Teal and Neon Love use dark themes with accent colors.
+          </p>
         </div>
       </div>
     </div>
@@ -69,17 +80,26 @@
     {{> settings-columns}}
 
     <!-- Shortcuts Section -->
-    <div x-show="isSection('shortcuts')" x-data="shortcutsSettings" data-testid="settings-section-shortcuts">
+    <div
+      x-show="isSection('shortcuts')"
+      x-data="shortcutsSettings"
+      data-testid="settings-section-shortcuts"
+    >
       <h3 class="text-xl font-semibold mb-4">Keyboard Shortcuts</h3>
 
       <!-- Playback -->
       <div class="mb-6">
-        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Playback</h4>
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          Playback
+        </h4>
         <div class="space-y-0">
           <template x-for="s in playback" :key="s.action">
             <div class="flex items-center justify-between py-2 border-b border-border/50">
               <span class="text-sm" x-text="s.action"></span>
-              <kbd class="text-xs font-mono px-2 py-1 bg-muted rounded border border-border/50" x-text="s.label"></kbd>
+              <kbd
+                class="text-xs font-mono px-2 py-1 bg-muted rounded border border-border/50"
+                x-text="s.label"
+              ></kbd>
             </div>
           </template>
         </div>
@@ -87,12 +107,17 @@
 
       <!-- Volume -->
       <div class="mb-6">
-        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Volume</h4>
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          Volume
+        </h4>
         <div class="space-y-0">
           <template x-for="s in volume" :key="s.action">
             <div class="flex items-center justify-between py-2 border-b border-border/50">
               <span class="text-sm" x-text="s.action"></span>
-              <kbd class="text-xs font-mono px-2 py-1 bg-muted rounded border border-border/50" x-text="s.label"></kbd>
+              <kbd
+                class="text-xs font-mono px-2 py-1 bg-muted rounded border border-border/50"
+                x-text="s.label"
+              ></kbd>
             </div>
           </template>
         </div>
@@ -100,12 +125,17 @@
 
       <!-- Navigation -->
       <div class="mb-6">
-        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Navigation</h4>
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          Navigation
+        </h4>
         <div class="space-y-0">
           <template x-for="s in navigation" :key="s.action">
             <div class="flex items-center justify-between py-2 border-b border-border/50">
               <span class="text-sm" x-text="s.action"></span>
-              <kbd class="text-xs font-mono px-2 py-1 bg-muted rounded border border-border/50" x-text="s.label"></kbd>
+              <kbd
+                class="text-xs font-mono px-2 py-1 bg-muted rounded border border-border/50"
+                x-text="s.label"
+              ></kbd>
             </div>
           </template>
         </div>
@@ -113,15 +143,23 @@
 
       <!-- Context-Aware -->
       <div class="mb-6">
-        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Context-Aware</h4>
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          Context-Aware
+        </h4>
         <div class="space-y-0">
           <template x-for="s in contextAware" :key="s.action">
             <div class="flex items-center justify-between py-2 border-b border-border/50">
               <div>
                 <span class="text-sm" x-text="s.action"></span>
-                <span class="text-xs text-muted-foreground ml-2" x-text="'(' + s.context + ')'"></span>
+                <span
+                  class="text-xs text-muted-foreground ml-2"
+                  x-text="'(' + s.context + ')'"
+                ></span>
               </div>
-              <kbd class="text-xs font-mono px-2 py-1 bg-muted rounded border border-border/50" x-text="s.label"></kbd>
+              <kbd
+                class="text-xs font-mono px-2 py-1 bg-muted rounded border border-border/50"
+                x-text="s.label"
+              ></kbd>
             </div>
           </template>
         </div>
@@ -130,14 +168,27 @@
       <!-- Tip -->
       <div class="p-4 bg-muted/30 rounded-lg border border-border/50">
         <div class="flex items-start gap-3">
-          <svg class="w-5 h-5 text-primary shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          <svg
+            class="w-5 h-5 text-primary shrink-0 mt-0.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            >
+            </path>
           </svg>
           <div>
             <p class="text-sm font-medium">Note</p>
             <p class="text-xs text-muted-foreground mt-1">
-              Shortcuts are disabled while typing in text fields. Context-aware shortcuts only work in Library and Playlist views.
-              Plain letter keys (A-Z) jump to the first artist starting with that letter in the library. Press the same letter again to cycle through matches.
+              Shortcuts are disabled while typing in text fields. Context-aware shortcuts only work
+              in Library and Playlist views. Plain letter keys (A-Z) jump to the first artist
+              starting with that letter in the library. Press the same letter again to cycle through
+              matches.
             </p>
           </div>
         </div>
@@ -165,7 +216,8 @@
               <div class="flex-1">
                 <div class="text-sm font-medium">Enable ignore words</div>
                 <div class="text-xs text-muted-foreground">
-                  Strip article prefixes (like "The", "Le", "Los") when sorting by artist, album, or title
+                  Strip article prefixes (like "The", "Le", "Los") when sorting by artist, album, or
+                  title
                 </div>
               </div>
             </label>
@@ -190,7 +242,9 @@
 
           <!-- Example -->
           <div class="mt-4 p-4 bg-muted/30 rounded-lg">
-            <h5 class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Example</h5>
+            <h5 class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+              Example
+            </h5>
             <div class="text-sm space-y-1">
               <div class="flex items-center gap-2">
                 <span class="text-muted-foreground">-></span>
@@ -219,7 +273,9 @@
 
       <!-- App Info -->
       <div class="mb-8">
-        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">App Info</h4>
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          App Info
+        </h4>
         <div class="bg-muted/30 rounded-lg p-4 space-y-2">
           <div class="flex justify-between text-sm">
             <span class="text-muted-foreground">Version</span>
@@ -238,7 +294,9 @@
 
       <!-- Maintenance -->
       <div>
-        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Maintenance</h4>
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          Maintenance
+        </h4>
         <div class="space-y-3">
           <button
             class="w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
@@ -246,7 +304,9 @@
             data-testid="settings-reset"
           >
             <div class="font-medium text-sm">Reset Settings</div>
-            <div class="text-xs text-muted-foreground mt-0.5">Restore all settings to their defaults</div>
+            <div class="text-xs text-muted-foreground mt-0.5">
+              Restore all settings to their defaults
+            </div>
           </button>
           <button
             class="w-full text-left px-4 py-3 rounded-lg border border-border hover:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -256,9 +316,12 @@
           >
             <div class="flex items-center gap-2">
               <span class="font-medium text-sm">Export Logs</span>
-              <span x-show="isExportingLogs" class="text-xs text-muted-foreground">Exporting...</span>
+              <span x-show="isExportingLogs" class="text-xs text-muted-foreground"
+              >Exporting...</span>
             </div>
-            <div class="text-xs text-muted-foreground mt-0.5">Save diagnostic information for troubleshooting</div>
+            <div class="text-xs text-muted-foreground mt-0.5">
+              Save diagnostic information for troubleshooting
+            </div>
           </button>
         </div>
       </div>

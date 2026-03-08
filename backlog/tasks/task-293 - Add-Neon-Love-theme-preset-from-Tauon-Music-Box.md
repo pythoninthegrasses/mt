@@ -1,23 +1,24 @@
 ---
 id: TASK-293
 title: Add "Neon Love" theme preset (from Tauon Music Box)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-03-07 23:13'
+updated_date: '2026-03-07 23:49'
 labels:
   - frontend
   - theme
 dependencies: []
 references:
-  - 'app/frontend/styles.css (metro-teal theme pattern, lines 194-343)'
+  - app/frontend/styles.css (neon-love theme CSS)
   - app/frontend/js/stores/ui.js (theme switching logic)
   - app/frontend/main.js (pre-Alpine theme init)
   - app/frontend/views/settings.html (theme preset buttons)
-  - task-162 (Metro Teal implementation — prior art)
-  - /Users/lance/Desktop/love.css (Love palette source)
+  - app/frontend/__tests__/ui.store.test.js (theme tests)
+  - /Users/lance/Library/CloudStorage/Dropbox/mt/love.css (Love palette source)
   - >-
-    /Users/lance/Desktop/tauon/Screenshot 2026-03-07 at 4.11.39 PM.png (visual
-    reference)
+    /Users/lance/Library/CloudStorage/Dropbox/mt/tauon/Screenshot 2026-03-07 at
+    4.11.39 PM.png (visual reference)
 documentation:
   - 'https://love.holllo.cc (Love color palette)'
   - 'https://github.com/taiko2k/tauon/wiki/Theming (Tauon theme format)'
@@ -136,12 +137,12 @@ From the `.ttheme` file, these are how Tauon maps Love colors to UI elements:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Neon Love theme preset selectable in Settings > Appearance alongside Light and Metro Teal
-- [ ] #2 Theme uses Love dark palette: deep purple backgrounds (#1F1731, #2A2041), lavender text (#F2EFFF), cyan primary accent (#41C8E5)
-- [ ] #3 Now-playing track row uses lime green indicator (#96C839) matching Tauon's Neon Love
-- [ ] #4 All component overrides present: track rows, footer, progress bar, sidebar, titlebar, settings panels, borders
-- [ ] #5 Theme persists across app restart (saved to settings store)
-- [ ] #6 No flash of wrong theme on startup (pre-Alpine init handles neon-love)
-- [ ] #7 All existing tests pass with the new theme added
-- [ ] #8 deno lint, deno fmt, cargo clippy, cargo fmt all pass
+- [x] #1 Neon Love theme preset selectable in Settings > Appearance alongside Light and Metro Teal
+- [x] #2 Theme uses Love dark palette: deep purple backgrounds (#1F1731, #2A2041), lavender text (#F2EFFF), cyan primary accent (#41C8E5)
+- [x] #3 Now-playing track row uses lime green indicator (#96C839) matching Tauon's Neon Love
+- [x] #4 All component overrides present: track rows, footer, progress bar, sidebar, titlebar, settings panels, borders
+- [x] #5 Theme persists across app restart (saved to settings store)
+- [x] #6 No flash of wrong theme on startup (pre-Alpine init handles neon-love)
+- [x] #7 All existing tests pass with the new theme added
+- [x] #8 deno lint, deno fmt, cargo clippy, cargo fmt all pass
 <!-- AC:END -->

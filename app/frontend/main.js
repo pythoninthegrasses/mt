@@ -128,9 +128,9 @@ function applyInitialTheme() {
   document.documentElement.classList.remove('light', 'dark');
   delete document.documentElement.dataset.themePreset;
 
-  if (themePreset === 'metro-teal') {
+  if (themePreset === 'metro-teal' || themePreset === 'neon-love') {
     document.documentElement.classList.add('dark');
-    document.documentElement.dataset.themePreset = 'metro-teal';
+    document.documentElement.dataset.themePreset = themePreset;
   } else {
     const contentTheme = theme === 'system'
       ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
