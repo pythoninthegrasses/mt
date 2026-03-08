@@ -12,7 +12,83 @@ mise install
 cp .env.example .env
 
 # Install dependencies
-npm install
+task deno:install
+```
+
+## Worktree Setup (Agent Orchestrators)
+
+When using agent orchestrators like [Conductor](https://conductor.build) or
+[Superset](https://superset.sh), each agent works in an isolated git worktree.
+Git-untracked files (`.env`, `node_modules/`) are not copied into new worktrees
+and must be restored via a setup script.
+
+### Standard git worktree
+
+```bash
+# Create a worktree on a new branch
+git worktree add ../mt-feature -b feature-branch
+
+# Enter the worktree
+cd ../mt-feature
+
+# Symlink .env from the parent repo (single source of truth)
+ln -sf /path/to/mt/.env .env
+
+# Install dependencies
+task deno:install
+```
+
+### Conductor
+
+Conductor exposes `$CONDUCTOR_ROOT_PATH` pointing to the parent repo.
+Add a `conductor.json` at the repo root:
+
+```json
+{
+  "scripts": {
+    "setup": "ln -sf \"$CONDUCTOR_ROOT_PATH/.env\" .env && deno install --node-modules-dir=auto --frozen",
+    "run": "deno run -A npm:@tauri-apps/cli dev",
+    "archive": ""
+  }
+}
+```
+
+Or for more control, create `bin/conductor-setup`:
+
+```bash
+#!/bin/sh
+set -e
+cd "$(dirname "$0")"/..
+
+if [ -z "$CONDUCTOR_ROOT_PATH" ]; then
+  echo "Not running in Conductor, skipping workspace setup."
+  exit 0
+fi
+
+# Symlink .env from parent repo
+if [ -f "$CONDUCTOR_ROOT_PATH/.env" ]; then
+  ln -sf "$CONDUCTOR_ROOT_PATH/.env" .env
+else
+  echo "Warning: $CONDUCTOR_ROOT_PATH/.env not found."
+  echo "Create it from .env.example: cp .env.example $CONDUCTOR_ROOT_PATH/.env"
+fi
+
+# Install frontend dependencies
+deno install --node-modules-dir=auto --frozen
+```
+
+### Superset
+
+Superset exposes `$SUPERSET_ROOT_PATH` pointing to the parent repo.
+It creates a `config.json` at the repo root:
+
+```json
+{
+  "setup": [
+    "ln -sf \"$SUPERSET_ROOT_PATH/.env\" .env && deno install --node-modules-dir=auto --frozen"
+  ],
+  "teardown": []
+}
 ```
 
 ## Running the Application
@@ -53,26 +129,35 @@ task install                  # Install project dependencies via devbox
 
 ```bash
 task tauri:dev                # Run Tauri in development mode
+task tauri:dev:mcp            # Run Tauri dev with MCP bridge for AI agent debugging
 task tauri:build              # Build Tauri app for current architecture
 task tauri:build:arm64        # Build Tauri app for Apple Silicon
 task tauri:build:x64          # Build Tauri app for Intel
 task tauri:info               # Show Tauri build configuration
+task tauri:doctor             # Check Tauri environment
 task tauri:clean              # Clean Tauri build artifacts
 ```
 
-### NPM Commands (`npm:`)
+### Deno Commands (`deno:`)
 
 ```bash
-task npm:install              # Install npm dependencies
-task npm:clean                # Clean npm cache and node_modules
+task deno:install             # Install dependencies via Deno (8x faster than npm ci)
+task deno:lint                # Run Deno linter
+task deno:format              # Format JS/TS code
+task deno:test                # Run Vitest unit/property tests
+task deno:test:e2e            # Run Playwright E2E tests
+task deno:dev                 # Run Vite dev server via Deno
+task deno:build               # Build frontend via Deno (2.2x faster than npm)
+task deno:clean               # Clean deno artifacts
 ```
 
 ### Build Pipeline
 
 When running `task build`, the following happens automatically:
 
-1. `npm:install` - Install frontend dependencies
-2. `tauri:build` - Build Rust backend and bundle with frontend
+1. `deno:install` - Install frontend dependencies
+2. `cargo:install-sccache` - Ensure sccache is available for build caching
+3. `tauri:build` - Build Rust backend and bundle with frontend
 
 ## Raw Commands (Without Task Runner)
 
@@ -82,7 +167,7 @@ deno install --node-modules-dir=auto --frozen  # Frontend (8x faster than npm ci
 cargo build                                    # Rust backend
 
 # Fast syntax/type checking (no binary output, 2-3x faster than build)
-cargo check --manifest-path src-tauri/Cargo.toml
+cargo check --manifest-path crates/mt-tauri/Cargo.toml
 cargo check --all-features
 
 # Linting
@@ -130,9 +215,12 @@ rm -rf node_modules dist
 | Package | Purpose |
 |---------|---------|
 | Tauri | Desktop application framework |
+| Deno | Package manager and runtime |
 | basecoat | Design system (Tailwind CSS) |
 | Alpine.js | Lightweight reactive framework |
 | Tailwind CSS | Utility-first CSS |
+| Vitest | Unit and property testing |
+| fast-check | Property-based testing |
 | Playwright | E2E testing |
 | Vite | Build tool and dev server |
 
@@ -142,9 +230,14 @@ rm -rf node_modules dist
 |-------|---------|
 | tauri | Native system integration |
 | rodio/symphonia | Audio playback |
+| souvlaki | Media key integration |
+| lofty | Audio metadata parsing |
 | rusqlite | SQLite database |
+| r2d2 | Database connection pooling |
 | serde | Serialization |
 | tokio | Async runtime |
+| rayon | Parallel iteration |
+| tracing | Structured logging |
 
 ### Adding Dependencies
 
