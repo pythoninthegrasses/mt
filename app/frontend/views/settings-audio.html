@@ -1,0 +1,110 @@
+<!-- Audio Section -->
+<div x-show="isSection('audio')" data-testid="settings-section-audio">
+  <h3 class="text-xl font-semibold mb-4">Audio</h3>
+
+  <!-- Network File Caching -->
+  <div class="mb-8">
+    <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+      Network File Caching
+    </h4>
+    <div class="space-y-4">
+      <!-- Enable toggle -->
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-sm font-medium">Cache network files locally</div>
+          <div class="text-xs text-muted-foreground">
+            Copy files from network mounts (SMB/NFS) to a local cache before playback
+          </div>
+        </div>
+        <button
+          class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+          :class="networkCacheToggleTrackClass()"
+          @click="toggleNetworkCache()"
+          data-testid="network-cache-toggle"
+        >
+          <span
+            class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+            :class="networkCacheToggleThumbClass()"
+          ></span>
+        </button>
+      </div>
+
+      <!-- Sub-settings (shown when enabled) -->
+      <div x-show="networkCache.enabled" class="space-y-4 pl-0">
+        <!-- Persistent cache toggle -->
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-sm font-medium">Persistent cache</div>
+            <div class="text-xs text-muted-foreground">
+              Keep cached files across app restarts (otherwise cleared on exit)
+            </div>
+          </div>
+          <button
+            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+            :class="networkCachePersistentTrackClass()"
+            @click="toggleNetworkCachePersistent()"
+            data-testid="network-cache-persistent-toggle"
+          >
+            <span
+              class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+              :class="networkCachePersistentThumbClass()"
+            ></span>
+          </button>
+        </div>
+
+        <!-- Max cache size slider -->
+        <div>
+          <div class="text-sm font-medium mb-2">Maximum cache size</div>
+          <div class="text-xs text-muted-foreground mb-3">
+            Limit local cache to <span x-text="networkCache.maxGb"></span> GB
+          </div>
+          <div class="px-2">
+            <input
+              type="range"
+              min="0.5"
+              max="20"
+              step="0.5"
+              x-model.number="networkCache.maxGb"
+              @change="updateNetworkCacheMaxGb()"
+              class="w-full cursor-pointer accent-primary"
+              style="-webkit-appearance: auto; appearance: auto; box-shadow: none;"
+              data-testid="network-cache-size-slider"
+            >
+            <div class="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>0.5 GB</span>
+              <span>10 GB</span>
+              <span>20 GB</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cache status -->
+        <div class="bg-muted/30 rounded-lg p-4">
+          <div class="grid grid-cols-2 gap-4 text-center">
+            <div>
+              <div class="text-2xl font-semibold" x-text="formatCacheSize(networkCache.usedBytes)"></div>
+              <div class="text-xs text-muted-foreground">Used</div>
+            </div>
+            <div>
+              <div class="text-2xl font-semibold" x-text="networkCache.fileCount"></div>
+              <div class="text-xs text-muted-foreground">Files</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Purge button -->
+        <button
+          class="w-full text-left px-4 py-3 rounded-lg border border-destructive/50 hover:bg-destructive/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="networkCache.isPurging || networkCache.fileCount === 0"
+          @click="purgeNetworkCache()"
+          data-testid="network-cache-purge"
+        >
+          <div class="font-medium text-sm text-destructive" x-text="purgeButtonText()"></div>
+          <div class="text-xs text-muted-foreground mt-0.5">
+            Remove all locally cached network files
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
