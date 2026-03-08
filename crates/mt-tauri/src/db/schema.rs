@@ -151,6 +151,15 @@ pub const CREATE_TABLES: &[(&str, &str)] = &[
             UNIQUE(filepath)
         )",
     ),
+    (
+        "play_history",
+        "CREATE TABLE IF NOT EXISTS play_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            track_id INTEGER NOT NULL,
+            played_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+            FOREIGN KEY (track_id) REFERENCES library(id) ON DELETE CASCADE
+        )",
+    ),
 ];
 
 /// Create all database tables
@@ -390,6 +399,55 @@ pub(crate) fn run_migrations(conn: &Connection) -> DbResult<()> {
         info!("album/artist sort index created");
     }
 
+    // Migration: Create play_history table for listening statistics
+    if !table_exists(conn, "play_history")? {
+        info!("Creating play_history table");
+        conn.execute(
+            "CREATE TABLE play_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                track_id INTEGER NOT NULL,
+                played_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+                FOREIGN KEY (track_id) REFERENCES library(id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+        info!("play_history table created");
+
+        // Backfill from existing play data (one entry per track using last_played timestamp)
+        let backfilled: usize = conn.execute(
+            "INSERT INTO play_history (track_id, played_at)
+             SELECT id, CAST(strftime('%s', last_played) AS INTEGER)
+             FROM library
+             WHERE play_count > 0 AND last_played IS NOT NULL",
+            [],
+        )?;
+        if backfilled > 0 {
+            info!(
+                count = backfilled,
+                "Backfilled play_history from existing library data"
+            );
+        }
+    }
+
+    // Migration: Add indexes on play_history for stats queries
+    if !index_exists(conn, "idx_play_history_played_at")? {
+        info!("Creating played_at index on play_history table");
+        conn.execute(
+            "CREATE INDEX idx_play_history_played_at ON play_history(played_at)",
+            [],
+        )?;
+        info!("play_history played_at index created");
+    }
+
+    if !index_exists(conn, "idx_play_history_track_id")? {
+        info!("Creating track_id index on play_history table");
+        conn.execute(
+            "CREATE INDEX idx_play_history_track_id ON play_history(track_id)",
+            [],
+        )?;
+        info!("play_history track_id index created");
+    }
+
     Ok(())
 }
 
@@ -442,7 +500,7 @@ mod tests {
             .filter_map(|r| r.ok())
             .collect();
 
-        assert_eq!(tables.len(), 12);
+        assert_eq!(tables.len(), 13);
         assert!(tables.contains(&"library".to_string()));
         assert!(tables.contains(&"queue".to_string()));
         assert!(tables.contains(&"queue_state".to_string()));
@@ -455,6 +513,7 @@ mod tests {
         assert!(tables.contains(&"lyrics_cache".to_string()));
         assert!(tables.contains(&"lastfm_loved_tracks".to_string()));
         assert!(tables.contains(&"removed_tracks".to_string()));
+        assert!(tables.contains(&"play_history".to_string()));
     }
 
     #[test]

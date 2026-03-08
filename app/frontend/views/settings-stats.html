@@ -1,0 +1,217 @@
+<!-- Statistics Section -->
+<div x-show="isSection('stats')" data-testid="settings-section-stats" x-data="statsView">
+
+  <!-- Header with date range filter -->
+  <div class="flex items-center justify-between mb-6">
+    <h3 class="text-xl font-semibold">Statistics</h3>
+    <select
+      x-model="dateRange"
+      @change="onDateRangeChange()"
+      class="px-3 py-1.5 text-sm rounded-md border border-border bg-background"
+      data-testid="stats-date-range"
+    >
+      <option value="AllTime">All Time</option>
+      <option value="Last7Days">Last 7 Days</option>
+      <option value="Last30Days">Last 30 Days</option>
+    </select>
+  </div>
+
+  <!-- Loading state -->
+  <div x-show="loading" class="flex items-center justify-center py-12">
+    <div class="text-sm text-muted-foreground">Loading statistics...</div>
+  </div>
+
+  <div x-show="!loading">
+    <!-- Overview Cards -->
+    <div class="grid grid-cols-3 gap-4 mb-8" data-testid="stats-overview-cards">
+      <div class="bg-muted/30 rounded-lg p-4 text-center">
+        <div class="text-3xl font-bold" x-text="overview?.total_plays || 0" data-testid="stats-total-plays"></div>
+        <div class="text-xs text-muted-foreground mt-1">Total Plays</div>
+      </div>
+      <div class="bg-muted/30 rounded-lg p-4 text-center">
+        <div class="text-3xl font-bold" x-text="overview?.total_artists_played || 0" data-testid="stats-artists-played"></div>
+        <div class="text-xs text-muted-foreground mt-1">Artists Played</div>
+      </div>
+      <div class="bg-muted/30 rounded-lg p-4 text-center">
+        <div class="text-3xl font-bold" x-text="formatDuration(overview?.total_listening_time)" data-testid="stats-listening-time"></div>
+        <div class="text-xs text-muted-foreground mt-1">Listening Time</div>
+      </div>
+    </div>
+
+    <!-- Two-column layout: Artists left, Plays over time right -->
+    <div class="grid grid-cols-2 gap-6 mb-8">
+
+      <!-- Top Artists -->
+      <div data-testid="stats-top-artists">
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Top Artists</h4>
+        <div class="space-y-1.5 max-h-[400px] overflow-y-auto">
+          <template x-for="(artist, index) in topArtists" :key="artist.artist">
+            <div class="flex items-center gap-3 py-1 group">
+              <span class="text-xs text-muted-foreground w-5 text-right shrink-0" x-text="index + 1"></span>
+              <div class="w-8 h-8 rounded shrink-0 bg-muted/50 overflow-hidden">
+                <img
+                  x-show="artistArtwork[artist.track_id]"
+                  :src="artistArtwork[artist.track_id]"
+                  class="w-full h-full object-cover"
+                  alt=""
+                >
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm truncate" x-text="artist.artist"></div>
+                <div class="h-1.5 bg-muted/30 rounded-full mt-0.5">
+                  <div
+                    class="h-full bg-primary/70 rounded-full transition-all"
+                    :style="artistBarWidth(artist.play_count)"
+                  ></div>
+                </div>
+              </div>
+              <span class="text-xs text-muted-foreground shrink-0 tabular-nums" x-text="artist.play_count"></span>
+            </div>
+          </template>
+          <div x-show="!topArtists.length" class="text-sm text-muted-foreground py-4 text-center">
+            No play data yet
+          </div>
+        </div>
+      </div>
+
+      <!-- Plays Over Time -->
+      <div data-testid="stats-plays-over-time">
+        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Plays Over Time</h4>
+        <div class="space-y-1.5 max-h-[400px] overflow-y-auto">
+          <template x-for="entry in playsOverTime" :key="entry.label">
+            <div class="flex items-center gap-3 py-1">
+              <span class="text-xs text-muted-foreground w-20 shrink-0 tabular-nums" x-text="entry.label"></span>
+              <div class="flex-1">
+                <div class="h-5 bg-muted/30 rounded">
+                  <div
+                    class="h-full bg-primary/50 rounded transition-all flex items-center justify-end pr-2"
+                    :style="timeBarWidth(entry.count)"
+                  >
+                    <span class="text-[10px] text-primary-foreground/80 tabular-nums" x-text="entry.count" x-show="entry.count / maxPlaysInTimePeriod() > 0.15"></span>
+                  </div>
+                </div>
+              </div>
+              <span class="text-xs text-muted-foreground shrink-0 w-8 text-right tabular-nums" x-text="entry.count"></span>
+            </div>
+          </template>
+          <div x-show="!playsOverTime.length" class="text-sm text-muted-foreground py-4 text-center">
+            No play data yet
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Genre Breakdown -->
+    <div class="mb-8" data-testid="stats-genre-breakdown">
+      <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Genre Breakdown</h4>
+      <div class="grid grid-cols-2 gap-x-6 gap-y-1.5" x-show="genres.length">
+        <template x-for="genre in genres" :key="genre.genre">
+          <div class="flex items-center justify-between py-1">
+            <span class="text-sm truncate" x-text="genre.genre"></span>
+            <div class="flex items-center gap-3 shrink-0">
+              <span class="text-xs text-muted-foreground tabular-nums"><span x-text="genre.play_count"></span> plays</span>
+              <span class="text-xs text-muted-foreground/60 tabular-nums"><span x-text="genre.track_count"></span> tracks</span>
+            </div>
+          </div>
+        </template>
+      </div>
+      <div x-show="!genres.length" class="text-sm text-muted-foreground py-4 text-center">
+        No genre data yet
+      </div>
+    </div>
+
+    <!-- Chart Grid Generator -->
+    <div data-testid="stats-chart-grid">
+      <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Album Chart Grid</h4>
+      <div class="bg-muted/30 rounded-lg p-4">
+        <div class="grid grid-cols-5 gap-4 mb-4">
+          <div>
+            <label class="block text-xs text-muted-foreground mb-1">Rows</label>
+            <input
+              type="number"
+              min="1"
+              max="10"
+              x-model.number="chartGrid.rows"
+              class="w-full px-2 py-1 text-sm rounded border border-border bg-background"
+              data-testid="stats-grid-rows"
+            >
+          </div>
+          <div>
+            <label class="block text-xs text-muted-foreground mb-1">Columns</label>
+            <input
+              type="number"
+              min="1"
+              max="10"
+              x-model.number="chartGrid.columns"
+              class="w-full px-2 py-1 text-sm rounded border border-border bg-background"
+              data-testid="stats-grid-columns"
+            >
+          </div>
+          <div>
+            <label class="block text-xs text-muted-foreground mb-1">Cell Size</label>
+            <input
+              type="number"
+              min="50"
+              max="600"
+              step="50"
+              x-model.number="chartGrid.cellSize"
+              class="w-full px-2 py-1 text-sm rounded border border-border bg-background"
+              data-testid="stats-grid-cell-size"
+            >
+          </div>
+          <div>
+            <label class="block text-xs text-muted-foreground mb-1">Padding</label>
+            <input
+              type="number"
+              min="0"
+              max="20"
+              x-model.number="chartGrid.padding"
+              class="w-full px-2 py-1 text-sm rounded border border-border bg-background"
+              data-testid="stats-grid-padding"
+            >
+          </div>
+          <div>
+            <label class="block text-xs text-muted-foreground mb-1">Sort By</label>
+            <select
+              x-model="chartGrid.sortBy"
+              class="w-full px-2 py-1 text-sm rounded border border-border bg-background"
+              data-testid="stats-grid-sort"
+            >
+              <option value="play_count">Play Count</option>
+              <option value="album">Album Name</option>
+              <option value="artist">Artist Name</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button
+            class="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
+            :disabled="chartGrid.generating"
+            @click="generateChartGrid()"
+            data-testid="stats-grid-generate"
+          >
+            <span x-text="chartGrid.generating ? 'Generating...' : 'Generate'"></span>
+          </button>
+          <button
+            x-show="chartGrid.imageDataUrl"
+            class="px-4 py-2 text-sm border border-border rounded-md hover:bg-muted/50 transition-colors"
+            @click="exportChartGrid()"
+            data-testid="stats-grid-export"
+          >
+            Export PNG
+          </button>
+        </div>
+
+        <!-- Chart Grid Preview -->
+        <div x-show="chartGrid.imageDataUrl" class="mt-4">
+          <img
+            :src="chartGrid.imageDataUrl"
+            class="max-w-full rounded border border-border"
+            alt="Album chart grid"
+            data-testid="stats-grid-preview"
+          >
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

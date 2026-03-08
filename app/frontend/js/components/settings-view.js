@@ -18,6 +18,7 @@ export function createSettingsView(Alpine) {
       { id: 'sorting', label: 'Sorting' },
       { id: 'advanced', label: 'Advanced' },
       { id: 'lastfm', label: 'Last.fm' },
+      { id: 'stats', label: 'Statistics' },
     ],
 
     watchedFolders: [],

@@ -562,7 +562,7 @@ pub(crate) fn update_track_metadata(
     Ok(updated > 0)
 }
 
-/// Increment play count for a track
+/// Increment play count for a track and record in play_history
 pub(crate) fn update_play_count(conn: &Connection, track_id: i64) -> DbResult<Option<Track>> {
     conn.execute(
         "UPDATE library SET
@@ -571,6 +571,8 @@ pub(crate) fn update_play_count(conn: &Connection, track_id: i64) -> DbResult<Op
          WHERE id = ?",
         [track_id],
     )?;
+
+    conn.execute("INSERT INTO play_history (track_id) VALUES (?)", [track_id])?;
 
     get_track_by_id(conn, track_id)
 }

@@ -15,8 +15,9 @@ import { favorites } from './favorites.js';
 import { playlists } from './playlists.js';
 import { lastfm } from './lastfm.js';
 import { settings } from './settings.js';
+import { stats } from './stats.js';
 
-export { favorites, lastfm, library, playlists, queue, settings };
+export { favorites, lastfm, library, playlists, queue, settings, stats };
 
 /**
  * Unified API object (backward compatibility).
@@ -33,6 +34,7 @@ export const api = {
   playlists,
   lastfm,
   settings,
+  stats,
 
   playback: {
     getState() {

@@ -69,6 +69,9 @@ md5 = "0.7"
 # LRU cache for artwork
 lru = "0.12"
 
+# Image processing for chart grid generation
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+
 # Structured logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

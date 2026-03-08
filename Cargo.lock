@@ -2832,6 +2832,7 @@ dependencies = [
  "chrono",
  "dirs",
  "dispatch2",
+ "image",
  "lofty",
  "lru",
  "md5",

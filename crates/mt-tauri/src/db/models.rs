@@ -190,6 +190,57 @@ pub struct LibraryStats {
     pub total_albums: i64,
 }
 
+/// Listening statistics overview
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListeningStats {
+    pub total_plays: i64,
+    pub total_tracks_played: i64,
+    pub total_artists_played: i64,
+    pub total_listening_time: i64,
+}
+
+/// Artist with play count for statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArtistPlayCount {
+    pub artist: String,
+    pub play_count: i64,
+    pub track_id: Option<i64>,
+}
+
+/// Genre breakdown for statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GenreBreakdown {
+    pub genre: String,
+    pub play_count: i64,
+    pub track_count: i64,
+}
+
+/// Plays over time for statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlaysOverTime {
+    pub label: String,
+    pub count: i64,
+}
+
+/// Date range for statistics queries
+#[derive(Debug, Clone, Deserialize)]
+pub enum StatsDateRange {
+    AllTime,
+    Last7Days,
+    Last30Days,
+}
+
+/// Request for chart grid generation
+#[derive(Debug, Clone, Deserialize)]
+pub struct ChartGridRequest {
+    pub rows: u32,
+    pub columns: u32,
+    pub cell_size: u32,
+    pub padding: u32,
+    pub sort_by: String,
+    pub date_range: StatsDateRange,
+}
+
 /// File fingerprint for change detection
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // Constructed in db queries, fields read by scanner

@@ -4,6 +4,7 @@ mod lastfm;
 mod playlists;
 mod queue;
 mod settings;
+mod stats;
 
 pub(crate) use audio::{
     AudioState, audio_get_status, audio_get_volume, audio_load, audio_load_and_play, audio_pause,
@@ -36,4 +37,9 @@ pub(crate) use queue::{
 
 pub(crate) use settings::{
     settings_get, settings_get_all, settings_reset, settings_set, settings_update,
+};
+
+pub(crate) use stats::{
+    stats_generate_chart_grid, stats_get_genres, stats_get_overview, stats_get_plays_over_time,
+    stats_get_top_artists,
 };

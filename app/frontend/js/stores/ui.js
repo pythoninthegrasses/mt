@@ -163,6 +163,7 @@ export function createUIStore(Alpine) {
           'sorting',
           'advanced',
           'lastfm',
+          'stats',
         ].includes(
           section,
         )

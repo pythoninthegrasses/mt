@@ -13,6 +13,7 @@ pub(crate) mod removed;
 pub(crate) mod schema;
 pub(crate) mod scrobble;
 pub(crate) mod settings;
+pub(crate) mod stats;
 pub(crate) mod watched;
 
 #[cfg(test)]

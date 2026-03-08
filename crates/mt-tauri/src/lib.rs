@@ -27,7 +27,8 @@ use commands::{
     playlist_reorder_tracks, playlist_update, playlists_reorder, queue_add, queue_add_files,
     queue_clear, queue_get, queue_get_playback_state, queue_remove, queue_reorder,
     queue_set_current_index, queue_set_loop, queue_set_shuffle, queue_shuffle, settings_get,
-    settings_get_all, settings_reset, settings_set, settings_update,
+    settings_get_all, settings_reset, settings_set, settings_update, stats_generate_chart_grid,
+    stats_get_genres, stats_get_overview, stats_get_plays_over_time, stats_get_top_artists,
 };
 use dialog::{open_add_music_dialog, open_file_dialog, open_folder_dialog};
 use library::commands::{
@@ -417,6 +418,11 @@ pub fn run() {
             settings_set,
             settings_update,
             settings_reset,
+            stats_get_overview,
+            stats_get_top_artists,
+            stats_get_genres,
+            stats_get_plays_over_time,
+            stats_generate_chart_grid,
         ])
         .setup(|app| {
             // Initialize database
