@@ -1,10 +1,10 @@
 ---
 id: TASK-296
 title: Show LRCLIB lyrics in Now Playing view with caching
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-03-08 02:09'
-updated_date: '2026-03-08 02:18'
+updated_date: '2026-03-08 02:40'
 labels:
   - feature
   - frontend
@@ -142,20 +142,60 @@ Tauon sends only `track_name` and `artist_name` (not album/duration). For mt, se
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Lyrics display in the Now Playing view between album art and queue when available from LRCLIB
-- [ ] #2 When no lyrics are found (404, instrumental, error), the view remains unchanged — album art stays prominent with metadata below, exactly as current behavior (no 'No lyrics' message or empty panel)
-- [ ] #3 Lyrics are cached per-track in the lyrics_cache SQLite table (keyed by artist+title) so each track is fetched at most once
-- [ ] #4 Negative results (404 / no lyrics) are also cached to avoid repeated failed lookups
-- [ ] #5 Lyrics fetch only triggers when the Now Playing view is in the foreground
-- [ ] #6 When lyrics ARE available: album art shrinks or moves to make room for a scrollable lyrics panel between art and queue
-- [ ] #7 Loading spinner shown only briefly during fetch; if fetch fails or returns no lyrics, view silently stays in album-art-dominant layout
-- [ ] #8 User-Agent header is set to mt-desktop/<version> on LRCLIB requests
-- [ ] #9 HTTP timeout of 10 seconds prevents UI blocking on slow/failed network
-- [ ] #10 Both plainLyrics and syncedLyrics from LRCLIB are stored (plain displayed now; synced stored for future use)
-- [ ] #11 Backend Rust tests cover: DB cache round-trip, LRCLIB response parsing (200/404/instrumental), timeout handling
-- [ ] #12 Frontend Vitest tests cover: lyrics store fetch/visibility gating, API invocation, component render states (with-lyrics vs fallback-to-album-art)
-- [ ] #13 All existing tests continue to pass (no regressions)
+- [x] #1 Lyrics display in the Now Playing view between album art and queue when available from LRCLIB
+- [x] #2 When no lyrics are found (404, instrumental, error), the view remains unchanged — album art stays prominent with metadata below, exactly as current behavior (no 'No lyrics' message or empty panel)
+- [x] #3 Lyrics are cached per-track in the lyrics_cache SQLite table (keyed by artist+title) so each track is fetched at most once
+- [x] #4 Negative results (404 / no lyrics) are also cached to avoid repeated failed lookups
+- [x] #5 Lyrics fetch only triggers when the Now Playing view is in the foreground
+- [x] #6 When lyrics ARE available: album art shrinks or moves to make room for a scrollable lyrics panel between art and queue
+- [x] #7 Loading spinner shown only briefly during fetch; if fetch fails or returns no lyrics, view silently stays in album-art-dominant layout
+- [x] #8 User-Agent header is set to mt-desktop/<version> on LRCLIB requests
+- [x] #9 HTTP timeout of 10 seconds prevents UI blocking on slow/failed network
+- [x] #10 Both plainLyrics and syncedLyrics from LRCLIB are stored (plain displayed now; synced stored for future use)
+- [x] #11 Backend Rust tests cover: DB cache round-trip, LRCLIB response parsing (200/404/instrumental), timeout handling
+- [x] #12 Frontend Vitest tests cover: lyrics store fetch/visibility gating, API invocation, component render states (with-lyrics vs fallback-to-album-art)
+- [x] #13 All existing tests continue to pass (no regressions)
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Implementation Plan (Approved)
+
+### Phase 1: Backend — DB Layer (`crates/mt-tauri/src/db/lyrics.rs`)
+- `get_cached_lyrics(conn, artist, title)` → `DbResult<Option<LyricsCache>>`
+- `save_lyrics(conn, artist, title, album, lyrics, source_url)` → `DbResult<()>`
+- `lyrics` column stores JSON `{ "plainLyrics": "...", "syncedLyrics": "..." }`
+- Tests: cache miss, round-trip, negative cache, upsert
+
+### Phase 2: Backend — LRCLIB HTTP Client (`crates/mt-tauri/src/lyrics.rs`)
+- `LrcLibClient` with `reqwest::Client`
+- `fetch_lyrics(artist, title, album, duration_secs)` → `Result<Option<LrcLibResponse>, LrcLibError>`
+- User-Agent: `mt-desktop/<version>`, 10s timeout
+- Tests: response parsing (200/404/instrumental)
+
+### Phase 3: Backend — Tauri Commands (`crates/mt-tauri/src/commands/lyrics.rs`)
+- `lyrics_get(db, artist, title, album, duration)` → async, cache-first
+- `lyrics_clear_cache(db)` → delete all
+- Register in mod.rs + lib.rs
+
+### Phase 4: Frontend — API (`app/frontend/js/api/lyrics.js`)
+- `lyrics.get({ artist, title, album, duration })`
+- `lyrics.clearCache()`
+
+### Phase 5: Frontend — Lyrics State in `now-playing-view.js`
+- lyrics, lyricsLoading, _lyricsTrackId state
+- Watch currentTrack + view visibility
+
+### Phase 6: Frontend — HTML Update (`now-playing.html`)
+- Conditional lyrics panel (only when lyrics has content)
+- Silent fallback to current layout when no lyrics
+
+### Phase 7: Tests
+- Rust: DB, LRCLIB parsing, command integration
+- Vitest: fetch behavior, visibility gating, render states
+- Verify no regressions
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
@@ -178,3 +218,26 @@ The current Now Playing layout has:
 
 This means the lyrics panel is conditionally rendered only when `lyrics` state has actual content. The absence of lyrics should not alter the existing layout at all.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Summary
+
+Implemented LRCLIB lyrics display in the Now Playing view with SQLite caching.
+
+### Backend (Rust)
+- **`crates/mt-tauri/src/db/lyrics.rs`** (new): DB cache layer with `get_cached_lyrics`, `save_lyrics`, `clear_cache`. Stores both plainLyrics and syncedLyrics as JSON in the existing `lyrics_cache` table. 6 unit tests.
+- **`crates/mt-tauri/src/lyrics.rs`** (new): LRCLIB HTTP client with `LrcLibClient`, `fetch_lyrics`. Uses reqwest with 10s timeout and `mt-desktop/<version>` User-Agent. 5 unit tests for response parsing.
+- **`crates/mt-tauri/src/commands/lyrics.rs`** (new): `lyrics_get` (async, cache-first with negative caching) and `lyrics_clear_cache` Tauri commands. Registered in `commands/mod.rs` and `lib.rs` invoke_handler.
+
+### Frontend
+- **`app/frontend/js/api/lyrics.js`** (new): Lyrics API module invoking `lyrics_get` and `lyrics_clear_cache`. Registered in `api/index.js`.
+- **`app/frontend/js/components/now-playing-view.js`** (modified): Added lyrics state (`lyrics`, `lyricsLoading`, `_lyricsTrackKey`, `_lyricsFetchId`). Watches `$store.player.currentTrack` and `$store.ui.view` — only fetches when Now Playing is visible. Superseded-fetch guard prevents stale updates.
+- **`app/frontend/views/now-playing.html`** (modified): Two conditional layouts — without lyrics shows original centered album art, with lyrics shows compact art + scrollable lyrics panel. No visual change when lyrics unavailable.
+
+### Tests
+- **Rust**: 622 tests pass (11 new lyrics tests)
+- **Vitest**: 331 tests pass (12 new lyrics tests covering API invocation, visibility gating, track change, negative results, error handling, superseded fetch)
+- **Clippy**: clean, **cargo fmt**: clean, **deno lint/fmt**: clean
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -14,9 +14,10 @@ import { queue } from './queue.js';
 import { favorites } from './favorites.js';
 import { playlists } from './playlists.js';
 import { lastfm } from './lastfm.js';
+import { lyrics } from './lyrics.js';
 import { settings } from './settings.js';
 
-export { favorites, lastfm, library, playlists, queue, settings };
+export { favorites, lastfm, library, lyrics, playlists, queue, settings };
 
 /**
  * Unified API object (backward compatibility).
@@ -28,6 +29,7 @@ export const api = {
   },
 
   library,
+  lyrics,
   queue,
   favorites,
   playlists,

@@ -1,8 +1,15 @@
 import { queueDragReorderMixin } from '../mixins/queue-drag-reorder.js';
+import { lyrics as lyricsApi } from '../api/lyrics.js';
 
 export function createNowPlayingView(Alpine) {
   Alpine.data('nowPlayingView', () => ({
     ...queueDragReorderMixin(),
+
+    // Lyrics state
+    lyrics: null,
+    lyricsLoading: false,
+    _lyricsTrackKey: null,
+    _lyricsFetchId: 0,
 
     // Virtual scroll state
     _rowHeight: 41,
@@ -23,6 +30,10 @@ export function createNowPlayingView(Alpine) {
         });
         this._resizeObserver.observe(container);
       }
+
+      // Watch for track changes and view visibility to fetch lyrics
+      this.$watch('$store.player.currentTrack', () => this._onTrackOrViewChange());
+      this.$watch('$store.ui.view', () => this._onTrackOrViewChange());
     },
 
     destroy() {
@@ -33,6 +44,58 @@ export function createNowPlayingView(Alpine) {
       if (this._rafId) {
         cancelAnimationFrame(this._rafId);
         this._rafId = null;
+      }
+    },
+
+    _onTrackOrViewChange() {
+      const track = this.$store.player.currentTrack;
+      const isVisible = this.$store.ui.view === 'nowPlaying';
+
+      if (!track || !isVisible) {
+        return;
+      }
+
+      // Build a cache key from artist+title to detect track changes
+      const trackKey = `${track.artist || ''}::${track.title || ''}`;
+
+      if (trackKey === this._lyricsTrackKey) {
+        return;
+      }
+
+      this._lyricsTrackKey = trackKey;
+      this._fetchLyrics(track);
+    },
+
+    async _fetchLyrics(track) {
+      const fetchId = ++this._lyricsFetchId;
+      this.lyrics = null;
+      this.lyricsLoading = true;
+
+      try {
+        const durationSecs = track.duration ? Math.round(track.duration / 1000) : null;
+        const result = await lyricsApi.get({
+          artist: track.artist || '',
+          title: track.title || '',
+          album: track.album || '',
+          duration: durationSecs,
+        });
+
+        // Check if this fetch was superseded
+        if (this._lyricsFetchId !== fetchId) return;
+
+        if (result && result.plain_lyrics) {
+          this.lyrics = result.plain_lyrics;
+        } else {
+          this.lyrics = null;
+        }
+      } catch (error) {
+        console.error('[now-playing] Failed to fetch lyrics:', error);
+        if (this._lyricsFetchId !== fetchId) return;
+        this.lyrics = null;
+      } finally {
+        if (this._lyricsFetchId === fetchId) {
+          this.lyricsLoading = false;
+        }
       }
     },
 
