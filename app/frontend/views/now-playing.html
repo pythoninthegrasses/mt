@@ -1,11 +1,12 @@
 <!-- Now Playing View -->
 <div x-show="$store.ui.view === 'nowPlaying'" x-cloak class="h-full" x-data="nowPlayingView">
   <div class="flex h-full">
-    <!-- Left Panel: Album Art + Track Info -->
-    <div class="flex-1 flex items-center justify-center p-8">
+    <!-- Left Panel: Album Art + Track Info + Lyrics -->
+    <div class="flex-1 flex items-center justify-center" :class="lyrics ? '' : 'p-6'">
       <template x-if="$store.player.currentTrack">
-        <div class="flex flex-col items-center gap-6 max-w-md">
-          <div class="w-72 h-72 bg-muted rounded-lg flex items-center justify-center shadow-xl shrink-0 overflow-hidden" data-testid="album-art-container">
+        <!-- Without lyrics: large centered art + metadata -->
+        <div x-show="!lyrics" class="flex flex-col items-center gap-6">
+          <div class="w-96 h-96 bg-muted rounded-lg flex items-center justify-center shadow-xl shrink-0 overflow-hidden" data-testid="album-art-container">
             <template x-if="$store.player.artwork">
               <img
                 :src="'data:' + $store.player.artwork.mime_type + ';base64,' + $store.player.artwork.data"
@@ -27,6 +28,58 @@
           </div>
         </div>
       </template>
+
+      <template x-if="$store.player.currentTrack">
+        <!-- With lyrics: art on left + scrollable lyrics on right, centered as a block -->
+        <div x-show="lyrics" class="w-full h-full flex items-center justify-center py-6" data-testid="lyrics-layout">
+          <div class="flex items-center gap-10 max-w-full max-h-full pl-4" :style="_lyricsContentWidth ? '' : 'width: 100%'">
+            <div class="flex flex-col items-center gap-3 shrink-0 self-center">
+              <div class="w-80 h-80 bg-muted rounded-lg flex items-center justify-center shadow-xl shrink-0 overflow-hidden">
+                <template x-if="$store.player.artwork">
+                  <img
+                    :src="'data:' + $store.player.artwork.mime_type + ';base64,' + $store.player.artwork.data"
+                    alt="Album artwork"
+                    class="w-full h-full object-cover"
+                  >
+                </template>
+                <template x-if="!$store.player.artwork">
+                  <svg class="w-16 h-16 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                  </svg>
+                </template>
+              </div>
+              <div class="text-center space-y-1 w-80">
+                <h2 class="text-xl font-bold truncate" x-text="$store.player.currentTrack.title || 'Unknown'"></h2>
+                <p class="text-sm text-muted-foreground truncate" x-text="$store.player.currentTrack.artist || 'Unknown Artist'"></p>
+                <p class="text-sm text-muted-foreground/70 truncate" x-text="$store.player.currentTrack.album || ''"></p>
+              </div>
+            </div>
+            <div class="min-h-0 self-stretch relative" :class="_lyricsContentWidth ? 'shrink' : 'flex-1'" :style="_lyricsContentWidth ? 'width: ' + _lyricsContentWidth + 'px; max-width: 100%' : ''">
+              <div
+                class="absolute inset-x-0 top-0 h-12 z-10 pointer-events-none transition-opacity duration-300"
+                :class="_lyricsScrollTop > 0 ? 'opacity-100' : 'opacity-0'"
+                style="background: linear-gradient(to bottom, hsl(var(--background)), transparent);"
+              ></div>
+              <div
+                class="h-full overflow-y-auto lyrics-hide-scrollbar"
+                data-testid="lyrics-panel"
+                x-ref="lyricsPanel"
+                @scroll.passive="_onLyricsScroll($event)"
+              >
+                <div class="min-h-full flex flex-col justify-center">
+                  <p class="leading-relaxed text-foreground/80 whitespace-pre-wrap pr-2" style="font-size: clamp(1rem, 2vw, 1.5rem); line-height: 1.75;" x-text="lyrics" data-testid="lyrics-text"></p>
+                </div>
+              </div>
+              <div
+                class="absolute inset-x-0 bottom-0 h-12 z-10 pointer-events-none transition-opacity duration-300"
+                :class="_lyricsCanScrollMore ? 'opacity-100' : 'opacity-0'"
+                style="background: linear-gradient(to top, hsl(var(--background)), transparent);"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </template>
+
       <template x-if="!$store.player.currentTrack">
         <div class="text-center text-muted-foreground">
           <svg class="w-24 h-24 mx-auto mb-6 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">

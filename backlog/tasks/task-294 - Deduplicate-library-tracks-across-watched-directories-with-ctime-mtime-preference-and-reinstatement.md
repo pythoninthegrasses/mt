@@ -3,10 +3,10 @@ id: TASK-294
 title: >-
   Deduplicate library tracks across watched directories with ctime/mtime
   preference and reinstatement
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-03-08 01:23'
-updated_date: '2026-03-08 01:34'
+updated_date: '2026-03-08 07:20'
 labels:
   - feature
   - library
@@ -129,16 +129,29 @@ When toggled on, trigger a reconcile scan to apply dedup.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Tracks with identical content_hash across different watched directories are deduplicated to show only one copy in the library
-- [ ] #2 Preference ordering uses ctime (oldest first), falling back to mtime, then alphabetical directory path
-- [ ] #3 file_ctime_ns column added to library table and populated during scan
-- [ ] #4 deduplicated_tracks table tracks suppressed duplicates with kept_track_id, suppressed_filepath, content_hash, and timestamps
-- [ ] #5 When a kept track's directory is removed or goes missing, the best remaining suppressed duplicate is reinstated automatically
-- [ ] #6 Reinstated tracks inherit play_count, favorites, and playlist entries from the missing kept track
-- [ ] #7 Settings UI has a toggle in Library section: 'Deduplicate tracks across directories' (enabled by default)
-- [ ] #8 Setting key is library.deduplicateAcrossDirectories stored in settings.json
-- [ ] #9 Disabling the setting reinstates all suppressed duplicates
-- [ ] #10 Enabling the setting triggers a reconcile scan with cross-directory dedup
-- [ ] #11 Existing inode-based and content_hash-based single-directory dedup continues to work unchanged
-- [ ] #12 DB migration is backward-compatible (new columns nullable, new table additive)
+- [x] #1 Tracks with identical content_hash across different watched directories are deduplicated to show only one copy in the library
+- [x] #2 Preference ordering uses ctime (oldest first), falling back to mtime, then alphabetical directory path
+- [x] #3 file_ctime_ns column added to library table and populated during scan
+- [x] #4 deduplicated_tracks table tracks suppressed duplicates with kept_track_id, suppressed_filepath, content_hash, and timestamps
+- [x] #5 When a kept track's directory is removed or goes missing, the best remaining suppressed duplicate is reinstated automatically
+- [x] #6 Reinstated tracks inherit play_count, favorites, and playlist entries from the missing kept track
+- [x] #7 Settings UI has a toggle in Library section: 'Deduplicate tracks across directories' (enabled by default)
+- [x] #8 Setting key is library.deduplicateAcrossDirectories stored in settings.json
+- [x] #9 Disabling the setting reinstates all suppressed duplicates
+- [x] #10 Enabling the setting triggers a reconcile scan with cross-directory dedup
+- [x] #11 Existing inode-based and content_hash-based single-directory dedup continues to work unchanged
+- [x] #12 DB migration is backward-compatible (new columns nullable, new table additive)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+All 12 acceptance criteria verified as implemented in commit a7ef45a. Cross-directory track deduplication with ctime/mtime preference and reinstatement is fully functional.
+
+Fixed 29 failing E2E tests:
+- 26 tests in library-playlist-features.spec.js and sidebar.spec.js failed because the mock route pattern `**/api/library**` intercepted the Vite dev server's JS module file `/js/api/library.js`, preventing Alpine.js from initializing. Fixed by changing to regex `/\/api\/library(\?.*)?$/`.
+- 1 test in error-states.spec.js failed because `/\/api\/settings/` intercepted `/js/api/settings.js`. Fixed by anchoring the regex with `$`.
+- 3 visual regression tests failed because UI legitimately changed (dedup toggle in library settings panel, "Add to Playlist" in context menu). Updated baseline snapshots.
+
+Full test suite: 668 passed, 2 skipped, 0 failures.
+<!-- SECTION:FINAL_SUMMARY:END -->

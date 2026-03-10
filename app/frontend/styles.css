@@ -643,6 +643,14 @@ aside button:hover svg {
     overflow-x: clip;
   }
 
+  /* Hide scrollbar on lyrics panel — scroll indicators replace it */
+  .lyrics-hide-scrollbar {
+    scrollbar-width: none;
+  }
+  .lyrics-hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Disable header clicks during column resize */
   .resizing-columns > div {
     pointer-events: none;

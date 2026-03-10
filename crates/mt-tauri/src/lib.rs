@@ -6,6 +6,7 @@ pub(crate) mod events;
 pub(crate) mod lastfm;
 pub(crate) mod library;
 pub(crate) mod logging;
+pub(crate) mod lyrics;
 pub(crate) mod media_keys;
 pub(crate) mod metadata;
 pub(crate) mod scanner;
@@ -22,8 +23,9 @@ use commands::{
     lastfm_cache_loved_tracks, lastfm_disconnect, lastfm_get_auth_url, lastfm_get_settings,
     lastfm_import_loved_tracks, lastfm_loved_stats, lastfm_match_loved_tracks, lastfm_now_playing,
     lastfm_queue_retry, lastfm_queue_status, lastfm_reset_loved_cache, lastfm_scrobble,
-    lastfm_update_settings, match_loved_tracks_impl, playlist_add_tracks, playlist_create,
-    playlist_delete, playlist_generate_name, playlist_get, playlist_list, playlist_remove_track,
+    lastfm_update_settings, lyrics_clear_cache, lyrics_get, match_loved_tracks_impl,
+    playlist_add_tracks, playlist_create, playlist_delete, playlist_generate_name, playlist_get,
+    playlist_list, playlist_remove_track,
     playlist_reorder_tracks, playlist_update, playlists_reorder, queue_add, queue_add_files,
     queue_clear, queue_get, queue_get_playback_state, queue_remove, queue_reorder,
     queue_set_current_index, queue_set_loop, queue_set_shuffle, queue_shuffle, settings_get,
@@ -414,6 +416,8 @@ pub fn run() {
             lastfm_match_loved_tracks,
             lastfm_loved_stats,
             lastfm_reset_loved_cache,
+            lyrics_get,
+            lyrics_clear_cache,
             settings_get_all,
             settings_get,
             settings_set,

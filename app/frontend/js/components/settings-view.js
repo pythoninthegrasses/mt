@@ -66,6 +66,7 @@ export function createSettingsView(Alpine) {
       resetSort: true,
     },
 
+    deduplicateAcrossDirectories: true,
     isExportingLogs: false,
     isDraggingThreshold: false,
 
@@ -95,9 +96,10 @@ export function createSettingsView(Alpine) {
 
     reconcilePhaseText() {
       if (!this.reconcileScan.progress) return '';
-      return this.reconcileScan.progress.phase === 'fingerprinting'
-        ? 'Computing fingerprints...'
-        : 'Merging duplicates...';
+      const phase = this.reconcileScan.progress.phase;
+      if (phase === 'fingerprinting') return 'Computing fingerprints...';
+      if (phase === 'cross_directory_dedup') return 'Cross-directory dedup...';
+      return 'Merging duplicates...';
     },
 
     reconcileProgressText() {
@@ -171,6 +173,10 @@ export function createSettingsView(Alpine) {
       await this.loadWatchedFolders();
       await this.loadLastfmSettings();
       this.loadColumnSettings();
+      this.deduplicateAcrossDirectories = window.settings.get(
+        'library.deduplicateAcrossDirectories',
+        true,
+      );
     },
 
     async loadAppInfo() {
@@ -679,6 +685,17 @@ export function createSettingsView(Alpine) {
         Alpine.store('ui').toast('Failed to reset loved cache', 'error');
       } finally {
         this.lastfm.isResettingLoved = false;
+      }
+    },
+
+    async toggleDeduplicateAcrossDirectories() {
+      try {
+        await window.settings.set(
+          'library.deduplicateAcrossDirectories',
+          this.deduplicateAcrossDirectories,
+        );
+      } catch (err) {
+        console.error('[settings] Failed to save dedup setting:', err);
       }
     },
 

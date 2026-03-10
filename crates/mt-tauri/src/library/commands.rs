@@ -281,6 +281,7 @@ pub(crate) fn library_rescan_track(
         duration: extracted.duration,
         file_size: Some(extracted.file_size),
         file_mtime_ns: extracted.file_mtime_ns,
+        file_ctime_ns: None,
         file_inode: None,
         content_hash: None,
     };
@@ -475,6 +476,8 @@ pub(crate) fn library_mark_present(
 pub struct ReconcileScanResult {
     pub backfilled: u32,
     pub duplicates_merged: u32,
+    pub cross_directory_suppressed: u32,
+    pub reinstated: u32,
     pub errors: u32,
 }
 
@@ -629,7 +632,176 @@ pub(crate) async fn library_reconcile_scan(
         }
 
         if !deleted_ids.is_empty() {
-            let _ = app_handle.emit_library_updated(LibraryUpdatedEvent::deleted(deleted_ids));
+            let _ =
+                app_handle.emit_library_updated(LibraryUpdatedEvent::deleted(deleted_ids.clone()));
+        }
+
+        // Phase 3: Cross-directory dedup
+        let _ =
+            app_handle.emit_reconcile_progress(ReconcileProgressEvent::cross_directory_dedup(0, 0));
+
+        let mut cross_directory_suppressed = 0u32;
+        let mut reinstated = 0u32;
+
+        // Phase 3a: Reinstatement (always runs if there are suppression records)
+        let suppression_count = crate::db::dedup::count_suppressed(&conn).unwrap_or(0);
+        if suppression_count > 0 {
+            match crate::db::dedup::reinstate_missing_kept_tracks(&conn, |filepath| {
+                let path = std::path::Path::new(filepath);
+                if !path.exists() {
+                    return None;
+                }
+                let extracted = extract_metadata_or_default(filepath);
+                let content_hash = compute_content_hash(path).ok();
+                let metadata = TrackMetadata {
+                    title: extracted.title,
+                    artist: extracted.artist,
+                    album: extracted.album,
+                    album_artist: extracted.album_artist,
+                    track_number: extracted.track_number,
+                    track_total: extracted.track_total,
+                    disc_number: extracted.disc_number.map(|n| n.to_string()),
+                    disc_total: extracted.disc_total.map(|n| n.to_string()),
+                    date: extracted.date,
+                    genre: extracted.genre,
+                    duration: extracted.duration,
+                    file_size: Some(extracted.file_size),
+                    file_mtime_ns: extracted.file_mtime_ns,
+                    file_ctime_ns: extracted.file_ctime_ns,
+                    file_inode: extracted.file_inode,
+                    content_hash,
+                };
+                library::add_track(&conn, filepath, &metadata).ok()
+            }) {
+                Ok(r) => {
+                    reinstated = r.reinstated;
+                    errors += r.errors;
+                }
+                Err(e) => {
+                    info!(error = %e, "Reinstatement phase encountered error");
+                    errors += 1;
+                }
+            }
+        }
+
+        // Phase 3b: Cross-directory dedup
+        // Read setting from Tauri store
+        let dedup_enabled = {
+            use tauri_plugin_store::StoreExt;
+            app_handle
+                .store("settings.json")
+                .ok()
+                .and_then(|store| {
+                    store
+                        .get("library.deduplicateAcrossDirectories")
+                        .and_then(|v| v.as_bool())
+                })
+                .unwrap_or(true)
+        };
+
+        if dedup_enabled {
+            // Get watched folder paths
+            let watched_folders =
+                crate::db::watched::get_watched_folders(&conn).unwrap_or_default();
+            let folder_paths: Vec<String> =
+                watched_folders.iter().map(|f| f.path.clone()).collect();
+
+            if folder_paths.len() >= 2 {
+                match library::find_cross_directory_duplicates(&conn, &folder_paths) {
+                    Ok(groups) => {
+                        let group_total = groups.len() as u32;
+                        for (i, group) in groups.iter().enumerate() {
+                            if group.len() < 2 {
+                                continue;
+                            }
+                            let keep = &group[0];
+                            for dup in &group[1..] {
+                                if deleted_ids.contains(&dup.id) {
+                                    continue;
+                                }
+                                // Record suppression before merging
+                                let _ = crate::db::dedup::suppress_track(
+                                    &conn,
+                                    keep.id,
+                                    &dup.filepath,
+                                    dup.content_hash.as_deref(),
+                                    dup.file_ctime_ns,
+                                    dup.file_mtime_ns,
+                                );
+                                match library::merge_duplicate_tracks(&conn, keep.id, dup.id) {
+                                    Ok(true) => {
+                                        cross_directory_suppressed += 1;
+                                        deleted_ids.push(dup.id);
+                                    }
+                                    Ok(false) => {}
+                                    Err(_) => errors += 1,
+                                }
+                            }
+                            if (i as u32 + 1).is_multiple_of(100) || i as u32 + 1 == group_total {
+                                let _ = app_handle.emit_reconcile_progress(
+                                    ReconcileProgressEvent::cross_directory_dedup(
+                                        i as u32 + 1,
+                                        group_total,
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        info!(error = %e, "Cross-directory dedup query failed");
+                        errors += 1;
+                    }
+                }
+            }
+        } else if suppression_count > 0 {
+            // Setting disabled but suppressions exist: unsuppress all
+            match crate::db::dedup::clear_all_suppressions(&conn) {
+                Ok(infos) => {
+                    // Re-scan and re-add the previously suppressed filepaths
+                    for info in &infos {
+                        let path = std::path::Path::new(&info.suppressed_filepath);
+                        if !path.exists() {
+                            continue;
+                        }
+                        let extracted = extract_metadata_or_default(&info.suppressed_filepath);
+                        let content_hash = compute_content_hash(path).ok();
+                        let metadata = TrackMetadata {
+                            title: extracted.title,
+                            artist: extracted.artist,
+                            album: extracted.album,
+                            album_artist: extracted.album_artist,
+                            track_number: extracted.track_number,
+                            track_total: extracted.track_total,
+                            disc_number: extracted.disc_number.map(|n| n.to_string()),
+                            disc_total: extracted.disc_total.map(|n| n.to_string()),
+                            date: extracted.date,
+                            genre: extracted.genre,
+                            duration: extracted.duration,
+                            file_size: Some(extracted.file_size),
+                            file_mtime_ns: extracted.file_mtime_ns,
+                            file_ctime_ns: extracted.file_ctime_ns,
+                            file_inode: extracted.file_inode,
+                            content_hash,
+                        };
+                        let _ = library::add_track(&conn, &info.suppressed_filepath, &metadata);
+                    }
+                    info!(
+                        count = infos.len(),
+                        "Unsuppressed tracks (dedup setting disabled)"
+                    );
+                }
+                Err(e) => {
+                    info!(error = %e, "Failed to clear suppressions");
+                    errors += 1;
+                }
+            }
+        }
+
+        // Emit deleted events for cross-directory dedup
+        if cross_directory_suppressed > 0 {
+            let _ = app_handle.emit_library_updated(LibraryUpdatedEvent::deleted(
+                deleted_ids[duplicates_merged as usize..].to_vec(),
+            ));
         }
 
         let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::complete(total));
@@ -637,6 +809,8 @@ pub(crate) async fn library_reconcile_scan(
         Ok(ReconcileScanResult {
             backfilled,
             duplicates_merged,
+            cross_directory_suppressed,
+            reinstated,
             errors,
         })
     })
@@ -757,12 +931,16 @@ mod tests {
         let result = ReconcileScanResult {
             backfilled: 10,
             duplicates_merged: 5,
+            cross_directory_suppressed: 3,
+            reinstated: 1,
             errors: 2,
         };
 
         let json = serde_json::to_string(&result).unwrap();
         assert!(json.contains("\"backfilled\":10"));
         assert!(json.contains("\"duplicates_merged\":5"));
+        assert!(json.contains("\"cross_directory_suppressed\":3"));
+        assert!(json.contains("\"reinstated\":1"));
         assert!(json.contains("\"errors\":2"));
     }
 
@@ -771,6 +949,8 @@ mod tests {
         let result = ReconcileScanResult {
             backfilled: 0,
             duplicates_merged: 0,
+            cross_directory_suppressed: 0,
+            reinstated: 0,
             errors: 0,
         };
 
@@ -785,6 +965,8 @@ mod tests {
         let result = ReconcileScanResult {
             backfilled: 100,
             duplicates_merged: 20,
+            cross_directory_suppressed: 0,
+            reinstated: 0,
             errors: 3,
         };
 
@@ -799,6 +981,8 @@ mod tests {
         let result = ReconcileScanResult {
             backfilled: 10_000,
             duplicates_merged: 5_000,
+            cross_directory_suppressed: 0,
+            reinstated: 0,
             errors: 100,
         };
 

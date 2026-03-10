@@ -21,6 +21,8 @@ use crate::scanner::ScanResult;
 pub struct FileFingerprint {
     /// File modification time in nanoseconds since Unix epoch
     pub mtime_ns: Option<i64>,
+    /// File creation time (birthtime) in nanoseconds since Unix epoch
+    pub ctime_ns: Option<i64>,
     /// File size in bytes
     pub size: i64,
     /// File inode (Unix only) for move detection
@@ -38,6 +40,12 @@ impl FileFingerprint {
             .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
             .map(|d| d.as_nanos() as i64);
 
+        let ctime_ns = metadata
+            .created()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_nanos() as i64);
+
         let size = metadata.len() as i64;
 
         #[cfg(unix)]
@@ -48,6 +56,7 @@ impl FileFingerprint {
 
         Ok(FileFingerprint {
             mtime_ns,
+            ctime_ns,
             size,
             inode,
         })
@@ -57,6 +66,7 @@ impl FileFingerprint {
     pub(crate) fn from_db(mtime_ns: Option<i64>, size: i64) -> Self {
         FileFingerprint {
             mtime_ns,
+            ctime_ns: None,
             size,
             inode: None,
         }
@@ -67,6 +77,7 @@ impl FileFingerprint {
     pub(crate) fn from_db_with_inode(mtime_ns: Option<i64>, size: i64, inode: Option<u64>) -> Self {
         FileFingerprint {
             mtime_ns,
+            ctime_ns: None,
             size,
             inode,
         }
@@ -136,6 +147,7 @@ mod tests {
         let fingerprint = FileFingerprint::from_path(&file_path).unwrap();
 
         assert!(fingerprint.mtime_ns.is_some());
+        assert!(fingerprint.ctime_ns.is_some());
         assert_eq!(fingerprint.size, 12); // "test content" is 12 bytes
         #[cfg(unix)]
         assert!(fingerprint.inode.is_some());
@@ -145,24 +157,28 @@ mod tests {
     fn test_fingerprint_matches() {
         let fp1 = FileFingerprint {
             mtime_ns: Some(1234567890),
+            ctime_ns: None,
             size: 1000,
             inode: Some(12345),
         };
 
         let fp2 = FileFingerprint {
             mtime_ns: Some(1234567890),
+            ctime_ns: None,
             size: 1000,
             inode: Some(99999), // Different inode - should still match
         };
 
         let fp3 = FileFingerprint {
             mtime_ns: Some(1234567890),
+            ctime_ns: None,
             size: 2000, // Different size
             inode: Some(12345),
         };
 
         let fp4 = FileFingerprint {
             mtime_ns: Some(9999999999),
+            ctime_ns: None,
             size: 1000, // Different mtime
             inode: Some(12345),
         };
