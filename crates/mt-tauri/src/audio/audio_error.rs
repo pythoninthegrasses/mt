@@ -22,6 +22,9 @@ pub enum AudioError {
 
     #[error("Stream error: {0}")]
     Stream(String),
+
+    #[error("Device error: {0}")]
+    Device(String),
 }
 
 impl From<std::io::Error> for AudioError {

@@ -9,6 +9,7 @@
 import { request } from './shared.js';
 export { ApiError } from './shared.js';
 
+import { audio } from './audio.js';
 import { library } from './library.js';
 import { queue } from './queue.js';
 import { favorites } from './favorites.js';
@@ -17,7 +18,7 @@ import { lastfm } from './lastfm.js';
 import { lyrics } from './lyrics.js';
 import { settings } from './settings.js';
 
-export { favorites, lastfm, library, lyrics, playlists, queue, settings };
+export { audio, favorites, lastfm, library, lyrics, playlists, queue, settings };
 
 /**
  * Unified API object (backward compatibility).
@@ -28,6 +29,7 @@ export const api = {
     return request('/health');
   },
 
+  audio,
   library,
   lyrics,
   queue,

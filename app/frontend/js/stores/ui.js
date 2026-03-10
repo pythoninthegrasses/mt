@@ -156,6 +156,7 @@ export function createUIStore(Alpine) {
       if (
         [
           'general',
+          'audio',
           'library',
           'appearance',
           'columns',

@@ -1,4 +1,6 @@
+import { audio } from '../api/audio.js';
 import { lastfm } from '../api/lastfm.js';
+import { settings } from '../api/settings.js';
 import { modLabel, SHORTCUT_DEFINITIONS } from '../shortcuts.js';
 
 export function createSettingsView(Alpine) {
@@ -11,6 +13,7 @@ export function createSettingsView(Alpine) {
 
     navSections: [
       { id: 'general', label: 'General' },
+      { id: 'audio', label: 'Audio' },
       { id: 'appearance', label: 'Appearance' },
       { id: 'library', label: 'Library' },
       { id: 'columns', label: 'Columns' },
@@ -45,6 +48,10 @@ export function createSettingsView(Alpine) {
       lastResult: null,
       progress: null,
     },
+
+    audioDevices: [],
+    selectedAudioDevice: 'default',
+    audioDevicesLoading: false,
 
     // Column settings for Settings > Columns section
     columnSettings: {
@@ -162,6 +169,7 @@ export function createSettingsView(Alpine) {
 
     async init() {
       await this.loadAppInfo();
+      await this.loadAudioDevices();
       await this.loadWatchedFolders();
       await this.loadLastfmSettings();
       this.loadColumnSettings();
@@ -196,6 +204,38 @@ export function createSettingsView(Alpine) {
           build: 'unknown',
           platform: 'unknown',
         };
+      }
+    },
+
+    async loadAudioDevices() {
+      this.audioDevicesLoading = true;
+      try {
+        const response = await audio.listDevices();
+        this.audioDevices = response.devices || [];
+
+        // Load saved device selection
+        const saved = await settings.get('audio_output_device');
+        if (saved && saved.value && saved.value !== 'default') {
+          this.selectedAudioDevice = saved.value;
+        } else {
+          this.selectedAudioDevice = 'default';
+        }
+      } catch (error) {
+        console.error('[settings] Failed to load audio devices:', error);
+        this.audioDevices = [];
+      } finally {
+        this.audioDevicesLoading = false;
+      }
+    },
+
+    async setAudioDevice(deviceName) {
+      const previous = this.selectedAudioDevice;
+      this.selectedAudioDevice = deviceName;
+      try {
+        await audio.setDevice(deviceName === 'default' ? null : deviceName);
+      } catch (error) {
+        console.error('[settings] Failed to set audio device:', error);
+        this.selectedAudioDevice = previous;
       }
     },
 
