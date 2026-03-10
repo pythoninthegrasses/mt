@@ -1,10 +1,10 @@
 ---
 id: TASK-268
 title: Add audio output device selection
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-16 15:08'
-updated_date: '2026-03-08 02:03'
+updated_date: '2026-03-10 05:55'
 labels:
   - audio
   - feature
@@ -32,11 +32,11 @@ Use cpal (already in dependency tree via rodio) to enumerate devices via `cpal::
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Device selector dropdown in settings view lists available output devices
-- [ ] #2 Switching device preserves current playback position
-- [ ] #3 Selected device persisted in settings and restored on startup
-- [ ] #4 Falls back to default device if saved device unavailable
-- [ ] #5 New audio_list_devices and audio_set_device Tauri commands
-- [ ] #6 Rust unit tests for device enumeration and switching
-- [ ] #7 Playwright E2E test for device selector in settings
+- [x] #1 Device selector dropdown in settings view lists available output devices
+- [x] #2 Switching device preserves current playback position
+- [x] #3 Selected device persisted in settings and restored on startup
+- [x] #4 Falls back to default device if saved device unavailable
+- [x] #5 New audio_list_devices and audio_set_device Tauri commands
+- [x] #6 Rust unit tests for device enumeration and switching
+- [x] #7 Playwright E2E test for device selector in settings
 <!-- AC:END -->
