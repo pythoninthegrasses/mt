@@ -34,7 +34,7 @@ struct PlayerHandle {
 }
 
 pub struct AudioEngine {
-    stream: OutputStream,
+    stream: Option<OutputStream>,
     player_handle: Option<PlayerHandle>,
     state: PlaybackState,
     volume: f32,
@@ -46,7 +46,7 @@ impl AudioEngine {
         let stream = OutputStreamBuilder::open_default_stream()
             .map_err(|e| AudioError::Stream(e.to_string()))?;
         Ok(Self {
-            stream,
+            stream: Some(stream),
             player_handle: None,
             state: PlaybackState::Stopped,
             volume: 1.0,
@@ -74,7 +74,11 @@ impl AudioEngine {
         let duration = source.total_duration().unwrap_or(Duration::ZERO);
         let duration_ms = duration.as_millis() as u64;
 
-        let sink = Sink::connect_new(self.stream.mixer());
+        let stream = self
+            .stream
+            .as_ref()
+            .ok_or_else(|| AudioError::Stream("No active audio stream".to_string()))?;
+        let sink = Sink::connect_new(stream.mixer());
         sink.set_volume(self.volume);
         sink.append(source);
         sink.pause();
@@ -170,7 +174,11 @@ impl AudioEngine {
             handle.sink.stop();
         }
 
-        let sink = Sink::connect_new(self.stream.mixer());
+        let stream = self
+            .stream
+            .as_ref()
+            .ok_or_else(|| AudioError::Stream("No active audio stream".to_string()))?;
+        let sink = Sink::connect_new(stream.mixer());
         sink.set_volume(self.volume);
         sink.append(source);
 
@@ -257,24 +265,25 @@ impl AudioEngine {
     /// Preserves current playback position and state. If the named device is
     /// not found, falls back to the system default and returns an error.
     pub fn set_device(&mut self, name: Option<&str>) -> Result<(), AudioError> {
-        let new_stream = match name {
+        // Resolve the target device before tearing anything down. For named
+        // devices we need to enumerate first; for default we grab the host's
+        // default. Validation happens here so we can bail early without
+        // disrupting playback.
+        let device = match name {
             Some(device_name) => {
                 let host = rodio::cpal::default_host();
                 let devices = host.output_devices().map_err(|e| {
                     AudioError::Device(format!("Failed to enumerate devices: {}", e))
                 })?;
 
-                let device = devices
+                let found = devices
                     .into_iter()
                     .find(|d| d.name().ok().as_deref() == Some(device_name));
 
-                match device {
+                match found {
                     Some(d) => {
                         info!(device = device_name, "Switching audio output device");
-                        OutputStreamBuilder::from_device(d)
-                            .map_err(|e| AudioError::Device(e.to_string()))?
-                            .open_stream()
-                            .map_err(|e| AudioError::Device(e.to_string()))?
+                        d
                     }
                     None => {
                         warn!(
@@ -289,9 +298,10 @@ impl AudioEngine {
                 }
             }
             None => {
-                info!("Switching to default audio output device");
-                OutputStreamBuilder::open_default_stream()
-                    .map_err(|e| AudioError::Device(e.to_string()))?
+                let host = rodio::cpal::default_host();
+                host.default_output_device().ok_or_else(|| {
+                    AudioError::Device("No default output device found".to_string())
+                })?
             }
         };
 
@@ -304,13 +314,27 @@ impl AudioEngine {
             .unwrap_or(0);
         let track_info = self.current_track.clone();
 
-        // Stop current playback
+        // Stop current playback (sink must be dropped before the stream)
         if let Some(handle) = self.player_handle.take() {
             handle.sink.stop();
         }
 
-        // Replace stream
-        self.stream = new_stream;
+        // Drop old stream BEFORE creating the new one. On macOS CoreAudio,
+        // two simultaneous streams to the same physical device (e.g. switching
+        // from "Mac Studio Speakers" to "Default" which resolves to the same
+        // hardware) causes the new stream to produce silence.
+        self.stream = None;
+
+        if name.is_none() {
+            info!("Switching to default audio output device");
+        }
+
+        let new_stream = OutputStreamBuilder::from_device(device)
+            .map_err(|e| AudioError::Device(e.to_string()))?
+            .open_stream()
+            .map_err(|e| AudioError::Device(e.to_string()))?;
+
+        self.stream = Some(new_stream);
 
         // Reload track on new stream if one was loaded
         if let Some(ref track) = track_info {
@@ -318,7 +342,8 @@ impl AudioEngine {
             if path_obj.exists() {
                 if let Ok(file) = File::open(&track.path) {
                     if let Ok(source) = Decoder::try_from(file) {
-                        let sink = Sink::connect_new(self.stream.mixer());
+                        let mixer = self.stream.as_ref().expect("stream just assigned").mixer();
+                        let sink = Sink::connect_new(mixer);
                         sink.set_volume(self.volume);
                         sink.append(source);
 
@@ -364,6 +389,15 @@ pub fn list_output_devices() -> Result<Vec<String>, AudioError> {
 
     debug!(count = names.len(), "Enumerated output devices");
     Ok(names)
+}
+
+#[cfg(test)]
+impl AudioEngine {
+    /// Remove the active stream to simulate a transient no-stream state.
+    /// Only available in tests.
+    pub(crate) fn drop_stream(&mut self) {
+        self.stream = None;
+    }
 }
 
 impl Default for AudioEngine {
