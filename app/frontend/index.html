@@ -4,8 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>mt</title>
-  <script src="/js/basecoat/all.min.js" defer></script>
-  <script type="module" src="/main.js"></script>
   <style>
     /* Hide elements with x-cloak until Alpine.js initializes */
     [x-cloak] { display: none !important; }
@@ -14,7 +12,16 @@
       display: block !important;
       visibility: hidden !important;
     }
+    /* Critical theme backgrounds — covers the gap between window.show()
+       and Tailwind CSS bundle load. Without these, the default white webview
+       background is visible while body is hidden via x-cloak. */
+    html { background-color: #ffffff; }
+    html.dark { background-color: #09090b; }
+    html.dark[data-theme-preset="metro-teal"] { background-color: #1e1e1e; }
+    html.dark[data-theme-preset="neon-love"] { background-color: #1f1731; }
   </style>
+  <script src="/js/basecoat/all.min.js" defer></script>
+  <script type="module" src="/main.js"></script>
 </head>
 <body x-cloak class="bg-background text-foreground h-screen overflow-hidden">
   <!-- macOS title bar drag region (overlay mode) - positioned absolutely over content -->

@@ -120,7 +120,23 @@ function revealApp() {
  * the first visible paint.
  */
 function applyInitialTheme() {
-  if (!settings.initialized) return;
+  // Hardcoded background colors matching theme definitions.
+  // Applied as inline style so the <html> background is correct
+  // before the Tailwind CSS bundle computes theme variables.
+  const themeBackgrounds = {
+    'metro-teal': '#1e1e1e',
+    'neon-love': '#1f1731',
+    'dark': '#09090b',
+    'light': '#ffffff',
+  };
+
+  if (!settings.initialized) {
+    // Settings unavailable (e.g. browser mode) — apply system-preferred default
+    const fallback = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.classList.add(fallback);
+    document.documentElement.style.backgroundColor = themeBackgrounds[fallback];
+    return;
+  }
 
   const themePreset = settings.get('ui:themePreset', 'light');
   const theme = settings.get('ui:theme', 'system');
@@ -131,11 +147,13 @@ function applyInitialTheme() {
   if (themePreset === 'metro-teal' || themePreset === 'neon-love') {
     document.documentElement.classList.add('dark');
     document.documentElement.dataset.themePreset = themePreset;
+    document.documentElement.style.backgroundColor = themeBackgrounds[themePreset];
   } else {
     const contentTheme = theme === 'system'
       ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
       : theme;
     document.documentElement.classList.add(contentTheme);
+    document.documentElement.style.backgroundColor = themeBackgrounds[contentTheme];
   }
 }
 
@@ -225,13 +243,15 @@ async function initApp() {
   console.log('[perf] total initApp (sync):', Math.round(t.alpine - t.start), 'ms');
   console.log('[main] Test dialog with: testDialog()');
 
-  // Reveal the app after Alpine has initialized the DOM
-  // Note: We use setTimeout instead of requestAnimationFrame because
-  // RAF callbacks don't fire when the window is hidden (visible: false)
-  setTimeout(() => {
+  // Reveal the app after Alpine has initialized the DOM.
+  // requestAnimationFrame fires after style recalculation and before paint,
+  // ensuring Alpine-rendered DOM is fully styled before x-cloak is removed.
+  // The window is already visible (shown early to avoid WebKit IPC throttling),
+  // so rAF callbacks fire reliably.
+  requestAnimationFrame(() => {
     console.log('[perf] revealApp at:', Math.round(performance.now() - t.start), 'ms');
     revealApp();
-  }, 0);
+  });
 }
 
 // Make settings service globally available
