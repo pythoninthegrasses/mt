@@ -115,20 +115,20 @@ let resolvedThemeBgColor = '#ffffff';
  */
 async function revealApp() {
   if (window.__TAURI__) {
-    const { getCurrentWindow } = window.__TAURI__.window;
-    const appWindow = getCurrentWindow();
     try {
-      await appWindow.setBackgroundColor(resolvedThemeBgColor);
-    } catch (error) {
-      console.error('[main] Failed to set window background color:', error);
-    }
-    try {
-      const { getCurrentWebview } = window.__TAURI__.webview;
-      await getCurrentWebview().setBackgroundColor(resolvedThemeBgColor);
-    } catch (error) {
-      console.error('[main] Failed to set webview background color:', error);
-    }
-    try {
+      const { getCurrentWindow } = window.__TAURI__.window;
+      const appWindow = getCurrentWindow();
+      try {
+        await appWindow.setBackgroundColor(resolvedThemeBgColor);
+      } catch (e) {
+        console.error('[main] Failed to set window background color:', e);
+      }
+      try {
+        const { getCurrentWebview } = window.__TAURI__.webview;
+        await getCurrentWebview().setBackgroundColor(resolvedThemeBgColor);
+      } catch (e) {
+        console.error('[main] Failed to set webview background color:', e);
+      }
       await appWindow.show();
     } catch (error) {
       console.error('[main] Failed to show window:', error);
