@@ -4,6 +4,7 @@ members = ["crates/mt-tauri"]
 
 # Shared profile settings for all workspace members
 [profile.dev]
+panic = "abort"
 split-debuginfo = "unpacked"  # macOS-specific: up to 70% faster incremental debug builds
 debug = "line-tables-only"    # Reduce debug info for faster builds (still get line numbers in backtraces)
 
