@@ -103,12 +103,37 @@ async function initTitlebarDrag() {
   }
 }
 
+// Resolved theme background color, set by applyInitialTheme().
+let resolvedThemeBgColor = '#ffffff';
+
 /**
- * Reveal the UI content.
- * Window is already visible (shown early in initApp to avoid WebKit throttling).
- * This just removes x-cloak so Alpine-rendered content becomes visible.
+ * Show the Tauri window and reveal UI content in one atomic step.
+ * The window stays hidden (visible: false) throughout initialization so the
+ * user never sees a blank/white webview. Setting the native background color
+ * and calling show() right before removing x-cloak ensures the first visible
+ * frame is fully styled.
  */
-function revealApp() {
+async function revealApp() {
+  if (window.__TAURI__) {
+    const { getCurrentWindow } = window.__TAURI__.window;
+    const appWindow = getCurrentWindow();
+    try {
+      await appWindow.setBackgroundColor(resolvedThemeBgColor);
+    } catch (error) {
+      console.error('[main] Failed to set window background color:', error);
+    }
+    try {
+      const { getCurrentWebview } = window.__TAURI__.webview;
+      await getCurrentWebview().setBackgroundColor(resolvedThemeBgColor);
+    } catch (error) {
+      console.error('[main] Failed to set webview background color:', error);
+    }
+    try {
+      await appWindow.show();
+    } catch (error) {
+      console.error('[main] Failed to show window:', error);
+    }
+  }
   document.body.removeAttribute('x-cloak');
   console.log('[main] App ready, UI revealed');
 }
@@ -187,29 +212,7 @@ async function initApp() {
   // Pre-apply theme to <html> before Alpine starts to prevent flash of incorrect styling.
   // Without this, the theme is only applied when Alpine's ui store init() runs,
   // which can cause the sidebar to briefly render with wrong theme colors.
-  const themeBgColor = applyInitialTheme();
-
-  // Show window early so WebKit doesn't throttle IPC callbacks.
-  // The body still has x-cloak (hiding content), but the window being visible
-  // prevents the WebView from deprioritizing async callback execution.
-  // Set the native window/webview background to match the theme BEFORE showing,
-  // so the first visible frame has the correct background color.
-  if (window.__TAURI__) {
-    const { getCurrentWebviewWindow } = window.__TAURI__.webviewWindow;
-    const webviewWindow = getCurrentWebviewWindow();
-    try {
-      await webviewWindow.setBackgroundColor(themeBgColor);
-    } catch (error) {
-      console.error('[main] Failed to set background color:', error);
-    }
-    try {
-      await webviewWindow.show();
-      t.windowShow = performance.now();
-      console.log('[perf] window.show:', Math.round(t.windowShow - t.start), 'ms');
-    } catch (error) {
-      console.error('[main] Failed to show window:', error);
-    }
-  }
+  resolvedThemeBgColor = applyInitialTheme();
 
   // Set platform attribute for Linux-specific CSS (hide macOS overlay titlebar gap)
   if (navigator.platform?.startsWith('Linux')) {
@@ -255,14 +258,20 @@ async function initApp() {
   console.log('[main] Test dialog with: testDialog()');
 
   // Reveal the app after Alpine has initialized the DOM.
-  // requestAnimationFrame fires after style recalculation and before paint,
-  // ensuring Alpine-rendered DOM is fully styled before x-cloak is removed.
-  // The window is already visible (shown early to avoid WebKit IPC throttling),
-  // so rAF callbacks fire reliably.
-  requestAnimationFrame(() => {
+  if (window.__TAURI__) {
+    // Tauri: window has been hidden (visible: false) throughout initialization.
+    // revealApp() sets the native background color, calls window.show(), and
+    // removes x-cloak in one atomic step so the first visible frame is fully styled.
+    await revealApp();
     console.log('[perf] revealApp at:', Math.round(performance.now() - t.start), 'ms');
-    revealApp();
-  });
+  } else {
+    // Browser: use requestAnimationFrame to ensure styles are computed before
+    // removing x-cloak. No native window to manage.
+    requestAnimationFrame(() => {
+      revealApp();
+      console.log('[perf] revealApp at:', Math.round(performance.now() - t.start), 'ms');
+    });
+  }
 }
 
 // Make settings service globally available

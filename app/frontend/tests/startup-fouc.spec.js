@@ -220,7 +220,7 @@ test.describe('Startup FOUC Prevention (task-298)', () => {
       await page.goto('/');
       await waitForAlpine(page);
 
-      // Wait for revealApp to have run (it uses requestAnimationFrame after Alpine.start)
+      // Wait for revealApp to have run (called after Alpine.start)
       await page.waitForFunction(() => !document.body.hasAttribute('x-cloak'));
 
       const removedBeforeAlpine = await page.evaluate(() => window._testCloakRemovedBeforeAlpine);
