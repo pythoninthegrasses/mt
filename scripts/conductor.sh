@@ -22,7 +22,7 @@ case "${1:-}" in
   setup)
     ln -sf "$CONDUCTOR_ROOT_PATH/.env" .env
     task deno:clean
-    task tauri:build:signed
+    task deno:install
     ;;
   run)
     task tauri:dev:mcp
