@@ -193,7 +193,7 @@ tasks:
 
   dev:
     desc: "Run Tauri in development mode"
-    deps: [":deno:install", ":cargo:install-sccache", ":cargo:install-cranelift"]
+    deps: [":deno:install", ":cargo:install-sccache"]
     cmds:
       - deno run -A npm:@tauri-apps/cli dev
     interactive: true
@@ -201,7 +201,7 @@ tasks:
 
   dev:mcp:
     desc: "Run Tauri in development mode with MCP bridge for AI agent debugging"
-    deps: [":deno:install", ":cargo:install-sccache", ":cargo:install-cranelift"]
+    deps: [":deno:install", ":cargo:install-sccache"]
     cmds:
       - deno run -A npm:@tauri-apps/cli dev -- --features mcp
     interactive: true

@@ -12,13 +12,6 @@ tasks:
     status:
       - command -v sccache &> /dev/null
 
-  install-cranelift:
-    desc: "Install cranelift codegen backend for faster dev builds"
-    cmds:
-      - rustup component add rustc-codegen-cranelift
-    status:
-      - rustup component list --installed | grep -q rustc-codegen-cranelift
-
   clean:
     desc: "Clean Rust build artifacts"
     cmds:
