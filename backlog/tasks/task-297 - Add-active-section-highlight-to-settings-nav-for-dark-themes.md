@@ -1,10 +1,10 @@
 ---
 id: TASK-297
 title: Add active section highlight to settings nav for dark themes
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-03-10 05:27'
-updated_date: '2026-03-10 05:28'
+updated_date: '2026-03-12 06:12'
 labels:
   - ui
   - theme
