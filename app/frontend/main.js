@@ -195,15 +195,19 @@ async function initApp() {
   // Set the native window/webview background to match the theme BEFORE showing,
   // so the first visible frame has the correct background color.
   if (window.__TAURI__) {
+    const { getCurrentWebviewWindow } = window.__TAURI__.webviewWindow;
+    const webviewWindow = getCurrentWebviewWindow();
     try {
-      const { getCurrentWebviewWindow } = window.__TAURI__.webviewWindow;
-      const webviewWindow = getCurrentWebviewWindow();
       await webviewWindow.setBackgroundColor(themeBgColor);
+    } catch (error) {
+      console.error('[main] Failed to set background color:', error);
+    }
+    try {
       await webviewWindow.show();
       t.windowShow = performance.now();
       console.log('[perf] window.show:', Math.round(t.windowShow - t.start), 'ms');
     } catch (error) {
-      console.error('[main] Failed to show window early:', error);
+      console.error('[main] Failed to show window:', error);
     }
   }
 
