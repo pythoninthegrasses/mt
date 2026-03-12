@@ -251,6 +251,16 @@ cargo add crate-name
 cargo add --dev crate-name
 ```
 
+## Known Incompatibilities
+
+### Cranelift codegen backend (last tested: 2026-03-12)
+
+Do **not** use `codegen-backend = "cranelift"` for dev builds. Tauri plugin build
+scripts (e.g. `tauri-plugin-fs`) use aarch64 NEON SIMD intrinsics
+(`llvm.aarch64.neon.sqdmulh.v2i32`) that cranelift does not implement. Build
+scripts abort with SIGABRT. Tracked upstream:
+<https://github.com/rust-lang/rustc_codegen_cranelift/issues/171>
+
 ## Logging
 
 ### Frontend
