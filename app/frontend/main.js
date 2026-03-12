@@ -113,29 +113,30 @@ function revealApp() {
   console.log('[main] App ready, UI revealed');
 }
 
+// Hardcoded background colors matching theme definitions.
+// Used as inline style and native window background so the <html> background
+// is correct before the Tailwind CSS bundle computes theme variables.
+const themeBackgrounds = {
+  'metro-teal': '#1e1e1e',
+  'neon-love': '#1f1731',
+  'dark': '#09090b',
+  'light': '#ffffff',
+};
+
 /**
  * Apply theme classes to <html> before Alpine starts.
  * This prevents a flash of incorrect styling (e.g., sidebar showing light-mode
  * colors when metro-teal is selected) by ensuring CSS variables are set before
  * the first visible paint.
+ * @returns {string} Resolved theme background color hex string.
  */
 function applyInitialTheme() {
-  // Hardcoded background colors matching theme definitions.
-  // Applied as inline style so the <html> background is correct
-  // before the Tailwind CSS bundle computes theme variables.
-  const themeBackgrounds = {
-    'metro-teal': '#1e1e1e',
-    'neon-love': '#1f1731',
-    'dark': '#09090b',
-    'light': '#ffffff',
-  };
-
   if (!settings.initialized) {
     // Settings unavailable (e.g. browser mode) — apply system-preferred default
     const fallback = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     document.documentElement.classList.add(fallback);
     document.documentElement.style.backgroundColor = themeBackgrounds[fallback];
-    return;
+    return themeBackgrounds[fallback];
   }
 
   const themePreset = settings.get('ui:themePreset', 'light');
@@ -148,12 +149,14 @@ function applyInitialTheme() {
     document.documentElement.classList.add('dark');
     document.documentElement.dataset.themePreset = themePreset;
     document.documentElement.style.backgroundColor = themeBackgrounds[themePreset];
+    return themeBackgrounds[themePreset];
   } else {
     const contentTheme = theme === 'system'
       ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
       : theme;
     document.documentElement.classList.add(contentTheme);
     document.documentElement.style.backgroundColor = themeBackgrounds[contentTheme];
+    return themeBackgrounds[contentTheme];
   }
 }
 
@@ -184,15 +187,19 @@ async function initApp() {
   // Pre-apply theme to <html> before Alpine starts to prevent flash of incorrect styling.
   // Without this, the theme is only applied when Alpine's ui store init() runs,
   // which can cause the sidebar to briefly render with wrong theme colors.
-  applyInitialTheme();
+  const themeBgColor = applyInitialTheme();
 
   // Show window early so WebKit doesn't throttle IPC callbacks.
   // The body still has x-cloak (hiding content), but the window being visible
   // prevents the WebView from deprioritizing async callback execution.
+  // Set the native window/webview background to match the theme BEFORE showing,
+  // so the first visible frame has the correct background color.
   if (window.__TAURI__) {
     try {
-      const { getCurrentWindow } = window.__TAURI__.window;
-      await getCurrentWindow().show();
+      const { getCurrentWebviewWindow } = window.__TAURI__.webviewWindow;
+      const webviewWindow = getCurrentWebviewWindow();
+      await webviewWindow.setBackgroundColor(themeBgColor);
+      await webviewWindow.show();
       t.windowShow = performance.now();
       console.log('[perf] window.show:', Math.round(t.windowShow - t.start), 'ms');
     } catch (error) {
