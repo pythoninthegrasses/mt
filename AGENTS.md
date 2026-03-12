@@ -25,7 +25,6 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 - microsoft/playwright
 - mrlesk/backlog.md
 - nextest-rs/nextest
-- roborev-dev/roborev
 - serial-ata/lofty-rs
 - sharkdp/hyperfine
 - taiko2k/tauon
@@ -49,7 +48,6 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 | Remote debugging, crash analysis | [Debugging Guide](docs/debugging.md) |
 | Last.fm scrobbling | [Last.fm Integration](docs/lastfm.md) |
 | Cross-platform builds, CI/CD | [Build Configuration](docs/builds.md) |
-| Continuous code review | [roborev](https://www.roborev.io/) |
 
 ## Architecture Overview
 
@@ -133,47 +131,6 @@ cargo check --manifest-path src-tauri/Cargo.toml  # Fast type check (no binary)
 3. **File Organization**: Frontend in `app/frontend/`, backend in `src-tauri/src/`. Keep files under 500 LOC.
 4. **Testing**: Unit tests + Playwright E2E. All integration tests MUST use Playwright.
 5. **Code Style**: `deno lint` + `deno fmt` (frontend), `cargo fmt` + `cargo clippy` (backend). Run formatters before committing.
-
-## Code Review (roborev)
-
-Every commit is automatically reviewed by [roborev](https://www.roborev.io/) via git hooks. Reviews run in the background and findings must be addressed before merging.
-
-Config: `.roborev.toml` (project), `~/.roborev/config.toml` (global)
-
-### CLI Commands
-
-```bash
-roborev show                          # List recent reviews
-roborev show --job <id>               # View a specific review
-roborev show --job <id> --json        # Machine-readable review output
-roborev fix                           # Fix all unaddressed reviews
-roborev fix <job_id>                  # Fix a specific review
-roborev fix --unaddressed --list      # List unaddressed reviews without fixing
-roborev refine                        # Fix, re-review, repeat until passing
-roborev comment --job <id> "<msg>"    # Add a comment to a review
-roborev address <job_id>              # Mark a review as addressed
-```
-
-### Agent Skills
-
-| Skill | Purpose |
-|-------|---------|
-| `/roborev-review` | Request a code review for a specific commit |
-| `/roborev-review-branch` | Review all commits on the current branch |
-| `/roborev-fix` | Discover and fix all unaddressed review findings |
-| `/roborev-address` | Fetch a review and make code changes to address findings |
-| `/roborev-respond` | Comment on a review and mark it as addressed |
-| `/roborev-design-review` | Request a design review for a commit |
-| `/roborev-design-review-branch` | Design review for all commits on current branch |
-
-### Workflow
-
-1. **Commit** — roborev automatically reviews in the background
-2. **Check** — `roborev show` or `roborev fix --unaddressed --list` to see findings
-3. **Fix** — `/roborev-fix` addresses findings, runs tests, comments, and marks addressed
-4. **Refine** — `roborev refine` loops fix-and-review in an isolated worktree until passing
-
-When `roborev fix` cannot automatically resolve a finding, create a backlog task with the `roborev` label and reference the job ID.
 
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 
