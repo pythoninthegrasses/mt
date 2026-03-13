@@ -39,24 +39,6 @@ tasks:
     cmds:
       - task --list
 
-  install-devbox:
-    desc: "Install devbox"
-    cmds:
-      - curl -fsSL https://get.jetify.com/devbox | bash
-    run: once
-    silent: true
-    environment:
-      FORCE: 1
-      INSTALL_DIR: "{{.HOME}}/.local/bin"
-    status:
-      - command -v devbox 2>/dev/null
-
-  install:
-    desc: "Install project dependencies"
-    deps: ["install-devbox"]
-    cmds:
-      - devbox install
-
   pre-commit:
     desc: "Run pre-commit hooks"
     cmds:
