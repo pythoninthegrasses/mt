@@ -4,6 +4,20 @@ set: ['e', 'u', 'pipefail']
 shopt: ['globstar']
 
 tasks:
+  _setup-cargo-home:
+    internal: true
+    desc: "Create CARGO_HOME/bin symlinks so mise shims resolve correctly"
+    cmds:
+      - |
+        rust_dir="$(mise where rust)"
+        cargo_bin="$CARGO_HOME/bin"
+        mkdir -p "$cargo_bin"
+        for tool in cargo cargo-clippy cargo-fmt rustc rustdoc rustfmt; do
+          ln -sf "$rust_dir/$tool" "$cargo_bin/$tool"
+        done
+    status:
+      - test -L "$CARGO_HOME/bin/cargo" && test -e "$CARGO_HOME/bin/cargo"
+
   install-sccache:
     desc: "Install sccache for Rust build caching"
     platforms: [darwin]
@@ -14,12 +28,14 @@ tasks:
 
   clean:
     desc: "Clean Rust build artifacts"
+    deps: [_setup-cargo-home]
     cmds:
       - cargo clean
     silent: true
 
   build:timings:
     desc: "Analyze Rust build performance bottlenecks"
+    deps: [_setup-cargo-home]
     cmds:
       - cargo build --workspace --timings
       - |
@@ -33,16 +49,19 @@ tasks:
 
   lint:
     desc: "Run Rust linter"
+    deps: [_setup-cargo-home]
     cmds:
       - cargo clippy --workspace
 
   format:
     desc: "Format Rust code"
+    deps: [_setup-cargo-home]
     cmds:
       - cargo fmt --all
 
   test:
     desc: "Run Rust tests"
+    deps: [_setup-cargo-home]
     cmds:
       - |
         if command -v cargo-nextest &> /dev/null; then

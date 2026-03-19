@@ -24,6 +24,7 @@ mod tests {
             duration: Some((180 + (i % 120)) as f64),
             file_size: Some(5_000_000 + (i * 100) as i64),
             file_mtime_ns: None,
+            file_ctime_ns: None,
             file_inode: None,
             content_hash: None,
         };

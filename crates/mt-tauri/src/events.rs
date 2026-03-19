@@ -427,6 +427,14 @@ impl ReconcileProgressEvent {
         }
     }
 
+    pub(crate) fn cross_directory_dedup(current: u32, total: u32) -> Self {
+        Self {
+            phase: "cross_directory_dedup".to_string(),
+            current,
+            total,
+        }
+    }
+
     pub(crate) fn complete(total: u32) -> Self {
         Self {
             phase: "complete".to_string(),

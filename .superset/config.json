@@ -1,6 +1,6 @@
 {
   "setup": [
-    "ln -sf \"$SUPERSET_ROOT_PATH/.env\" .env && deno install --node-modules-dir=auto --frozen"
+    "export CARGO_TARGET_DIR=\"$SUPERSET_ROOT_PATH/target\" && ln -sf \"$SUPERSET_ROOT_PATH/.env\" .env && deno install --node-modules-dir=auto --frozen"
   ],
   "teardown": []
 }

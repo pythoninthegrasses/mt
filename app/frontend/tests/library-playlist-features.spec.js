@@ -19,7 +19,7 @@ test.describe('Playlist Feature Parity - Library Browser (task-150)', () => {
     // Setup playlist API mocks before navigation
     await setupPlaylistMocks(page, playlistState);
     // Also mock library tracks endpoint
-    await page.route('**/api/library**', async (route) => {
+    await page.route(/\/api\/library(\?.*)?$/, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

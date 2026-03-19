@@ -334,6 +334,11 @@ aside button:hover svg {
   border-color: rgba(0, 183, 195, 0.4) !important;
 }
 
+[data-theme-preset='metro-teal'] [data-testid='settings-view'] nav button.bg-primary\/15 {
+  background-color: rgba(0, 183, 195, 0.15) !important;
+  color: #00C4CC !important;
+}
+
 /* Metro-teal scrobbling toggle needs explicit colors (Tailwind bg-primary/bg-muted resolve transparent) */
 [data-theme-preset='metro-teal'] [data-testid='lastfm-toggle'].bg-muted {
   background-color: hsl(0 0% 25%) !important;
@@ -485,6 +490,11 @@ aside button:hover svg {
 [data-theme-preset='neon-love'] [data-testid='settings-view'] button.border-border:hover {
   background-color: rgba(65, 200, 229, 0.15) !important;
   border-color: rgba(65, 200, 229, 0.4) !important;
+}
+
+[data-theme-preset='neon-love'] [data-testid='settings-view'] nav button.bg-primary\/15 {
+  background-color: rgba(65, 200, 229, 0.15) !important;
+  color: #41C8E5 !important;
 }
 
 [data-theme-preset='neon-love'] [data-testid='lastfm-toggle'].bg-muted {
@@ -641,6 +651,14 @@ aside button:hover svg {
   /* Clip resizer overflow to prevent horizontal scrollbar */
   .library-header-container {
     overflow-x: clip;
+  }
+
+  /* Hide scrollbar on lyrics panel — scroll indicators replace it */
+  .lyrics-hide-scrollbar {
+    scrollbar-width: none;
+  }
+  .lyrics-hide-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 
   /* Disable header clicks during column resize */

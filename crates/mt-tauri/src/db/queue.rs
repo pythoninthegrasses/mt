@@ -14,7 +14,7 @@ pub(crate) fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
                 l.track_number, l.track_total, l.disc_number, l.disc_total,
                 l.date, l.genre, l.duration, l.file_size,
                 l.play_count, l.last_played, l.added_date, l.missing, l.last_seen_at,
-                l.file_mtime_ns, l.file_inode, l.content_hash
+                l.file_mtime_ns, l.file_ctime_ns, l.file_inode, l.content_hash
          FROM queue q
          LEFT JOIN library l ON q.filepath = l.filepath
          ORDER BY q.id",
@@ -42,6 +42,7 @@ pub(crate) fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
             duration: row.get("duration")?,
             file_size: row.get::<_, Option<i64>>("file_size")?.unwrap_or(0),
             file_mtime_ns: row.get("file_mtime_ns")?,
+            file_ctime_ns: row.get("file_ctime_ns").unwrap_or(None),
             file_inode: row.get("file_inode")?,
             content_hash: row.get("content_hash")?,
             added_date: row.get("added_date")?,

@@ -22,7 +22,8 @@
         "minHeight": 600,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "visible": false
+        "visible": false,
+        "backgroundColor": "#ffffff"
       }
     ],
     "security": {

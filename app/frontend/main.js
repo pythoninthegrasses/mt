@@ -103,24 +103,66 @@ async function initTitlebarDrag() {
   }
 }
 
+// Resolved theme background color, set by applyInitialTheme().
+let resolvedThemeBgColor = '#ffffff';
+
 /**
- * Reveal the UI content.
- * Window is already visible (shown early in initApp to avoid WebKit throttling).
- * This just removes x-cloak so Alpine-rendered content becomes visible.
+ * Show the Tauri window and reveal UI content in one atomic step.
+ * The window stays hidden (visible: false) throughout initialization so the
+ * user never sees a blank/white webview. Setting the native background color
+ * and calling show() right before removing x-cloak ensures the first visible
+ * frame is fully styled.
  */
-function revealApp() {
+async function revealApp() {
+  if (window.__TAURI__) {
+    try {
+      const { getCurrentWindow } = window.__TAURI__.window;
+      const appWindow = getCurrentWindow();
+      try {
+        await appWindow.setBackgroundColor(resolvedThemeBgColor);
+      } catch (e) {
+        console.error('[main] Failed to set window background color:', e);
+      }
+      try {
+        const { getCurrentWebview } = window.__TAURI__.webview;
+        await getCurrentWebview().setBackgroundColor(resolvedThemeBgColor);
+      } catch (e) {
+        console.error('[main] Failed to set webview background color:', e);
+      }
+      await appWindow.show();
+    } catch (error) {
+      console.error('[main] Failed to show window:', error);
+    }
+  }
   document.body.removeAttribute('x-cloak');
   console.log('[main] App ready, UI revealed');
 }
+
+// Hardcoded background colors matching theme definitions.
+// Used as inline style and native window background so the <html> background
+// is correct before the Tailwind CSS bundle computes theme variables.
+const themeBackgrounds = {
+  'metro-teal': '#1e1e1e',
+  'neon-love': '#1f1731',
+  'dark': '#09090b',
+  'light': '#ffffff',
+};
 
 /**
  * Apply theme classes to <html> before Alpine starts.
  * This prevents a flash of incorrect styling (e.g., sidebar showing light-mode
  * colors when metro-teal is selected) by ensuring CSS variables are set before
  * the first visible paint.
+ * @returns {string} Resolved theme background color hex string.
  */
 function applyInitialTheme() {
-  if (!settings.initialized) return;
+  if (!settings.initialized) {
+    // Settings unavailable (e.g. browser mode) — apply system-preferred default
+    const fallback = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.classList.add(fallback);
+    document.documentElement.style.backgroundColor = themeBackgrounds[fallback];
+    return themeBackgrounds[fallback];
+  }
 
   const themePreset = settings.get('ui:themePreset', 'light');
   const theme = settings.get('ui:theme', 'system');
@@ -131,11 +173,15 @@ function applyInitialTheme() {
   if (themePreset === 'metro-teal' || themePreset === 'neon-love') {
     document.documentElement.classList.add('dark');
     document.documentElement.dataset.themePreset = themePreset;
+    document.documentElement.style.backgroundColor = themeBackgrounds[themePreset];
+    return themeBackgrounds[themePreset];
   } else {
     const contentTheme = theme === 'system'
       ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
       : theme;
     document.documentElement.classList.add(contentTheme);
+    document.documentElement.style.backgroundColor = themeBackgrounds[contentTheme];
+    return themeBackgrounds[contentTheme];
   }
 }
 
@@ -166,21 +212,7 @@ async function initApp() {
   // Pre-apply theme to <html> before Alpine starts to prevent flash of incorrect styling.
   // Without this, the theme is only applied when Alpine's ui store init() runs,
   // which can cause the sidebar to briefly render with wrong theme colors.
-  applyInitialTheme();
-
-  // Show window early so WebKit doesn't throttle IPC callbacks.
-  // The body still has x-cloak (hiding content), but the window being visible
-  // prevents the WebView from deprioritizing async callback execution.
-  if (window.__TAURI__) {
-    try {
-      const { getCurrentWindow } = window.__TAURI__.window;
-      await getCurrentWindow().show();
-      t.windowShow = performance.now();
-      console.log('[perf] window.show:', Math.round(t.windowShow - t.start), 'ms');
-    } catch (error) {
-      console.error('[main] Failed to show window early:', error);
-    }
-  }
+  resolvedThemeBgColor = applyInitialTheme();
 
   // Set platform attribute for Linux-specific CSS (hide macOS overlay titlebar gap)
   if (navigator.platform?.startsWith('Linux')) {
@@ -225,13 +257,21 @@ async function initApp() {
   console.log('[perf] total initApp (sync):', Math.round(t.alpine - t.start), 'ms');
   console.log('[main] Test dialog with: testDialog()');
 
-  // Reveal the app after Alpine has initialized the DOM
-  // Note: We use setTimeout instead of requestAnimationFrame because
-  // RAF callbacks don't fire when the window is hidden (visible: false)
-  setTimeout(() => {
+  // Reveal the app after Alpine has initialized the DOM.
+  if (window.__TAURI__) {
+    // Tauri: window has been hidden (visible: false) throughout initialization.
+    // revealApp() sets the native background color, calls window.show(), and
+    // removes x-cloak in one atomic step so the first visible frame is fully styled.
+    await revealApp();
     console.log('[perf] revealApp at:', Math.round(performance.now() - t.start), 'ms');
-    revealApp();
-  }, 0);
+  } else {
+    // Browser: use requestAnimationFrame to ensure styles are computed before
+    // removing x-cloak. No native window to manage.
+    requestAnimationFrame(() => {
+      revealApp();
+      console.log('[perf] revealApp at:', Math.round(performance.now() - t.start), 'ms');
+    });
+  }
 }
 
 // Make settings service globally available

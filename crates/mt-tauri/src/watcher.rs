@@ -754,6 +754,7 @@ fn to_track_metadata_with_hash(
         duration: m.duration,
         file_size: Some(m.file_size),
         file_mtime_ns: m.file_mtime_ns,
+        file_ctime_ns: m.file_ctime_ns,
         file_inode: m.file_inode,
         content_hash,
     }

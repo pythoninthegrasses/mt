@@ -7,6 +7,7 @@ pub(crate) mod events;
 pub(crate) mod lastfm;
 pub(crate) mod library;
 pub(crate) mod logging;
+pub(crate) mod lyrics;
 pub(crate) mod media_keys;
 pub(crate) mod metadata;
 pub(crate) mod scanner;
@@ -17,17 +18,18 @@ mod concurrency_test;
 
 use cache::NetworkFileCache;
 use commands::{
-    AudioState, audio_get_status, audio_get_volume, audio_load, audio_load_and_play, audio_pause,
-    audio_play, audio_seek, audio_set_volume, audio_stop, favorites_add, favorites_check,
-    favorites_get, favorites_get_recently_added, favorites_get_recently_played,
-    favorites_get_top25, favorites_remove, lastfm_auth_callback, lastfm_cache_loved_tracks,
-    lastfm_disconnect, lastfm_get_auth_url, lastfm_get_settings, lastfm_import_loved_tracks,
-    lastfm_loved_stats, lastfm_match_loved_tracks, lastfm_now_playing, lastfm_queue_retry,
-    lastfm_queue_status, lastfm_reset_loved_cache, lastfm_scrobble, lastfm_update_settings,
-    match_loved_tracks_impl, network_cache_purge, network_cache_status, playlist_add_tracks,
-    playlist_create, playlist_delete, playlist_generate_name, playlist_get, playlist_list,
-    playlist_remove_track, playlist_reorder_tracks, playlist_update, playlists_reorder, queue_add,
-    queue_add_files, queue_clear, queue_get, queue_get_playback_state, queue_remove, queue_reorder,
+    AudioState, audio_get_status, audio_get_volume, audio_list_devices, audio_load,
+    audio_load_and_play, audio_pause, audio_play, audio_seek, audio_set_device, audio_set_volume,
+    audio_stop, favorites_add, favorites_check, favorites_get, favorites_get_recently_added,
+    favorites_get_recently_played, favorites_get_top25, favorites_remove, lastfm_auth_callback,
+    lastfm_cache_loved_tracks, lastfm_disconnect, lastfm_get_auth_url, lastfm_get_settings,
+    lastfm_import_loved_tracks, lastfm_loved_stats, lastfm_match_loved_tracks, lastfm_now_playing,
+    lastfm_queue_retry, lastfm_queue_status, lastfm_reset_loved_cache, lastfm_scrobble,
+    lastfm_update_settings, lyrics_clear_cache, lyrics_get, match_loved_tracks_impl,
+    network_cache_purge, network_cache_status, playlist_add_tracks, playlist_create,
+    playlist_delete, playlist_generate_name, playlist_get, playlist_list, playlist_remove_track,
+    playlist_reorder_tracks, playlist_update, playlists_reorder, queue_add, queue_add_files,
+    queue_clear, queue_get, queue_get_playback_state, queue_remove, queue_reorder,
     queue_set_current_index, queue_set_loop, queue_set_shuffle, queue_shuffle, settings_get,
     settings_get_all, settings_reset, settings_set, settings_update,
 };
@@ -331,6 +333,8 @@ pub fn run() {
             audio_set_volume,
             audio_get_volume,
             audio_get_status,
+            audio_list_devices,
+            audio_set_device,
             open_file_dialog,
             open_folder_dialog,
             open_add_music_dialog,
@@ -415,6 +419,8 @@ pub fn run() {
             lastfm_match_loved_tracks,
             lastfm_loved_stats,
             lastfm_reset_loved_cache,
+            lyrics_get,
+            lyrics_clear_cache,
             settings_get_all,
             settings_get,
             settings_set,

@@ -100,7 +100,7 @@ tasks:
 
   build:
     desc: "Build Tauri app for current platform"
-    deps: [":deno:install", ":cargo:install-sccache", "_install-linux-deps"]
+    deps: [":deno:install", ":cargo:_setup-cargo-home", ":cargo:install-sccache", "_install-linux-deps"]
     vars:
       CURRENT_TARGET:
         sh: |
@@ -124,7 +124,7 @@ tasks:
   build:arm64:
     desc: "Build Tauri app for Apple Silicon (arm64)"
     platforms: [darwin/arm64]
-    deps: [":deno:install", ":cargo:install-sccache"]
+    deps: [":deno:install", ":cargo:_setup-cargo-home", ":cargo:install-sccache"]
     cmds:
       - task: _build
         vars:
@@ -137,7 +137,7 @@ tasks:
   build:x64:
     desc: "Build Tauri app for Intel (x86_64)"
     platforms: [darwin/amd64]
-    deps: [":deno:install", ":cargo:install-sccache"]
+    deps: [":deno:install", ":cargo:_setup-cargo-home", ":cargo:install-sccache"]
     cmds:
       - task: _build
         vars:
@@ -170,7 +170,7 @@ tasks:
   build:signed:
     desc: "Build signed macOS app (requires APPLE_SIGNING_IDENTITY)"
     platforms: [darwin]
-    deps: [":deno:install", ":cargo:install-sccache"]
+    deps: [":deno:install", ":cargo:_setup-cargo-home", ":cargo:install-sccache"]
     preconditions:
       - sh: '[ -n "$APPLE_SIGNING_IDENTITY" ]'
         msg: "APPLE_SIGNING_IDENTITY env var is required"
@@ -183,7 +183,7 @@ tasks:
   build:dmg:
     desc: "Build signed DMG installer (requires APPLE_SIGNING_IDENTITY)"
     platforms: [darwin]
-    deps: [":deno:install", ":cargo:install-sccache"]
+    deps: [":deno:install", ":cargo:_setup-cargo-home", ":cargo:install-sccache"]
     preconditions:
       - sh: '[ -n "$APPLE_SIGNING_IDENTITY" ]'
         msg: "APPLE_SIGNING_IDENTITY env var is required"
@@ -193,7 +193,7 @@ tasks:
 
   dev:
     desc: "Run Tauri in development mode"
-    deps: [":deno:install", ":cargo:install-sccache"]
+    deps: [":deno:install", ":cargo:_setup-cargo-home", ":cargo:install-sccache"]
     cmds:
       - deno run -A npm:@tauri-apps/cli dev
     interactive: true
@@ -201,7 +201,7 @@ tasks:
 
   dev:mcp:
     desc: "Run Tauri in development mode with MCP bridge for AI agent debugging"
-    deps: [":deno:install", ":cargo:install-sccache"]
+    deps: [":deno:install", ":cargo:_setup-cargo-home", ":cargo:install-sccache"]
     cmds:
       - deno run -A npm:@tauri-apps/cli dev -- --features mcp
     interactive: true

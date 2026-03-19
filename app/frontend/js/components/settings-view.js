@@ -1,4 +1,6 @@
+import { audio } from '../api/audio.js';
 import { lastfm } from '../api/lastfm.js';
+import { settings } from '../api/settings.js';
 import { modLabel, SHORTCUT_DEFINITIONS } from '../shortcuts.js';
 
 export function createSettingsView(Alpine) {
@@ -56,6 +58,10 @@ export function createSettingsView(Alpine) {
       isPurging: false,
     },
 
+    audioDevices: [],
+    selectedAudioDevice: 'default',
+    audioDevicesLoading: false,
+
     // Column settings for Settings > Columns section
     columnSettings: {
       visibleCount: 0,
@@ -69,6 +75,7 @@ export function createSettingsView(Alpine) {
       resetSort: true,
     },
 
+    deduplicateAcrossDirectories: true,
     isExportingLogs: false,
     isDraggingThreshold: false,
 
@@ -98,9 +105,10 @@ export function createSettingsView(Alpine) {
 
     reconcilePhaseText() {
       if (!this.reconcileScan.progress) return '';
-      return this.reconcileScan.progress.phase === 'fingerprinting'
-        ? 'Computing fingerprints...'
-        : 'Merging duplicates...';
+      const phase = this.reconcileScan.progress.phase;
+      if (phase === 'fingerprinting') return 'Computing fingerprints...';
+      if (phase === 'cross_directory_dedup') return 'Cross-directory dedup...';
+      return 'Merging duplicates...';
     },
 
     reconcileProgressText() {
@@ -197,10 +205,15 @@ export function createSettingsView(Alpine) {
 
     async init() {
       await this.loadAppInfo();
+      await this.loadAudioDevices();
       await this.loadWatchedFolders();
       await this.loadLastfmSettings();
       await this.loadNetworkCacheStatus();
       this.loadColumnSettings();
+      this.deduplicateAcrossDirectories = window.settings.get(
+        'library.deduplicateAcrossDirectories',
+        true,
+      );
     },
 
     async loadAppInfo() {
@@ -228,6 +241,38 @@ export function createSettingsView(Alpine) {
           build: 'unknown',
           platform: 'unknown',
         };
+      }
+    },
+
+    async loadAudioDevices() {
+      this.audioDevicesLoading = true;
+      try {
+        const response = await audio.listDevices();
+        this.audioDevices = response.devices || [];
+
+        // Load saved device selection
+        const saved = await settings.get('audio_output_device');
+        if (saved && saved.value && saved.value !== 'default') {
+          this.selectedAudioDevice = saved.value;
+        } else {
+          this.selectedAudioDevice = 'default';
+        }
+      } catch (error) {
+        console.error('[settings] Failed to load audio devices:', error);
+        this.audioDevices = [];
+      } finally {
+        this.audioDevicesLoading = false;
+      }
+    },
+
+    async setAudioDevice(deviceName) {
+      const previous = this.selectedAudioDevice;
+      this.selectedAudioDevice = deviceName;
+      try {
+        await audio.setDevice(deviceName === 'default' ? null : deviceName);
+      } catch (error) {
+        console.error('[settings] Failed to set audio device:', error);
+        this.selectedAudioDevice = previous;
       }
     },
 
@@ -765,6 +810,17 @@ export function createSettingsView(Alpine) {
         Alpine.store('ui').toast('Failed to reset loved cache', 'error');
       } finally {
         this.lastfm.isResettingLoved = false;
+      }
+    },
+
+    async toggleDeduplicateAcrossDirectories() {
+      try {
+        await window.settings.set(
+          'library.deduplicateAcrossDirectories',
+          this.deduplicateAcrossDirectories,
+        );
+      } catch (err) {
+        console.error('[settings] Failed to save dedup setting:', err);
       }
     },
 

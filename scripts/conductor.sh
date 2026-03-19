@@ -18,11 +18,13 @@ BREW_PREFIX="/opt/homebrew"
 MISE_DATA_DIR="${HOME}/.local/share/mise"
 export PATH="${MISE_DATA_DIR}/shims:${HOME}/.cargo/bin:${HOME}/.local/bin:${BREW_PREFIX}/bin:${BREW_PREFIX}/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
+export CARGO_TARGET_DIR="$CONDUCTOR_ROOT_PATH/target"
+
 case "${1:-}" in
   setup)
     ln -sf "$CONDUCTOR_ROOT_PATH/.env" .env
     task deno:clean
-    task tauri:build:signed
+    task deno:install
     ;;
   run)
     task tauri:dev:mcp
