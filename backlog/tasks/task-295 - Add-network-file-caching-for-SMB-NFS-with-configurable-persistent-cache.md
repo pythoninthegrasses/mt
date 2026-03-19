@@ -1,10 +1,10 @@
 ---
 id: TASK-295
 title: Add network file caching for SMB/NFS with configurable persistent cache
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-03-08 02:03'
-updated_date: '2026-03-08 02:04'
+updated_date: '2026-03-19 03:57'
 labels:
   - audio
   - feature
@@ -41,12 +41,12 @@ Add optional local caching for audio files served over network mounts (SMB/NFS) 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 "Cache local files (for smb/nfs)" toggle in Settings > Audio, disabled by default
-- [ ] #2 Detect network-mounted paths (SMB/NFS) and cache files locally before playback when enabled
-- [ ] #3 "Use persistent network cache" toggle — when off, cache directory is purged on app exit
-- [ ] #4 Configurable cache size with slider/input (default reasonable size, e.g. 2 GB)
-- [ ] #5 LRU eviction policy when cache exceeds configured size
-- [ ] #6 Cache status/size visible in settings
-- [ ] #7 Rust unit tests for cache logic (write, evict, purge)
-- [ ] #8 Playwright E2E test for cache settings UI
+- [x] #1 "Cache local files (for smb/nfs)" toggle in Settings > Audio, disabled by default
+- [x] #2 Detect network-mounted paths (SMB/NFS) and cache files locally before playback when enabled
+- [x] #3 "Use persistent network cache" toggle — when off, cache directory is purged on app exit
+- [x] #4 Configurable cache size with slider/input (default reasonable size, e.g. 2 GB)
+- [x] #5 LRU eviction policy when cache exceeds configured size
+- [x] #6 Cache status/size visible in settings
+- [x] #7 Rust unit tests for cache logic (write, evict, purge)
+- [x] #8 Playwright E2E test for cache settings UI
 <!-- AC:END -->
