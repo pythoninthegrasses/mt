@@ -1,27 +1,81 @@
 import { expect, test } from '@playwright/test';
 import { waitForAlpine } from './fixtures/helpers.js';
-import { createLibraryState, setupLibraryMocks } from './fixtures/mock-library.js';
 
 test.describe('Network Cache Settings', () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1624, height: 1057 });
 
-    const libraryState = createLibraryState();
-    await setupLibraryMocks(page, libraryState);
+    await page.addInitScript(() => {
+      const cacheState = {
+        enabled: false,
+        persistent: false,
+        max_bytes: 2147483648,
+        used_bytes: 0,
+        file_count: 0,
+      };
 
-    // Mock Last.fm to prevent error toasts
-    await page.route(/\/api\/lastfm\/settings/, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          enabled: false,
-          username: null,
-          authenticated: false,
-          configured: false,
-          scrobble_threshold: 50,
-        }),
-      });
+      window.__TAURI__ = {
+        core: {
+          invoke: (cmd, args) => {
+            if (cmd === 'network_cache_status') {
+              return Promise.resolve({ ...cacheState });
+            }
+            if (cmd === 'network_cache_purge') {
+              cacheState.used_bytes = 0;
+              cacheState.file_count = 0;
+              return Promise.resolve(null);
+            }
+            if (cmd === 'audio_list_devices') {
+              return Promise.resolve({ devices: [] });
+            }
+            if (cmd === 'audio_set_device') {
+              return Promise.resolve(null);
+            }
+            if (cmd === 'app_get_info') {
+              return Promise.resolve({
+                version: 'test',
+                build: 'test',
+                platform: 'test',
+              });
+            }
+            if (cmd === 'watched_folders_list') {
+              return Promise.resolve([]);
+            }
+            if (cmd === 'lastfm_get_settings') {
+              return Promise.resolve({
+                enabled: false,
+                authenticated: false,
+                scrobble_threshold: 90,
+              });
+            }
+            if (cmd === 'settings_get') {
+              if (args?.key === 'network_cache_enabled') {
+                return Promise.resolve({
+                  key: 'network_cache_enabled',
+                  value: cacheState.enabled,
+                });
+              }
+              return Promise.resolve({ key: args?.key, value: null });
+            }
+            if (cmd === 'settings_set') {
+              if (args?.key === 'network_cache_enabled') {
+                cacheState.enabled = args.value;
+              }
+              if (args?.key === 'network_cache_persistent') {
+                cacheState.persistent = args.value;
+              }
+              return Promise.resolve({ key: args?.key, value: args?.value });
+            }
+            return Promise.resolve(null);
+          },
+        },
+        event: {
+          listen: () => Promise.resolve(() => {}),
+        },
+        dialog: {
+          confirm: () => Promise.resolve(true),
+        },
+      };
     });
 
     await page.goto('/');
@@ -29,9 +83,13 @@ test.describe('Network Cache Settings', () => {
 
     // Navigate to Settings > Audio
     await page.click('[data-testid="sidebar-settings"]');
-    await page.waitForTimeout(500);
+    await page.waitForSelector('[data-testid="settings-nav-audio"]', {
+      state: 'visible',
+    });
     await page.click('[data-testid="settings-nav-audio"]');
-    await page.waitForTimeout(300);
+    await page.waitForSelector('[data-testid="settings-section-audio"]', {
+      state: 'visible',
+    });
   });
 
   test('should show Audio nav item in settings', async ({ page }) => {
@@ -41,7 +99,9 @@ test.describe('Network Cache Settings', () => {
   });
 
   test('should display the Audio section', async ({ page }) => {
-    const section = page.locator('[data-testid="settings-section-audio"]');
+    const section = page.locator(
+      '[data-testid="settings-section-audio"]',
+    );
     await expect(section).toBeVisible();
   });
 
@@ -56,18 +116,23 @@ test.describe('Network Cache Settings', () => {
 
   test('should show sub-settings when cache is enabled', async ({ page }) => {
     // Persistent toggle, slider, and purge should not be visible initially
-    const persistentToggle = page.locator('[data-testid="network-cache-persistent-toggle"]');
+    const persistentToggle = page.locator(
+      '[data-testid="network-cache-persistent-toggle"]',
+    );
     await expect(persistentToggle).not.toBeVisible();
 
-    const slider = page.locator('[data-testid="network-cache-size-slider"]');
+    const slider = page.locator(
+      '[data-testid="network-cache-size-slider"]',
+    );
     await expect(slider).not.toBeVisible();
 
-    const purgeButton = page.locator('[data-testid="network-cache-purge"]');
+    const purgeButton = page.locator(
+      '[data-testid="network-cache-purge"]',
+    );
     await expect(purgeButton).not.toBeVisible();
 
     // Enable the cache
     await page.click('[data-testid="network-cache-toggle"]');
-    await page.waitForTimeout(300);
 
     // Now sub-settings should be visible
     await expect(persistentToggle).toBeVisible();
@@ -78,9 +143,11 @@ test.describe('Network Cache Settings', () => {
   test('should have range slider with correct min/max', async ({ page }) => {
     // Enable cache to show slider
     await page.click('[data-testid="network-cache-toggle"]');
-    await page.waitForTimeout(300);
 
-    const slider = page.locator('[data-testid="network-cache-size-slider"]');
+    const slider = page.locator(
+      '[data-testid="network-cache-size-slider"]',
+    );
+    await expect(slider).toBeVisible();
     await expect(slider).toHaveAttribute('min', '0.5');
     await expect(slider).toHaveAttribute('max', '20');
     await expect(slider).toHaveAttribute('step', '0.5');
@@ -89,22 +156,22 @@ test.describe('Network Cache Settings', () => {
   test('should show cache status when enabled', async ({ page }) => {
     // Enable cache
     await page.click('[data-testid="network-cache-toggle"]');
-    await page.waitForTimeout(300);
 
-    // Cache status card should show "0 B" and "0" files
-    const usedText = page.locator('text=Used');
+    // Cache status card should show "Used" and "Files" labels
+    const usedText = page.getByText('Used', { exact: true });
     await expect(usedText).toBeVisible();
 
-    const filesText = page.locator('text=Files');
+    const filesText = page.getByText('Files', { exact: true });
     await expect(filesText).toBeVisible();
   });
 
   test('should show purge button as disabled when cache is empty', async ({ page }) => {
     // Enable cache
     await page.click('[data-testid="network-cache-toggle"]');
-    await page.waitForTimeout(300);
 
-    const purgeButton = page.locator('[data-testid="network-cache-purge"]');
+    const purgeButton = page.locator(
+      '[data-testid="network-cache-purge"]',
+    );
     await expect(purgeButton).toBeDisabled();
   });
 });
