@@ -97,6 +97,42 @@ test.describe('Startup FOUC Prevention (task-298)', () => {
       expect(hadCloakBeforeJS).toBe(true);
     });
 
+    test('inline styles include critical theme background colors for html element', async ({ page }) => {
+      let inlineStyleContent = '';
+
+      await page.route('/', async (route) => {
+        const response = await route.fetch();
+        inlineStyleContent = await response.text();
+        await route.fulfill({ response });
+      });
+
+      const libraryState = createLibraryState();
+      await setupLibraryMocks(page, libraryState);
+
+      await page.route(/\/api\/lastfm\/settings/, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            enabled: false,
+            username: null,
+            authenticated: false,
+            configured: false,
+            scrobble_threshold: 50,
+          }),
+        });
+      });
+
+      await page.goto('/');
+
+      // Inline <style> must define background colors for all theme variants
+      // to prevent white flash when window is shown early but body is hidden
+      expect(inlineStyleContent).toContain('html {');
+      expect(inlineStyleContent).toContain('html.dark {');
+      expect(inlineStyleContent).toContain('html.dark[data-theme-preset="metro-teal"]');
+      expect(inlineStyleContent).toContain('html.dark[data-theme-preset="neon-love"]');
+    });
+
     test('body[x-cloak] computed visibility is hidden before Alpine initializes', async ({ page }) => {
       const libraryState = createLibraryState();
       await setupLibraryMocks(page, libraryState);
@@ -184,7 +220,7 @@ test.describe('Startup FOUC Prevention (task-298)', () => {
       await page.goto('/');
       await waitForAlpine(page);
 
-      // Wait for revealApp to have run (it uses setTimeout(0) after Alpine.start)
+      // Wait for revealApp to have run (called after Alpine.start)
       await page.waitForFunction(() => !document.body.hasAttribute('x-cloak'));
 
       const removedBeforeAlpine = await page.evaluate(() => window._testCloakRemovedBeforeAlpine);
@@ -261,6 +297,38 @@ test.describe('Startup FOUC Prevention (task-298)', () => {
       // At reveal time, <html> must have either 'light' or 'dark' class
       const hasTheme = htmlClasses.includes('light') || htmlClasses.includes('dark');
       expect(hasTheme).toBe(true);
+    });
+
+    test('html element has inline background-color set before x-cloak is removed', async ({ page }) => {
+      await page.addInitScript(() => {
+        window._testHtmlBgColorAtReveal = null;
+
+        const observer = new MutationObserver((mutations) => {
+          for (const mutation of mutations) {
+            if (
+              mutation.type === 'attributes' &&
+              mutation.attributeName === 'x-cloak' &&
+              mutation.target === document.body &&
+              !document.body.hasAttribute('x-cloak')
+            ) {
+              window._testHtmlBgColorAtReveal = document.documentElement.style.backgroundColor;
+              observer.disconnect();
+            }
+          }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+          observer.observe(document.body, { attributes: true });
+        }, { once: true });
+      });
+
+      await page.goto('/');
+      await waitForAlpine(page);
+      await page.waitForFunction(() => !document.body.hasAttribute('x-cloak'));
+
+      const htmlBgColor = await page.evaluate(() => window._testHtmlBgColorAtReveal);
+      // Must have an explicit inline background-color (not empty string)
+      expect(htmlBgColor).toBeTruthy();
     });
   });
 
