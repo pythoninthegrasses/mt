@@ -9,11 +9,15 @@ tasks:
     desc: "Create CARGO_HOME/bin symlinks so mise shims resolve correctly"
     cmds:
       - |
-        rust_dir="$(mise where rust)"
         cargo_bin="$CARGO_HOME/bin"
         mkdir -p "$cargo_bin"
+        rustup_bin="$cargo_bin/rustup"
+        if [[ ! -x "$rustup_bin" ]]; then
+          echo "error: rustup not found at $rustup_bin" >&2
+          exit 1
+        fi
         for tool in cargo cargo-clippy cargo-fmt rustc rustdoc rustfmt; do
-          ln -sf "$rust_dir/$tool" "$cargo_bin/$tool"
+          ln -sf "$rustup_bin" "$cargo_bin/$tool"
         done
     status:
       - test -L "$CARGO_HOME/bin/cargo" && test -e "$CARGO_HOME/bin/cargo"

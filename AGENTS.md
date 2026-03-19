@@ -70,6 +70,10 @@ Database: `mt.db`, Logs: see [Observability](docs/observability.md)
 
 See [Tauri Architecture](docs/tauri-architecture.md) for full details.
 
+### Rust Toolchain (mise + rustup)
+
+mise manages the Rust version (via `.tool-versions`) but delegates to rustup under the hood. The mise install directory (`~/.local/share/mise/installs/rust/<version>/`) contains symlinks like `cargo -> rustup` — these are rustup multicall symlinks that require the `rustup` binary to be resolvable. The `cargo:_setup-cargo-home` task in `taskfiles/cargo.yml` creates `$CARGO_HOME/bin` symlinks pointing directly at `$CARGO_HOME/bin/rustup` (the real binary) rather than chaining through the mise install dir, which would break if the relative `rustup` target is missing.
+
 ## Queue and Shuffle Behavior
 
 The queue store (`app/frontend/js/stores/queue.js`) maintains tracks in **play order** — the `items` array always reflects the order tracks will be played.
