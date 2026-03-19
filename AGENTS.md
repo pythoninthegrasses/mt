@@ -47,6 +47,7 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 | MCP bridge tools | [MCP Tool Reference](docs/mcp-reference.md) |
 | Remote debugging, crash analysis | [Debugging Guide](docs/debugging.md) |
 | Last.fm scrobbling | [Last.fm Integration](docs/lastfm.md) |
+| Themes, dark mode toggle fixes | [Theming Guide](docs/theming.md) |
 | Cross-platform builds, CI/CD | [Build Configuration](docs/builds.md) |
 
 ## Architecture Overview

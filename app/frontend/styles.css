@@ -339,12 +339,16 @@ aside button:hover svg {
   color: #00C4CC !important;
 }
 
-/* Metro-teal scrobbling toggle needs explicit colors (Tailwind bg-primary/bg-muted resolve transparent) */
-[data-theme-preset='metro-teal'] [data-testid='lastfm-toggle'].bg-muted {
+/* Metro-teal toggle overrides (Tailwind bg-primary/bg-muted resolve transparent) */
+[data-theme-preset='metro-teal'] [data-testid='lastfm-toggle'].bg-muted,
+[data-theme-preset='metro-teal'] [data-testid='network-cache-toggle'].bg-muted,
+[data-theme-preset='metro-teal'] [data-testid='network-cache-persistent-toggle'].bg-muted {
   background-color: hsl(0 0% 25%) !important;
 }
 
-[data-theme-preset='metro-teal'] [data-testid='lastfm-toggle'].bg-primary {
+[data-theme-preset='metro-teal'] [data-testid='lastfm-toggle'].bg-primary,
+[data-theme-preset='metro-teal'] [data-testid='network-cache-toggle'].bg-primary,
+[data-theme-preset='metro-teal'] [data-testid='network-cache-persistent-toggle'].bg-primary {
   background-color: hsl(184 100% 38%) !important;
 }
 
@@ -497,11 +501,15 @@ aside button:hover svg {
   color: #41C8E5 !important;
 }
 
-[data-theme-preset='neon-love'] [data-testid='lastfm-toggle'].bg-muted {
+[data-theme-preset='neon-love'] [data-testid='lastfm-toggle'].bg-muted,
+[data-theme-preset='neon-love'] [data-testid='network-cache-toggle'].bg-muted,
+[data-theme-preset='neon-love'] [data-testid='network-cache-persistent-toggle'].bg-muted {
   background-color: hsl(268 30% 25%) !important;
 }
 
-[data-theme-preset='neon-love'] [data-testid='lastfm-toggle'].bg-primary {
+[data-theme-preset='neon-love'] [data-testid='lastfm-toggle'].bg-primary,
+[data-theme-preset='neon-love'] [data-testid='network-cache-toggle'].bg-primary,
+[data-theme-preset='neon-love'] [data-testid='network-cache-persistent-toggle'].bg-primary {
   background-color: hsl(191 76% 58%) !important;
 }
 
