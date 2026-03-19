@@ -207,14 +207,10 @@ jobs:
       - name: Check Rust build
         run: cargo check --workspace --all-features
 
+      - uses: cargo-bins/cargo-binstall@main
+
       - name: Install cargo-tarpaulin
-        run: |
-          # Only install if not already cached
-          if ! command -v cargo-tarpaulin &> /dev/null; then
-            cargo install cargo-tarpaulin
-          else
-            echo "cargo-tarpaulin already installed (cached)"
-          fi
+        run: cargo binstall --no-confirm cargo-tarpaulin
 
       - name: Run Rust tests with coverage
         run: |
