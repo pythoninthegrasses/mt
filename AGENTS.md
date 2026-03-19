@@ -72,7 +72,15 @@ See [Tauri Architecture](docs/tauri-architecture.md) for full details.
 
 ### Rust Toolchain (mise + rustup)
 
-mise manages the Rust version (via `.tool-versions`) but delegates to rustup under the hood. The mise install directory (`~/.local/share/mise/installs/rust/<version>/`) contains symlinks like `cargo -> rustup` — these are rustup multicall symlinks that require the `rustup` binary to be resolvable. The `cargo:_setup-cargo-home` task in `taskfiles/cargo.yml` creates `$CARGO_HOME/bin` symlinks pointing directly at `$CARGO_HOME/bin/rustup` (the real binary) rather than chaining through the mise install dir, which would break if the relative `rustup` target is missing.
+Three directories are involved — do NOT cross-link them:
+
+| Directory | Purpose | Managed by |
+|-----------|---------|------------|
+| `~/.cargo/bin/` | Real rustup binary + multicall symlinks (`cargo -> rustup`) | rustup |
+| `~/.local/share/mise/installs/rust/<version>/` | Relative multicall symlinks (`cargo -> rustup`) + rustup copy | mise |
+| `$CARGO_HOME/bin/` (project-local `.cache/cargo/bin/`) | Symlinks to `~/.cargo/bin/<tool>` | `cargo:_setup-cargo-home` task |
+
+`cargo.yml` adds `~/.cargo/bin` to PATH so rustup tools are always findable. The `_setup-cargo-home` task symlinks project-local `CARGO_HOME/bin/` to `~/.cargo/bin/` — never to the mise install dir, which has its own internal symlink structure.
 
 ## Queue and Shuffle Behavior
 
