@@ -1,10 +1,10 @@
 ---
 id: TASK-298
 title: Fix FOUC regression on app startup
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-03-10 05:39'
-updated_date: '2026-03-10 05:42'
+updated_date: '2026-03-19 02:52'
 labels:
   - bug
   - frontend

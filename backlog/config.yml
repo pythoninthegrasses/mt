@@ -1,17 +1,13 @@
-project_name: "mt"
-default_status: "To Do"
+project_name: ""
 statuses: ["To Do", "In Progress", "Done"]
 labels: []
-milestones: []
 date_format: yyyy-mm-dd
-max_column_width: 20
-default_editor: "vim"
+max_column_width: 80
 auto_open_browser: true
 default_port: 6420
-remote_operations: false
+remote_operations: true
 auto_commit: false
-zero_padded_ids: 3
-bypass_git_hooks: true
-check_active_branches: false
-active_branch_days: 15
+bypass_git_hooks: false
+check_active_branches: true
+active_branch_days: 30
 task_prefix: "task"
