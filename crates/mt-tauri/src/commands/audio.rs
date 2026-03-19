@@ -1,4 +1,6 @@
 use crate::audio::{AudioEngine, PlaybackState, TrackInfo, list_output_devices};
+use crate::cache::NetworkFileCache;
+use crate::cache::mount_detect::is_network_mount;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
@@ -277,27 +279,65 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
     }
 }
 
-#[tracing::instrument(skip(state))]
+/// If network caching is enabled and the path is on a network mount,
+/// copy the file to the local cache and return the cached path.
+/// Otherwise return the original path unchanged.
+fn resolve_cached_path(path: &str, cache: &State<NetworkFileCache>, app: &AppHandle) -> String {
+    let enabled = app
+        .store("settings.json")
+        .ok()
+        .and_then(|s| s.get("network_cache_enabled"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if !enabled {
+        return path.to_string();
+    }
+
+    if !is_network_mount(path) {
+        return path.to_string();
+    }
+
+    match cache.get_or_cache(path) {
+        Ok(cached) => {
+            let cached_str = cached.to_string_lossy().to_string();
+            debug!(source = path, cached = %cached_str, "Using cached network file");
+            cached_str
+        }
+        Err(e) => {
+            warn!(source = path, error = %e, "Failed to cache network file, using original");
+            path.to_string()
+        }
+    }
+}
+
+#[tracing::instrument(skip(state, cache, app))]
 #[tauri::command]
 pub(crate) fn audio_load(
     path: String,
     track_id: Option<i64>,
     state: State<AudioState>,
+    cache: State<NetworkFileCache>,
+    app: AppHandle,
 ) -> Result<TrackInfo, String> {
+    let resolved = resolve_cached_path(&path, &cache, &app);
     let (tx, rx) = mpsc::channel();
-    state.send_command(AudioCommand::Load(path, track_id, tx));
+    state.send_command(AudioCommand::Load(resolved, track_id, tx));
     rx.recv().map_err(|_| "Channel closed".to_string())?
 }
 
-#[tracing::instrument(skip(state))]
+#[tracing::instrument(skip(state, cache, app))]
 #[tauri::command]
 pub(crate) fn audio_load_and_play(
     path: String,
     track_id: Option<i64>,
     state: State<AudioState>,
+    cache: State<NetworkFileCache>,
+    app: AppHandle,
 ) -> Result<TrackInfo, String> {
+    let resolved = resolve_cached_path(&path, &cache, &app);
     let (tx, rx) = mpsc::channel();
-    state.send_command(AudioCommand::LoadAndPlay(path, track_id, tx));
+    state.send_command(AudioCommand::LoadAndPlay(resolved, track_id, tx));
     rx.recv().map_err(|_| "Channel closed".to_string())?
 }
 
@@ -361,6 +401,55 @@ pub(crate) fn audio_get_status(state: State<AudioState>) -> PlaybackStatus {
         volume: 1.0,
         track: None,
     })
+}
+
+#[derive(Serialize)]
+pub(crate) struct CacheStatusResponse {
+    pub enabled: bool,
+    pub persistent: bool,
+    pub max_bytes: u64,
+    pub used_bytes: u64,
+    pub file_count: usize,
+}
+
+#[tracing::instrument(skip(cache, app))]
+#[tauri::command]
+pub(crate) fn network_cache_status(
+    cache: State<NetworkFileCache>,
+    app: AppHandle,
+) -> Result<CacheStatusResponse, String> {
+    let store = app
+        .store("settings.json")
+        .map_err(|e| format!("Failed to open settings store: {}", e))?;
+
+    let enabled = store
+        .get("network_cache_enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let persistent = store
+        .get("network_cache_persistent")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let max_gb = store
+        .get("network_cache_max_gb")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(2.0);
+
+    Ok(CacheStatusResponse {
+        enabled,
+        persistent,
+        max_bytes: (max_gb * 1_073_741_824.0) as u64,
+        used_bytes: cache.current_size_bytes(),
+        file_count: cache.entry_count(),
+    })
+}
+
+#[tracing::instrument(skip(cache))]
+#[tauri::command]
+pub(crate) fn network_cache_purge(cache: State<NetworkFileCache>) -> Result<(), String> {
+    cache
+        .purge()
+        .map_err(|e| format!("Failed to purge cache: {}", e))
 }
 
 #[tracing::instrument(skip(state))]

@@ -80,10 +80,14 @@ default = ["mcp"]
 devtools = ["dep:tauri-plugin-devtools", "tauri/devtools"]
 mcp = ["dep:tauri-plugin-mcp-bridge"]
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 # Required to extract the HWND from the Tauri window for souvlaki SMTC registration.
 # souvlaki panics on Windows if PlatformConfig.hwnd is None.
 raw-window-handle = "0.6"
+windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

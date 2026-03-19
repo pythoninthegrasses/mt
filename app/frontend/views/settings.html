@@ -36,33 +36,7 @@
       </div>
     </div>
 
-    <!-- Audio Section -->
-    <div x-show="isSection('audio')" data-testid="settings-section-audio">
-      <h3 class="text-xl font-semibold mb-4">Audio</h3>
-      <div class="space-y-6">
-        <div>
-          <label class="block text-sm font-medium mb-2" for="audio-output-device">
-            Output Device
-          </label>
-          <p class="text-xs text-muted-foreground mb-3">
-            Select the audio output device for playback.
-          </p>
-          <select
-            id="audio-output-device"
-            class="w-full max-w-md px-3 py-2 rounded-md border border-border bg-background text-sm"
-            :value="selectedAudioDevice"
-            @change="setAudioDevice($event.target.value)"
-            :disabled="audioDevicesLoading"
-            data-testid="audio-device-select"
-          >
-            <option value="default">Default</option>
-            <template x-for="device in audioDevices" :key="device">
-              <option :value="device" x-text="device"></option>
-            </template>
-          </select>
-        </div>
-      </div>
-    </div>
+    {{> settings-audio}}
 
     {{> settings-library}}
 
