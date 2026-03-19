@@ -210,7 +210,7 @@ jobs:
       - uses: cargo-bins/cargo-binstall@main
 
       - name: Install cargo-tarpaulin
-        run: cargo binstall --no-confirm cargo-tarpaulin
+        run: cargo binstall --no-confirm --force cargo-tarpaulin
 
       - name: Run Rust tests with coverage
         run: |
