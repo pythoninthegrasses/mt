@@ -1,10 +1,10 @@
 ---
 id: TASK-300
 title: Debug cargo-binstall PATH issue for tarpaulin in CI
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-03-19 04:00'
-updated_date: '2026-03-19 04:02'
+updated_date: '2026-03-19 22:46'
 labels:
   - ci
   - bug
@@ -14,6 +14,7 @@ references:
     https://github.com/pythoninthegrass/mt/actions/runs/23278515091/job/67686711086
   - .github/workflows/ci.yml
 priority: high
+ordinal: 2000
 ---
 
 ## Description
@@ -51,9 +52,9 @@ https://github.com/pythoninthegrass/mt/actions/runs/23278515091/job/67686711086
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 cargo-tarpaulin installs and runs successfully via cargo-binstall in CI
-- [ ] #2 Coverage report is generated and uploaded as artifact
-- [ ] #3 CI pipeline passes end-to-end on self-hosted macOS runner
+- [x] #1 cargo-tarpaulin installs and runs successfully via cargo-binstall in CI
+- [x] #2 Coverage report is generated and uploaded as artifact
+- [x] #3 CI pipeline passes end-to-end on self-hosted macOS runner
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -74,3 +75,20 @@ https://github.com/pythoninthegrass/mt/actions/runs/23278515091/job/67686711086
 3. Consider adding `--force` flag to binstall to ensure fresh install to correct location
 4. Add `which cargo-tarpaulin` and `echo $PATH` debug steps to CI workflow
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Fix
+
+Added `--force` flag to `cargo binstall` in `.github/workflows/test.yml` so tarpaulin is always installed to `~/.cargo/bin/` regardless of stale metadata.
+
+## Root Cause
+
+`~/.cargo/.crates.toml` on the Mac Mini runner had metadata from a previous `cargo install cargo-tarpaulin` (installed via mise to `~/.local/share/mise/shims/`). Binstall found the metadata, reported "already installed", and skipped — but the binary wasn't in `~/.cargo/bin/` where `cargo tarpaulin` looks.
+
+## Verification
+
+- Force-installed tarpaulin on Mini via SSH, confirmed binary at `~/.cargo/bin/cargo-tarpaulin`
+- CI run [23319951069] passed all 4 jobs end-to-end (Build & Rust Tests, Playwright E2E, Vitest, Lint)
+<!-- SECTION:FINAL_SUMMARY:END -->
