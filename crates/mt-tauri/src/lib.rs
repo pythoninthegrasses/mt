@@ -208,6 +208,19 @@ async fn export_diagnostics(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Write base64-encoded bytes to a file (used by frontend export features).
+#[tauri::command]
+async fn save_file(path: String, base64_data: String) -> Result<(), String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&base64_data)
+        .map_err(|e| format!("Invalid base64: {e}"))?;
+    tokio::fs::write(&path, &bytes)
+        .await
+        .map_err(|e| format!("Failed to write file: {e}"))?;
+    Ok(())
+}
+
 fn setup_global_shortcuts(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle = app.handle().clone();
 
@@ -345,6 +358,7 @@ pub fn run() {
             media_set_stopped,
             app_get_info,
             export_diagnostics,
+            save_file,
             log_frontend_error,
             get_track_metadata,
             get_tracks_metadata_batch,

@@ -203,6 +203,7 @@ export function createStatsView(Alpine) {
 
       try {
         const { save } = window.__TAURI__.dialog;
+        const { invoke } = window.__TAURI__.core;
         const path = await save({
           defaultPath: `chart_${this.chartGrid.rows}x${this.chartGrid.columns}.png`,
           filters: [{ name: 'PNG Images', extensions: ['png'] }],
@@ -210,16 +211,8 @@ export function createStatsView(Alpine) {
 
         if (!path) return;
 
-        // Convert data URL to bytes and write
         const base64Data = this.chartGrid.imageDataUrl.split(',')[1];
-        const binaryString = atob(base64Data);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        const { writeFile } = window.__TAURI__.fs;
-        await writeFile(path, bytes);
+        await invoke('save_file', { path, base64Data });
         Alpine.store('ui').toast('Chart exported', 'success');
       } catch (error) {
         console.error('[stats] Failed to export chart grid:', error);

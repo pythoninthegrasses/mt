@@ -71,6 +71,8 @@ lru = "0.12"
 
 # Image processing for chart grid generation
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+imageproc = "0.25"
+ab_glyph = "0.2"
 
 # Structured logging
 tracing = "0.1"
