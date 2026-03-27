@@ -1,19 +1,56 @@
-<!-- Statistics Section -->
-<div x-show="isSection('stats')" data-testid="settings-section-stats" x-data="statsView">
+<!-- Statistics Section (Last.fm-inspired layout) -->
+<div x-show="isSection('stats')" data-testid="settings-section-stats" x-data="statsView" class="select-none">
 
-  <!-- Header with date range filter -->
-  <div class="flex items-center justify-between mb-6">
-    <h3 class="text-xl font-semibold">Statistics</h3>
-    <select
-      x-model="dateRange"
-      @change="onDateRangeChange()"
-      class="px-3 py-1.5 text-sm rounded-md border border-border bg-background"
-      data-testid="stats-date-range"
-    >
-      <option value="AllTime">All Time</option>
-      <option value="Last7Days">Last 7 Days</option>
-      <option value="Last30Days">Last 30 Days</option>
-    </select>
+  <!-- Header row: stat summary left, date range right -->
+  <div class="flex items-start justify-between mb-4">
+    <div>
+      <div class="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Artists Played</div>
+      <div class="text-3xl font-bold tabular-nums" x-text="(overview?.total_artists_played || 0).toLocaleString()" data-testid="stats-artists-played"></div>
+    </div>
+
+    <!-- Date Range dropdown -->
+    <div class="relative" @click.outside="dateDropdownOpen = false">
+      <button
+        class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+        @click="dateDropdownOpen = !dateDropdownOpen"
+        data-testid="stats-date-range"
+      >
+        <span class="text-muted-foreground">Date Range</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        <span class="font-semibold text-primary" x-text="dateRangeLabel()"></span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-primary" :class="dateDropdownOpen ? 'rotate-180' : ''">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+
+      <!-- Dropdown panel -->
+      <div
+        x-show="dateDropdownOpen"
+        x-transition:enter="transition ease-out duration-100"
+        x-transition:enter-start="opacity-0 scale-95"
+        x-transition:enter-end="opacity-100 scale-100"
+        x-transition:leave="transition ease-in duration-75"
+        x-transition:leave-start="opacity-100 scale-100"
+        x-transition:leave-end="opacity-0 scale-95"
+        class="absolute right-0 top-full mt-1 z-20 bg-popover border border-border rounded-lg shadow-lg p-3 min-w-[220px]"
+      >
+        <div class="grid grid-cols-2 gap-1">
+          <template x-for="opt in dateRangeOptions" :key="opt.value">
+            <button
+              class="px-3 py-1.5 text-sm rounded text-left transition-colors"
+              :class="dateRange === opt.value ? 'bg-primary text-primary-foreground font-medium' : 'hover:bg-muted text-foreground'"
+              @click="selectDateRange(opt.value)"
+              x-text="opt.label"
+            ></button>
+          </template>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Loading state -->
@@ -22,95 +59,138 @@
   </div>
 
   <div x-show="!loading">
-    <!-- Overview Cards -->
-    <div class="grid grid-cols-3 gap-4 mb-8" data-testid="stats-overview-cards">
-      <div class="bg-muted/30 rounded-lg p-4 text-center">
-        <div class="text-3xl font-bold" x-text="overview?.total_plays || 0" data-testid="stats-total-plays"></div>
-        <div class="text-xs text-muted-foreground mt-1">Total Plays</div>
-      </div>
-      <div class="bg-muted/30 rounded-lg p-4 text-center">
-        <div class="text-3xl font-bold" x-text="overview?.total_artists_played || 0" data-testid="stats-artists-played"></div>
-        <div class="text-xs text-muted-foreground mt-1">Artists Played</div>
-      </div>
-      <div class="bg-muted/30 rounded-lg p-4 text-center">
-        <div class="text-3xl font-bold" x-text="formatDuration(overview?.total_listening_time)" data-testid="stats-listening-time"></div>
-        <div class="text-xs text-muted-foreground mt-1">Listening Time</div>
-      </div>
-    </div>
 
     <!-- Two-column layout: Artists left, Plays over time right -->
-    <div class="grid grid-cols-2 gap-6 mb-8">
+    <div class="flex gap-6 mb-6">
 
-      <!-- Top Artists -->
-      <div data-testid="stats-top-artists">
-        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Top Artists</h4>
-        <div class="space-y-1.5 max-h-[400px] overflow-y-auto">
-          <template x-for="(artist, index) in topArtists" :key="artist.artist">
-            <div class="flex items-center gap-3 py-1 group">
-              <span class="text-xs text-muted-foreground w-5 text-right shrink-0" x-text="index + 1"></span>
-              <div class="w-8 h-8 rounded shrink-0 bg-muted/50 overflow-hidden">
-                <img
-                  x-show="artistArtwork[artist.track_id]"
-                  :src="artistArtwork[artist.track_id]"
-                  class="w-full h-full object-cover"
-                  alt=""
-                >
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="text-sm truncate" x-text="artist.artist"></div>
-                <div class="h-1.5 bg-muted/30 rounded-full mt-0.5">
+      <!-- Top Artists (left column, ~60%) -->
+      <div class="w-[58%] shrink-0" data-testid="stats-top-artists">
+        <div class="mb-2">
+          <span class="text-[11px] text-muted-foreground font-medium">Most plays</span>
+        </div>
+
+        <!-- Scroll container with gradient overlays -->
+        <div class="relative">
+          <!-- Top gradient -->
+          <div
+            class="absolute inset-x-0 top-0 h-8 z-10 pointer-events-none transition-opacity duration-300"
+            :class="_artistsScrollTop > 0 ? 'opacity-100' : 'opacity-0'"
+            style="background: linear-gradient(to bottom, hsl(var(--background)), transparent);"
+          ></div>
+
+          <div
+            class="max-h-[540px] overflow-y-auto lyrics-hide-scrollbar"
+            x-ref="artistsPanel"
+            @scroll.passive="_onArtistsScroll($event)"
+          >
+            <template x-for="(artist, index) in topArtists" :key="artist.artist">
+              <div class="flex items-center gap-2 h-9" style="border-bottom: 1px solid rgba(128,128,128,0.08);">
+                <!-- Rank -->
+                <span class="text-[11px] text-muted-foreground w-5 text-right shrink-0 tabular-nums" x-text="index + 1"></span>
+
+                <!-- Circular artwork -->
+                <div class="w-7 h-7 rounded-full shrink-0 bg-muted/40 overflow-hidden">
+                  <img
+                    x-show="artistArtwork[artist.track_id]"
+                    :src="artistArtwork[artist.track_id]"
+                    class="w-full h-full object-cover"
+                    alt=""
+                  >
+                </div>
+
+                <!-- Name -->
+                <span class="text-[13px] w-[130px] shrink-0 truncate" x-text="artist.artist"></span>
+
+                <!-- Bar with embedded count text (vertically centered) -->
+                <div class="flex-1 h-[22px] rounded-sm overflow-hidden relative" style="background: rgba(128,128,128,0.06);">
                   <div
-                    class="h-full bg-primary/70 rounded-full transition-all"
-                    :style="artistBarWidth(artist.play_count)"
+                    class="h-full rounded-sm absolute left-0 top-0"
+                    :style="'width:' + Math.max((artist.play_count / maxArtistPlays()) * 100, 2) + '%; background: hsl(var(--primary) / 0.25);'"
                   ></div>
+                  <span
+                    class="relative z-10 text-[11px] tabular-nums flex items-center h-full pl-2"
+                    :class="index === 0 ? 'font-medium text-foreground' : 'text-muted-foreground'"
+                    x-text="index === 0 ? artist.play_count.toLocaleString() + ' plays' : artist.play_count.toLocaleString()"
+                  ></span>
                 </div>
               </div>
-              <span class="text-xs text-muted-foreground shrink-0 tabular-nums" x-text="artist.play_count"></span>
+            </template>
+            <div x-show="!topArtists.length" class="text-sm text-muted-foreground py-4 text-center">
+              No play data yet
             </div>
-          </template>
-          <div x-show="!topArtists.length" class="text-sm text-muted-foreground py-4 text-center">
-            No play data yet
           </div>
+
+          <!-- Bottom gradient -->
+          <div
+            class="absolute inset-x-0 bottom-0 h-8 z-10 pointer-events-none transition-opacity duration-300"
+            :class="_artistsCanScrollMore ? 'opacity-100' : 'opacity-0'"
+            style="background: linear-gradient(to top, hsl(var(--background)), transparent);"
+          ></div>
         </div>
       </div>
 
-      <!-- Plays Over Time -->
-      <div data-testid="stats-plays-over-time">
-        <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Plays Over Time</h4>
-        <div class="space-y-1.5 max-h-[400px] overflow-y-auto">
+      <!-- Plays Over Time bar chart (right column, ~40%) -->
+      <div class="flex-1 min-w-0" data-testid="stats-plays-over-time">
+        <div class="max-h-[540px] overflow-y-auto lyrics-hide-scrollbar">
           <template x-for="entry in playsOverTime" :key="entry.label">
-            <div class="flex items-center gap-3 py-1">
-              <span class="text-xs text-muted-foreground w-20 shrink-0 tabular-nums" x-text="entry.label"></span>
-              <div class="flex-1">
-                <div class="h-5 bg-muted/30 rounded">
-                  <div
-                    class="h-full bg-primary/50 rounded transition-all flex items-center justify-end pr-2"
-                    :style="timeBarWidth(entry.count)"
-                  >
-                    <span class="text-[10px] text-primary-foreground/80 tabular-nums" x-text="entry.count" x-show="entry.count / maxPlaysInTimePeriod() > 0.15"></span>
-                  </div>
-                </div>
+            <div class="flex items-center gap-2 h-7">
+              <!-- Time label (y-axis) -->
+              <span class="text-[11px] text-muted-foreground w-14 shrink-0 tabular-nums text-right" x-text="formatTimeLabel(entry.label)"></span>
+
+              <!-- Bar with embedded count -->
+              <div class="flex-1 h-[18px] rounded-sm overflow-hidden relative" style="background: rgba(128,128,128,0.06);">
+                <div
+                  class="h-full rounded-sm absolute left-0 top-0"
+                  :style="'width:' + Math.max((entry.count / maxPlaysInTimePeriod()) * 100, 2) + '%; background: hsl(var(--primary) / 0.25);'"
+                ></div>
+                <span
+                  class="relative z-10 text-[10px] text-muted-foreground tabular-nums flex items-center h-full pl-1.5"
+                  x-text="entry.count.toLocaleString()"
+                ></span>
               </div>
-              <span class="text-xs text-muted-foreground shrink-0 w-8 text-right tabular-nums" x-text="entry.count"></span>
+
+              <!-- Count on right side -->
+              <span class="text-[11px] text-muted-foreground shrink-0 w-10 text-right tabular-nums" x-text="entry.count.toLocaleString()"></span>
             </div>
           </template>
           <div x-show="!playsOverTime.length" class="text-sm text-muted-foreground py-4 text-center">
             No play data yet
           </div>
         </div>
+
+        <!-- X-axis label -->
+        <div x-show="playsOverTime.length" class="text-[10px] text-muted-foreground/50 uppercase tracking-wider text-right mt-1 pr-10">
+          Plays
+        </div>
+      </div>
+    </div>
+
+    <!-- Overview stats row (compact) -->
+    <div class="flex items-center gap-5 mb-6 text-[12px] text-muted-foreground" data-testid="stats-overview-cards">
+      <div class="flex items-center gap-1">
+        <span class="font-semibold text-foreground tabular-nums" x-text="(overview?.total_plays || 0).toLocaleString()" data-testid="stats-total-plays"></span>
+        <span>plays</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <span class="font-semibold text-foreground tabular-nums" x-text="(overview?.total_artists_played || 0).toLocaleString()"></span>
+        <span>artists</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <span class="font-semibold text-foreground tabular-nums" x-text="formatDuration(overview?.total_listening_time)" data-testid="stats-listening-time"></span>
+        <span>listening time</span>
       </div>
     </div>
 
     <!-- Genre Breakdown -->
     <div class="mb-8" data-testid="stats-genre-breakdown">
-      <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Genre Breakdown</h4>
-      <div class="grid grid-cols-2 gap-x-6 gap-y-1.5" x-show="genres.length">
+      <h4 class="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Genre Breakdown</h4>
+      <div class="grid grid-cols-2 gap-x-6 gap-y-0" x-show="genres.length">
         <template x-for="genre in genres" :key="genre.genre">
-          <div class="flex items-center justify-between py-1">
-            <span class="text-sm truncate" x-text="genre.genre"></span>
+          <div class="flex items-center justify-between py-1" style="border-bottom: 1px solid rgba(128,128,128,0.08);">
+            <span class="text-[13px] truncate" x-text="genre.genre"></span>
             <div class="flex items-center gap-3 shrink-0">
-              <span class="text-xs text-muted-foreground tabular-nums"><span x-text="genre.play_count"></span> plays</span>
-              <span class="text-xs text-muted-foreground/60 tabular-nums"><span x-text="genre.track_count"></span> tracks</span>
+              <span class="text-[11px] text-muted-foreground tabular-nums"><span x-text="genre.play_count.toLocaleString()"></span> plays</span>
+              <span class="text-[11px] text-muted-foreground/50 tabular-nums"><span x-text="genre.track_count"></span> tracks</span>
             </div>
           </div>
         </template>
@@ -122,61 +202,28 @@
 
     <!-- Chart Grid Generator -->
     <div data-testid="stats-chart-grid">
-      <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Album Chart Grid</h4>
+      <h4 class="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Album Chart Grid</h4>
       <div class="bg-muted/30 rounded-lg p-4">
         <div class="grid grid-cols-5 gap-4 mb-4">
           <div>
             <label class="block text-xs text-muted-foreground mb-1">Rows</label>
-            <input
-              type="number"
-              min="1"
-              max="10"
-              x-model.number="chartGrid.rows"
-              class="w-full px-2 py-1 text-sm rounded border border-border bg-background"
-              data-testid="stats-grid-rows"
-            >
+            <input type="number" min="1" max="10" x-model.number="chartGrid.rows" class="w-full px-2 py-1 text-sm rounded border border-border bg-background" data-testid="stats-grid-rows">
           </div>
           <div>
             <label class="block text-xs text-muted-foreground mb-1">Columns</label>
-            <input
-              type="number"
-              min="1"
-              max="10"
-              x-model.number="chartGrid.columns"
-              class="w-full px-2 py-1 text-sm rounded border border-border bg-background"
-              data-testid="stats-grid-columns"
-            >
+            <input type="number" min="1" max="10" x-model.number="chartGrid.columns" class="w-full px-2 py-1 text-sm rounded border border-border bg-background" data-testid="stats-grid-columns">
           </div>
           <div>
             <label class="block text-xs text-muted-foreground mb-1">Cell Size</label>
-            <input
-              type="number"
-              min="50"
-              max="600"
-              step="50"
-              x-model.number="chartGrid.cellSize"
-              class="w-full px-2 py-1 text-sm rounded border border-border bg-background"
-              data-testid="stats-grid-cell-size"
-            >
+            <input type="number" min="50" max="600" step="50" x-model.number="chartGrid.cellSize" class="w-full px-2 py-1 text-sm rounded border border-border bg-background" data-testid="stats-grid-cell-size">
           </div>
           <div>
             <label class="block text-xs text-muted-foreground mb-1">Padding</label>
-            <input
-              type="number"
-              min="0"
-              max="20"
-              x-model.number="chartGrid.padding"
-              class="w-full px-2 py-1 text-sm rounded border border-border bg-background"
-              data-testid="stats-grid-padding"
-            >
+            <input type="number" min="0" max="20" x-model.number="chartGrid.padding" class="w-full px-2 py-1 text-sm rounded border border-border bg-background" data-testid="stats-grid-padding">
           </div>
           <div>
             <label class="block text-xs text-muted-foreground mb-1">Sort By</label>
-            <select
-              x-model="chartGrid.sortBy"
-              class="w-full px-2 py-1 text-sm rounded border border-border bg-background"
-              data-testid="stats-grid-sort"
-            >
+            <select x-model="chartGrid.sortBy" class="w-full px-2 py-1 text-sm rounded border border-border bg-background" data-testid="stats-grid-sort">
               <option value="play_count">Play Count</option>
               <option value="album">Album Name</option>
               <option value="artist">Artist Name</option>
@@ -201,15 +248,8 @@
             Export PNG
           </button>
         </div>
-
-        <!-- Chart Grid Preview -->
         <div x-show="chartGrid.imageDataUrl" class="mt-4">
-          <img
-            :src="chartGrid.imageDataUrl"
-            class="max-w-full rounded border border-border"
-            alt="Album chart grid"
-            data-testid="stats-grid-preview"
-          >
+          <img :src="chartGrid.imageDataUrl" class="max-w-full rounded border border-border" alt="Album chart grid" data-testid="stats-grid-preview">
         </div>
       </div>
     </div>

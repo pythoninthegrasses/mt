@@ -3,15 +3,46 @@
  *
  * Listening statistics dashboard with artist rankings, genre breakdown,
  * plays-over-time chart, and album art chart grid generator.
+ * Layout inspired by Last.fm's library statistics page.
  */
 
 import { stats } from '../api/stats.js';
 import { library } from '../api/library.js';
 
+const DATE_RANGE_OPTIONS = [
+  { value: 'Last7Days', label: 'Last 7 days' },
+  { value: 'Last30Days', label: 'Last 30 days' },
+  { value: 'Last90Days', label: 'Last 90 days' },
+  { value: 'Last180Days', label: 'Last 180 days' },
+  { value: 'Last365Days', label: 'Last 365 days' },
+  { value: 'AllTime', label: 'All time' },
+];
+
+const MONTH_NAMES = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
 export function createStatsView(Alpine) {
   Alpine.data('statsView', () => ({
     dateRange: 'AllTime',
+    dateDropdownOpen: false,
+    dateRangeOptions: DATE_RANGE_OPTIONS,
     loading: false,
+
+    // Scroll state for gradient overlays
+    _artistsScrollTop: 0,
+    _artistsCanScrollMore: false,
 
     overview: null,
     topArtists: [],
@@ -49,6 +80,9 @@ export function createStatsView(Alpine) {
         this.playsOverTime = playsOverTime;
 
         this.loadArtistArtwork(topArtists);
+
+        // Update scroll state after DOM renders
+        this.$nextTick(() => this._updateArtistsScrollState());
       } catch (error) {
         console.error('[stats] Failed to load stats:', error);
         Alpine.store('ui').toast('Failed to load statistics', 'error');
@@ -72,8 +106,28 @@ export function createStatsView(Alpine) {
       }
     },
 
-    async onDateRangeChange() {
-      await this.loadStats();
+    _onArtistsScroll(event) {
+      const el = event.target;
+      this._artistsScrollTop = el.scrollTop;
+      this._artistsCanScrollMore = el.scrollTop + el.clientHeight < el.scrollHeight - 10;
+    },
+
+    _updateArtistsScrollState() {
+      const panel = this.$refs.artistsPanel;
+      if (!panel) return;
+      this._artistsScrollTop = panel.scrollTop;
+      this._artistsCanScrollMore = panel.scrollHeight > panel.clientHeight + 10;
+    },
+
+    dateRangeLabel() {
+      const opt = DATE_RANGE_OPTIONS.find((o) => o.value === this.dateRange);
+      return opt ? opt.label : this.dateRange;
+    },
+
+    selectDateRange(value) {
+      this.dateRange = value;
+      this.dateDropdownOpen = false;
+      this.loadStats();
     },
 
     maxArtistPlays() {
@@ -94,6 +148,23 @@ export function createStatsView(Alpine) {
     timeBarWidth(count) {
       const pct = (count / this.maxPlaysInTimePeriod()) * 100;
       return `width: ${Math.max(pct, 2)}%`;
+    },
+
+    /**
+     * Format time period labels for display.
+     * "2024" -> "2024", "2024-03" -> "Mar 2024", "2024-03-15" -> "15 Mar"
+     */
+    formatTimeLabel(label) {
+      if (!label) return '';
+      const parts = label.split('-');
+      if (parts.length === 1) return label; // Year only
+      if (parts.length === 2) {
+        const monthIdx = parseInt(parts[1], 10) - 1;
+        return `${MONTH_NAMES[monthIdx]} ${parts[0]}`;
+      }
+      // Full date: show "15 Mar"
+      const monthIdx = parseInt(parts[1], 10) - 1;
+      return `${parseInt(parts[2], 10)} ${MONTH_NAMES[monthIdx]}`;
     },
 
     formatDuration(seconds) {

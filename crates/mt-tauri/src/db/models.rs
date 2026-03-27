@@ -230,6 +230,9 @@ pub enum StatsDateRange {
     AllTime,
     Last7Days,
     Last30Days,
+    Last90Days,
+    Last180Days,
+    Last365Days,
 }
 
 /// Request for chart grid generation

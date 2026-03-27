@@ -30,6 +30,18 @@ fn range_clause(range: &StatsDateRange) -> (&'static str, Option<i64>) {
             let cutoff = chrono::Utc::now().timestamp() - 30 * 86400;
             ("AND ph.played_at >= ?", Some(cutoff))
         }
+        StatsDateRange::Last90Days => {
+            let cutoff = chrono::Utc::now().timestamp() - 90 * 86400;
+            ("AND ph.played_at >= ?", Some(cutoff))
+        }
+        StatsDateRange::Last180Days => {
+            let cutoff = chrono::Utc::now().timestamp() - 180 * 86400;
+            ("AND ph.played_at >= ?", Some(cutoff))
+        }
+        StatsDateRange::Last365Days => {
+            let cutoff = chrono::Utc::now().timestamp() - 365 * 86400;
+            ("AND ph.played_at >= ?", Some(cutoff))
+        }
     }
 }
 
@@ -179,7 +191,10 @@ pub(crate) fn get_plays_over_time(
 
     let group_expr = match range {
         StatsDateRange::AllTime => "strftime('%Y', played_at, 'unixepoch')",
-        _ => "strftime('%Y-%m-%d', played_at, 'unixepoch')",
+        StatsDateRange::Last7Days | StatsDateRange::Last30Days => {
+            "strftime('%Y-%m-%d', played_at, 'unixepoch')"
+        }
+        _ => "strftime('%Y-%m', played_at, 'unixepoch')",
     };
 
     let sql = format!(
