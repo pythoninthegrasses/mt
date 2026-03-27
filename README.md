@@ -27,7 +27,11 @@
 
 ## Downloads
 
-Download the latest release from [GitHub Releases](https://github.com/pythoninthegrass/mt/releases).
+<!-- DOWNLOADS:START -->
+| Platform | Architecture | Download |
+|----------|--------------|----------|
+| Windows | x64 | [mt_1.0.0_x64-setup.exe](https://github.com/pythoninthegrass/mt/releases/download/v1.0.0/mt_1.0.0_x64-setup.exe) |
+<!-- DOWNLOADS:END -->
 
 ## Development
 
