@@ -4,7 +4,7 @@
   x-cloak
   x-data="libraryBrowser"
   @keydown.window="$store.ui.view === 'library' && handleKeydown($event)"
-  class="h-full flex flex-col min-h-0"
+  class="h-full flex flex-col min-h-0 select-none"
 >
   <!-- Track table - single scroll container for both vertical and horizontal -->
   <div class="flex-1 min-h-0 w-full overflow-auto" x-ref="scrollContainer">

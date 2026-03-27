@@ -2,7 +2,7 @@
   x-data="sidebar"
   @dragover="console.log('[Sidebar/aside] dragover event', $event.target)"
   @drop="console.log('[Sidebar/aside] drop event', $event.target)"
-  class="border-r border-border bg-muted/30 flex flex-col shrink-0 overflow-hidden transition-[width] duration-200"
+  class="border-r border-border bg-muted/30 flex flex-col shrink-0 overflow-hidden transition-[width] duration-200 sidebar-no-select"
   :class="isCollapsed ? 'w-[70px]' : 'w-52'"
 >
   <!-- Search (Apple Music style pill) -->
@@ -14,6 +14,7 @@
       <input
         type="text"
         class="w-full text-xs py-1.5 pl-8 pr-7 rounded-full bg-muted/80 border-0 focus:ring-1 focus:ring-primary/50 focus:outline-none text-foreground placeholder:text-foreground/50"
+        :class="$store.library.searchQuery ? 'select-text' : 'select-none'"
         placeholder="Search"
         x-model="$store.library.searchQuery"
         @input.debounce.300ms="$store.library.search($store.library.searchQuery)"

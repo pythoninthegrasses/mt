@@ -4,7 +4,7 @@
   x-show="isOpen"
   x-cloak
   data-testid="metadata-modal"
-  class="fixed inset-0 z-50 flex items-center justify-center"
+  class="fixed inset-0 z-50 flex items-center justify-center select-none"
   @keydown.window="if (isOpen) handleKeydown($event)"
 >
   <div class="absolute inset-0 bg-black/50" @click="close()"></div>
