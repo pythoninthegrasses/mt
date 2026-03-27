@@ -13,6 +13,11 @@ on:
           - macos
           - linux
           - windows
+      tag:
+        description: 'Release tag to attach artifacts to (e.g. v1.0.0). Leave empty to skip upload.'
+        required: false
+        default: ''
+        type: string
   release:
     types: [published]
 
@@ -95,11 +100,12 @@ jobs:
         run: task ci:notarize TARGET=aarch64-apple-darwin
 
       - name: Upload release assets
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || inputs.tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
+          TAG="${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}"
+          gh release upload "$TAG" \
             target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
 
       - name: Cleanup CI keychain
@@ -140,11 +146,12 @@ jobs:
           retention-days: 7
 
       - name: Upload release assets
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || inputs.tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
+          TAG="${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}"
+          gh release upload "$TAG" \
             target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
 
   build-linux-arm64:
@@ -196,11 +203,12 @@ jobs:
           retention-days: 7
 
       - name: Upload release assets
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || inputs.tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
+          TAG="${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}"
+          gh release upload "$TAG" \
             dist/linux-arm64/*.deb
 
   build-windows:
@@ -308,7 +316,7 @@ jobs:
   update-readme:
     name: Update README download links
     needs: [build-macos, build-linux-amd64, build-linux-arm64, build-windows]
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || inputs.tag != ''
     runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
@@ -320,7 +328,7 @@ jobs:
       - name: Update download table
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
         run: |
           python3 << 'EOF'
           import json, os, re, subprocess
@@ -369,5 +377,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
-          git diff --staged --quiet || git commit -m "chore: update download links for ${{ github.event.release.tag_name }} [skip ci]"
+          git diff --staged --quiet || git commit -m "chore: update download links for ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }} [skip ci]"
           git push origin main
