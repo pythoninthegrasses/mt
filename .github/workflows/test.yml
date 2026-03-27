@@ -80,7 +80,7 @@ jobs:
       matrix:
         include:
           - platform: macos
-            os: [macOS, ARM64]
+            os: [macOS, ARM64, studio]
             target: aarch64-apple-darwin
           - platform: linux
             os: blacksmith-4vcpu-ubuntu-2404
@@ -218,7 +218,7 @@ jobs:
   rust-tests:
     name: Rust Tests with Coverage
     needs: rust-lint
-    runs-on: [macOS, ARM64]
+    runs-on: [macOS, ARM64, studio]
     timeout-minutes: 10
     env:
       CARGO_INCREMENTAL: 1
