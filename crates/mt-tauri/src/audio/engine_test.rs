@@ -456,7 +456,10 @@ mod tests {
                 let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("tests/fixtures/test_sample.mp3");
                 let result = engine.load(fixture.to_str().unwrap());
-                assert!(result.is_err(), "load() should fail without an active stream");
+                assert!(
+                    result.is_err(),
+                    "load() should fail without an active stream"
+                );
                 let err = result.unwrap_err().to_string();
                 assert!(
                     err.contains("No active audio stream"),
@@ -519,7 +522,11 @@ mod tests {
                 assert!(engine.get_current_track().is_none());
 
                 let result = engine.set_device(None);
-                assert!(result.is_ok(), "set_device(None) failed: {:?}", result.err());
+                assert!(
+                    result.is_ok(),
+                    "set_device(None) failed: {:?}",
+                    result.err()
+                );
 
                 // State should remain Stopped, no track loaded
                 assert_eq!(engine.get_state(), PlaybackState::Stopped);
@@ -550,7 +557,11 @@ mod tests {
                 let track_path = engine.get_current_track().unwrap().path.clone();
 
                 let result = engine.set_device(None);
-                assert!(result.is_ok(), "set_device(None) failed: {:?}", result.err());
+                assert!(
+                    result.is_ok(),
+                    "set_device(None) failed: {:?}",
+                    result.err()
+                );
 
                 // Track should still be loaded and paused
                 assert_eq!(engine.get_state(), PlaybackState::Paused);
@@ -580,7 +591,11 @@ mod tests {
                 assert_eq!(engine.get_state(), PlaybackState::Playing);
 
                 let result = engine.set_device(None);
-                assert!(result.is_ok(), "set_device(None) failed: {:?}", result.err());
+                assert!(
+                    result.is_ok(),
+                    "set_device(None) failed: {:?}",
+                    result.err()
+                );
 
                 // Should still be playing after device switch
                 assert_eq!(engine.get_state(), PlaybackState::Playing);
@@ -601,7 +616,11 @@ mod tests {
                 assert!((engine.get_volume() - 0.42).abs() < f32::EPSILON);
 
                 let result = engine.set_device(None);
-                assert!(result.is_ok(), "set_device(None) failed: {:?}", result.err());
+                assert!(
+                    result.is_ok(),
+                    "set_device(None) failed: {:?}",
+                    result.err()
+                );
 
                 assert!(
                     (engine.get_volume() - 0.42).abs() < f32::EPSILON,
@@ -691,7 +710,11 @@ mod tests {
         match engine {
             Ok(mut engine) => {
                 let result = engine.set_device(None);
-                assert!(result.is_ok(), "set_device(None) failed: {:?}", result.err());
+                assert!(
+                    result.is_ok(),
+                    "set_device(None) failed: {:?}",
+                    result.err()
+                );
 
                 // Loading a track after device switch should work
                 let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
