@@ -1,5 +1,68 @@
 # Changelog
 
+## [1.1.0](https://github.com/pythoninthegrasses/mt/compare/v1.0.0...v1.1.0) (2026-03-27)
+
+
+### Features
+
+* add active section highlight to settings nav for dark themes ([#29](https://github.com/pythoninthegrasses/mt/issues/29)) ([1d9eeff](https://github.com/pythoninthegrasses/mt/commit/1d9eeff9b90c392bc396ebad24c94b6fec2b51e0))
+* add listening statistics dashboard under Settings ([a74c222](https://github.com/pythoninthegrasses/mt/commit/a74c222bb6b2285bbd7f14c1244ac0e66c987106))
+* add Neon Love theme preset from Love color palette ([af912cc](https://github.com/pythoninthegrasses/mt/commit/af912ccb326213930b7966ea2e18b60724d40474))
+* add network file caching for SMB/NFS mounts ([#27](https://github.com/pythoninthegrasses/mt/issues/27)) ([e6c55ae](https://github.com/pythoninthegrasses/mt/commit/e6c55ae078a5773b65f288fec873131c62344565))
+* **artists-browser:** sort artist albums by year ascending ([9d3c59c](https://github.com/pythoninthegrasses/mt/commit/9d3c59c33ea1e7294c26d4ef59140c1a6341961d))
+* **audio:** add output device selection in Settings &gt; Audio ([#26](https://github.com/pythoninthegrasses/mt/issues/26)) ([d5c9f35](https://github.com/pythoninthegrasses/mt/commit/d5c9f35369961c3dddcd18e53c82552d652fb0dd))
+* **context-menu:** add "Go to Album" menu item to track context menus ([e93eaba](https://github.com/pythoninthegrasses/mt/commit/e93eaba3fa11430c2ecca6007ce8bc9ed1c24bc1))
+* **context-menu:** add "Go to Artist" menu item to track context menus ([83e6cdc](https://github.com/pythoninthegrasses/mt/commit/83e6cdc2f7e39f92249501c1eaf30200c5a072e3))
+* cross-directory track deduplication with reinstatement ([a7ef45a](https://github.com/pythoninthegrasses/mt/commit/a7ef45ac4e04f60184dd8ea2d7a36326bc169a12))
+* dynamic lyrics layout reflow with content-based width measurement ([f2181cc](https://github.com/pythoninthegrasses/mt/commit/f2181cc3d33f6931339e018bbb87d2afa07547fd))
+* **library:** persist removed track identifiers to prevent re-addition on scan ([f7721ef](https://github.com/pythoninthegrasses/mt/commit/f7721ef29a7571b79082f8b1936456d9ba48a565))
+* show LRCLIB lyrics in Now Playing view with caching ([b7e5533](https://github.com/pythoninthegrasses/mt/commit/b7e5533c6c122830808cf311bd032a210cc4b6fe))
+* show LRCLIB lyrics in Now Playing view with caching ([532bf87](https://github.com/pythoninthegrasses/mt/commit/532bf87dad9e0c5648fee4a4cecb7377663d6233))
+* **stats:** add placeholder art with artist name for chart grid, fix PNG export ([da5b2b3](https://github.com/pythoninthegrasses/mt/commit/da5b2b3dd984d38b63cf4aae80d7da1dabde6ca5))
+* **stats:** rework statistics dashboard to Last.fm-inspired layout ([900620d](https://github.com/pythoninthegrasses/mt/commit/900620d12a54c4a6a296937388f1cdb81ac70911))
+
+
+### Bug Fixes
+
+* apply roborev fix for 7da95a2 (job [#6](https://github.com/pythoninthegrasses/mt/issues/6)) ([4c0908b](https://github.com/pythoninthegrasses/mt/commit/4c0908b2518926f51544e8abbbd3e377a1dafadd))
+* apply roborev fix for 83e6cdc (job [#17](https://github.com/pythoninthegrasses/mt/issues/17)) ([4885972](https://github.com/pythoninthegrasses/mt/commit/4885972a88c934dae5c7e0664bd5dc1a52def838))
+* apply roborev fix for 968f392 (job [#2](https://github.com/pythoninthegrasses/mt/issues/2)) ([5d161ee](https://github.com/pythoninthegrasses/mt/commit/5d161eeb5637d57192779404adc03bee7ae13f15))
+* apply roborev fix for 9cf7984 (job [#25](https://github.com/pythoninthegrasses/mt/issues/25)) ([c3cea62](https://github.com/pythoninthegrasses/mt/commit/c3cea626939e23126ae99afa12b4b00bd1896f4a))
+* apply roborev fix for 9d3c59c (job [#20](https://github.com/pythoninthegrasses/mt/issues/20)) ([77b3700](https://github.com/pythoninthegrasses/mt/commit/77b37006b0b8d5cb9cb8009395f0fbfed76d9d6e))
+* apply roborev fix for e93eaba (job [#13](https://github.com/pythoninthegrasses/mt/issues/13)) ([81793fc](https://github.com/pythoninthegrasses/mt/commit/81793fc5b31dffa3efa2972ff148c883f3f91a43))
+* **cargo:** create CARGO_HOME/bin symlinks for mise shim compatibility ([38cb8f9](https://github.com/pythoninthegrasses/mt/commit/38cb8f9cf469958f843aadf1df076767d2c2a51a))
+* **cargo:** symlink project CARGO_HOME/bin to ~/.cargo/bin, add PATH ([aaefd99](https://github.com/pythoninthegrasses/mt/commit/aaefd99a460f6e19f62c2f71138601bb010b49ed))
+* **cargo:** symlink tools to rustup binary instead of mise install dir ([37fd360](https://github.com/pythoninthegrasses/mt/commit/37fd36060d8d762d7ff3dc30ff892990f2fe4cf6))
+* **ci:** add libasound2-dev for Linux and fix macOS keychain search list ([5151e62](https://github.com/pythoninthegrasses/mt/commit/5151e62fba20d222400c3e7385ee68b6e22443c5))
+* **ci:** force cargo-binstall to install tarpaulin binary ([6e3383a](https://github.com/pythoninthegrasses/mt/commit/6e3383a8a6007181a43e5307088fef0c235ddc82))
+* **ci:** gate build matrix behind all lint and test jobs ([ede587e](https://github.com/pythoninthegrasses/mt/commit/ede587ede5824e6854b25a41ce982015a0cfbd85))
+* **ci:** gate rust-tests behind rust-lint ([300b6da](https://github.com/pythoninthegrasses/mt/commit/300b6da46c50a7ec784533b15e182fd651061add))
+* **ci:** resolve release build failures on macOS, Linux amd64, and Linux ARM64 ([5d919af](https://github.com/pythoninthegrasses/mt/commit/5d919af811bef5bffbdb3b8ac77b95d5fb6705b4))
+* **ci:** skip Tauri DMG bundling on macOS, create DMG with hdiutil ([f702934](https://github.com/pythoninthegrasses/mt/commit/f7029340c4670d4cbdbe39d4a6ede1307c3bff13))
+* **clippy:** collapse nested if statements into let-chains ([930c092](https://github.com/pythoninthegrasses/mt/commit/930c092e0d9ffa303bc8567821e4a66be3d58feb))
+* **drag-drop:** use relative offset for queue drag ghost position ([cf244ee](https://github.com/pythoninthegrasses/mt/commit/cf244eedcfae3b792421d949752ae0641b8f67b0))
+* guard playNextTracks against background queue build race condition ([2c17f80](https://github.com/pythoninthegrasses/mt/commit/2c17f80eacbd2e2fa3e6690860a7a0760b7be2f6))
+* **library:** force repaint when returning from albums view ([c70b4c5](https://github.com/pythoninthegrasses/mt/commit/c70b4c5701496c8a95d0f0eb4d5ab1bdd5d5e384))
+* **media-keys:** register MediaRewind/FastForward for macOS F7/F9 keys ([2b84602](https://github.com/pythoninthegrasses/mt/commit/2b84602b1d3652f111b98e7630faa283858f4609))
+* **metadata-modal:** prevent repeated re-opens during library updates ([3d61cd5](https://github.com/pythoninthegrasses/mt/commit/3d61cd581c714248237d7036d782a61bac5c123f))
+* **playback:** loop-one not re-queuing current track and icon not untoggling ([7481401](https://github.com/pythoninthegrasses/mt/commit/7481401a0937aeaaaca3bdc894344a65cff5abb8))
+* propagate DB errors instead of silently swallowing in removed tracks ([1451d61](https://github.com/pythoninthegrasses/mt/commit/1451d61f5ddbf113352544e0a91379957d19e1f8))
+* resolve clippy warnings in mount_detect and stats ([58b4293](https://github.com/pythoninthegrasses/mt/commit/58b4293a1873aef6fda4524fc0a2f8a43879e226))
+* **roam:** resolve 3 false-positive dependency cycles ([f7131bf](https://github.com/pythoninthegrasses/mt/commit/f7131bfe8f8f3368fd2fcfcc60a1582a54ce1bba))
+* **startup:** prevent FOUC flash between window.show() and CSS load ([#30](https://github.com/pythoninthegrasses/mt/issues/30)) ([930bc32](https://github.com/pythoninthegrasses/mt/commit/930bc3277ab2a6b2092d415b93a9b27eb2e430b5))
+* **test:** anchor Playwright route patterns to avoid intercepting JS modules ([f3b854b](https://github.com/pythoninthegrasses/mt/commit/f3b854b139c3f460ee7691b429f8e002e87efb6f))
+* **testing:** update 3 stale visual regression snapshots ([662b96e](https://github.com/pythoninthegrasses/mt/commit/662b96e2bd14935b0598fe5d2d03aa2fdf4cfa49))
+* **themes:** add dark-theme toggle overrides for network cache settings ([1b621a2](https://github.com/pythoninthegrasses/mt/commit/1b621a29a517b433a362ba203c7bd181172c39d9))
+* **ui:** prevent text selection on all UI chrome ([be560ce](https://github.com/pythoninthegrasses/mt/commit/be560ce99190e85e6bfb30a0772a4bc502680923))
+* **watcher:** return original tracks on filter_removed_tracks error ([4e3f633](https://github.com/pythoninthegrasses/mt/commit/4e3f633391358d606b6b52ace1a589bbc3f5b83a))
+
+
+### Performance Improvements
+
+* **conductor:** replace signed build with deno install in setup ([0841f5c](https://github.com/pythoninthegrasses/mt/commit/0841f5c666f0f2685d747c7f523e007d2a2f6f01))
+* **dev:** add cranelift codegen, panic=abort, and shared target dir ([b4ed57b](https://github.com/pythoninthegrasses/mt/commit/b4ed57b5d33f96d116133eedbc2d742389ed712e))
+* **dev:** add panic=abort and shared target dir for dev builds ([fea390e](https://github.com/pythoninthegrasses/mt/commit/fea390ed8e19df21784cc73087cd88f81280ae32))
+
 ## [1.0.0](https://github.com/pythoninthegrasses/mt/compare/v0.1.0...v1.0.0) (2026-02-21)
 
 
