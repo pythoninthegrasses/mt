@@ -74,7 +74,7 @@ jobs:
 
   build:
     name: Build (${{ matrix.platform }})
-    needs: rust-lint
+    needs: [rust-lint, deno-lint, vitest-tests, playwright-tests, rust-tests]
     strategy:
       fail-fast: false
       matrix:
