@@ -34,6 +34,7 @@ mod tests {
                 duration REAL,
                 file_size INTEGER DEFAULT 0,
                 file_mtime_ns INTEGER,
+                file_ctime_ns INTEGER,
                 file_inode INTEGER,
                 content_hash TEXT,
                 added_date TEXT,

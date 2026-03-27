@@ -79,6 +79,7 @@ pub struct ExtractedMetadata {
     pub duration: Option<f64>,
     pub file_size: i64,
     pub file_mtime_ns: Option<i64>,
+    pub file_ctime_ns: Option<i64>,
     pub file_inode: Option<u64>,
     pub bitrate: Option<u32>,
     pub sample_rate: Option<u32>,

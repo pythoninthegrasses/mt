@@ -45,6 +45,7 @@ pub(crate) fn get_favorites(
                     duration: row.get("duration")?,
                     file_size: row.get::<_, Option<i64>>("file_size")?.unwrap_or(0),
                     file_mtime_ns: row.get("file_mtime_ns")?,
+                    file_ctime_ns: row.get("file_ctime_ns").unwrap_or(None),
                     file_inode: row.get("file_inode")?,
                     content_hash: row.get("content_hash")?,
                     added_date: row.get("added_date")?,
@@ -71,7 +72,7 @@ pub(crate) fn get_top_25(conn: &Connection) -> DbResult<Vec<Track>> {
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
          FROM library
          WHERE play_count > 0
          ORDER BY play_count DESC, last_played DESC
@@ -96,6 +97,7 @@ pub(crate) fn get_top_25(conn: &Connection) -> DbResult<Vec<Track>> {
                 duration: row.get("duration")?,
                 file_size: row.get::<_, Option<i64>>("file_size")?.unwrap_or(0),
                 file_mtime_ns: row.get("file_mtime_ns")?,
+                file_ctime_ns: row.get("file_ctime_ns").unwrap_or(None),
                 file_inode: row.get("file_inode")?,
                 content_hash: row.get("content_hash")?,
                 added_date: row.get("added_date")?,
@@ -123,7 +125,7 @@ pub(crate) fn get_recently_played(
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
          FROM library
          WHERE last_played IS NOT NULL
            AND last_played >= datetime('now', ?)
@@ -149,6 +151,7 @@ pub(crate) fn get_recently_played(
                 duration: row.get("duration")?,
                 file_size: row.get::<_, Option<i64>>("file_size")?.unwrap_or(0),
                 file_mtime_ns: row.get("file_mtime_ns")?,
+                file_ctime_ns: row.get("file_ctime_ns").unwrap_or(None),
                 file_inode: row.get("file_inode")?,
                 content_hash: row.get("content_hash")?,
                 added_date: row.get("added_date")?,
@@ -172,7 +175,7 @@ pub(crate) fn get_recently_added(conn: &Connection, days: i64, limit: i64) -> Db
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
          FROM library
          WHERE added_date IS NOT NULL
            AND added_date >= datetime('now', ?)
@@ -198,6 +201,7 @@ pub(crate) fn get_recently_added(conn: &Connection, days: i64, limit: i64) -> Db
                 duration: row.get("duration")?,
                 file_size: row.get::<_, Option<i64>>("file_size")?.unwrap_or(0),
                 file_mtime_ns: row.get("file_mtime_ns")?,
+                file_ctime_ns: row.get("file_ctime_ns").unwrap_or(None),
                 file_inode: row.get("file_inode")?,
                 content_hash: row.get("content_hash")?,
                 added_date: row.get("added_date")?,

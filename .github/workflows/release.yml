@@ -23,17 +23,20 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-macos:
     name: Build macOS (ARM64)
     if: >
       github.event_name == 'release' ||
       inputs.platform == 'all' || inputs.platform == 'macos' || inputs.platform == ''
-    runs-on: [macOS, ARM64]
+    runs-on: [macOS, ARM64, studio]
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
@@ -64,40 +67,40 @@ jobs:
         run: |
           echo "$APPLE_API_KEY_B64" | base64 --decode > /tmp/auth_key.p8
 
-      - name: Build frontend
-        working-directory: ./app/frontend
-        run: npm run build
-
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build binary
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_PATH: /tmp/auth_key.p8
+          GITHUB_TOKEN: ${{ github.token }}
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
+        run: task ci:build TARGET=aarch64-apple-darwin
+
+      - name: Bundle and sign
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: task ci:bundle TARGET=aarch64-apple-darwin
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tagName: ${{ github.event.release.tag_name }}
-          releaseId: ${{ github.event.release.id }}
-          args: --target aarch64-apple-darwin --bundles app --config '{"build":{"beforeBuildCommand":""}}'
-          projectPath: './crates/mt-tauri'
+          name: macos-arm64
+          path: |
+            target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            target/aarch64-apple-darwin/release/bundle/macos/*.app
+          retention-days: 7
 
-      - name: Create DMG
-        run: |
-          APP_PATH="target/aarch64-apple-darwin/release/bundle/macos/mt.app"
-          DMG_PATH="target/aarch64-apple-darwin/release/bundle/dmg/mt_1.0.0_aarch64.dmg"
-          mkdir -p "$(dirname "$DMG_PATH")"
-          hdiutil create -volname "mt" -srcfolder "$APP_PATH" \
-            -ov -format UDZO "$DMG_PATH"
+      - name: Notarize
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: task ci:notarize TARGET=aarch64-apple-darwin
 
-      - name: Upload DMG to release
+      - name: Upload release assets
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ github.event.release.tag_name }}" \
-            target/aarch64-apple-darwin/release/bundle/dmg/mt_1.0.0_aarch64.dmg
+            target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
 
       - name: Cleanup CI keychain
         if: always()
@@ -110,43 +113,64 @@ jobs:
     if: >
       github.event_name == 'release' ||
       inputs.platform == 'all' || inputs.platform == 'linux' || inputs.platform == ''
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
 
-      - name: Build frontend
-        working-directory: ./app/frontend
-        run: npm run build
-
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build binary
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
+        run: task ci:build TARGET=x86_64-unknown-linux-gnu
+
+      - name: Bundle
+        run: task ci:bundle TARGET=x86_64-unknown-linux-gnu BUNDLES=deb
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tagName: ${{ github.event.release.tag_name }}
-          releaseId: ${{ github.event.release.id }}
-          args: --target x86_64-unknown-linux-gnu --bundles deb --config '{"build":{"beforeBuildCommand":""}}'
-          projectPath: './crates/mt-tauri'
+          name: linux-amd64
+          path: target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+          retention-days: 7
+
+      - name: Upload release assets
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
 
   build-linux-arm64:
     name: Build Linux (ARM64)
     if: >
       github.event_name == 'release' ||
       inputs.platform == 'all' || inputs.platform == 'linux' || inputs.platform == ''
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Install Task
+        uses: go-task/setup-task@v1
+
+      - name: Restore Taskfile fingerprint cache
+        uses: actions/cache@v4
+        with:
+          path: .task
+          key: task-${{ runner.os }}-${{ hashFiles('taskfiles/ci.yml') }}
+          restore-keys: |
+            task-${{ runner.os }}-
+
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -164,7 +188,14 @@ jobs:
             --output type=local,dest=dist/linux-arm64 \
             .
 
-      - name: Upload ARM64 artifacts to release
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64
+          path: dist/linux-arm64/*.deb
+          retention-days: 7
+
+      - name: Upload release assets
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -181,7 +212,22 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Bootstrap Windows prerequisites
+        shell: powershell
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $toInstall = @()
+          if (-not (Get-Command git -ErrorAction SilentlyContinue)) { $toInstall += 'git' }
+          if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) { $toInstall += 'pwsh' }
+          if ($toInstall.Count -gt 0) {
+            choco install @toInstall -y
+          }
+          $gitPath = (Get-ItemProperty 'HKLM:\SOFTWARE\GitForWindows' -ErrorAction SilentlyContinue).InstallPath
+          if ($gitPath) {
+            echo "$gitPath\cmd" >> $env:GITHUB_PATH
+          }
+
+      - uses: actions/checkout@v4
 
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
@@ -207,19 +253,11 @@ jobs:
           Export-PfxCertificate -Cert $cert -FilePath "${{ runner.temp }}\mt-cert.pfx" -Password $password
           echo "CERT_PATH=${{ runner.temp }}\mt-cert.pfx" >> $env:GITHUB_ENV
 
-      - name: Build frontend
-        shell: pwsh
-        working-directory: ./app/frontend
-        run: |
-          npm run build
-
       - name: Write signing config override
         shell: pwsh
         env:
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          # Write a .cmd wrapper so signtool path with spaces is properly quoted
-          # (.cmd files require cmd.exe to interpret — they can't be launched via CreateProcess)
           $signScript = Join-Path "${{ runner.temp }}" 'sign.cmd'
           @"
           @echo off
@@ -233,17 +271,31 @@ jobs:
           $config | Out-File -FilePath $configPath -Encoding utf8
           echo "SIGN_CONFIG_PATH=$configPath" >> $env:GITHUB_ENV
 
-      - name: Build NSIS installer
-        uses: tauri-apps/tauri-action@v0
+      - name: Build binary
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
+        run: task ci:build TARGET=x86_64-pc-windows-msvc CONFIG=${{ env.SIGN_CONFIG_PATH }}
+
+      - name: Bundle NSIS installer
+        shell: pwsh
+        run: task ci:bundle TARGET=x86_64-pc-windows-msvc BUNDLES=nsis CONFIG=${{ env.SIGN_CONFIG_PATH }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tagName: ${{ github.event.release.tag_name }}
-          releaseId: ${{ github.event.release.id }}
-          args: --target x86_64-pc-windows-msvc --bundles nsis --config "${{ env.SIGN_CONFIG_PATH }}"
-          projectPath: './crates/mt-tauri'
+          name: windows-x64
+          path: target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+          retention-days: 7
+
+      - name: Upload release assets
+        if: github.event_name == 'release'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" (Get-Item target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe)
 
       - name: Cleanup certificate
         if: always()
@@ -252,3 +304,70 @@ jobs:
           Remove-Item -Force "${{ runner.temp }}\mt-cert.pfx" -ErrorAction SilentlyContinue
           Remove-Item -Force "${{ runner.temp }}\sign-override.json" -ErrorAction SilentlyContinue
           Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Where-Object { $_.Subject -eq 'CN=MT' } | Remove-Item
+
+  update-readme:
+    name: Update README download links
+    needs: [build-macos, build-linux-amd64, build-linux-arm64, build-windows]
+    if: github.event_name == 'release'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update download table
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python3 << 'EOF'
+          import json, os, re, subprocess
+
+          tag = os.environ['TAG']
+          result = subprocess.run(
+            ['gh', 'api', f'repos/pythoninthegrass/mt/releases/tags/{tag}'],
+            capture_output=True, text=True, check=True
+          )
+          assets = json.loads(result.stdout)['assets']
+
+          PLATFORM_MAP = [
+            ('.dmg',  'macOS',   'Apple Silicon (ARM64)'),
+            ('amd64', 'Linux',   'x86_64 (amd64)'),
+            ('arm64', 'Linux',   'ARM64'),
+            ('.exe',  'Windows', 'x64'),
+          ]
+
+          rows = []
+          for asset in sorted(assets, key=lambda a: a['name']):
+            name = asset['name']
+            url  = asset['browser_download_url']
+            for key, platform, arch in PLATFORM_MAP:
+              if key in name:
+                rows.append(f'| {platform} | {arch} | [{name}]({url}) |')
+                break
+
+          table = '\n'.join([
+            '| Platform | Architecture | Download |',
+            '|----------|--------------|----------|',
+            *rows,
+          ])
+          section = f'<!-- DOWNLOADS:START -->\n{table}\n<!-- DOWNLOADS:END -->'
+
+          readme = open('README.md').read()
+          updated = re.sub(
+            r'<!-- DOWNLOADS:START -->.*?<!-- DOWNLOADS:END -->',
+            section, readme, flags=re.DOTALL
+          )
+          open('README.md', 'w').write(updated)
+          print(f"Updated README with {len(rows)} download link(s)")
+          EOF
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git diff --staged --quiet || git commit -m "chore: update download links for ${{ github.event.release.tag_name }} [skip ci]"
+          git push origin main

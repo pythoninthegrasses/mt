@@ -25,7 +25,6 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 - microsoft/playwright
 - mrlesk/backlog.md
 - nextest-rs/nextest
-- roborev-dev/roborev
 - serial-ata/lofty-rs
 - sharkdp/hyperfine
 - taiko2k/tauon
@@ -48,8 +47,8 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 | MCP bridge tools | [MCP Tool Reference](docs/mcp-reference.md) |
 | Remote debugging, crash analysis | [Debugging Guide](docs/debugging.md) |
 | Last.fm scrobbling | [Last.fm Integration](docs/lastfm.md) |
+| Themes, dark mode toggle fixes | [Theming Guide](docs/theming.md) |
 | Cross-platform builds, CI/CD | [Build Configuration](docs/builds.md) |
-| Continuous code review | [roborev](https://www.roborev.io/) |
 
 ## Architecture Overview
 
@@ -71,6 +70,18 @@ MT uses a pure Rust + Tauri architecture:
 Database: `mt.db`, Logs: see [Observability](docs/observability.md)
 
 See [Tauri Architecture](docs/tauri-architecture.md) for full details.
+
+### Rust Toolchain (mise + rustup)
+
+Three directories are involved — do NOT cross-link them:
+
+| Directory | Purpose | Managed by |
+|-----------|---------|------------|
+| `~/.cargo/bin/` | Real rustup binary + multicall symlinks (`cargo -> rustup`) | rustup |
+| `~/.local/share/mise/installs/rust/<version>/` | Relative multicall symlinks (`cargo -> rustup`) + rustup copy | mise |
+| `$CARGO_HOME/bin/` (project-local `.cache/cargo/bin/`) | Symlinks to `~/.cargo/bin/<tool>` | `cargo:_setup-cargo-home` task |
+
+`cargo.yml` adds `~/.cargo/bin` to PATH so rustup tools are always findable. The `_setup-cargo-home` task symlinks project-local `CARGO_HOME/bin/` to `~/.cargo/bin/` — never to the mise install dir, which has its own internal symlink structure.
 
 ## Queue and Shuffle Behavior
 
@@ -133,47 +144,6 @@ cargo check --manifest-path src-tauri/Cargo.toml  # Fast type check (no binary)
 3. **File Organization**: Frontend in `app/frontend/`, backend in `src-tauri/src/`. Keep files under 500 LOC.
 4. **Testing**: Unit tests + Playwright E2E. All integration tests MUST use Playwright.
 5. **Code Style**: `deno lint` + `deno fmt` (frontend), `cargo fmt` + `cargo clippy` (backend). Run formatters before committing.
-
-## Code Review (roborev)
-
-Every commit is automatically reviewed by [roborev](https://www.roborev.io/) via git hooks. Reviews run in the background and findings must be addressed before merging.
-
-Config: `.roborev.toml` (project), `~/.roborev/config.toml` (global)
-
-### CLI Commands
-
-```bash
-roborev show                          # List recent reviews
-roborev show --job <id>               # View a specific review
-roborev show --job <id> --json        # Machine-readable review output
-roborev fix                           # Fix all unaddressed reviews
-roborev fix <job_id>                  # Fix a specific review
-roborev fix --unaddressed --list      # List unaddressed reviews without fixing
-roborev refine                        # Fix, re-review, repeat until passing
-roborev comment --job <id> "<msg>"    # Add a comment to a review
-roborev address <job_id>              # Mark a review as addressed
-```
-
-### Agent Skills
-
-| Skill | Purpose |
-|-------|---------|
-| `/roborev-review` | Request a code review for a specific commit |
-| `/roborev-review-branch` | Review all commits on the current branch |
-| `/roborev-fix` | Discover and fix all unaddressed review findings |
-| `/roborev-address` | Fetch a review and make code changes to address findings |
-| `/roborev-respond` | Comment on a review and mark it as addressed |
-| `/roborev-design-review` | Request a design review for a commit |
-| `/roborev-design-review-branch` | Design review for all commits on current branch |
-
-### Workflow
-
-1. **Commit** — roborev automatically reviews in the background
-2. **Check** — `roborev show` or `roborev fix --unaddressed --list` to see findings
-3. **Fix** — `/roborev-fix` addresses findings, runs tests, comments, and marks addressed
-4. **Refine** — `roborev refine` loops fix-and-review in an isolated worktree until passing
-
-When `roborev fix` cannot automatically resolve a finding, create a backlog task with the `roborev` label and reference the job ID.
 
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 

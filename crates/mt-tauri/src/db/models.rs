@@ -23,6 +23,7 @@ pub struct Track {
     pub duration: Option<f64>,
     pub file_size: i64,
     pub file_mtime_ns: Option<i64>,
+    pub file_ctime_ns: Option<i64>,
     pub file_inode: Option<i64>,
     pub content_hash: Option<String>,
     pub added_date: Option<String>,
@@ -48,6 +49,7 @@ pub struct TrackMetadata {
     pub duration: Option<f64>,
     pub file_size: Option<i64>,
     pub file_mtime_ns: Option<i64>,
+    pub file_ctime_ns: Option<i64>,
     pub file_inode: Option<u64>,
     pub content_hash: Option<String>,
 }

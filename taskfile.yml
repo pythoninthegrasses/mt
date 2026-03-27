@@ -1,3 +1,5 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
 version: "3.0"
 
 set: ['e', 'u', 'pipefail']
@@ -30,30 +32,14 @@ includes:
     taskfile: ./taskfiles/cargo.yml
   tauri:
     taskfile: ./taskfiles/tauri.yml
+  ci:
+    taskfile: ./taskfiles/ci.yml
 
 tasks:
   default:
     desc: "Default task"
     cmds:
       - task --list
-
-  install-devbox:
-    desc: "Install devbox"
-    cmds:
-      - curl -fsSL https://get.jetify.com/devbox | bash
-    run: once
-    silent: true
-    environment:
-      FORCE: 1
-      INSTALL_DIR: "{{.HOME}}/.local/bin"
-    status:
-      - command -v devbox 2>/dev/null
-
-  install:
-    desc: "Install project dependencies"
-    deps: ["install-devbox"]
-    cmds:
-      - devbox install
 
   pre-commit:
     desc: "Run pre-commit hooks"

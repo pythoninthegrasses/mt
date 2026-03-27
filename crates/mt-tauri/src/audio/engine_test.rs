@@ -371,4 +371,363 @@ mod tests {
         assert_eq!(progress.position_ms, deserialized.position_ms);
         assert_eq!(progress.duration_ms, deserialized.duration_ms);
     }
+
+    // ==================== Device Enumeration Tests ====================
+
+    #[test]
+    fn test_list_output_devices_returns_vec() {
+        use crate::audio::list_output_devices;
+
+        let result = list_output_devices();
+        // Should succeed on any machine with audio hardware (CI may not have devices)
+        match result {
+            Ok(devices) => {
+                // Each device name should be non-empty
+                for name in &devices {
+                    assert!(!name.is_empty(), "Device name should not be empty");
+                }
+            }
+            Err(e) => {
+                // Acceptable on headless CI: no audio host available
+                let msg = e.to_string();
+                assert!(
+                    msg.contains("Device") || msg.contains("enumerate"),
+                    "Unexpected error: {}",
+                    msg
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_set_device_nonexistent_returns_error() {
+        use crate::audio::AudioEngine;
+
+        let engine = AudioEngine::new();
+        match engine {
+            Ok(mut engine) => {
+                let result = engine.set_device(Some("__nonexistent_device_12345__"));
+                assert!(result.is_err(), "set_device with bogus name should fail");
+                let err_msg = result.unwrap_err().to_string();
+                assert!(
+                    err_msg.contains("not found"),
+                    "Error should mention 'not found': {}",
+                    err_msg
+                );
+            }
+            Err(_) => {
+                // No audio output available (headless CI) — skip
+            }
+        }
+    }
+
+    #[test]
+    fn test_set_device_none_switches_to_default() {
+        use crate::audio::AudioEngine;
+
+        let engine = AudioEngine::new();
+        match engine {
+            Ok(mut engine) => {
+                // Switching to default (None) should succeed
+                let result = engine.set_device(None);
+                assert!(
+                    result.is_ok(),
+                    "set_device(None) should succeed: {:?}",
+                    result.err()
+                );
+            }
+            Err(_) => {
+                // No audio output available (headless CI) — skip
+            }
+        }
+    }
+
+    // ==================== No-Stream Error Handling ====================
+
+    #[test]
+    fn test_load_returns_error_when_stream_is_none() {
+        use crate::audio::AudioEngine;
+        use std::path::PathBuf;
+
+        let engine = AudioEngine::new();
+        match engine {
+            Ok(mut engine) => {
+                engine.drop_stream();
+                let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/test_sample.mp3");
+                let result = engine.load(fixture.to_str().unwrap());
+                assert!(
+                    result.is_err(),
+                    "load() should fail without an active stream"
+                );
+                let err = result.unwrap_err().to_string();
+                assert!(
+                    err.contains("No active audio stream"),
+                    "Expected stream error, got: {}",
+                    err
+                );
+            }
+            Err(_) => {}
+        }
+    }
+
+    #[test]
+    fn test_seek_backward_returns_error_when_stream_is_none() {
+        use crate::audio::AudioEngine;
+        use std::path::PathBuf;
+
+        let engine = AudioEngine::new();
+        match engine {
+            Ok(mut engine) => {
+                let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/test_sample.mp3");
+
+                // Load a track so there's something to seek on
+                let load_result = engine.load(fixture.to_str().unwrap());
+                if load_result.is_err() {
+                    return; // Audio hardware not usable
+                }
+                engine.play().unwrap();
+
+                // Seek forward to give us a position to seek backward from
+                let _ = engine.seek(2000);
+
+                // Drop the stream to simulate the transient None state
+                engine.drop_stream();
+
+                // Backward seek (reload path) should return a stream error
+                let result = engine.seek(0);
+                assert!(result.is_err(), "seek should fail without an active stream");
+                let err = result.unwrap_err().to_string();
+                assert!(
+                    err.contains("No active audio stream"),
+                    "Expected stream error, got: {}",
+                    err
+                );
+            }
+            Err(_) => {}
+        }
+    }
+
+    // ==================== Device Switch State Preservation ====================
+
+    #[test]
+    fn test_set_device_preserves_stopped_state_without_track() {
+        use crate::audio::AudioEngine;
+
+        let engine = AudioEngine::new();
+        match engine {
+            Ok(mut engine) => {
+                assert_eq!(engine.get_state(), PlaybackState::Stopped);
+                assert!(engine.get_current_track().is_none());
+
+                let result = engine.set_device(None);
+                assert!(
+                    result.is_ok(),
+                    "set_device(None) failed: {:?}",
+                    result.err()
+                );
+
+                // State should remain Stopped, no track loaded
+                assert_eq!(engine.get_state(), PlaybackState::Stopped);
+                assert!(engine.get_current_track().is_none());
+            }
+            Err(_) => {}
+        }
+    }
+
+    #[test]
+    fn test_set_device_preserves_paused_state_with_track() {
+        use crate::audio::AudioEngine;
+        use std::path::PathBuf;
+
+        let engine = AudioEngine::new();
+        match engine {
+            Ok(mut engine) => {
+                let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/test_sample.mp3");
+
+                let load_result = engine.load(fixture.to_str().unwrap());
+                if load_result.is_err() {
+                    return;
+                }
+
+                // Engine is paused after load (not yet playing)
+                assert_eq!(engine.get_state(), PlaybackState::Paused);
+                let track_path = engine.get_current_track().unwrap().path.clone();
+
+                let result = engine.set_device(None);
+                assert!(
+                    result.is_ok(),
+                    "set_device(None) failed: {:?}",
+                    result.err()
+                );
+
+                // Track should still be loaded and paused
+                assert_eq!(engine.get_state(), PlaybackState::Paused);
+                assert!(engine.get_current_track().is_some());
+                assert_eq!(engine.get_current_track().unwrap().path, track_path);
+            }
+            Err(_) => {}
+        }
+    }
+
+    #[test]
+    fn test_set_device_preserves_playing_state() {
+        use crate::audio::AudioEngine;
+        use std::path::PathBuf;
+
+        let engine = AudioEngine::new();
+        match engine {
+            Ok(mut engine) => {
+                let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/test_sample.mp3");
+
+                let load_result = engine.load(fixture.to_str().unwrap());
+                if load_result.is_err() {
+                    return;
+                }
+                engine.play().unwrap();
+                assert_eq!(engine.get_state(), PlaybackState::Playing);
+
+                let result = engine.set_device(None);
+                assert!(
+                    result.is_ok(),
+                    "set_device(None) failed: {:?}",
+                    result.err()
+                );
+
+                // Should still be playing after device switch
+                assert_eq!(engine.get_state(), PlaybackState::Playing);
+                assert!(engine.get_current_track().is_some());
+            }
+            Err(_) => {}
+        }
+    }
+
+    #[test]
+    fn test_set_device_preserves_volume() {
+        use crate::audio::AudioEngine;
+
+        let engine = AudioEngine::new();
+        match engine {
+            Ok(mut engine) => {
+                engine.set_volume(0.42);
+                assert!((engine.get_volume() - 0.42).abs() < f32::EPSILON);
+
+                let result = engine.set_device(None);
+                assert!(
+                    result.is_ok(),
+                    "set_device(None) failed: {:?}",
+                    result.err()
+                );
+
+                assert!(
+                    (engine.get_volume() - 0.42).abs() < f32::EPSILON,
+                    "Volume should be preserved after device switch, got: {}",
+                    engine.get_volume()
+                );
+            }
+            Err(_) => {}
+        }
+    }
+
+    #[test]
+    fn test_set_device_nonexistent_preserves_playback() {
+        use crate::audio::AudioEngine;
+        use std::path::PathBuf;
+
+        let engine = AudioEngine::new();
+        match engine {
+            Ok(mut engine) => {
+                let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/test_sample.mp3");
+
+                let load_result = engine.load(fixture.to_str().unwrap());
+                if load_result.is_err() {
+                    return;
+                }
+                engine.play().unwrap();
+
+                // Attempting a bogus device should fail but NOT disrupt playback
+                let result = engine.set_device(Some("__nonexistent_device_xyz__"));
+                assert!(result.is_err());
+
+                // Playback should still be intact
+                assert_eq!(engine.get_state(), PlaybackState::Playing);
+                assert!(engine.get_current_track().is_some());
+            }
+            Err(_) => {}
+        }
+    }
+
+    #[test]
+    fn test_set_device_consecutive_switches() {
+        use crate::audio::AudioEngine;
+        use std::path::PathBuf;
+
+        let engine = AudioEngine::new();
+        match engine {
+            Ok(mut engine) => {
+                let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/test_sample.mp3");
+
+                let load_result = engine.load(fixture.to_str().unwrap());
+                if load_result.is_err() {
+                    return;
+                }
+                engine.play().unwrap();
+
+                // Switch to default multiple times in succession
+                for i in 0..3 {
+                    let result = engine.set_device(None);
+                    assert!(
+                        result.is_ok(),
+                        "set_device(None) failed on iteration {}: {:?}",
+                        i,
+                        result.err()
+                    );
+                    assert_eq!(
+                        engine.get_state(),
+                        PlaybackState::Playing,
+                        "Should still be playing after switch #{}",
+                        i
+                    );
+                }
+
+                assert!(engine.get_current_track().is_some());
+            }
+            Err(_) => {}
+        }
+    }
+
+    #[test]
+    fn test_set_device_load_works_after_switch() {
+        use crate::audio::AudioEngine;
+        use std::path::PathBuf;
+
+        let engine = AudioEngine::new();
+        match engine {
+            Ok(mut engine) => {
+                let result = engine.set_device(None);
+                assert!(
+                    result.is_ok(),
+                    "set_device(None) failed: {:?}",
+                    result.err()
+                );
+
+                // Loading a track after device switch should work
+                let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/test_sample.mp3");
+                let load_result = engine.load(fixture.to_str().unwrap());
+                assert!(
+                    load_result.is_ok(),
+                    "load() after device switch failed: {:?}",
+                    load_result.err()
+                );
+                assert!(engine.get_current_track().is_some());
+            }
+            Err(_) => {}
+        }
+    }
 }

@@ -457,7 +457,7 @@ test.describe('Playlist Feature Parity (task-150)', () => {
   test.beforeEach(async ({ page }) => {
     clearApiCalls(playlistState);
     await setupPlaylistMocks(page, playlistState);
-    await page.route('**/api/library**', async (route) => {
+    await page.route(/\/api\/library(\?.*)?$/, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

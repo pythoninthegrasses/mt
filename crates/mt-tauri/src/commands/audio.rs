@@ -1,10 +1,13 @@
-use crate::audio::{AudioEngine, PlaybackState, TrackInfo};
+use crate::audio::{AudioEngine, PlaybackState, TrackInfo, list_output_devices};
+use crate::cache::NetworkFileCache;
+use crate::cache::mount_detect::is_network_mount;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
-use tracing::{debug, error};
+use tauri_plugin_store::StoreExt;
+use tracing::{debug, error, info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlaybackStatus {
@@ -13,6 +16,11 @@ pub struct PlaybackStatus {
     pub state: PlaybackState,
     pub volume: f32,
     pub track: Option<TrackInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceListResponse {
+    pub devices: Vec<String>,
 }
 
 enum AudioCommand {
@@ -25,6 +33,8 @@ enum AudioCommand {
     SetVolume(f32, Sender<Result<(), String>>),
     GetVolume(Sender<f32>),
     GetStatus(Sender<PlaybackStatus>),
+    ListDevices(Sender<Result<Vec<String>, String>>),
+    SetDevice(Option<String>, Sender<Result<(), String>>),
 }
 
 struct PlayCountState {
@@ -66,6 +76,26 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
             return;
         }
     };
+
+    // Restore saved audio output device from settings
+    if let Ok(store) = app.store("mt-settings.json")
+        && let Some(device_value) = store.get("audio_output_device")
+        && let Some(device_name) = device_value.as_str()
+        && device_name != "default"
+    {
+        match engine.set_device(Some(device_name)) {
+            Ok(()) => {
+                info!(device = device_name, "Restored saved audio output device");
+            }
+            Err(e) => {
+                warn!(
+                    device = device_name,
+                    error = %e,
+                    "Saved audio device unavailable, using default"
+                );
+            }
+        }
+    }
 
     let mut last_finished = false;
     let mut last_emit = std::time::Instant::now();
@@ -161,6 +191,16 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                     };
                     let _ = reply.send(status);
                 }
+                AudioCommand::ListDevices(reply) => {
+                    let result = list_output_devices().map_err(|e| e.to_string());
+                    let _ = reply.send(result);
+                }
+                AudioCommand::SetDevice(name, reply) => {
+                    let result = engine
+                        .set_device(name.as_deref())
+                        .map_err(|e| e.to_string());
+                    let _ = reply.send(result);
+                }
             },
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
@@ -237,27 +277,65 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
     }
 }
 
-#[tracing::instrument(skip(state))]
+/// If network caching is enabled and the path is on a network mount,
+/// copy the file to the local cache and return the cached path.
+/// Otherwise return the original path unchanged.
+fn resolve_cached_path(path: &str, cache: &State<NetworkFileCache>, app: &AppHandle) -> String {
+    let enabled = app
+        .store("settings.json")
+        .ok()
+        .and_then(|s| s.get("network_cache_enabled"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if !enabled {
+        return path.to_string();
+    }
+
+    if !is_network_mount(path) {
+        return path.to_string();
+    }
+
+    match cache.get_or_cache(path) {
+        Ok(cached) => {
+            let cached_str = cached.to_string_lossy().to_string();
+            debug!(source = path, cached = %cached_str, "Using cached network file");
+            cached_str
+        }
+        Err(e) => {
+            warn!(source = path, error = %e, "Failed to cache network file, using original");
+            path.to_string()
+        }
+    }
+}
+
+#[tracing::instrument(skip(state, cache, app))]
 #[tauri::command]
 pub(crate) fn audio_load(
     path: String,
     track_id: Option<i64>,
     state: State<AudioState>,
+    cache: State<NetworkFileCache>,
+    app: AppHandle,
 ) -> Result<TrackInfo, String> {
+    let resolved = resolve_cached_path(&path, &cache, &app);
     let (tx, rx) = mpsc::channel();
-    state.send_command(AudioCommand::Load(path, track_id, tx));
+    state.send_command(AudioCommand::Load(resolved, track_id, tx));
     rx.recv().map_err(|_| "Channel closed".to_string())?
 }
 
-#[tracing::instrument(skip(state))]
+#[tracing::instrument(skip(state, cache, app))]
 #[tauri::command]
 pub(crate) fn audio_load_and_play(
     path: String,
     track_id: Option<i64>,
     state: State<AudioState>,
+    cache: State<NetworkFileCache>,
+    app: AppHandle,
 ) -> Result<TrackInfo, String> {
+    let resolved = resolve_cached_path(&path, &cache, &app);
     let (tx, rx) = mpsc::channel();
-    state.send_command(AudioCommand::LoadAndPlay(path, track_id, tx));
+    state.send_command(AudioCommand::LoadAndPlay(resolved, track_id, tx));
     rx.recv().map_err(|_| "Channel closed".to_string())?
 }
 
@@ -321,6 +399,88 @@ pub(crate) fn audio_get_status(state: State<AudioState>) -> PlaybackStatus {
         volume: 1.0,
         track: None,
     })
+}
+
+#[derive(Serialize)]
+pub(crate) struct CacheStatusResponse {
+    pub enabled: bool,
+    pub persistent: bool,
+    pub max_bytes: u64,
+    pub used_bytes: u64,
+    pub file_count: usize,
+}
+
+#[tracing::instrument(skip(cache, app))]
+#[tauri::command]
+pub(crate) fn network_cache_status(
+    cache: State<NetworkFileCache>,
+    app: AppHandle,
+) -> Result<CacheStatusResponse, String> {
+    let store = app
+        .store("settings.json")
+        .map_err(|e| format!("Failed to open settings store: {}", e))?;
+
+    let enabled = store
+        .get("network_cache_enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let persistent = store
+        .get("network_cache_persistent")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let max_gb = store
+        .get("network_cache_max_gb")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(2.0);
+
+    Ok(CacheStatusResponse {
+        enabled,
+        persistent,
+        max_bytes: (max_gb * 1_073_741_824.0) as u64,
+        used_bytes: cache.current_size_bytes(),
+        file_count: cache.entry_count(),
+    })
+}
+
+#[tracing::instrument(skip(cache))]
+#[tauri::command]
+pub(crate) fn network_cache_purge(cache: State<NetworkFileCache>) -> Result<(), String> {
+    cache
+        .purge()
+        .map_err(|e| format!("Failed to purge cache: {}", e))
+}
+
+#[tracing::instrument(skip(state))]
+#[tauri::command]
+pub(crate) fn audio_list_devices(state: State<AudioState>) -> Result<DeviceListResponse, String> {
+    let (tx, rx) = mpsc::channel();
+    state.send_command(AudioCommand::ListDevices(tx));
+    let devices = rx.recv().map_err(|_| "Channel closed".to_string())??;
+    Ok(DeviceListResponse { devices })
+}
+
+#[tracing::instrument(skip(state, app))]
+#[tauri::command]
+pub(crate) fn audio_set_device(
+    device_name: Option<String>,
+    state: State<AudioState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let (tx, rx) = mpsc::channel();
+    state.send_command(AudioCommand::SetDevice(device_name.clone(), tx));
+    rx.recv().map_err(|_| "Channel closed".to_string())??;
+
+    // Persist selection to settings store
+    let store = app
+        .store("mt-settings.json")
+        .map_err(|e| format!("Failed to open settings store: {}", e))?;
+    let value = device_name.unwrap_or_else(|| "default".to_string());
+    store.set("audio_output_device", serde_json::json!(value));
+    store
+        .save()
+        .map_err(|e| format!("Failed to save settings: {}", e))?;
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -699,5 +859,101 @@ mod tests {
 
         let ratio = position_ms as f64 / duration_ms as f64;
         assert!(ratio >= threshold);
+    }
+
+    // ==================== Device Command Tests ====================
+
+    #[test]
+    fn test_audio_command_list_devices_variant() {
+        let (tx, rx) = mpsc::channel::<Result<Vec<String>, String>>();
+        let cmd = AudioCommand::ListDevices(tx);
+
+        match cmd {
+            AudioCommand::ListDevices(sender) => {
+                let _ = sender.send(Ok(vec![
+                    "Built-in Output".to_string(),
+                    "External DAC".to_string(),
+                ]));
+            }
+            _ => panic!("Wrong command variant"),
+        }
+
+        let result = rx.recv().unwrap();
+        assert!(result.is_ok());
+        let devices = result.unwrap();
+        assert_eq!(devices.len(), 2);
+        assert_eq!(devices[0], "Built-in Output");
+        assert_eq!(devices[1], "External DAC");
+    }
+
+    #[test]
+    fn test_audio_command_set_device_with_name() {
+        let (tx, rx) = mpsc::channel::<Result<(), String>>();
+        let cmd = AudioCommand::SetDevice(Some("External DAC".to_string()), tx);
+
+        match cmd {
+            AudioCommand::SetDevice(name, sender) => {
+                assert_eq!(name, Some("External DAC".to_string()));
+                let _ = sender.send(Ok(()));
+            }
+            _ => panic!("Wrong command variant"),
+        }
+
+        assert!(rx.recv().unwrap().is_ok());
+    }
+
+    #[test]
+    fn test_audio_command_set_device_default() {
+        let (tx, rx) = mpsc::channel::<Result<(), String>>();
+        let cmd = AudioCommand::SetDevice(None, tx);
+
+        match cmd {
+            AudioCommand::SetDevice(name, sender) => {
+                assert!(name.is_none());
+                let _ = sender.send(Ok(()));
+            }
+            _ => panic!("Wrong command variant"),
+        }
+
+        assert!(rx.recv().unwrap().is_ok());
+    }
+
+    // ==================== DeviceListResponse Tests ====================
+
+    #[test]
+    fn test_device_list_response_serialization() {
+        let response = DeviceListResponse {
+            devices: vec!["Built-in Output".to_string(), "External DAC".to_string()],
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"devices\""));
+        assert!(json.contains("Built-in Output"));
+        assert!(json.contains("External DAC"));
+    }
+
+    #[test]
+    fn test_device_list_response_deserialization() {
+        let json = r#"{"devices":["Speaker","Headphones"]}"#;
+        let response: DeviceListResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.devices.len(), 2);
+        assert_eq!(response.devices[0], "Speaker");
+        assert_eq!(response.devices[1], "Headphones");
+    }
+
+    #[test]
+    fn test_device_list_response_empty() {
+        let response = DeviceListResponse { devices: vec![] };
+        let json = serde_json::to_string(&response).unwrap();
+        assert_eq!(json, r#"{"devices":[]}"#);
+    }
+
+    #[test]
+    fn test_device_list_response_clone() {
+        let response = DeviceListResponse {
+            devices: vec!["Test Device".to_string()],
+        };
+        let cloned = response.clone();
+        assert_eq!(response.devices, cloned.devices);
     }
 }

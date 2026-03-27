@@ -2833,6 +2833,7 @@ dependencies = [
  "dirs",
  "dispatch2",
  "image",
+ "libc",
  "lofty",
  "lru",
  "md5",
@@ -2871,6 +2872,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "walkdir",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

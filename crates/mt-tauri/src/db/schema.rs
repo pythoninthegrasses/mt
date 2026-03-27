@@ -448,6 +448,52 @@ pub(crate) fn run_migrations(conn: &Connection) -> DbResult<()> {
         info!("play_history track_id index created");
     }
 
+    // Migration: Add file_ctime_ns column for creation time (birthtime)
+    let library_columns = get_table_columns(conn, "library")?;
+    if !library_columns.contains(&"file_ctime_ns".to_string()) {
+        info!("Adding file_ctime_ns column to library table");
+        conn.execute("ALTER TABLE library ADD COLUMN file_ctime_ns INTEGER", [])?;
+        info!("file_ctime_ns column added");
+    }
+
+    // Migration: Create deduplicated_tracks table for cross-directory dedup
+    if !table_exists(conn, "deduplicated_tracks")? {
+        info!("Creating deduplicated_tracks table");
+        conn.execute(
+            "CREATE TABLE deduplicated_tracks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kept_track_id INTEGER NOT NULL REFERENCES library(id),
+                suppressed_filepath TEXT NOT NULL,
+                suppressed_content_hash TEXT,
+                suppressed_ctime_ns INTEGER,
+                suppressed_mtime_ns INTEGER,
+                deduplicated_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+            )",
+            [],
+        )?;
+        info!("deduplicated_tracks table created");
+    }
+
+    // Migration: Add indexes on deduplicated_tracks
+    if !index_exists(conn, "idx_dedup_kept_track")? {
+        info!("Creating kept_track_id index on deduplicated_tracks");
+        conn.execute(
+            "CREATE INDEX idx_dedup_kept_track ON deduplicated_tracks(kept_track_id)",
+            [],
+        )?;
+        info!("kept_track_id index created");
+    }
+
+    if !index_exists(conn, "idx_dedup_content_hash")? {
+        info!("Creating content_hash index on deduplicated_tracks");
+        conn.execute(
+            "CREATE INDEX idx_dedup_content_hash ON deduplicated_tracks(suppressed_content_hash)",
+            [],
+        )?;
+        info!("content_hash index created");
+    }
+
+
     Ok(())
 }
 
@@ -537,5 +583,30 @@ mod tests {
         assert!(columns.contains(&"disc_number".to_string()));
         assert!(columns.contains(&"disc_total".to_string()));
         assert!(columns.contains(&"genre".to_string()));
+        // Cross-directory dedup columns
+        assert!(columns.contains(&"file_ctime_ns".to_string()));
+    }
+
+    #[test]
+    fn test_deduplicated_tracks_table_created() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_tables(&conn).expect("Failed to create tables");
+        run_migrations(&conn).expect("Migrations failed");
+
+        assert!(table_exists(&conn, "deduplicated_tracks").unwrap());
+
+        // Verify indexes exist
+        assert!(index_exists(&conn, "idx_dedup_kept_track").unwrap());
+        assert!(index_exists(&conn, "idx_dedup_content_hash").unwrap());
+
+        // Verify table schema has expected columns
+        let columns = get_table_columns(&conn, "deduplicated_tracks").unwrap();
+        assert!(columns.contains(&"id".to_string()));
+        assert!(columns.contains(&"kept_track_id".to_string()));
+        assert!(columns.contains(&"suppressed_filepath".to_string()));
+        assert!(columns.contains(&"suppressed_content_hash".to_string()));
+        assert!(columns.contains(&"suppressed_ctime_ns".to_string()));
+        assert!(columns.contains(&"suppressed_mtime_ns".to_string()));
+        assert!(columns.contains(&"deduplicated_at".to_string()));
     }
 }

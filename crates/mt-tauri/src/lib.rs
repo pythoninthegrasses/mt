@@ -1,4 +1,5 @@
 pub mod audio;
+pub(crate) mod cache;
 pub(crate) mod commands;
 pub(crate) mod db;
 pub(crate) mod dialog;
@@ -6,6 +7,7 @@ pub(crate) mod events;
 pub(crate) mod lastfm;
 pub(crate) mod library;
 pub(crate) mod logging;
+pub(crate) mod lyrics;
 pub(crate) mod media_keys;
 pub(crate) mod metadata;
 pub(crate) mod scanner;
@@ -14,16 +16,18 @@ pub(crate) mod watcher;
 #[cfg(test)]
 mod concurrency_test;
 
+use cache::NetworkFileCache;
 use commands::{
-    AudioState, audio_get_status, audio_get_volume, audio_load, audio_load_and_play, audio_pause,
-    audio_play, audio_seek, audio_set_volume, audio_stop, favorites_add, favorites_check,
-    favorites_get, favorites_get_recently_added, favorites_get_recently_played,
-    favorites_get_top25, favorites_remove, lastfm_auth_callback, lastfm_cache_loved_tracks,
-    lastfm_disconnect, lastfm_get_auth_url, lastfm_get_settings, lastfm_import_loved_tracks,
-    lastfm_loved_stats, lastfm_match_loved_tracks, lastfm_now_playing, lastfm_queue_retry,
-    lastfm_queue_status, lastfm_reset_loved_cache, lastfm_scrobble, lastfm_update_settings,
-    match_loved_tracks_impl, playlist_add_tracks, playlist_create, playlist_delete,
-    playlist_generate_name, playlist_get, playlist_list, playlist_remove_track,
+    AudioState, audio_get_status, audio_get_volume, audio_list_devices, audio_load,
+    audio_load_and_play, audio_pause, audio_play, audio_seek, audio_set_device, audio_set_volume,
+    audio_stop, favorites_add, favorites_check, favorites_get, favorites_get_recently_added,
+    favorites_get_recently_played, favorites_get_top25, favorites_remove, lastfm_auth_callback,
+    lastfm_cache_loved_tracks, lastfm_disconnect, lastfm_get_auth_url, lastfm_get_settings,
+    lastfm_import_loved_tracks, lastfm_loved_stats, lastfm_match_loved_tracks, lastfm_now_playing,
+    lastfm_queue_retry, lastfm_queue_status, lastfm_reset_loved_cache, lastfm_scrobble,
+    lastfm_update_settings, lyrics_clear_cache, lyrics_get, match_loved_tracks_impl,
+    network_cache_purge, network_cache_status, playlist_add_tracks, playlist_create,
+    playlist_delete, playlist_generate_name, playlist_get, playlist_list, playlist_remove_track,
     playlist_reorder_tracks, playlist_update, playlists_reorder, queue_add, queue_add_files,
     queue_clear, queue_get, queue_get_playback_state, queue_remove, queue_reorder,
     queue_set_current_index, queue_set_loop, queue_set_shuffle, queue_shuffle, settings_get,
@@ -48,6 +52,7 @@ use serde::Serialize;
 use std::time::Duration;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+use tauri_plugin_store::StoreExt;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, error, info, warn};
 use watcher::{
@@ -329,6 +334,8 @@ pub fn run() {
             audio_set_volume,
             audio_get_volume,
             audio_get_status,
+            audio_list_devices,
+            audio_set_device,
             open_file_dialog,
             open_folder_dialog,
             open_add_music_dialog,
@@ -413,6 +420,8 @@ pub fn run() {
             lastfm_match_loved_tracks,
             lastfm_loved_stats,
             lastfm_reset_loved_cache,
+            lyrics_get,
+            lyrics_clear_cache,
             settings_get_all,
             settings_get,
             settings_set,
@@ -423,6 +432,8 @@ pub fn run() {
             stats_get_genres,
             stats_get_plays_over_time,
             stats_generate_chart_grid,
+            network_cache_status,
+            network_cache_purge,
         ])
         .setup(|app| {
             // Initialize database
@@ -445,6 +456,36 @@ pub fn run() {
             let artwork_cache = scanner::artwork_cache::ArtworkCache::with_capacity(50);
             app.manage(artwork_cache);
             debug!("Artwork cache initialized (LRU, capacity: 50)");
+
+            // Initialize network file cache for SMB/NFS mounts
+            let cache_dir = app.path().app_data_dir()
+                .expect("Failed to get app data directory")
+                .join("network_cache");
+            // Default 2 GB; actual limit is read from settings at runtime via set_max_bytes
+            let default_max_bytes: u64 = 2 * 1024 * 1024 * 1024;
+            match NetworkFileCache::new(cache_dir, default_max_bytes) {
+                Ok(network_cache) => {
+                    // Apply persisted max_bytes from settings if available
+                    if let Ok(store) = app.store("settings.json")
+                        && let Some(max_gb) =
+                            store.get("network_cache_max_gb").and_then(|v| v.as_f64())
+                    {
+                        network_cache.set_max_bytes((max_gb * 1_073_741_824.0) as u64);
+                    }
+                    let count = network_cache.entry_count();
+                    let bytes = network_cache.current_size_bytes();
+                    app.manage(network_cache);
+                    info!(entries = count, bytes, "Network file cache initialized");
+                }
+                Err(e) => {
+                    warn!(error = %e, "Failed to initialize network file cache; creating empty fallback");
+                    // Create a fallback with a temp dir so the app still runs
+                    let fallback_dir = std::env::temp_dir().join("mt_network_cache_fallback");
+                    let fallback = NetworkFileCache::new(fallback_dir, default_max_bytes)
+                        .expect("Failed to create fallback network cache");
+                    app.manage(fallback);
+                }
+            }
 
             // Pass database clone to watcher manager
             let watcher = WatcherManager::new(app.handle().clone(), database_for_watcher);
@@ -577,6 +618,27 @@ pub fn run() {
         .on_window_event(|_window, _event| {
             // Window event handler (sidecar removed in migration)
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                // Purge non-persistent cache on exit
+                let persistent = app_handle
+                    .store("settings.json")
+                    .ok()
+                    .and_then(|s| s.get("network_cache_persistent"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                if !persistent
+                    && let Some(cache) = app_handle.try_state::<NetworkFileCache>()
+                {
+                    if let Err(e) = cache.purge() {
+                        error!(error = %e, "Failed to purge network cache on exit");
+                    } else {
+                        info!("Non-persistent network cache purged on exit");
+                    }
+                }
+            }
+        });
 }

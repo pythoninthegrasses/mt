@@ -1,4 +1,6 @@
+import { audio } from '../api/audio.js';
 import { lastfm } from '../api/lastfm.js';
+import { settings } from '../api/settings.js';
 import { modLabel, SHORTCUT_DEFINITIONS } from '../shortcuts.js';
 
 export function createSettingsView(Alpine) {
@@ -11,6 +13,7 @@ export function createSettingsView(Alpine) {
 
     navSections: [
       { id: 'general', label: 'General' },
+      { id: 'audio', label: 'Audio' },
       { id: 'appearance', label: 'Appearance' },
       { id: 'library', label: 'Library' },
       { id: 'columns', label: 'Columns' },
@@ -47,6 +50,19 @@ export function createSettingsView(Alpine) {
       progress: null,
     },
 
+    networkCache: {
+      enabled: false,
+      persistent: false,
+      maxGb: 2,
+      usedBytes: 0,
+      fileCount: 0,
+      isPurging: false,
+    },
+
+    audioDevices: [],
+    selectedAudioDevice: 'default',
+    audioDevicesLoading: false,
+
     // Column settings for Settings > Columns section
     columnSettings: {
       visibleCount: 0,
@@ -60,6 +76,7 @@ export function createSettingsView(Alpine) {
       resetSort: true,
     },
 
+    deduplicateAcrossDirectories: true,
     isExportingLogs: false,
     isDraggingThreshold: false,
 
@@ -89,9 +106,10 @@ export function createSettingsView(Alpine) {
 
     reconcilePhaseText() {
       if (!this.reconcileScan.progress) return '';
-      return this.reconcileScan.progress.phase === 'fingerprinting'
-        ? 'Computing fingerprints...'
-        : 'Merging duplicates...';
+      const phase = this.reconcileScan.progress.phase;
+      if (phase === 'fingerprinting') return 'Computing fingerprints...';
+      if (phase === 'cross_directory_dedup') return 'Cross-directory dedup...';
+      return 'Merging duplicates...';
     },
 
     reconcileProgressText() {
@@ -135,6 +153,33 @@ export function createSettingsView(Alpine) {
       return this.lastfm.enabled ? 'translate-x-6' : 'translate-x-1';
     },
 
+    networkCacheToggleTrackClass() {
+      return this.networkCache.enabled ? 'bg-primary' : 'bg-muted';
+    },
+
+    networkCacheToggleThumbClass() {
+      return this.networkCache.enabled ? 'translate-x-6' : 'translate-x-1';
+    },
+
+    networkCachePersistentTrackClass() {
+      return this.networkCache.persistent ? 'bg-primary' : 'bg-muted';
+    },
+
+    networkCachePersistentThumbClass() {
+      return this.networkCache.persistent ? 'translate-x-6' : 'translate-x-1';
+    },
+
+    purgeButtonText() {
+      return this.networkCache.isPurging ? 'Clearing...' : 'Clear Cache';
+    },
+
+    formatCacheSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(1024));
+      return `${(bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
+    },
+
     connectButtonText() {
       return this.lastfm.isConnecting ? 'Connecting...' : 'Connect';
     },
@@ -161,9 +206,15 @@ export function createSettingsView(Alpine) {
 
     async init() {
       await this.loadAppInfo();
+      await this.loadAudioDevices();
       await this.loadWatchedFolders();
       await this.loadLastfmSettings();
+      await this.loadNetworkCacheStatus();
       this.loadColumnSettings();
+      this.deduplicateAcrossDirectories = window.settings.get(
+        'library.deduplicateAcrossDirectories',
+        true,
+      );
     },
 
     async loadAppInfo() {
@@ -191,6 +242,38 @@ export function createSettingsView(Alpine) {
           build: 'unknown',
           platform: 'unknown',
         };
+      }
+    },
+
+    async loadAudioDevices() {
+      this.audioDevicesLoading = true;
+      try {
+        const response = await audio.listDevices();
+        this.audioDevices = response.devices || [];
+
+        // Load saved device selection
+        const saved = await settings.get('audio_output_device');
+        if (saved && saved.value && saved.value !== 'default') {
+          this.selectedAudioDevice = saved.value;
+        } else {
+          this.selectedAudioDevice = 'default';
+        }
+      } catch (error) {
+        console.error('[settings] Failed to load audio devices:', error);
+        this.audioDevices = [];
+      } finally {
+        this.audioDevicesLoading = false;
+      }
+    },
+
+    async setAudioDevice(deviceName) {
+      const previous = this.selectedAudioDevice;
+      this.selectedAudioDevice = deviceName;
+      try {
+        await audio.setDevice(deviceName === 'default' ? null : deviceName);
+      } catch (error) {
+        console.error('[settings] Failed to set audio device:', error);
+        this.selectedAudioDevice = previous;
       }
     },
 
@@ -348,6 +431,94 @@ export function createSettingsView(Alpine) {
         Alpine.store('ui').toast('Failed to export diagnostics', 'error');
       } finally {
         this.isExportingLogs = false;
+      }
+    },
+
+    // ============================================
+    // Network Cache methods
+    // ============================================
+
+    async loadNetworkCacheStatus() {
+      if (!window.__TAURI__) return;
+
+      try {
+        const { invoke } = window.__TAURI__.core;
+        const status = await invoke('network_cache_status');
+        this.networkCache.enabled = status.enabled;
+        this.networkCache.persistent = status.persistent;
+        this.networkCache.maxGb = status.max_bytes / 1_073_741_824;
+        this.networkCache.usedBytes = status.used_bytes;
+        this.networkCache.fileCount = status.file_count;
+      } catch (error) {
+        console.error('[settings] Failed to load network cache status:', error);
+      }
+    },
+
+    async toggleNetworkCache() {
+      if (!window.__TAURI__) return;
+
+      try {
+        const newValue = !this.networkCache.enabled;
+        await window.settings.set('network_cache_enabled', newValue);
+        this.networkCache.enabled = newValue;
+        Alpine.store('ui').toast(
+          `Network file caching ${newValue ? 'enabled' : 'disabled'}`,
+          'success',
+        );
+      } catch (error) {
+        console.error('[settings] Failed to toggle network cache:', error);
+        Alpine.store('ui').toast('Failed to update network cache setting', 'error');
+      }
+    },
+
+    async toggleNetworkCachePersistent() {
+      if (!window.__TAURI__) return;
+
+      try {
+        const newValue = !this.networkCache.persistent;
+        await window.settings.set('network_cache_persistent', newValue);
+        this.networkCache.persistent = newValue;
+        Alpine.store('ui').toast(
+          `Persistent cache ${newValue ? 'enabled' : 'disabled'}`,
+          'success',
+        );
+      } catch (error) {
+        console.error('[settings] Failed to toggle persistent cache:', error);
+        Alpine.store('ui').toast('Failed to update persistent cache setting', 'error');
+      }
+    },
+
+    async updateNetworkCacheMaxGb() {
+      if (!window.__TAURI__) return;
+
+      try {
+        const clamped = Math.max(0.5, Math.min(20, this.networkCache.maxGb));
+        if (clamped !== this.networkCache.maxGb) {
+          this.networkCache.maxGb = clamped;
+        }
+
+        await window.settings.set('network_cache_max_gb', this.networkCache.maxGb);
+      } catch (error) {
+        console.error('[settings] Failed to update cache size limit:', error);
+        Alpine.store('ui').toast('Failed to update cache size limit', 'error');
+      }
+    },
+
+    async purgeNetworkCache() {
+      if (!window.__TAURI__) return;
+
+      this.networkCache.isPurging = true;
+      try {
+        const { invoke } = window.__TAURI__.core;
+        await invoke('network_cache_purge');
+        this.networkCache.usedBytes = 0;
+        this.networkCache.fileCount = 0;
+        Alpine.store('ui').toast('Network cache cleared', 'success');
+      } catch (error) {
+        console.error('[settings] Failed to purge network cache:', error);
+        Alpine.store('ui').toast('Failed to clear network cache', 'error');
+      } finally {
+        this.networkCache.isPurging = false;
       }
     },
 
@@ -640,6 +811,17 @@ export function createSettingsView(Alpine) {
         Alpine.store('ui').toast('Failed to reset loved cache', 'error');
       } finally {
         this.lastfm.isResettingLoved = false;
+      }
+    },
+
+    async toggleDeduplicateAcrossDirectories() {
+      try {
+        await window.settings.set(
+          'library.deduplicateAcrossDirectories',
+          this.deduplicateAcrossDirectories,
+        );
+      } catch (err) {
+        console.error('[settings] Failed to save dedup setting:', err);
       }
     },
 

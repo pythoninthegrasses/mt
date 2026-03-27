@@ -1,0 +1,168 @@
+version: "3.0"
+
+set: ['e', 'u', 'pipefail']
+
+vars:
+  CARGO_BIN: "{{.HOME}}/.cargo/bin"
+  MISE_SHIMS: "{{.HOME}}/.local/share/mise/shims"
+  BREW_PREFIX: '{{if eq ARCH "arm64"}}/opt/homebrew{{else}}/usr/local{{end}}'
+  TAURI_DIR: "{{.ROOT_DIR}}/crates/mt-tauri"
+  TARGET: '{{.TARGET | default ""}}'
+  TARGET_FLAG: '{{if .TARGET}}--target {{.TARGET}}{{end}}'
+  TARGET_DIR: '{{if .TARGET}}{{.ROOT_DIR}}/target/{{.TARGET}}{{else}}{{.ROOT_DIR}}/target{{end}}'
+  BUNDLES: '{{.BUNDLES | default ""}}'
+  BUNDLES_FLAG: '{{if .BUNDLES}}--bundles {{.BUNDLES}}{{end}}'
+  CONFIG: '{{.CONFIG | default ""}}'
+  CONFIG_FLAG: '{{if .CONFIG}}--config {{.CONFIG}}{{end}}'
+  EXE_EXT: '{{if eq OS "windows"}}.exe{{end}}'
+
+env:
+  PATH: "{{.CARGO_BIN}}:{{.MISE_SHIMS}}:{{.PATH}}"
+  RUSTC_WRAPPER: ""
+  RUSTUP_TOOLCHAIN: nightly
+
+tasks:
+  setup:
+    desc: "Setup CI build environment"
+    deps: [setup-system-deps, setup-rust, setup-rust-windows]
+    cmds:
+      - task: setup-cargo-tools
+
+  setup-rust:
+    desc: "Install rustup and nightly toolchain (macOS/Linux)"
+    platforms: [darwin, linux]
+    cmds:
+      - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs |
+          sh -s -- -y --default-toolchain nightly --no-modify-path
+      - rustup toolchain install nightly --profile minimal --no-self-update
+      - rustup default nightly
+      - rustc --version
+      - cargo --version
+    status:
+      - test -x "{{.CARGO_BIN}}/rustup"
+      - test -x "{{.CARGO_BIN}}/rustc"
+      - test -x "{{.CARGO_BIN}}/cargo"
+      - rustc --version
+
+  setup-rust-windows:
+    desc: "Configure rustup nightly toolchain (Windows)"
+    platforms: [windows]
+    cmds:
+      - rustup toolchain install nightly --profile minimal --no-self-update --target x86_64-pc-windows-msvc
+      - rustup default nightly
+      - rustc --version
+      - cargo --version
+    status:
+      - rustup which rustc
+      - rustc --version
+
+  setup-cargo-tools:
+    desc: "Install cargo-binstall and tauri-cli"
+    cmds:
+      - task: _install-cargo-binstall
+      - task: _install-tauri-cli
+
+  _install-cargo-binstall:
+    internal: true
+    platforms: [darwin, linux]
+    cmds:
+      - curl -L --proto '=https' --tlsv1.2 -sSf
+          https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+    status:
+      - test -x "{{.CARGO_BIN}}/cargo-binstall"
+
+  _install-tauri-cli:
+    internal: true
+    cmds:
+      - cargo binstall tauri-cli --locked --no-confirm
+    status:
+      - cargo tauri --version
+
+  setup-system-deps:
+    desc: "Install Linux system dependencies for Tauri"
+    platforms: [linux]
+    cmds:
+      - sudo apt-get update
+      - sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file
+          libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+          libasound2-dev cmake zlib1g-dev libgtk-3-dev libdbus-1-dev
+    preconditions:
+      - sh: command -v apt-get &>/dev/null
+        msg: "apt-get required (Debian/Ubuntu)"
+    status:
+      - pkg-config --exists webkit2gtk-4.1
+      - pkg-config --exists gtk+-3.0
+      - pkg-config --exists dbus-1
+      - pkg-config --exists alsa
+
+  check:
+    desc: "Run cargo check (TARGET optional)"
+    cmds:
+      - cargo check --workspace {{.TARGET_FLAG}}
+    sources:
+      - "{{.TAURI_DIR}}/src/**/*.rs"
+      - "{{.TAURI_DIR}}/Cargo.toml"
+      - "{{.ROOT_DIR}}/Cargo.lock"
+
+  frontend-build:
+    desc: "Build frontend assets"
+    cmds:
+      - npm --prefix {{.ROOT_DIR}}/app/frontend run build
+    sources:
+      - "{{.ROOT_DIR}}/app/frontend/js/**/*"
+      - "{{.ROOT_DIR}}/app/frontend/css/**/*"
+      - "{{.ROOT_DIR}}/app/frontend/*.html"
+      - "{{.ROOT_DIR}}/app/frontend/package.json"
+    generates:
+      - "{{.ROOT_DIR}}/app/frontend/dist/**/*"
+
+  build:
+    desc: "Build Tauri binary without bundling (TARGET optional)"
+    deps: [frontend-build]
+    cmds:
+      - cargo tauri build --no-bundle {{.TARGET_FLAG}}
+          --config '{"build":{"beforeBuildCommand":""}}'
+          {{.CONFIG_FLAG}}
+    sources:
+      - "{{.TAURI_DIR}}/src/**/*.rs"
+      - "{{.TAURI_DIR}}/Cargo.toml"
+      - "{{.TAURI_DIR}}/tauri.conf.json"
+      - "{{.ROOT_DIR}}/Cargo.lock"
+      - "{{.ROOT_DIR}}/app/frontend/dist/**/*"
+    generates:
+      - "{{.TARGET_DIR}}/release/mt{{.EXE_EXT}}"
+
+  bundle:
+    desc: "Bundle Tauri app (TARGET optional, BUNDLES optional)"
+    cmds:
+      - cargo tauri bundle {{.TARGET_FLAG}} {{.BUNDLES_FLAG}}
+          {{.CONFIG_FLAG}}
+    sources:
+      - "{{.TARGET_DIR}}/release/mt{{.EXE_EXT}}"
+      - "{{.TAURI_DIR}}/tauri.conf.json"
+      - "{{.ROOT_DIR}}/app/frontend/dist/**/*"
+    preconditions:
+      - sh: test -f "{{.TARGET_DIR}}/release/mt{{.EXE_EXT}}"
+        msg: "Binary not found. Run 'task ci:build TARGET={{.TARGET}}' first."
+
+  notarize:
+    desc: "Notarize and staple macOS DMG"
+    platforms: [darwin]
+    vars:
+      DMG_GLOB: "{{.TARGET_DIR}}/release/bundle/dmg/*.dmg"
+    cmds:
+      - xcrun notarytool submit {{.DMG_GLOB}}
+          --key /tmp/auth_key.p8
+          --key-id "$APPLE_API_KEY"
+          --issuer "$APPLE_API_ISSUER"
+          --wait
+      - xcrun stapler staple {{.DMG_GLOB}}
+    preconditions:
+      - sh: ls {{.DMG_GLOB}} 2>/dev/null
+        msg: "No DMG found. Run 'task ci:bundle TARGET={{.TARGET}}' first."
+      - sh: test -f /tmp/auth_key.p8
+        msg: "Apple API key not found at /tmp/auth_key.p8"
+      - sh: test -n "$APPLE_API_KEY"
+        msg: "APPLE_API_KEY not set"
+      - sh: test -n "$APPLE_API_ISSUER"
+        msg: "APPLE_API_ISSUER not set"

@@ -1,14 +1,16 @@
 mod audio;
 mod favorites;
 mod lastfm;
+mod lyrics;
 mod playlists;
 mod queue;
 mod settings;
 mod stats;
 
 pub(crate) use audio::{
-    AudioState, audio_get_status, audio_get_volume, audio_load, audio_load_and_play, audio_pause,
-    audio_play, audio_seek, audio_set_volume, audio_stop,
+    AudioState, audio_get_status, audio_get_volume, audio_list_devices, audio_load,
+    audio_load_and_play, audio_pause, audio_play, audio_seek, audio_set_device, audio_set_volume,
+    audio_stop, network_cache_purge, network_cache_status,
 };
 
 pub(crate) use favorites::{
@@ -34,6 +36,8 @@ pub(crate) use queue::{
     queue_add, queue_add_files, queue_clear, queue_get, queue_get_playback_state, queue_remove,
     queue_reorder, queue_set_current_index, queue_set_loop, queue_set_shuffle, queue_shuffle,
 };
+
+pub(crate) use lyrics::{lyrics_clear_cache, lyrics_get};
 
 pub(crate) use settings::{
     settings_get, settings_get_all, settings_reset, settings_set, settings_update,

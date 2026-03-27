@@ -19,5 +19,6 @@
   "python.analysis.extraPaths": [
     ".venv/bin/python",
     "/opt/venv/bin/python"
-  ]
+  ],
+  "rust-analyzer.diagnostics.enable": false
 }

@@ -29,6 +29,7 @@ fn row_to_track(row: &Row) -> rusqlite::Result<Track> {
         duration: row.get("duration")?,
         file_size: row.get::<_, Option<i64>>("file_size")?.unwrap_or(0),
         file_mtime_ns: row.get("file_mtime_ns")?,
+        file_ctime_ns: row.get("file_ctime_ns").unwrap_or(None),
         file_inode: row.get("file_inode")?,
         content_hash: row.get("content_hash")?,
         added_date: row.get("added_date")?,
@@ -108,7 +109,7 @@ pub(crate) fn get_all_tracks(
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
          FROM library
          {}
          ORDER BY {} {}{}
@@ -149,7 +150,7 @@ pub(crate) fn find_tracks_by_artist_title(
     let sql = "SELECT id, filepath, title, artist, album, album_artist,
             track_number, track_total, disc_number, disc_total, date, genre,
             duration, file_size, play_count, last_played, added_date,
-            missing, last_seen_at, file_mtime_ns, file_inode, content_hash
+            missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
      FROM library
      WHERE (missing = 0 OR missing IS NULL)
        AND title = ? COLLATE NOCASE
@@ -184,7 +185,7 @@ pub(crate) fn get_track_by_id(conn: &Connection, track_id: i64) -> DbResult<Opti
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
          FROM library WHERE id = ?",
     )?;
 
@@ -202,7 +203,7 @@ pub(crate) fn get_track_by_filepath(conn: &Connection, filepath: &str) -> DbResu
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
          FROM library WHERE filepath = ?",
     )?;
 
@@ -277,8 +278,8 @@ pub(crate) fn add_track(
         "INSERT INTO library
          (filepath, title, artist, album, album_artist,
           track_number, track_total, disc_number, disc_total, date, genre,
-          duration, file_size, file_mtime_ns, file_inode, content_hash, missing)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+          duration, file_size, file_mtime_ns, file_ctime_ns, file_inode, content_hash, missing)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
         params![
             filepath,
             metadata.title,
@@ -294,6 +295,7 @@ pub(crate) fn add_track(
             metadata.duration,
             metadata.file_size.unwrap_or(0),
             metadata.file_mtime_ns,
+            metadata.file_ctime_ns,
             metadata.file_inode.map(|v| v as i64),
             metadata.content_hash,
         ],
@@ -315,8 +317,8 @@ pub(crate) fn add_tracks_bulk(
         "INSERT INTO library
          (filepath, title, artist, album, album_artist,
           track_number, track_total, disc_number, disc_total, date, genre,
-          duration, file_size, file_mtime_ns, file_inode, content_hash, missing)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+          duration, file_size, file_mtime_ns, file_ctime_ns, file_inode, content_hash, missing)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
     )?;
 
     let mut count = 0;
@@ -336,6 +338,7 @@ pub(crate) fn add_tracks_bulk(
             metadata.duration,
             metadata.file_size.unwrap_or(0),
             metadata.file_mtime_ns,
+            metadata.file_ctime_ns,
             metadata.file_inode.map(|v| v as i64),
             metadata.content_hash,
         ])?;
@@ -764,7 +767,7 @@ pub(crate) fn get_missing_tracks(conn: &Connection) -> DbResult<Vec<Track>> {
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
          FROM library WHERE missing = 1 ORDER BY title ASC",
     )?;
 
@@ -804,7 +807,7 @@ pub(crate) fn find_missing_track_by_inode(
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
          FROM library WHERE file_inode = ? AND missing = 1 LIMIT 1",
     )?;
 
@@ -825,7 +828,7 @@ pub(crate) fn find_missing_track_by_content_hash(
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
          FROM library WHERE content_hash = ? AND missing = 1 LIMIT 1",
     )?;
 
@@ -908,6 +911,9 @@ pub struct DuplicateCandidate {
     pub missing: bool,
     pub play_count: i64,
     pub added_date: Option<String>,
+    pub file_ctime_ns: Option<i64>,
+    pub file_mtime_ns: Option<i64>,
+    pub content_hash: Option<String>,
 }
 
 /// Find duplicate tracks by inode (tracks with same inode)
@@ -931,7 +937,8 @@ pub(crate) fn find_duplicates_by_inode(
 
     for inode in duplicate_inodes {
         let mut stmt = conn.prepare(
-            "SELECT id, filepath, missing, play_count, added_date
+            "SELECT id, filepath, missing, play_count, added_date,
+                    file_ctime_ns, file_mtime_ns, content_hash
              FROM library WHERE file_inode = ?
              ORDER BY missing ASC, added_date ASC",
         )?;
@@ -944,6 +951,9 @@ pub(crate) fn find_duplicates_by_inode(
                     missing: row.get::<_, Option<i64>>(2)?.unwrap_or(0) != 0,
                     play_count: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
                     added_date: row.get(4)?,
+                    file_ctime_ns: row.get(5)?,
+                    file_mtime_ns: row.get(6)?,
+                    content_hash: row.get(7)?,
                 })
             })?
             .filter_map(|r| r.ok())
@@ -978,7 +988,8 @@ pub(crate) fn find_duplicates_by_content_hash(
 
     for hash in duplicate_hashes {
         let mut stmt = conn.prepare(
-            "SELECT id, filepath, missing, play_count, added_date
+            "SELECT id, filepath, missing, play_count, added_date,
+                    file_ctime_ns, file_mtime_ns, content_hash
              FROM library WHERE content_hash = ?
              ORDER BY missing ASC, added_date ASC",
         )?;
@@ -991,12 +1002,105 @@ pub(crate) fn find_duplicates_by_content_hash(
                     missing: row.get::<_, Option<i64>>(2)?.unwrap_or(0) != 0,
                     play_count: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
                     added_date: row.get(4)?,
+                    file_ctime_ns: row.get(5)?,
+                    file_mtime_ns: row.get(6)?,
+                    content_hash: row.get(7)?,
                 })
             })?
             .filter_map(|r| r.ok())
             .collect();
 
         if candidates.len() > 1 {
+            result.push(candidates);
+        }
+    }
+
+    Ok(result)
+}
+
+/// Find duplicate tracks that span multiple watched directories (cross-directory dedup).
+///
+/// Only returns groups where the same content_hash exists in 2+ different watched
+/// directories. Within-directory duplicates are handled by the existing inode/hash dedup.
+///
+/// Each group is ordered by: missing ASC, file_ctime_ns ASC NULLS LAST,
+/// file_mtime_ns ASC NULLS LAST, filepath ASC — so the first element is the
+/// preferred "keeper".
+pub(crate) fn find_cross_directory_duplicates(
+    conn: &Connection,
+    watched_folder_paths: &[String],
+) -> DbResult<Vec<Vec<DuplicateCandidate>>> {
+    if watched_folder_paths.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Find content hashes that appear more than once (non-missing tracks only for grouping,
+    // but we'll include missing tracks in the result for completeness)
+    let mut stmt = conn.prepare(
+        "SELECT content_hash FROM library
+         WHERE content_hash IS NOT NULL
+         GROUP BY content_hash
+         HAVING COUNT(*) > 1",
+    )?;
+
+    let duplicate_hashes: Vec<String> = stmt
+        .query_map([], |row| row.get(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let mut result = Vec::new();
+
+    for hash in &duplicate_hashes {
+        let mut stmt = conn.prepare(
+            "SELECT id, filepath, missing, play_count, added_date,
+                    file_ctime_ns, file_mtime_ns, content_hash
+             FROM library WHERE content_hash = ?
+             ORDER BY missing ASC,
+                      CASE WHEN file_ctime_ns IS NULL THEN 1 ELSE 0 END ASC,
+                      file_ctime_ns ASC,
+                      CASE WHEN file_mtime_ns IS NULL THEN 1 ELSE 0 END ASC,
+                      file_mtime_ns ASC,
+                      filepath ASC",
+        )?;
+
+        let candidates: Vec<DuplicateCandidate> = stmt
+            .query_map([hash], |row| {
+                Ok(DuplicateCandidate {
+                    id: row.get(0)?,
+                    filepath: row.get(1)?,
+                    missing: row.get::<_, Option<i64>>(2)?.unwrap_or(0) != 0,
+                    play_count: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
+                    added_date: row.get(4)?,
+                    file_ctime_ns: row.get(5)?,
+                    file_mtime_ns: row.get(6)?,
+                    content_hash: row.get(7)?,
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        if candidates.len() < 2 {
+            continue;
+        }
+
+        // Determine which watched folder each track belongs to
+        let mut dirs_seen = std::collections::HashSet::new();
+        for candidate in &candidates {
+            for folder in watched_folder_paths {
+                let prefix = if folder.ends_with('/') {
+                    folder.clone()
+                } else {
+                    format!("{}/", folder)
+                };
+                if candidate.filepath.starts_with(&prefix) {
+                    dirs_seen.insert(folder.as_str());
+                    break;
+                }
+            }
+        }
+
+        // Only include groups that span 2+ different watched directories
+        if dirs_seen.len() >= 2 {
             result.push(candidates);
         }
     }
@@ -2425,6 +2529,9 @@ mod tests {
             missing: false,
             play_count: 10,
             added_date: Some("2024-01-01".to_string()),
+            file_ctime_ns: None,
+            file_mtime_ns: None,
+            content_hash: None,
         };
 
         let debug_str = format!("{:?}", candidate);
@@ -2810,5 +2917,129 @@ mod tests {
         assert_eq!(artists[0], "Arcade Fire");
         assert_eq!(artists[1], "Belle and Sebastian");
         assert_eq!(artists[2], "The Decemberists");
+    }
+
+    // =========================================================================
+    // Cross-directory duplicate finder tests
+    // =========================================================================
+
+    #[test]
+    fn test_cross_directory_duplicates_across_two_dirs() {
+        let conn = setup_test_db();
+
+        let hash = "sha256:same_content";
+        // Track in dir A
+        let meta_a = TrackMetadata {
+            title: Some("Song A".to_string()),
+            content_hash: Some(hash.to_string()),
+            file_ctime_ns: Some(1000),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/dir_a/song.mp3", &meta_a).unwrap();
+
+        // Same track in dir B
+        let meta_b = TrackMetadata {
+            title: Some("Song B".to_string()),
+            content_hash: Some(hash.to_string()),
+            file_ctime_ns: Some(2000),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/dir_b/song.mp3", &meta_b).unwrap();
+
+        let folders = vec!["/music/dir_a".to_string(), "/music/dir_b".to_string()];
+        let groups = find_cross_directory_duplicates(&conn, &folders).unwrap();
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].len(), 2);
+        // Oldest ctime_ns first (1000 < 2000)
+        assert_eq!(groups[0][0].filepath, "/music/dir_a/song.mp3");
+        assert_eq!(groups[0][1].filepath, "/music/dir_b/song.mp3");
+    }
+
+    #[test]
+    fn test_cross_directory_duplicates_same_dir_not_returned() {
+        let conn = setup_test_db();
+
+        let hash = "sha256:same_content";
+        // Two tracks in the same dir
+        let meta1 = TrackMetadata {
+            content_hash: Some(hash.to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/dir_a/song1.mp3", &meta1).unwrap();
+
+        let meta2 = TrackMetadata {
+            content_hash: Some(hash.to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/dir_a/song2.mp3", &meta2).unwrap();
+
+        let folders = vec!["/music/dir_a".to_string(), "/music/dir_b".to_string()];
+        let groups = find_cross_directory_duplicates(&conn, &folders).unwrap();
+
+        // Same dir duplicates should NOT be returned
+        assert!(groups.is_empty());
+    }
+
+    #[test]
+    fn test_cross_directory_duplicates_ordering() {
+        let conn = setup_test_db();
+
+        let hash = "sha256:same";
+        // Track with no ctime (NULL) should sort last
+        let meta_null = TrackMetadata {
+            content_hash: Some(hash.to_string()),
+            file_ctime_ns: None,
+            file_mtime_ns: Some(500),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/dir_a/song.mp3", &meta_null).unwrap();
+
+        // Track with ctime should sort first
+        let meta_ctime = TrackMetadata {
+            content_hash: Some(hash.to_string()),
+            file_ctime_ns: Some(3000),
+            file_mtime_ns: Some(3000),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/dir_b/song.mp3", &meta_ctime).unwrap();
+
+        let folders = vec!["/music/dir_a".to_string(), "/music/dir_b".to_string()];
+        let groups = find_cross_directory_duplicates(&conn, &folders).unwrap();
+
+        assert_eq!(groups.len(), 1);
+        // ctime=3000 sorts before ctime=NULL
+        assert_eq!(groups[0][0].filepath, "/music/dir_b/song.mp3");
+        assert_eq!(groups[0][1].filepath, "/music/dir_a/song.mp3");
+    }
+
+    #[test]
+    fn test_cross_directory_duplicates_missing_sorted_last() {
+        let conn = setup_test_db();
+
+        let hash = "sha256:same";
+        let meta_a = TrackMetadata {
+            content_hash: Some(hash.to_string()),
+            file_ctime_ns: Some(1000),
+            ..Default::default()
+        };
+        let id_a = add_track(&conn, "/music/dir_a/song.mp3", &meta_a).unwrap();
+
+        let meta_b = TrackMetadata {
+            content_hash: Some(hash.to_string()),
+            file_ctime_ns: Some(2000),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/dir_b/song.mp3", &meta_b).unwrap();
+
+        // Mark A as missing — it should sort after B despite older ctime
+        mark_track_missing(&conn, id_a).unwrap();
+
+        let folders = vec!["/music/dir_a".to_string(), "/music/dir_b".to_string()];
+        let groups = find_cross_directory_duplicates(&conn, &folders).unwrap();
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0][0].filepath, "/music/dir_b/song.mp3");
+        assert_eq!(groups[0][1].filepath, "/music/dir_a/song.mp3");
     }
 }

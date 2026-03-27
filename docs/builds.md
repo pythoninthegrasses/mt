@@ -238,6 +238,26 @@ RUSTUP_TOOLCHAIN=nightly CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift \
   cargo build -p mt-tauri -Zcodegen-backend
 ```
 
+## rust-analyzer (VS Code)
+
+By default, rust-analyzer runs continuous background diagnostics and `cargo check` on every save. On a large workspace this can saturate the CPU even when you haven't changed anything.
+
+### Settings
+
+| Setting | Default | Description |
+| ------- | ------- | ----------- |
+| `rust-analyzer.checkOnSave` | `true` | Run `cargo check` when a file is saved. Keep enabled for on-save feedback. |
+| `rust-analyzer.diagnostics.enable` | `true` | Continuous background analysis (type errors, borrow-check squiggles). Disable to stop builds when nothing has been saved. |
+| `rust-analyzer.procMacro.enable` | `true` | Expand procedural macros in the background. Disable to reduce CPU at the cost of missing diagnostics in macro-heavy code. |
+
+### Current override (`.vscode/settings.json`)
+
+```jsonc
+"rust-analyzer.diagnostics.enable": false
+```
+
+Background diagnostics are disabled. `checkOnSave` remains at its default (`true`), so `cargo check` still runs on each manual save. If you want inline squiggles back but with less background work, swap to disabling only `procMacro.enable` instead.
+
 ## Signing & Distribution
 
 ### macOS
