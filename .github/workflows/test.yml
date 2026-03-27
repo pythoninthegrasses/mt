@@ -217,6 +217,7 @@ jobs:
 
   rust-tests:
     name: Rust Tests with Coverage
+    needs: rust-lint
     runs-on: [macOS, ARM64]
     timeout-minutes: 10
     env:
