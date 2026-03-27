@@ -42,7 +42,7 @@ mod macos {
                 return false;
             }
             // If MNT_LOCAL is NOT set, the filesystem is remote
-            (stat.f_flags as u32 & MNT_LOCAL) == 0
+            (stat.f_flags & MNT_LOCAL) == 0
         }
     }
 }

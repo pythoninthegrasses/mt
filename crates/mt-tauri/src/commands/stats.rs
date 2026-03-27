@@ -31,10 +31,10 @@ fn load_system_font() -> Option<FontArc> {
     };
 
     for path in candidates {
-        if let Ok(data) = std::fs::read(path) {
-            if let Ok(font) = FontArc::try_from_vec(data) {
-                return Some(font);
-            }
+        if let Ok(data) = std::fs::read(path)
+            && let Ok(font) = FontArc::try_from_vec(data)
+        {
+            return Some(font);
         }
     }
     None
@@ -265,18 +265,18 @@ pub(crate) fn stats_generate_chart_grid(
             false
         };
 
-        if !has_artwork {
-            if let Some(ref font) = font {
-                draw_placeholder(
-                    &mut canvas,
-                    x_offset,
-                    y_offset,
-                    cell_size,
-                    &album.artist,
-                    &album.album,
-                    font,
-                );
-            }
+        if !has_artwork
+            && let Some(ref font) = font
+        {
+            draw_placeholder(
+                &mut canvas,
+                x_offset,
+                y_offset,
+                cell_size,
+                &album.artist,
+                &album.album,
+                font,
+            );
         }
     }
 
