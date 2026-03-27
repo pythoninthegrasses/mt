@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
@@ -80,7 +80,7 @@ jobs:
         run: task ci:bundle TARGET=aarch64-apple-darwin
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-arm64
           path: |
@@ -117,7 +117,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
@@ -133,7 +133,7 @@ jobs:
         run: task ci:bundle TARGET=x86_64-unknown-linux-gnu BUNDLES=deb
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-amd64
           path: target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
@@ -156,13 +156,13 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Task
         uses: go-task/setup-task@v1
 
       - name: Restore Taskfile fingerprint cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .task
           key: task-${{ runner.os }}-${{ hashFiles('taskfiles/ci.yml') }}
@@ -189,7 +189,7 @@ jobs:
             .
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-arm64
           path: dist/linux-arm64/*.deb
@@ -227,7 +227,7 @@ jobs:
             echo "$gitPath\cmd" >> $env:GITHUB_PATH
           }
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
@@ -283,7 +283,7 @@ jobs:
         run: task ci:bundle TARGET=x86_64-pc-windows-msvc BUNDLES=nsis CONFIG=${{ env.SIGN_CONFIG_PATH }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-x64
           path: target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
@@ -312,7 +312,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}

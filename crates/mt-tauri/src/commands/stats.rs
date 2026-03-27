@@ -102,7 +102,15 @@ fn draw_placeholder(
         // Center horizontally
         let line_x = x + margin + ((usable as f32 - line_width) / 2.0).max(0.0) as u32;
         let line_y = start_y + (i as f32 * line_height) as u32;
-        draw_text_mut(canvas, color, line_x as i32, line_y as i32, px_scale, font, line);
+        draw_text_mut(
+            canvas,
+            color,
+            line_x as i32,
+            line_y as i32,
+            px_scale,
+            font,
+            line,
+        );
     }
 }
 
@@ -250,8 +258,7 @@ pub(crate) fn stats_generate_chart_grid(
         let y_offset = row as u32 * (cell_size + padding);
 
         // Load artwork from cache
-        let has_artwork = if let Some(artwork) =
-            cache.get_or_load(album.track_id, &album.filepath)
+        let has_artwork = if let Some(artwork) = cache.get_or_load(album.track_id, &album.filepath)
             && let Ok(decoded) =
                 base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &artwork.data)
             && let Ok(img) = image::load_from_memory(&decoded)
@@ -265,9 +272,7 @@ pub(crate) fn stats_generate_chart_grid(
             false
         };
 
-        if !has_artwork
-            && let Some(ref font) = font
-        {
+        if !has_artwork && let Some(ref font) = font {
             draw_placeholder(
                 &mut canvas,
                 x_offset,

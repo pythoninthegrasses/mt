@@ -493,7 +493,6 @@ pub(crate) fn run_migrations(conn: &Connection) -> DbResult<()> {
         info!("content_hash index created");
     }
 
-
     Ok(())
 }
 
