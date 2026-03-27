@@ -3,6 +3,12 @@ fail_fast: true
 repos:
   - repo: local
     hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all --
+        language: system
+        types: [rust]
+        pass_filenames: false
       - id: cargo-check
         name: cargo check
         entry: cargo check --workspace --quiet
