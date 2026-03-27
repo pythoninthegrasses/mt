@@ -1,6 +1,14 @@
 fail_fast: true
 
 repos:
+  - repo: local
+    hooks:
+      - id: cargo-check
+        name: cargo check
+        entry: cargo check --manifest-path src-tauri/Cargo.toml --quiet
+        language: system
+        types: [rust]
+        pass_filenames: false
   - repo: https://github.com/nozaq/pre-commit-deno
     rev: 0.1.0
     hooks:
