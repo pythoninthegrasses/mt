@@ -339,35 +339,34 @@ impl AudioEngine {
         // Reload track on new stream if one was loaded
         if let Some(ref track) = track_info {
             let path_obj = Path::new(&track.path);
-            if path_obj.exists() {
-                if let Ok(file) = File::open(&track.path) {
-                    if let Ok(source) = Decoder::try_from(file) {
-                        let mixer = self.stream.as_ref().expect("stream just assigned").mixer();
-                        let sink = Sink::connect_new(mixer);
-                        sink.set_volume(self.volume);
-                        sink.append(source);
+            if path_obj.exists()
+                && let Ok(file) = File::open(&track.path)
+                && let Ok(source) = Decoder::try_from(file)
+            {
+                let mixer = self.stream.as_ref().expect("stream just assigned").mixer();
+                let sink = Sink::connect_new(mixer);
+                sink.set_volume(self.volume);
+                sink.append(source);
 
-                        // Seek to previous position
-                        if position_ms > 0 {
-                            let _ = sink.try_seek(Duration::from_millis(position_ms));
-                        }
-
-                        if was_playing {
-                            sink.play();
-                            self.state = PlaybackState::Playing;
-                        } else {
-                            sink.pause();
-                            self.state = PlaybackState::Paused;
-                        }
-
-                        self.player_handle = Some(PlayerHandle { sink });
-                        debug!(
-                            path = %track.path,
-                            position_ms,
-                            "Track reloaded on new device"
-                        );
-                    }
+                // Seek to previous position
+                if position_ms > 0 {
+                    let _ = sink.try_seek(Duration::from_millis(position_ms));
                 }
+
+                if was_playing {
+                    sink.play();
+                    self.state = PlaybackState::Playing;
+                } else {
+                    sink.pause();
+                    self.state = PlaybackState::Paused;
+                }
+
+                self.player_handle = Some(PlayerHandle { sink });
+                debug!(
+                    path = %track.path,
+                    position_ms,
+                    "Track reloaded on new device"
+                );
             }
         }
 

@@ -78,23 +78,21 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
     };
 
     // Restore saved audio output device from settings
-    if let Ok(store) = app.store("mt-settings.json") {
-        if let Some(device_value) = store.get("audio_output_device") {
-            if let Some(device_name) = device_value.as_str() {
-                if device_name != "default" {
-                    match engine.set_device(Some(device_name)) {
-                        Ok(()) => {
-                            info!(device = device_name, "Restored saved audio output device");
-                        }
-                        Err(e) => {
-                            warn!(
-                                device = device_name,
-                                error = %e,
-                                "Saved audio device unavailable, using default"
-                            );
-                        }
-                    }
-                }
+    if let Ok(store) = app.store("mt-settings.json")
+        && let Some(device_value) = store.get("audio_output_device")
+        && let Some(device_name) = device_value.as_str()
+        && device_name != "default"
+    {
+        match engine.set_device(Some(device_name)) {
+            Ok(()) => {
+                info!(device = device_name, "Restored saved audio output device");
+            }
+            Err(e) => {
+                warn!(
+                    device = device_name,
+                    error = %e,
+                    "Saved audio device unavailable, using default"
+                );
             }
         }
     }
