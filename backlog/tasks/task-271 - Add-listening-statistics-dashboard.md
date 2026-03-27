@@ -1,10 +1,10 @@
 ---
 id: TASK-271
 title: Add listening statistics dashboard
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-02-16 16:12'
-updated_date: '2026-03-08 01:57'
+updated_date: '2026-03-27 21:43'
 labels:
   - feature
   - ui
