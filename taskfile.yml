@@ -32,6 +32,8 @@ includes:
     taskfile: ./taskfiles/cargo.yml
   tauri:
     taskfile: ./taskfiles/tauri.yml
+  ci:
+    taskfile: ./taskfiles/ci.yml
 
 tasks:
   default:

@@ -1,91 +1,179 @@
-name: Test Suite
+name: Test
 
 on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'crates/**'
+      - 'app/**'
+      - 'Cargo.*'
+      - 'taskfiles/**'
+      - '.github/**'
   push:
     branches: [main]
     paths:
-      # Rust source and config
-      - '**/*.rs'
-      - '**/Cargo.toml'
-      - '**/Cargo.lock'
-      - '**/build.rs'
-      # JavaScript/TypeScript source
-      - '**/*.js'
-      - '**/*.ts'
-      - '**/*.jsx'
-      - '**/*.tsx'
-      - '**/*.mjs'
-      # Frontend assets and templates
-      - '**/*.html'
-      - '**/*.css'
-      # Node.js config
-      - '**/package.json'
-      - '**/package-lock.json'
-      - '**/tsconfig.json'
-      - '**/vite.config.js'
-      - '**/vitest.config.js'
-      - '**/playwright.config.js'
-      # Tauri config
-      - '**/tauri.conf.json'
-      # Task runner config
-      - 'taskfile.yml'
-      # Test files
-      - 'tests/**/*'
-      - '**/tests/**/*'
-      # CI workflow itself
-      - '.github/workflows/test.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      # Rust source and config
-      - '**/*.rs'
-      - '**/Cargo.toml'
-      - '**/Cargo.lock'
-      - '**/build.rs'
-      # JavaScript/TypeScript source
-      - '**/*.js'
-      - '**/*.ts'
-      - '**/*.jsx'
-      - '**/*.tsx'
-      - '**/*.mjs'
-      # Frontend assets and templates
-      - '**/*.html'
-      - '**/*.css'
-      # Node.js config
-      - '**/package.json'
-      - '**/package-lock.json'
-      - '**/tsconfig.json'
-      - '**/vite.config.js'
-      - '**/vitest.config.js'
-      - '**/playwright.config.js'
-      # Tauri config
-      - '**/tauri.conf.json'
-      # Task runner config
-      - 'taskfile.yml'
-      # Test files
-      - 'tests/**/*'
-      - '**/tests/**/*'
-      # CI workflow itself
-      - '.github/workflows/test.yml'
+      - 'crates/**'
+      - 'app/**'
+      - 'Cargo.*'
+      - 'taskfiles/**'
+      - '.github/**'
 
-# Cancel in-progress runs when a new push supersedes them
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Frontend E2E tests with Playwright
+  rust-lint:
+    name: Rust Lint and Format Check
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 15
+
+    steps:
+      - name: Setup macOS self-hosted runner PATH
+        shell: bash
+        run: |
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          echo "/opt/homebrew/bin:/opt/homebrew/sbin" >> $GITHUB_PATH
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: clippy, rustfmt
+          cache: false
+
+      - name: Cargo clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Cargo fmt check
+        run: cargo fmt --all -- --check
+
+  deno-lint:
+    name: Deno Lint and Format Check
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check Deno formatting
+        run: deno fmt --check
+
+      - name: Run Deno lint
+        run: deno lint
+
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: rust-lint
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos
+            os: [macOS, ARM64]
+            target: aarch64-apple-darwin
+          - platform: linux
+            os: blacksmith-4vcpu-ubuntu-2404
+            target: x86_64-unknown-linux-gnu
+          - platform: windows
+            os: [self-hosted, Windows, X64]
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Bootstrap Windows prerequisites
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $toInstall = @()
+          if (-not (Get-Command git -ErrorAction SilentlyContinue)) { $toInstall += 'git' }
+          if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) { $toInstall += 'pwsh' }
+          if ($toInstall.Count -gt 0) {
+            choco install @toInstall -y
+          }
+          $gitPath = (Get-ItemProperty 'HKLM:\SOFTWARE\GitForWindows' -ErrorAction SilentlyContinue).InstallPath
+          if ($gitPath) {
+            echo "$gitPath\cmd" >> $env:GITHUB_PATH
+          }
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Tauri build environment
+        uses: ./.github/actions/setup-tauri-build
+
+      - name: Cargo check (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: task ci:check TARGET=${{ matrix.target }}
+
+      - name: Cargo check (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: task ci:check TARGET=${{ matrix.target }}
+
+      - name: Cargo check (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: task ci:check TARGET=${{ matrix.target }}
+
+  vitest-tests:
+    name: Vitest Unit Tests
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: app/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./app/frontend
+        run: npm ci
+
+      - name: Run Vitest with coverage
+        working-directory: ./app/frontend
+        run: npm run test:coverage
+        continue-on-error: true
+
+      - name: Upload coverage report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-coverage
+          path: app/frontend/coverage/
+          retention-days: 30
+
   playwright-tests:
     name: Playwright E2E Tests
     runs-on: [macOS, ARM64]
     timeout-minutes: 20
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
@@ -108,8 +196,8 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        continue-on-error: true  # Don't fail job on upload timeout (self-hosted network issues)
-        uses: actions/upload-artifact@v6
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: playwright-report/
@@ -118,91 +206,25 @@ jobs:
       - name: Upload test results
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-results
           path: test-results/
           retention-days: 30
 
-  # Linting and code quality
-  lint:
-    name: Lint and Format Check
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-
-      - name: Install Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
-      - name: Check Deno formatting
-        run: deno fmt --check
-
-      - name: Run Deno lint
-        run: deno lint
-
-  # Vitest unit tests with coverage
-  vitest-tests:
-    name: Vitest Unit Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: app/frontend/package-lock.json
-
-      - name: Install frontend dependencies
-        working-directory: ./app/frontend
-        run: npm ci
-
-      - name: Run Vitest with coverage
-        working-directory: ./app/frontend
-        run: npm run test:coverage
-        continue-on-error: true  # Pre-existing prop-test failures
-
-      - name: Upload coverage report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v6
-        with:
-          name: vitest-coverage
-          path: app/frontend/coverage/
-          retention-days: 30
-
-  # Build verification and Rust backend tests with coverage
-  build-and-test:
-    name: Build & Rust Tests
+  rust-tests:
+    name: Rust Tests with Coverage
     runs-on: [macOS, ARM64]
     timeout-minutes: 10
     env:
-      CARGO_INCREMENTAL: 1  # Enable incremental compilation on self-hosted (reuses artifacts)
+      CARGO_INCREMENTAL: 1
       CARGO_TERM_COLOR: always
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
-
-      - name: Build frontend
-        working-directory: ./app/frontend
-        run: npm run build
 
       - name: Check Rust build
         run: cargo check --workspace --all-features
@@ -222,7 +244,7 @@ jobs:
       - name: Upload coverage report
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: rust-coverage
           path: coverage/
