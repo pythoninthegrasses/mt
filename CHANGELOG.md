@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.2.0](https://github.com/pythoninthegrasses/mt/compare/v1.1.0...v1.2.0) (2026-03-31)
+
+
+### Features
+
+* add context menu to now playing view ([a6b5850](https://github.com/pythoninthegrasses/mt/commit/a6b5850dd93b48fd2d59785f2e9339e30384443d))
+
+
+### Bug Fixes
+
+* **ci:** resolve cargo fmt failures and bump GHA actions to Node 24 ([c06ca35](https://github.com/pythoninthegrasses/mt/commit/c06ca35504b280c84692265347fe48cdb72f8565))
+* **keyboard:** prevent space from toggling play/pause during type-to-jump ([5195080](https://github.com/pythoninthegrasses/mt/commit/519508050680565fe361e743dab2a06bfe6d996a))
+* **now-playing:** prevent long lyrics from pushing queue panel off viewport ([67c292b](https://github.com/pythoninthegrasses/mt/commit/67c292b5bdcd0e65ad7e6e7eec847c064fd24c59))
+* **queue:** resolve shuffle, remove, and Play Next queue bugs ([49b1515](https://github.com/pythoninthegrasses/mt/commit/49b15159519ef0324e677dcdf4ceca26eb667eeb))
+* resolve merge conflict in .serena/project.yml ([e97f9e8](https://github.com/pythoninthegrasses/mt/commit/e97f9e86e9f3172c1050d5bf4281853a8ff07127))
+* **theme:** add search field contrast for metro-teal and neon-love themes ([37a60ad](https://github.com/pythoninthegrasses/mt/commit/37a60ad3cb6dd8c215eb864299641de3fc7a0665))
+
 ## [1.1.0](https://github.com/pythoninthegrasses/mt/compare/v1.0.0...v1.1.0) (2026-03-27)
 
 
