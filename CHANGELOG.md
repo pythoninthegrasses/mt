@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.3](https://github.com/pythoninthegrasses/mt/compare/v1.2.2...v1.2.3) (2026-03-31)
+
+
+### Bug Fixes
+
+* **ci:** add [[bin]] section to produce 'mt' binary name ([95db4f0](https://github.com/pythoninthegrasses/mt/commit/95db4f077b2e8c725c69d1b839a340d7bc8907b8))
+
 ## [1.2.2](https://github.com/pythoninthegrasses/mt/compare/v1.2.1...v1.2.2) (2026-03-31)
 
 
