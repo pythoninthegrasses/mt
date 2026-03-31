@@ -5,6 +5,10 @@ description = "Desktop music player for large collections"
 authors = ["pythoninthegrass"]
 edition = "2024"
 
+[[bin]]
+name = "mt"
+path = "src/main.rs"
+
 [lib]
 name = "mt_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
