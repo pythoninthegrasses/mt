@@ -252,6 +252,103 @@ pub struct NowPlayingApiResponse {
     pub nowplaying: HashMap<String, serde_json::Value>,
 }
 
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimilarTracksResponse {
+    pub similartracks: SimilarTracksContainer,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimilarTracksContainer {
+    pub track: Vec<SimilarTrack>,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimilarTrack {
+    pub name: String,
+    pub artist: ArtistInfo,
+    #[serde(rename = "match")]
+    pub match_score: Option<String>,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimilarArtistsResponse {
+    pub similarartists: SimilarArtistsContainer,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimilarArtistsContainer {
+    pub artist: Vec<SimilarArtist>,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimilarArtist {
+    pub name: String,
+    #[serde(rename = "match")]
+    pub match_score: Option<String>,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TopTagsResponse {
+    pub toptags: TopTagsContainer,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TopTagsContainer {
+    pub tag: Vec<TagInfo>,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagInfo {
+    pub name: String,
+    pub count: Option<u32>,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagTopArtistsResponse {
+    pub topartists: TagTopArtistsContainer,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagTopArtistsContainer {
+    pub artist: Vec<TagArtist>,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagArtist {
+    pub name: String,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoTopTracksResponse {
+    pub tracks: GeoTopTracksContainer,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoTopTracksContainer {
+    pub track: Vec<GeoTrack>,
+}
+
+#[cfg(feature = "agent")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoTrack {
+    pub name: String,
+    pub artist: ArtistInfo,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -114,6 +114,7 @@ pub struct AgentContext {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[allow(dead_code)] // Variants used in upcoming phases
 pub enum AgentError {
     #[error("database error: {0}")]
     Db(#[from] crate::db::DbError),
