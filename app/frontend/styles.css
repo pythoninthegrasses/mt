@@ -352,6 +352,12 @@ aside button:hover svg {
   color: #00c4cc !important;
 }
 
+/* Metro-teal search input needs contrast against #1e1e1e sidebar */
+[data-theme-preset='metro-teal'] [data-testid='sidebar-search'] {
+  background-color: hsl(0 0% 20%) !important;
+  border: 1px solid #404040 !important;
+}
+
 /* Metro-teal toggle overrides (Tailwind bg-primary/bg-muted resolve transparent) */
 [data-theme-preset='metro-teal'] [data-testid='lastfm-toggle'].bg-muted,
 [data-theme-preset='metro-teal'] [data-testid='network-cache-toggle'].bg-muted,
@@ -512,6 +518,12 @@ aside button:hover svg {
 [data-theme-preset='neon-love'] [data-testid='settings-view'] nav button.bg-primary\/15 {
   background-color: rgba(65, 200, 229, 0.15) !important;
   color: #41c8e5 !important;
+}
+
+/* Neon Love search input needs contrast against #2a2041 sidebar */
+[data-theme-preset='neon-love'] [data-testid='sidebar-search'] {
+  background-color: #302250 !important;
+  border: 1px solid #3c2864 !important;
 }
 
 [data-theme-preset='neon-love'] [data-testid='lastfm-toggle'].bg-muted,
