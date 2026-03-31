@@ -5,6 +5,8 @@ shopt: ['globstar']
 
 env:
   PATH: "{{.HOME}}/.cargo/bin:{{.PATH}}"
+  RUSTUP_TOOLCHAIN:
+    sh: mise current rust 2>/dev/null || echo ""
 
 tasks:
   _setup-cargo-home:

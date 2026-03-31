@@ -84,10 +84,15 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-appender = "0.2"
 dirs = "6"
 
+# Agent (optional — requires Ollama running locally)
+rig-core = { version = "0.27", features = ["experimental"], optional = true }
+schemars = { version = "1", optional = true }
+
 [features]
 default = []
 devtools = ["dep:tauri-plugin-devtools", "tauri/devtools"]
 mcp = ["dep:tauri-plugin-mcp-bridge"]
+agent = ["dep:rig-core", "dep:schemars"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
