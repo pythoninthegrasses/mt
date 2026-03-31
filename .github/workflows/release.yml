@@ -228,11 +228,24 @@ jobs:
       - name: Install Windows SDK (signtool)
         shell: pwsh
         run: |
-          choco install windows-sdk-10.1 -y
+          # Find existing signtool first; install SDK only if missing
           $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
-            -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\' } `
+            -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue `
+            | Where-Object { $_.FullName -match '\\x64\\' } `
             | Sort-Object { [version]($_.FullName -replace '.*\\(\d+\.\d+\.\d+\.\d+)\\.*','$1') } `
             | Select-Object -Last 1 -ExpandProperty FullName
+
+          if (-not $signtool) {
+            Write-Host "signtool not found, installing Windows SDK via winget..."
+            winget install --id Microsoft.WindowsSDK.10.0.26100 --silent --accept-source-agreements --accept-package-agreements
+            $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
+              -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\' } `
+              | Sort-Object { [version]($_.FullName -replace '.*\\(\d+\.\d+\.\d+\.\d+)\\.*','$1') } `
+              | Select-Object -Last 1 -ExpandProperty FullName
+          }
+
+          if (-not $signtool) { throw "signtool.exe not found after SDK install" }
+          Write-Host "Using signtool: $signtool"
           echo "SIGNTOOL_PATH=$signtool" >> $env:GITHUB_ENV
 
       - name: Generate self-signed code signing certificate
