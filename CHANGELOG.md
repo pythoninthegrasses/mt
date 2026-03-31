@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/pythoninthegrasses/mt/compare/v1.2.0...v1.2.1) (2026-03-31)
+
+
+### Bug Fixes
+
+* **ci:** remove stale Taskfile fingerprint cache that skips builds ([eb503d6](https://github.com/pythoninthegrasses/mt/commit/eb503d63c71cba363a8fa4ece98a8113bb653c8a))
+
 ## [1.2.0](https://github.com/pythoninthegrasses/mt/compare/v1.1.0...v1.2.0) (2026-03-31)
 
 
