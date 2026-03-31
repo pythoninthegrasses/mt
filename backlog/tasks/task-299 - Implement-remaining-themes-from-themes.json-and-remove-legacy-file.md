@@ -1,10 +1,10 @@
 ---
 id: TASK-299
 title: Implement remaining themes from themes.json and remove legacy file
-status: In Progress
+status: To Do
 assignee: []
 created_date: '2026-03-19 03:56'
-updated_date: '2026-03-19 03:58'
+updated_date: '2026-03-31 03:38'
 labels:
   - frontend
   - themes
@@ -17,7 +17,7 @@ references:
 documentation:
   - docs/theming.md
 priority: low
-ordinal: 6000
+ordinal: 48500
 ---
 
 ## Description

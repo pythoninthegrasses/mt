@@ -1,13 +1,13 @@
 ---
-id: task-008
+id: TASK-008
 title: Implement mobile remote control
 status: To Do
 assignee: []
 created_date: '2025-09-17 04:10'
-updated_date: '2026-01-10 05:55'
+updated_date: '2026-03-31 03:38'
 labels: []
 dependencies: []
-ordinal: 12000
+ordinal: 49500
 ---
 
 ## Description
