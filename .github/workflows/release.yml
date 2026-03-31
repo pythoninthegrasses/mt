@@ -147,55 +147,6 @@ jobs:
           gh release upload "${{ github.event.release.tag_name }}" \
             target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
 
-  build-linux-arm64:
-    name: Build Linux (ARM64)
-    if: >
-      github.event_name == 'release' ||
-      inputs.platform == 'all' || inputs.platform == 'linux' || inputs.platform == ''
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 60
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install Task
-        uses: go-task/setup-task@v1
-
-
-      - name: Setup Blacksmith Builder
-        uses: useblacksmith/setup-docker-builder@v1
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
-      - name: Build ARM64 .deb
-        run: |
-          docker buildx build \
-            --platform linux/arm64 \
-            --file docker/Dockerfile.linux-arm64 \
-            --build-arg LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }} \
-            --build-arg LASTFM_API_SECRET=${{ secrets.LASTFM_API_SECRET }} \
-            --target artifacts \
-            --output type=local,dest=dist/linux-arm64 \
-            .
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: linux-arm64
-          path: dist/linux-arm64/*.deb
-          retention-days: 7
-
-      - name: Upload release assets
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
-            dist/linux-arm64/*.deb
-
   build-windows:
     name: Build Windows (x64)
     if: >
@@ -313,7 +264,7 @@ jobs:
 
   update-readme:
     name: Update README download links
-    needs: [build-macos, build-linux-amd64, build-linux-arm64, build-windows]
+    needs: [build-macos, build-linux-amd64, build-windows]
     if: github.event_name == 'release'
     runs-on: blacksmith-4vcpu-ubuntu-2404
 
@@ -341,7 +292,6 @@ jobs:
           PLATFORM_MAP = [
             ('.dmg',  'macOS',   'Apple Silicon (ARM64)'),
             ('amd64', 'Linux',   'x86_64 (amd64)'),
-            ('arm64', 'Linux',   'ARM64'),
             ('.exe',  'Windows', 'x64'),
           ]
 

@@ -260,8 +260,8 @@ mt/
 
 ## Performance
 
-| Metric | macOS | Linux ARM64 | Notes |
-|--------|-------|-------------|-------|
+| Metric | macOS | Linux | Notes |
+|--------|-------|-------|-------|
 | Cold start | < 500ms | < 1s | |
 | Track switch | < 50ms | < 50ms | |
 | Memory (idle) | ~115 MB | ~480 MB | WebKitGTK multi-process overhead on Linux |

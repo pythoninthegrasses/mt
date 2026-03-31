@@ -84,11 +84,6 @@ tasks:
     cmds:
       - task: tauri:build:x64
 
-  build:linux-arm64:
-    desc: "Build Linux ARM64 .deb via Docker (for Raspberry Pi)"
-    cmds:
-      - task: tauri:build:linux-arm64
-
   build:linux-amd64:
     desc: "Build Linux amd64 .deb via Docker"
     cmds:
