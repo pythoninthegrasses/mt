@@ -81,7 +81,7 @@ tracing-appender = "0.2"
 dirs = "6"
 
 [features]
-default = ["mcp"]
+default = []
 devtools = ["dep:tauri-plugin-devtools", "tauri/devtools"]
 mcp = ["dep:tauri-plugin-mcp-bridge"]
 
