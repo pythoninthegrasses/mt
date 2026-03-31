@@ -172,6 +172,7 @@ function handlePlaybackShortcut(event, hasMod) {
 
   switch (event.code) {
     case 'Space':
+      if (Alpine.store('ui').typeToJumpActive) return;
       event.preventDefault();
       player.togglePlay();
       break;

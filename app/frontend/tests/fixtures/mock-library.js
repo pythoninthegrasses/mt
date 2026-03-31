@@ -38,6 +38,7 @@ export function generateMockTracks(count = 50) {
     'The Police',
     'Le Tigre',
     'La Dispute',
+    'I Break Horses',
   ];
 
   const albums = [
@@ -56,6 +57,7 @@ export function generateMockTracks(count = 50) {
     'Synchronicity',
     'Feminist Sweepstakes',
     'Wildlife',
+    'Hearts',
   ];
 
   const titlePrefixes = ['', 'The ', 'A ', 'My ', ''];

@@ -19,6 +19,9 @@ export function createUIStore(Alpine) {
     sortIgnoreWords: true,
     sortIgnoreWordsList: DEFAULT_SORT_IGNORE_WORDS,
 
+    // Type-to-jump state (set by type-to-jump mixin, read by shortcuts)
+    typeToJumpActive: false,
+
     modal: null,
     contextMenu: null,
     toasts: [],

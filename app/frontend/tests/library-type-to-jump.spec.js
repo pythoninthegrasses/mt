@@ -448,6 +448,60 @@ test.describe('Type-to-jump artist navigation (task-255)', () => {
     expect(selectedArtist).toBe("The La's");
   });
 
+  test('should treat space as part of search query during active type-to-jump', async ({ page }) => {
+    // Set player to playing - if space triggers togglePlay, it will pause
+    await page.evaluate(() => {
+      window.Alpine.store('player').isPlaying = true;
+    });
+
+    // Type "i" to start type-to-jump
+    await page.keyboard.press('i');
+    await page.waitForTimeout(50);
+
+    // Now press space - should NOT toggle play/pause
+    await page.keyboard.press(' ');
+    await page.waitForTimeout(50);
+
+    // Player should STILL be playing (space was consumed by type-to-jump, not shortcuts)
+    const isPlayingAfterSpace = await page.evaluate(() => {
+      return window.Alpine.store('player').isPlaying;
+    });
+    expect(isPlayingAfterSpace).toBe(true);
+
+    // Continue typing to match "I Break Horses"
+    await page.keyboard.type('br');
+    await page.waitForTimeout(100);
+
+    const selectedArtist = await page.evaluate(() => {
+      const browserEl = document.querySelector('[x-data="libraryBrowser"]');
+      if (!browserEl) return null;
+      const data = window.Alpine.$data(browserEl);
+      const selectedIds = Array.from(data.selectedTracks);
+      if (selectedIds.length === 0) return null;
+      const tracks = window.Alpine.store('library').filteredTracks;
+      const selectedTrack = tracks.find((t) => t.id === selectedIds[0]);
+      return selectedTrack?.artist;
+    });
+
+    expect(selectedArtist).toBe('I Break Horses');
+  });
+
+  test('space should still toggle play/pause when type-to-jump is not active', async ({ page }) => {
+    // Set player to playing state so togglePlay will pause it
+    await page.evaluate(() => {
+      window.Alpine.store('player').isPlaying = true;
+    });
+
+    // Press space without any prior typing - should toggle play (pause it)
+    await page.keyboard.press(' ');
+    await page.waitForTimeout(100);
+
+    const isPlaying = await page.evaluate(() => {
+      return window.Alpine.store('player').isPlaying;
+    });
+    expect(isPlaying).toBe(false);
+  });
+
   test('should cycle to next artist on repeated same-letter press', async ({ page }) => {
     // Press "e" to jump to first "E" artist
     await page.keyboard.press('e');

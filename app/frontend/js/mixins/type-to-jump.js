@@ -38,6 +38,7 @@ export function typeToJumpMixin() {
         this._typeBuffer.split('').every((c) => c.toLowerCase() === ch)
       ) {
         this._typeBuffer += event.key;
+        this.$store.ui.typeToJumpActive = true;
         this.cycleToNextArtist(ch);
         this.resetTypeDebounce();
         return;
@@ -47,6 +48,7 @@ export function typeToJumpMixin() {
       this._typeBuffer += event.key;
       this._cycleChar = '';
       this._cycleIndex = -1;
+      this.$store.ui.typeToJumpActive = true;
       this.jumpToMatchingArtist(this._typeBuffer);
 
       // Reset debounce timer
@@ -174,6 +176,7 @@ export function typeToJumpMixin() {
         this._cycleChar = '';
         this._cycleIndex = -1;
         this._typeDebounceTimer = null;
+        this.$store.ui.typeToJumpActive = false;
       }, 500); // 500ms matches existing debounce patterns in codebase
     },
   };
