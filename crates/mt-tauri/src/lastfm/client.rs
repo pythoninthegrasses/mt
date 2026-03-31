@@ -24,7 +24,7 @@ impl LastFmClient {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "agent"))]
     pub(crate) fn new_unconfigured() -> Self {
         Self {
             config: ApiKeyConfig {
