@@ -1,4 +1,5 @@
 act            0.2.84
+task           3.49.1
 cargo-binstall 1.14.4
 deno           2.5.1
 rust           nightly-2026-02-09

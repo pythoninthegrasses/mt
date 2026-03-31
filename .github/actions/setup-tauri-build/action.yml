@@ -45,13 +45,6 @@ runs:
       working-directory: ./app/frontend
       run: npm ci
 
-    - name: Restore Taskfile fingerprint cache
-      uses: actions/cache@v4
-      with:
-        path: .task
-        key: task-${{ runner.os }}-${{ hashFiles('taskfiles/ci.yml') }}
-        restore-keys: |
-          task-${{ runner.os }}-
 
     - name: Setup CI environment (macOS/Linux)
       if: runner.os != 'Windows'

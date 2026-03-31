@@ -161,13 +161,6 @@ jobs:
       - name: Install Task
         uses: go-task/setup-task@v1
 
-      - name: Restore Taskfile fingerprint cache
-        uses: actions/cache@v5
-        with:
-          path: .task
-          key: task-${{ runner.os }}-${{ hashFiles('taskfiles/ci.yml') }}
-          restore-keys: |
-            task-${{ runner.os }}-
 
       - name: Setup Blacksmith Builder
         uses: useblacksmith/setup-docker-builder@v1
