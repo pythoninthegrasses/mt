@@ -4,7 +4,7 @@ title: Genius playlist creator
 status: In Progress
 assignee: []
 created_date: '2026-02-18 05:58'
-updated_date: '2026-03-31 19:14'
+updated_date: '2026-03-31 20:16'
 labels:
   - feature
   - playlists
@@ -31,7 +31,7 @@ Design document: `~/.claude/plans/steady-juggling-scroll.md`
 - [ ] #3 8 tools available: GetRecentlyPlayed, GetTopArtists, SearchLibrary, GetSimilarTracks, GetSimilarArtists, GetTrackTags, GetTopArtistsByTag, GetTopTracksByCountry
 - [ ] #4 Generated playlist only contains tracks that exist in user's local library
 - [ ] #5 Graceful degradation: works without Last.fm (local-only tools), works without Ollama (returns setup instructions)
-- [ ] #6 Feature-flagged behind `agent` — zero overhead when disabled
+- [x] #6 Feature-flagged behind `agent` — zero overhead when disabled
 - [ ] #7 Onboarding wizard: Ollama check → model download → ready
 - [ ] #8 Agent evals pass (tool selection, output format, degradation)
 <!-- AC:END -->
@@ -49,12 +49,40 @@ Added to `crates/mt-tauri/Cargo.toml`:
 
 Verified: `cargo check --features agent` and `cargo check` (without) both compile.
 
-## Phase 2: Types + Prompt (`types.rs`, `prompt.rs`)
+## Phase 2: Types + Prompt + Module Scaffold (DONE)
 
-Create `crates/mt-tauri/src/agent/` module:
+Created `crates/mt-tauri/src/agent/` module with 3 files:
 
-- `types.rs` — TrackSummary, AgentResponse, AgentStatus, AgentContext, AgentError
-- `prompt.rs` — System prompt constant optimized for 1B parameter models
+### `types.rs`
+- `TrackSummary` — lightweight track representation with `JsonSchema` derive, `from_track()` converter
+- `AgentStatus` enum — `Success`, `NoOllama`, `NoModel`, `Error` (snake_case serialization)
+- `AgentResponse` — Tauri command response with convenience constructors, `skip_serializing_if` on Option fields
+- `AgentContext` — holds `Database` + `LastFmClient` for tool injection
+- `AgentError` — thiserror enum with `#[from]` for DbError, LastFmError, reqwest::Error
+- `ParsedPlaylist` — name + track_ids parsed from LLM output
+- `AgentStatusResponse` — for `agent_check_status` command
+- 5 unit tests
+
+### `prompt.rs`
+- `SYSTEM_PROMPT` const — optimized for 1B models, mentions all 8 tools, defines response format
+- `DEFAULT_MODEL` = `"llama3.2:1b"`
+- `OLLAMA_BASE_URL` = `"http://localhost:11434"`
+- `MAX_AGENT_TURNS` = `5`
+- 3 unit tests
+
+### `mod.rs`
+- Module exports (`pub mod types; pub mod prompt;`)
+- `parse_agent_response()` — robust LLM output parser (handles brackets, preamble, mixed valid/invalid IDs)
+- Placeholder `agent_generate_playlist` and `agent_check_status` functions
+- 8 unit tests for parser edge cases
+
+### `lib.rs` wiring
+- `#[cfg(feature = "agent")] pub(crate) mod agent;` module declaration
+- Thin wrapper Tauri commands with `#[cfg(feature/not(feature))]` pairs
+- Graceful "not enabled" JSON response when feature is off
+- Commands registered unconditionally in `generate_handler!`
+
+Verified: `cargo check --features agent`, `cargo check`, and 17/17 agent tests pass.
 
 ## Phase 3: Tools (`tools.rs`)
 
@@ -71,13 +99,11 @@ Implement 8 tools with Rig's `Tool` trait, each receiving `Arc<AgentContext>`:
 
 TDD: Unit test each tool's `call()` with test DB; mock Last.fm responses for similarity tools.
 
-## Phase 4: Agent Loop + Tauri Commands (`mod.rs`)
+## Phase 4: Agent Loop + Tauri Commands
 
 - `build_agent(ctx)` — construct Rig agent with all 8 tools + system prompt
-- `agent_generate_playlist(prompt)` — Tauri command: health check → build agent → run (max 5 turns) → parse track IDs → create playlist
-- `agent_check_status()` — Tauri command: check Ollama + model availability
-
-Wire into `lib.rs` under `#[cfg(feature = "agent")]`.
+- Wire real implementation into `agent_generate_playlist`: health check -> build agent -> run (max 5 turns) -> parse track IDs -> create playlist
+- Wire real implementation into `agent_check_status`: check Ollama + model availability
 
 ## Phase 5: Onboarding + Setup (`setup.rs`)
 
@@ -89,39 +115,20 @@ Tauri commands:
 
 ## Phase 6: Evals (`evals.rs`)
 
-Rig `Eval` trait with heuristic evals (no LLM judge):
+Heuristic evals (no LLM judge):
 
 - Tool selection evals (correct tools per prompt class)
 - Output format evals (parseable response, no hallucinated IDs)
 - Degradation evals (graceful fallback when Last.fm tools fail)
-- Batch suite across all prompt variants
 
-Gated behind `--features agent` + requires Ollama for full suite; CI uses mock HTTP server.
+Gated behind `--features agent`; CI uses mock HTTP server.
 
 ## Phase 7: Frontend — Genius Sidebar Category + Prompt UI
 
-### Sidebar: "Genius" category
-
-Add a new "Genius" category in the left sidebar, positioned above the existing "Playlists" section:
-
-- **Icon**: Wayfarer glasses (thick-rimmed) SVG, inline with the category label
-- **Label**: "Genius" displayed to the right of the icon
-- **Behavior**: Clicking expands to show generated Genius playlists (same pattern as the Playlists section)
-- Genius playlists are visually distinct from regular playlists (e.g., subtle accent or badge)
-- Category only visible when `agent` feature is enabled
-
-### Prompt input
-
-- Text input within the Genius section: natural language prompt field
-- "Generate" button triggers `invoke("agent_generate_playlist", { prompt })`
-- Loading state while agent runs (spinner or progress indicator)
-- If `agent_check_status` returns `no_ollama`, show onboarding wizard instead of prompt input
-
-### Onboarding wizard (3 steps)
-
-1. Ollama check — link to ollama.com/download + "Check Again" button
-2. Model download — progress bar driven by `agent://pull-progress` events
-3. Ready — confirmation + "Try it" button opens the prompt input
+- Genius sidebar category with wayfarer glasses icon
+- Natural language prompt input + Generate button
+- Loading state while agent runs
+- Onboarding wizard (3 steps): Ollama check -> model download -> ready
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -129,10 +136,13 @@ Add a new "Genius" category in the left sidebar, positioned above the existing "
 <!-- SECTION:NOTES:BEGIN -->
 ## Current State (2026-03-31)
 
-- Phase 1 (deps) complete — rig-core 0.27 + schemars 1 added, feature-flagged
-- Merge conflict with origin/main (version bump 1.2.3→1.2.4) resolved via stash/pop
-- Both `cargo check --features agent` and `cargo check` pass
-- Local changes are unstaged (Cargo.toml, Cargo.lock, schemas, cargo.yml taskfile)
+- Phase 1 (deps) complete
+- Phase 2 (types + prompt + module scaffold) complete — 3 files, 17 tests
+- Phase 3 (tools) complete — 8 Tool trait implementations, 12 tests
+- Phase 4 (agent loop + Tauri commands) complete — real implementations, 20 tests in mod.rs
+
+Both `cargo check --features agent` and `cargo check` pass.
+726/726 tests pass with `cargo nextest run --workspace --features agent`.
 
 ## Key Design Decisions
 
@@ -140,32 +150,37 @@ Add a new "Genius" category in the left sidebar, positioned above the existing "
 - Uses llama3.2:1b via Ollama — small enough for local inference
 - 8 tools covering local library + Last.fm APIs with graceful degradation
 - Heuristic evals (no LLM judge) for deterministic CI
+- Thin wrapper Tauri commands in lib.rs with cfg pairs (agent/not-agent) to keep generate_handler! unconditional
+- Agent module functions are plain async fns (not #[tauri::command]) — lib.rs wrappers handle Tauri integration
+- LastFmClient constructed fresh inside agent_generate_playlist (not managed as Tauri state)
 
-## Files to Create
+## Rig API Notes (v0.27 + experimental)
 
-- `crates/mt-tauri/src/agent/mod.rs` — module exports, Tauri commands, agent loop
-- `crates/mt-tauri/src/agent/tools.rs` — 8 Tool trait implementations
-- `crates/mt-tauri/src/agent/types.rs` — AgentResponse, TrackSummary, AgentContext, AgentError
-- `crates/mt-tauri/src/agent/prompt.rs` — system prompt constant
-- `crates/mt-tauri/src/agent/setup.rs` — Ollama detection, model pull, onboarding state
-- `crates/mt-tauri/src/agent/evals.rs` — agent eval suite
+- `rig::client::CompletionClient` trait needed for `.agent()` method on client
+- `rig::completion::Prompt` trait needed for `.prompt()` method on agent
+- `.multi_turn(N)` (NOT `.max_turns(N)`) controls tool-call loop depth
+- `ollama::Client::builder().api_key(rig::client::Nothing).base_url(URL).build()` — builder pattern avoids env var panic
+- Agent construction requires Tokio runtime (for tool registration) — test with `#[tokio::test]`
 
-## Existing Code to Reuse
+## Files Created/Modified
 
-- `db::favorites::get_recently_played` — GetRecentlyPlayed tool
-- `db::stats::get_top_artists` — GetTopArtists tool
-- `db::library::get_all_tracks` — SearchLibrary tool
-- `db::library::find_tracks_by_artist_title` — cross-ref for similarity tools
-- `LastFmClient::api_call` — all Last.fm tools
-- `db::playlists::create_playlist` / `add_tracks_to_playlist` — playlist creation
-- `RateLimiter` (via LastFmClient) — rate limiting
+- `crates/mt-tauri/src/agent/mod.rs` — module root, parse_agent_response, parse_model_names, has_default_model, check_ollama, build_agent, agent_generate_playlist, agent_check_status
+- `crates/mt-tauri/src/agent/types.rs` — AgentResponse, TrackSummary, AgentContext, AgentError, ParsedPlaylist, AgentStatusResponse
+- `crates/mt-tauri/src/agent/prompt.rs` — SYSTEM_PROMPT, DEFAULT_MODEL, OLLAMA_BASE_URL, MAX_AGENT_TURNS
+- `crates/mt-tauri/src/agent/tools.rs` — 8 Tool implementations
+- `crates/mt-tauri/src/lastfm/client.rs` — 5 discovery methods (get_similar_tracks, get_similar_artists, get_track_top_tags, get_top_artists_by_tag, get_top_tracks_by_country)
+- `crates/mt-tauri/src/lastfm/types.rs` — response types for discovery methods
+- `crates/mt-tauri/Cargo.toml` — rig-core + schemars deps
+- `crates/mt-tauri/src/lib.rs` — agent module declaration + wrapper Tauri commands
+
+## Next: Phase 5 (Onboarding + Setup)
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 cargo check --features agent compiles
-- [ ] #2 cargo check (without agent) compiles — no regressions
-- [ ] #3 cargo nextest run --workspace passes
-- [ ] #4 Unit tests for each tool's call() method
+- [x] #1 cargo check --features agent compiles
+- [x] #2 cargo check (without agent) compiles — no regressions
+- [x] #3 cargo nextest run --workspace passes
+- [x] #4 Unit tests for each tool's call() method
 - [ ] #5 Agent evals pass with mock Ollama server
 <!-- DOD:END -->

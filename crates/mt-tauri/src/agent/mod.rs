@@ -5,9 +5,101 @@
 //! a playlist, and persist it to the database.
 
 pub mod prompt;
+pub mod tools;
 pub mod types;
 
-use types::{AgentError, AgentResponse, AgentStatusResponse, ParsedPlaylist};
+use std::sync::Arc;
+
+use rig::client::CompletionClient;
+use rig::completion::Prompt;
+use rig::providers::ollama;
+use tracing::{debug, info, warn};
+
+use prompt::{DEFAULT_MODEL, MAX_AGENT_TURNS, OLLAMA_BASE_URL, SYSTEM_PROMPT};
+use tools::{
+    GetRecentlyPlayed, GetSimilarArtists, GetSimilarTracks, GetTopArtists, GetTopArtistsByTag,
+    GetTopTracksByCountry, GetTrackTags, SearchLibrary,
+};
+use types::{AgentContext, AgentError, AgentResponse, AgentStatusResponse, ParsedPlaylist};
+
+use crate::db::{Database, playlists};
+use crate::lastfm::LastFmClient;
+
+/// Parse model names from Ollama's `/api/tags` JSON response.
+///
+/// Expected format: `{ "models": [{ "name": "llama3.2:1b", ... }, ...] }`
+fn parse_model_names(tags_response: &serde_json::Value) -> Vec<String> {
+    tags_response
+        .get("models")
+        .and_then(|m| m.as_array())
+        .map(|models| {
+            models
+                .iter()
+                .filter_map(|m| m.get("name").and_then(|n| n.as_str()).map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Check if Ollama is reachable and return available model names.
+async fn check_ollama() -> Result<Vec<String>, AgentError> {
+    let url = format!("{OLLAMA_BASE_URL}/api/tags");
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(AgentError::Http)?;
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| AgentError::OllamaUnavailable(e.to_string()))?;
+
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| AgentError::OllamaUnavailable(format!("invalid response: {e}")))?;
+
+    Ok(parse_model_names(&body))
+}
+
+/// Build a Rig agent with all playlist tools and the system prompt.
+fn build_agent(
+    ctx: Arc<AgentContext>,
+) -> rig::agent::Agent<ollama::CompletionModel<reqwest::Client>> {
+    let client = ollama::Client::builder()
+        .api_key(rig::client::Nothing)
+        .base_url(OLLAMA_BASE_URL)
+        .build()
+        .expect("build Ollama client");
+
+    client
+        .agent(DEFAULT_MODEL)
+        .preamble(SYSTEM_PROMPT)
+        .tool(GetRecentlyPlayed {
+            ctx: Arc::clone(&ctx),
+        })
+        .tool(GetTopArtists {
+            ctx: Arc::clone(&ctx),
+        })
+        .tool(SearchLibrary {
+            ctx: Arc::clone(&ctx),
+        })
+        .tool(GetSimilarTracks {
+            ctx: Arc::clone(&ctx),
+        })
+        .tool(GetSimilarArtists {
+            ctx: Arc::clone(&ctx),
+        })
+        .tool(GetTrackTags {
+            ctx: Arc::clone(&ctx),
+        })
+        .tool(GetTopArtistsByTag {
+            ctx: Arc::clone(&ctx),
+        })
+        .tool(GetTopTracksByCountry { ctx })
+        .build()
+}
 
 pub fn parse_agent_response(text: &str) -> Result<ParsedPlaylist, AgentError> {
     let name = text
@@ -43,24 +135,139 @@ pub fn parse_agent_response(text: &str) -> Result<ParsedPlaylist, AgentError> {
     Ok(ParsedPlaylist { name, track_ids })
 }
 
-pub async fn agent_generate_playlist(
-    _prompt: String,
-    _db: tauri::State<'_, crate::db::Database>,
-) -> Result<AgentResponse, String> {
-    Ok(AgentResponse::error("Agent not yet implemented"))
+/// Check whether `models` contains `DEFAULT_MODEL` (exact or base-name match).
+///
+/// Matches `"llama3.2:1b"` against `"llama3.2:1b"` (exact) or `"llama3.2:latest"`
+/// (same base name before the colon).
+fn has_default_model(models: &[String]) -> bool {
+    let base = DEFAULT_MODEL.split(':').next().unwrap_or(DEFAULT_MODEL);
+    models
+        .iter()
+        .any(|m| m == DEFAULT_MODEL || m.starts_with(&format!("{base}:")))
 }
 
+/// Generate a playlist from a natural language prompt using the local LLM.
+///
+/// Flow: health check → build agent → prompt (multi-turn) → parse → create playlist.
+pub async fn agent_generate_playlist(
+    prompt: String,
+    db: tauri::State<'_, Database>,
+) -> Result<AgentResponse, String> {
+    let models = match check_ollama().await {
+        Ok(m) => m,
+        Err(_) => return Ok(AgentResponse::no_ollama()),
+    };
+
+    if !has_default_model(&models) {
+        return Ok(AgentResponse::no_model(DEFAULT_MODEL));
+    }
+
+    info!(prompt = %prompt, "Starting agent playlist generation");
+
+    // 3. Build agent with tools
+    let lastfm = LastFmClient::new();
+    let ctx = Arc::new(AgentContext {
+        db: db.inner().clone(),
+        lastfm,
+    });
+    let agent = build_agent(ctx);
+
+    // 4. Run the agent: multi-turn tool-calling loop
+    let response_text = agent
+        .prompt(&prompt)
+        .multi_turn(MAX_AGENT_TURNS as usize)
+        .await
+        .map_err(|e| {
+            warn!(error = %e, "Agent execution failed");
+            format!("Agent error: {e}")
+        })?;
+
+    debug!(response = %response_text, "Agent response received");
+
+    // 5. Parse the agent's final response
+    let parsed = match parse_agent_response(&response_text) {
+        Ok(p) => p,
+        Err(e) => {
+            warn!(error = %e, response = %response_text, "Failed to parse agent response");
+            return Ok(AgentResponse::error(format!(
+                "Could not parse playlist from agent response: {e}\n\nRaw response:\n{response_text}"
+            )));
+        }
+    };
+
+    // 6. Create the playlist in the database
+    let playlist = db
+        .with_conn(|conn| playlists::create_playlist(conn, &parsed.name))
+        .map_err(|e| format!("Failed to create playlist: {e}"))?;
+
+    let playlist = match playlist {
+        Some(p) => p,
+        None => {
+            return Ok(AgentResponse::error(format!(
+                "Playlist name '{}' already exists",
+                parsed.name
+            )));
+        }
+    };
+
+    let added = db
+        .with_conn(|conn| {
+            playlists::add_tracks_to_playlist(conn, playlist.id, &parsed.track_ids, None)
+        })
+        .map_err(|e| format!("Failed to add tracks to playlist: {e}"))?;
+
+    info!(
+        playlist_id = playlist.id,
+        playlist_name = %parsed.name,
+        track_count = added,
+        "Agent playlist created"
+    );
+
+    Ok(AgentResponse::success(
+        playlist.id,
+        parsed.name,
+        added as usize,
+    ))
+}
+
+/// Check if the agent is available (Ollama running + model downloaded).
 pub async fn agent_check_status() -> Result<AgentStatusResponse, String> {
-    Ok(AgentStatusResponse {
-        available: false,
-        model: prompt::DEFAULT_MODEL.into(),
-        message: "Agent not yet implemented".into(),
-    })
+    match check_ollama().await {
+        Ok(models) => {
+            if has_default_model(&models) {
+                Ok(AgentStatusResponse {
+                    available: true,
+                    model: DEFAULT_MODEL.into(),
+                    message: "Agent is ready".into(),
+                })
+            } else {
+                Ok(AgentStatusResponse {
+                    available: false,
+                    model: DEFAULT_MODEL.into(),
+                    message: format!(
+                        "Model '{}' is not installed. Run: ollama pull {}",
+                        DEFAULT_MODEL, DEFAULT_MODEL
+                    ),
+                })
+            }
+        }
+        Err(_) => Ok(AgentStatusResponse {
+            available: false,
+            model: DEFAULT_MODEL.into(),
+            message:
+                "Ollama is not running. Install from https://ollama.com/download and start it."
+                    .into(),
+        }),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // -----------------------------------------------------------------------
+    // parse_agent_response tests (existing)
+    // -----------------------------------------------------------------------
 
     #[test]
     fn parse_valid_response() {
@@ -120,5 +327,90 @@ mod tests {
         let text = "Playlist: Partial\nTracks: 1, bad, 3, nope, 5";
         let result = parse_agent_response(text).unwrap();
         assert_eq!(result.track_ids, vec![1, 3, 5]);
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_model_names tests (Phase 4)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_model_names_with_models() {
+        let json = serde_json::json!({
+            "models": [
+                { "name": "llama3.2:1b", "size": 1234 },
+                { "name": "codellama:7b", "size": 5678 },
+                { "name": "mistral:latest", "size": 9999 }
+            ]
+        });
+        let names = parse_model_names(&json);
+        assert_eq!(names, vec!["llama3.2:1b", "codellama:7b", "mistral:latest"]);
+    }
+
+    #[test]
+    fn parse_model_names_empty_list() {
+        let json = serde_json::json!({ "models": [] });
+        let names = parse_model_names(&json);
+        assert!(names.is_empty());
+    }
+
+    #[test]
+    fn parse_model_names_missing_field() {
+        let json = serde_json::json!({});
+        let names = parse_model_names(&json);
+        assert!(names.is_empty());
+    }
+
+    #[test]
+    fn parse_model_names_malformed_entries() {
+        let json = serde_json::json!({
+            "models": [
+                { "name": "valid:model" },
+                { "no_name": true },
+                { "name": 42 }
+            ]
+        });
+        let names = parse_model_names(&json);
+        // Only the entry with a string "name" field is extracted
+        assert_eq!(names, vec!["valid:model"]);
+    }
+
+    // -----------------------------------------------------------------------
+    // build_agent smoke test (Phase 4)
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn build_agent_constructs_successfully() {
+        let db = Database::new_in_memory().expect("in-memory db");
+        let lastfm = LastFmClient::new_unconfigured();
+        let ctx = Arc::new(AgentContext { db, lastfm });
+        let _agent = build_agent(ctx);
+    }
+
+    // -----------------------------------------------------------------------
+    // has_default_model tests (Phase 4)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn has_default_model_exact_match() {
+        let models = vec!["llama3.2:1b".into(), "codellama:7b".into()];
+        assert!(has_default_model(&models));
+    }
+
+    #[test]
+    fn has_default_model_base_name_match() {
+        let models = vec!["llama3.2:latest".into(), "mistral:7b".into()];
+        assert!(has_default_model(&models));
+    }
+
+    #[test]
+    fn has_default_model_no_match() {
+        let models = vec!["codellama:7b".into(), "mistral:latest".into()];
+        assert!(!has_default_model(&models));
+    }
+
+    #[test]
+    fn has_default_model_empty() {
+        let models: Vec<String> = vec![];
+        assert!(!has_default_model(&models));
     }
 }
