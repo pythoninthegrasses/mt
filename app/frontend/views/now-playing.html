@@ -2,7 +2,7 @@
 <div x-show="$store.ui.view === 'nowPlaying'" x-cloak class="h-full" x-data="nowPlayingView">
   <div class="flex h-full">
     <!-- Left Panel: Album Art + Track Info + Lyrics -->
-    <div class="flex-1 flex items-center justify-center" :class="lyrics ? '' : 'p-6'">
+    <div class="flex-1 min-w-0 flex items-center justify-center" :class="lyrics ? '' : 'p-6'">
       <template x-if="$store.player.currentTrack">
         <!-- Without lyrics: large centered art + metadata -->
         <div
@@ -66,7 +66,7 @@
           data-testid="lyrics-layout"
         >
           <div
-            class="flex items-center gap-10 max-w-full max-h-full pl-4"
+            class="flex items-center gap-10 max-w-full max-h-full pl-4 overflow-hidden"
             :style="_lyricsContentWidth ? '' : 'width: 100%'"
           >
             <div
@@ -180,7 +180,7 @@
     </div>
 
     <!-- Right Panel: Up Next Queue -->
-    <div class="w-96 border-l border-border flex flex-col bg-card/50">
+    <div class="w-96 shrink-0 border-l border-border flex flex-col bg-card/50">
       <div class="p-4 border-b border-border">
         <h3 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           Up Next

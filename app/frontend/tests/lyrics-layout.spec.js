@@ -144,6 +144,9 @@ test.describe('Lyrics Layout Reflow', () => {
   });
 
   test('long lyrics (Beck) should produce wider content width than short lyrics', async ({ page }) => {
+    // Use a wide viewport so width capping doesn't engage for either lyric set
+    await page.setViewportSize({ width: 1920, height: 1080 });
+
     await setCurrentTrack(page, TRAIL_OF_DEAD_TRACK);
     await navigateToNowPlaying(page);
 
@@ -243,5 +246,197 @@ test.describe('Lyrics Layout Reflow', () => {
     const classes = await lyricsWrapper.getAttribute('class');
     expect(classes).toContain('shrink');
     expect(classes).not.toContain('flex-1');
+  });
+});
+
+test.describe('Lyrics Layout - Queue Viewport Regression', () => {
+  test.beforeEach(async ({ page }) => {
+    const libraryState = createLibraryState();
+    await setupLibraryMocks(page, libraryState);
+    await page.goto('/');
+    await waitForAlpine(page);
+    await page.waitForSelector('[x-data="libraryBrowser"]', { state: 'visible' });
+  });
+
+  test('queue panel stays fully within viewport when long lyrics are present', async ({ page }) => {
+    await setCurrentTrack(page, BECK_TRACK);
+    await navigateToNowPlaying(page);
+    await setLyrics(page, BECK_LYRICS);
+    await waitForMeasurement(page);
+
+    const queuePanel = page.locator('[data-testid="lyrics-layout"]')
+      .locator('..').locator('..').locator('> div:last-child');
+    const queueBox = await queuePanel.boundingBox();
+    const viewportSize = page.viewportSize();
+
+    // Queue right edge must not exceed viewport width
+    expect(queueBox.x + queueBox.width).toBeLessThanOrEqual(viewportSize.width);
+    // Queue must be fully visible (left edge within viewport)
+    expect(queueBox.x).toBeGreaterThanOrEqual(0);
+  });
+
+  test('queue panel maintains w-96 (384px) width with lyrics at default viewport', async ({ page }) => {
+    await setCurrentTrack(page, BECK_TRACK);
+    await navigateToNowPlaying(page);
+    await setLyrics(page, BECK_LYRICS);
+    await waitForMeasurement(page);
+
+    // Target the Up Next queue panel directly by its heading text
+    const queueHeading = page.locator('h3:has-text("Up Next")');
+    const queuePanel = queueHeading.locator('..').locator('..');
+    const queueBox = await queuePanel.boundingBox();
+
+    // w-96 = 384px; allow 1px tolerance for subpixel rendering
+    expect(queueBox.width).toBeGreaterThanOrEqual(383);
+    expect(queueBox.width).toBeLessThanOrEqual(385);
+  });
+
+  test('queue panel stays visible at narrow viewport with long lyrics', async ({ page }) => {
+    // Use a narrower viewport that previously triggered the bug
+    await page.setViewportSize({ width: 1144, height: 669 });
+
+    await setCurrentTrack(page, BECK_TRACK);
+    await navigateToNowPlaying(page);
+    await setLyrics(page, BECK_LYRICS);
+    await waitForMeasurement(page);
+
+    const queueHeading = page.locator('h3:has-text("Up Next")');
+    await expect(queueHeading).toBeVisible();
+
+    const queuePanel = queueHeading.locator('..').locator('..');
+    const queueBox = await queuePanel.boundingBox();
+    const viewportSize = page.viewportSize();
+
+    // Queue must be fully within viewport
+    expect(queueBox.x + queueBox.width).toBeLessThanOrEqual(viewportSize.width);
+    expect(queueBox.x).toBeGreaterThanOrEqual(0);
+    // Queue width must remain at w-96 (384px)
+    expect(queueBox.width).toBeGreaterThanOrEqual(383);
+  });
+
+  test('lyrics content width is capped to available space', async ({ page }) => {
+    // Narrow viewport where Beck lyrics would previously overflow
+    await page.setViewportSize({ width: 1144, height: 669 });
+
+    await setCurrentTrack(page, BECK_TRACK);
+    await navigateToNowPlaying(page);
+    await setLyrics(page, BECK_LYRICS);
+    await waitForMeasurement(page);
+
+    const lyricsContentWidth = await getLyricsContentWidth(page);
+
+    // Layout container width minus fixed elements (art 320 + gap 40 + padding 16 = 376)
+    const layoutWidth = await page.evaluate(() => {
+      const layout = document.querySelector('[data-testid="lyrics-layout"]');
+      return layout ? layout.clientWidth : 0;
+    });
+    const maxExpected = layoutWidth - 376;
+
+    // Measured width must not exceed available space
+    expect(lyricsContentWidth).toBeLessThanOrEqual(maxExpected + 1); // 1px tolerance
+    expect(lyricsContentWidth).toBeGreaterThan(0);
+  });
+
+  test('no horizontal overflow in now playing view with long lyrics', async ({ page }) => {
+    await setCurrentTrack(page, BECK_TRACK);
+    await navigateToNowPlaying(page);
+    await setLyrics(page, BECK_LYRICS);
+    await waitForMeasurement(page);
+
+    const hasOverflow = await page.evaluate(() => {
+      return document.body.scrollWidth > window.innerWidth;
+    });
+    expect(hasOverflow).toBe(false);
+  });
+
+  test('no horizontal overflow at narrow viewport with long lyrics', async ({ page }) => {
+    await page.setViewportSize({ width: 1144, height: 669 });
+
+    await setCurrentTrack(page, BECK_TRACK);
+    await navigateToNowPlaying(page);
+    await setLyrics(page, BECK_LYRICS);
+    await waitForMeasurement(page);
+
+    const hasOverflow = await page.evaluate(() => {
+      return document.body.scrollWidth > window.innerWidth;
+    });
+    expect(hasOverflow).toBe(false);
+  });
+
+  test('queue remains fully visible after resizing from large to small viewport with lyrics', async ({
+    page,
+  }) => {
+    // Start at large viewport
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await setCurrentTrack(page, BECK_TRACK);
+    await navigateToNowPlaying(page);
+    await setLyrics(page, BECK_LYRICS);
+    await waitForMeasurement(page);
+
+    // Capture width BEFORE resize so the value is a constant
+    const prevWidth = await getLyricsContentWidth(page);
+
+    // Shrink to the viewport size that previously caused the bug
+    await page.setViewportSize({ width: 1144, height: 669 });
+
+    // Wait for measurement to update after resize
+    await page.waitForFunction(
+      (prev) => {
+        const el = document.querySelector('[x-data="nowPlayingView"]');
+        if (!el) return false;
+        const current = window.Alpine.$data(el)._lyricsContentWidth;
+        return current !== null && current !== prev;
+      },
+      prevWidth,
+      { timeout: 5000 },
+    );
+
+    const queueHeading = page.locator('h3:has-text("Up Next")');
+    await expect(queueHeading).toBeVisible();
+
+    const queuePanel = queueHeading.locator('..').locator('..');
+    const queueBox = await queuePanel.boundingBox();
+    const viewportSize = page.viewportSize();
+
+    expect(queueBox.x + queueBox.width).toBeLessThanOrEqual(viewportSize.width);
+    expect(queueBox.width).toBeGreaterThanOrEqual(383);
+  });
+
+  test('left panel has min-w-0 to prevent flex overflow', async ({ page }) => {
+    await setCurrentTrack(page, BECK_TRACK);
+    await navigateToNowPlaying(page);
+
+    // The left panel is the first child of the main flex container (.flex.h-full)
+    const leftPanel = page.locator('[x-data="nowPlayingView"] > .flex.h-full > div:first-child');
+    const classes = await leftPanel.getAttribute('class');
+    expect(classes).toContain('min-w-0');
+  });
+
+  test('queue panel has shrink-0 to prevent compression', async ({ page }) => {
+    await setCurrentTrack(page, BECK_TRACK);
+    await navigateToNowPlaying(page);
+
+    // The queue panel is the last child of the main flex container (.flex.h-full)
+    const queuePanel = page.locator('[x-data="nowPlayingView"] > .flex.h-full > div:last-child');
+    const classes = await queuePanel.getAttribute('class');
+    expect(classes).toContain('shrink-0');
+  });
+
+  test('short lyrics do not trigger width capping', async ({ page }) => {
+    await setCurrentTrack(page, TRAIL_OF_DEAD_TRACK);
+    await navigateToNowPlaying(page);
+    await setLyrics(page, TRAIL_OF_DEAD_LYRICS);
+    await waitForMeasurement(page);
+
+    const lyricsContentWidth = await getLyricsContentWidth(page);
+
+    // Short lyrics should fit naturally without capping.
+    // At default viewport (1624px), the cap = viewport - queue(384) - art(320) - gap(40) - padding(16) = 864px.
+    // Trail of Dead's short lines should be well under this.
+    const viewportWidth = page.viewportSize().width;
+    const theoreticalCap = viewportWidth - 384 - 320 - 40 - 16;
+
+    expect(lyricsContentWidth).toBeLessThan(theoreticalCap);
+    expect(lyricsContentWidth).toBeGreaterThan(0);
   });
 });

@@ -256,8 +256,20 @@ export function createNowPlayingView(Alpine) {
       const prev = p.style.width;
       p.style.width = 'max-content';
       // Add padding (pr-2 = 8px) to the measured text width
-      this._lyricsContentWidth = p.offsetWidth + 8;
+      let measured = p.offsetWidth + 8;
       p.style.width = prev;
+
+      // Cap to available space so lyrics wrap instead of pushing the queue off-viewport.
+      // Layout: album art (w-80 = 320px) + gap-10 (40px) + pl-4 (16px) = 376px fixed.
+      const layout = this.$el.querySelector('[data-testid="lyrics-layout"]');
+      if (layout) {
+        const maxAvailable = layout.clientWidth - 376;
+        if (maxAvailable > 0 && measured > maxAvailable) {
+          measured = maxAvailable;
+        }
+      }
+
+      this._lyricsContentWidth = measured;
     },
 
     _observeLyricsLayout() {
