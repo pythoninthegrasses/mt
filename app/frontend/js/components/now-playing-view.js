@@ -1,9 +1,20 @@
 import { queueDragReorderMixin } from '../mixins/queue-drag-reorder.js';
+import { singleTrackContextMenuMixin } from '../mixins/single-track-context-menu.js';
 import { lyrics as lyricsApi } from '../api/lyrics.js';
+import { favorites } from '../api/favorites.js';
 
 export function createNowPlayingView(Alpine) {
   Alpine.data('nowPlayingView', () => ({
     ...queueDragReorderMixin(),
+    ...singleTrackContextMenuMixin(),
+
+    // Context menu state
+    contextMenu: null,
+    playlists: [],
+    showPlaylistSubmenu: false,
+    submenuOnLeft: false,
+    submenuY: 0,
+    submenuCloseTimeout: null,
 
     // Lyrics state
     lyrics: null,
@@ -23,7 +34,107 @@ export function createNowPlayingView(Alpine) {
     _rafId: null,
     _resizeObserver: null,
 
+    get queue() {
+      return this.$store.queue;
+    },
+
+    get library() {
+      return this.$store.library;
+    },
+
+    get player() {
+      return this.$store.player;
+    },
+
+    get ui() {
+      return this.$store.ui;
+    },
+
+    // Override mixin's handleContextMenu with queue-specific menu items
+    handleContextMenu(event, track, originalIndex) {
+      event.preventDefault();
+
+      const isCurrentTrack = originalIndex === this.$store.queue.currentIndex;
+
+      const menuItems = [
+        { label: 'Play Now', action: () => this._ctxPlayInQueue(originalIndex) },
+        {
+          label: 'Play Next',
+          action: () => this._ctxPlayNextInQueue(track),
+          disabled: isCurrentTrack,
+        },
+        { type: 'separator' },
+        {
+          label: 'Add to Playlist',
+          hasSubmenu: true,
+          action: () => {
+            this.showPlaylistSubmenu = !this.showPlaylistSubmenu;
+          },
+        },
+        { label: 'Add to Liked Songs', action: () => this._ctxToggleFavorite(track) },
+        { type: 'separator' },
+        { label: 'Show in Finder', action: () => this._ctxShowInFinder(track) },
+        { type: 'separator' },
+        {
+          label: 'Remove from Queue',
+          danger: true,
+          action: () => this._ctxRemoveFromQueue(originalIndex),
+          disabled: isCurrentTrack,
+        },
+      ];
+
+      // Check favorite status and update label
+      favorites.check(track.id).then((result) => {
+        if (!this.contextMenu) return;
+        const favoriteItem = this.contextMenu.items.find(
+          (i) => i.label === 'Add to Liked Songs' || i.label === 'Remove from Liked Songs',
+        );
+        if (favoriteItem) {
+          favoriteItem.label = result.is_favorite
+            ? 'Remove from Liked Songs'
+            : 'Add to Liked Songs';
+        }
+      }).catch(() => {});
+
+      const menuHeight = 280;
+      const menuWidth = 200;
+      const submenuWidth = 200;
+      let x = event.clientX;
+      let y = event.clientY;
+
+      if (x + menuWidth > window.innerWidth) {
+        x = window.innerWidth - menuWidth - 10;
+      }
+      if (y + menuHeight > window.innerHeight) {
+        y = window.innerHeight - menuHeight - 10;
+      }
+
+      this.contextMenu = { x, y, track, items: menuItems };
+      this.showPlaylistSubmenu = false;
+      this.submenuOnLeft = (x + menuWidth + 45 + submenuWidth) > window.innerWidth;
+    },
+
+    _ctxPlayInQueue(originalIndex) {
+      this.closeContextMenu();
+      this.$store.queue.playIndex(originalIndex);
+    },
+
+    async _ctxPlayNextInQueue(track) {
+      this.closeContextMenu();
+      await this.$store.queue.playNextTracks([track]);
+      this.$store.ui.toast('Playing next', 'success');
+    },
+
+    _ctxRemoveFromQueue(originalIndex) {
+      this.closeContextMenu();
+      this.$store.queue.remove(originalIndex);
+    },
+
     init() {
+      this._loadPlaylists();
+      this._onPlaylistsUpdated = () => this._loadPlaylists();
+      window.addEventListener('mt:playlists-updated', this._onPlaylistsUpdated);
+
       const container = this.$refs.queueList;
       if (container) {
         this._containerHeight = container.clientHeight;
@@ -38,9 +149,21 @@ export function createNowPlayingView(Alpine) {
       // Watch for track changes and view visibility to fetch lyrics
       this.$watch('$store.player.currentTrack', () => this._onTrackOrViewChange());
       this.$watch('$store.ui.view', () => this._onTrackOrViewChange());
+
+      // Listen for scroll-to-current-track requests from the bottom bar
+      this._scrollToCurrentHandler = () => this.scrollToCurrentTrack();
+      window.addEventListener('mt:scroll-to-current-in-queue', this._scrollToCurrentHandler);
     },
 
     destroy() {
+      if (this._onPlaylistsUpdated) {
+        window.removeEventListener('mt:playlists-updated', this._onPlaylistsUpdated);
+        this._onPlaylistsUpdated = null;
+      }
+      if (this._scrollToCurrentHandler) {
+        window.removeEventListener('mt:scroll-to-current-in-queue', this._scrollToCurrentHandler);
+        this._scrollToCurrentHandler = null;
+      }
       if (this._resizeObserver) {
         this._resizeObserver.disconnect();
         this._resizeObserver = null;
@@ -145,6 +268,36 @@ export function createNowPlayingView(Alpine) {
         if (this.lyrics) this._measureLyricsWidth();
       });
       this._lyricsLayoutObserver.observe(layout);
+    },
+
+    scrollToCurrentTrack() {
+      const container = this.$refs.queueList;
+      if (!container) return;
+
+      // Current track is always at index 0 in playOrderItems
+      container.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Flash highlight on the current track row after scroll completes
+      const flashCurrentRow = () => {
+        const currentRow = container.querySelector('.queue-item.bg-primary\\/20');
+        if (currentRow) {
+          currentRow.classList.remove('queue-highlight-flash');
+          void currentRow.offsetWidth; // force reflow for re-trigger
+          currentRow.classList.add('queue-highlight-flash');
+          currentRow.addEventListener(
+            'animationend',
+            () => currentRow.classList.remove('queue-highlight-flash'),
+            { once: true },
+          );
+        }
+      };
+
+      // Use scrollend if supported, otherwise fall back to a short delay
+      if ('onscrollend' in window) {
+        container.addEventListener('scrollend', flashCurrentRow, { once: true });
+      } else {
+        setTimeout(flashCurrentRow, 300);
+      }
     },
 
     _onScroll() {

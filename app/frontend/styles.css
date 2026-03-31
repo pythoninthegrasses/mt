@@ -143,6 +143,19 @@ aside button:hover svg {
   opacity: 0.5;
 }
 
+.queue-highlight-flash {
+  animation: queue-highlight-flash 0.6s ease-out;
+}
+
+@keyframes queue-highlight-flash {
+  0%, 30% {
+    background-color: hsl(var(--primary) / 0.4);
+  }
+  100% {
+    background-color: hsl(var(--primary) / 0.2);
+  }
+}
+
 /* Playlist reorder shift animations - match queue behavior */
 [data-playlist-reorder-index] {
   transition: transform 0.15s ease-out;
@@ -336,7 +349,7 @@ aside button:hover svg {
 
 [data-theme-preset='metro-teal'] [data-testid='settings-view'] nav button.bg-primary\/15 {
   background-color: rgba(0, 183, 195, 0.15) !important;
-  color: #00C4CC !important;
+  color: #00c4cc !important;
 }
 
 /* Metro-teal toggle overrides (Tailwind bg-primary/bg-muted resolve transparent) */
@@ -383,7 +396,7 @@ aside button:hover svg {
   --mt-progress-bg: 268 25% 25%;
   --mt-progress-fill: 191 76% 58%;
   --mt-toast-bg: hsl(191 76% 58%);
-  --mt-toast-fg: #1F1731;
+  --mt-toast-fg: #1f1731;
 }
 
 [data-theme-preset='neon-love'] .track-row-even {
@@ -412,40 +425,40 @@ aside button:hover svg {
 
 [data-theme-preset='neon-love'] footer {
   background-color: #130e1e;
-  border-color: #3C2864;
+  border-color: #3c2864;
 }
 
 [data-theme-preset='neon-love'] .border-border {
-  border-color: #3C2864;
+  border-color: #3c2864;
 }
 
 [data-theme-preset='neon-love'] footer button {
-  color: #E6DEFF !important;
+  color: #e6deff !important;
 }
 
 [data-theme-preset='neon-love'] footer button:hover {
-  color: #41C8E5 !important;
+  color: #41c8e5 !important;
 }
 
 [data-theme-preset='neon-love'] footer button.text-primary,
 [data-theme-preset='neon-love'] footer button.text-red-500 {
-  color: #41C8E5 !important;
+  color: #41c8e5 !important;
 }
 
 [data-theme-preset='neon-love'] [data-testid='player-progressbar'] {
-  background-color: #3C2864 !important;
+  background-color: #3c2864 !important;
 }
 
 [data-theme-preset='neon-love'] [data-testid='player-progressbar'] > div:first-child {
-  background-color: #41C8E5 !important;
+  background-color: #41c8e5 !important;
 }
 
 [data-theme-preset='neon-love'] [data-testid='player-progressbar'] > div:last-child {
-  background-color: #41C8E5 !important;
+  background-color: #41c8e5 !important;
 }
 
 [data-theme-preset='neon-love'] footer .bg-\[\#8E8E93\]\/20 {
-  background-color: #3C2864 !important;
+  background-color: #3c2864 !important;
 }
 
 [data-theme-preset='neon-love'] .track-row-even,
@@ -458,7 +471,7 @@ aside button:hover svg {
 }
 
 [data-theme-preset='neon-love'] [data-testid='library-header'] {
-  background-color: #2A2041 !important;
+  background-color: #2a2041 !important;
 }
 
 [data-theme-preset='neon-love'] [data-testid='library-header'] .column-header-active {
@@ -466,29 +479,29 @@ aside button:hover svg {
 }
 
 [data-theme-preset='neon-love'] aside {
-  background-color: #2A2041 !important;
+  background-color: #2a2041 !important;
 }
 
 [data-theme-preset='neon-love'] .bg-card\/50,
 [data-theme-preset='neon-love'] .bg-card {
-  background-color: #2A2041 !important;
+  background-color: #2a2041 !important;
 }
 
 [data-theme-preset='neon-love'] .bg-background {
-  background-color: #1F1731 !important;
+  background-color: #1f1731 !important;
 }
 
 [data-theme-preset='neon-love'] .titlebar-drag-region {
-  background-color: #2A2041 !important;
+  background-color: #2a2041 !important;
 }
 
 [data-theme-preset='neon-love'] [data-testid='settings-view'] .bg-muted\/30 {
   background-color: rgba(60, 40, 100, 0.6) !important;
-  border: 1px solid #3C2864;
+  border: 1px solid #3c2864;
 }
 
 [data-theme-preset='neon-love'] [data-testid='settings-view'] .border-border\/50 {
-  border-color: #3C2864 !important;
+  border-color: #3c2864 !important;
 }
 
 [data-theme-preset='neon-love'] [data-testid='settings-view'] button.border-border:hover {
@@ -498,7 +511,7 @@ aside button:hover svg {
 
 [data-theme-preset='neon-love'] [data-testid='settings-view'] nav button.bg-primary\/15 {
   background-color: rgba(65, 200, 229, 0.15) !important;
-  color: #41C8E5 !important;
+  color: #41c8e5 !important;
 }
 
 [data-theme-preset='neon-love'] [data-testid='lastfm-toggle'].bg-muted,

@@ -296,11 +296,14 @@ export function createPlayerControls(Alpine) {
     },
 
     /**
-     * Jump to current track in library view
+     * Jump to current track in the active view's track list
      */
     jumpToCurrentTrack() {
-      if (this.ui.view === 'library' && this.currentTrack) {
+      if (!this.currentTrack) return;
+      if (this.ui.view === 'library') {
         window.dispatchEvent(new CustomEvent('mt:scroll-to-current-track'));
+      } else if (this.ui.view === 'nowPlaying') {
+        window.dispatchEvent(new CustomEvent('mt:scroll-to-current-in-queue'));
       }
     },
 

@@ -5,8 +5,16 @@
     <div class="flex-1 flex items-center justify-center" :class="lyrics ? '' : 'p-6'">
       <template x-if="$store.player.currentTrack">
         <!-- Without lyrics: large centered art + metadata -->
-        <div x-show="!lyrics" class="flex flex-col items-center gap-6">
-          <div class="w-96 h-96 bg-muted rounded-lg flex items-center justify-center shadow-xl shrink-0 overflow-hidden" data-testid="album-art-container">
+        <div
+          x-show="!lyrics"
+          class="flex flex-col items-center gap-6 cursor-pointer"
+          @dblclick="scrollToCurrentTrack()"
+          title="Double-click to scroll to current track in queue"
+        >
+          <div
+            class="w-96 h-96 bg-muted rounded-lg flex items-center justify-center shadow-xl shrink-0 overflow-hidden"
+            data-testid="album-art-container"
+          >
             <template x-if="$store.player.artwork">
               <img
                 :src="'data:' + $store.player.artwork.mime_type + ';base64,' + $store.player.artwork.data"
@@ -16,25 +24,59 @@
               >
             </template>
             <template x-if="!$store.player.artwork">
-              <svg class="w-24 h-24 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24" data-testid="album-art-placeholder">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+              <svg
+                class="w-24 h-24 text-muted-foreground"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                data-testid="album-art-placeholder"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                  d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+                >
+                </path>
               </svg>
             </template>
           </div>
           <div class="text-center space-y-2">
-            <h2 class="text-2xl font-bold" x-text="$store.player.currentTrack.title || 'Unknown'"></h2>
-            <p class="text-lg text-muted-foreground" x-text="$store.player.currentTrack.artist || 'Unknown Artist'"></p>
-            <p class="text-base text-muted-foreground/70" x-text="$store.player.currentTrack.album || ''"></p>
+            <h2 class="text-2xl font-bold" x-text="$store.player.currentTrack.title || 'Unknown'">
+            </h2>
+            <p
+              class="text-lg text-muted-foreground"
+              x-text="$store.player.currentTrack.artist || 'Unknown Artist'"
+            >
+            </p>
+            <p
+              class="text-base text-muted-foreground/70"
+              x-text="$store.player.currentTrack.album || ''"
+            >
+            </p>
           </div>
         </div>
       </template>
 
       <template x-if="$store.player.currentTrack">
         <!-- With lyrics: art on left + scrollable lyrics on right, centered as a block -->
-        <div x-show="lyrics" class="w-full h-full flex items-center justify-center py-6" data-testid="lyrics-layout">
-          <div class="flex items-center gap-10 max-w-full max-h-full pl-4" :style="_lyricsContentWidth ? '' : 'width: 100%'">
-            <div class="flex flex-col items-center gap-3 shrink-0 self-center">
-              <div class="w-80 h-80 bg-muted rounded-lg flex items-center justify-center shadow-xl shrink-0 overflow-hidden">
+        <div
+          x-show="lyrics"
+          class="w-full h-full flex items-center justify-center py-6"
+          data-testid="lyrics-layout"
+        >
+          <div
+            class="flex items-center gap-10 max-w-full max-h-full pl-4"
+            :style="_lyricsContentWidth ? '' : 'width: 100%'"
+          >
+            <div
+              class="flex flex-col items-center gap-3 shrink-0 self-center cursor-pointer"
+              @dblclick="scrollToCurrentTrack()"
+              title="Double-click to scroll to current track in queue"
+            >
+              <div
+                class="w-80 h-80 bg-muted rounded-lg flex items-center justify-center shadow-xl shrink-0 overflow-hidden"
+              >
                 <template x-if="$store.player.artwork">
                   <img
                     :src="'data:' + $store.player.artwork.mime_type + ';base64,' + $store.player.artwork.data"
@@ -43,23 +85,51 @@
                   >
                 </template>
                 <template x-if="!$store.player.artwork">
-                  <svg class="w-16 h-16 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                  <svg
+                    class="w-16 h-16 text-muted-foreground"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.5"
+                      d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+                    >
+                    </path>
                   </svg>
                 </template>
               </div>
               <div class="text-center space-y-1 w-80">
-                <h2 class="text-xl font-bold truncate" x-text="$store.player.currentTrack.title || 'Unknown'"></h2>
-                <p class="text-sm text-muted-foreground truncate" x-text="$store.player.currentTrack.artist || 'Unknown Artist'"></p>
-                <p class="text-sm text-muted-foreground/70 truncate" x-text="$store.player.currentTrack.album || ''"></p>
+                <h2
+                  class="text-xl font-bold truncate"
+                  x-text="$store.player.currentTrack.title || 'Unknown'"
+                >
+                </h2>
+                <p
+                  class="text-sm text-muted-foreground truncate"
+                  x-text="$store.player.currentTrack.artist || 'Unknown Artist'"
+                >
+                </p>
+                <p
+                  class="text-sm text-muted-foreground/70 truncate"
+                  x-text="$store.player.currentTrack.album || ''"
+                >
+                </p>
               </div>
             </div>
-            <div class="min-h-0 self-stretch relative" :class="_lyricsContentWidth ? 'shrink' : 'flex-1'" :style="_lyricsContentWidth ? 'width: ' + _lyricsContentWidth + 'px; max-width: 100%' : ''">
+            <div
+              class="min-h-0 self-stretch relative"
+              :class="_lyricsContentWidth ? 'shrink' : 'flex-1'"
+              :style="_lyricsContentWidth ? 'width: ' + _lyricsContentWidth + 'px; max-width: 100%' : ''"
+            >
               <div
                 class="absolute inset-x-0 top-0 h-12 z-10 pointer-events-none transition-opacity duration-300"
                 :class="_lyricsScrollTop > 0 ? 'opacity-100' : 'opacity-0'"
-                style="background: linear-gradient(to bottom, hsl(var(--background)), transparent);"
-              ></div>
+                style="background: linear-gradient(to bottom, hsl(var(--background)), transparent)"
+              >
+              </div>
               <div
                 class="h-full overflow-y-auto lyrics-hide-scrollbar"
                 data-testid="lyrics-panel"
@@ -67,14 +137,21 @@
                 @scroll.passive="_onLyricsScroll($event)"
               >
                 <div class="min-h-full flex flex-col justify-center">
-                  <p class="leading-relaxed text-foreground/80 whitespace-pre-wrap pr-2" style="font-size: clamp(1rem, 2vw, 1.5rem); line-height: 1.75;" x-text="lyrics" data-testid="lyrics-text"></p>
+                  <p
+                    class="leading-relaxed text-foreground/80 whitespace-pre-wrap pr-2"
+                    style="font-size: clamp(1rem, 2vw, 1.5rem); line-height: 1.75"
+                    x-text="lyrics"
+                    data-testid="lyrics-text"
+                  >
+                  </p>
                 </div>
               </div>
               <div
                 class="absolute inset-x-0 bottom-0 h-12 z-10 pointer-events-none transition-opacity duration-300"
                 :class="_lyricsCanScrollMore ? 'opacity-100' : 'opacity-0'"
-                style="background: linear-gradient(to top, hsl(var(--background)), transparent);"
-              ></div>
+                style="background: linear-gradient(to top, hsl(var(--background)), transparent)"
+              >
+              </div>
             </div>
           </div>
         </div>
@@ -82,8 +159,19 @@
 
       <template x-if="!$store.player.currentTrack">
         <div class="text-center text-muted-foreground">
-          <svg class="w-24 h-24 mx-auto mb-6 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+          <svg
+            class="w-24 h-24 mx-auto mb-6 opacity-50"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+            >
+            </path>
           </svg>
           <p class="text-xl">No track playing</p>
           <p class="text-sm mt-2">Select a track from the library or queue</p>
@@ -94,70 +182,169 @@
     <!-- Right Panel: Up Next Queue -->
     <div class="w-96 border-l border-border flex flex-col bg-card/50">
       <div class="p-4 border-b border-border">
-        <h3 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Up Next</h3>
+        <h3 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Up Next
+        </h3>
       </div>
       <div class="flex-1 overflow-y-auto" x-ref="queueList">
         <div x-show="$store.queue.items.length === 0" class="p-8 text-center text-muted-foreground">
           <p class="text-sm">Queue is empty</p>
           <p class="text-xs mt-1">Add tracks from the library</p>
         </div>
-        <div x-show="$store.queue.items.length > 0" :style="`height: ${queueTotalHeight}px; position: relative;`">
-          <div :style="`transform: translateY(${queueOffsetY}px); will-change: transform;`" x-ref="sortableContainer">
-          <template x-for="item in visibleQueueItems" :key="item.track.id + '-' + item.originalIndex">
-            <div
-              class="queue-item-wrapper"
-              :class="[
+        <div
+          x-show="$store.queue.items.length > 0"
+          :style="`height: ${queueTotalHeight}px; position: relative;`"
+        >
+          <div
+            :style="`transform: translateY(${queueOffsetY}px); will-change: transform;`"
+            x-ref="sortableContainer"
+          >
+            <template
+              x-for="item in visibleQueueItems"
+              :key="item.track.id + '-' + item.originalIndex"
+            >
+              <div
+                class="queue-item-wrapper"
+                :class="[
                 getShiftDirection(item.originalIndex) === 'up' ? 'shift-up' : '',
                 getShiftDirection(item.originalIndex) === 'down' ? 'shift-down' : ''
               ]"
-            >
-              <div
-                class="queue-item flex items-center gap-3 px-3 py-2 border-b border-[#E5E5E5] dark:border-[#323232] select-none cursor-default"
-                :class="[
+              >
+                <div
+                  class="queue-item flex items-center gap-3 px-3 py-2 border-b border-[#E5E5E5] dark:border-[#323232] select-none cursor-default"
+                  :class="[
                   item.isCurrentTrack ? 'bg-primary/20 text-primary' : '',
                   isDragging(item.originalIndex) ? 'dragging-item' : '',
                   isOtherDragging(item.originalIndex) ? 'other-dragging' : 'hover:bg-muted/50'
                 ]"
-                :style="isDragging(item.originalIndex) ? 'transform:' + getDragTransform() + '; z-index: 50;' : ''"
-                :data-id="item.track.id"
-                @dblclick.stop="$store.queue.playIndex(item.originalIndex)"
-              >
-                <div
-                  class="drag-handle cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground"
-                  @mousedown.prevent="startDrag(item.originalIndex, $event)"
-                  @touchstart.prevent="startDrag(item.originalIndex, $event)"
-                  @dblclick.stop
+                  :style="isDragging(item.originalIndex) ? 'transform:' + getDragTransform() + '; z-index: 50;' : ''"
+                  :data-id="item.track.id"
+                  @contextmenu="handleContextMenu($event, item.track, item.originalIndex)"
+                  @dblclick.stop="$store.queue.playIndex(item.originalIndex)"
                 >
-                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
-                  </svg>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium truncate" x-text="item.track.title || 'Unknown'"></p>
-                  <p class="text-xs truncate" :class="item.isCurrentTrack ? 'text-primary/70' : 'text-muted-foreground'" x-text="item.track.artist || 'Unknown Artist'"></p>
-                </div>
-                <template x-if="item.isCurrentTrack">
-                  <div class="shrink-0">
-                    <svg class="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                  <div
+                    class="drag-handle cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground"
+                    @mousedown.prevent="startDrag(item.originalIndex, $event)"
+                    @touchstart.prevent="startDrag(item.originalIndex, $event)"
+                    @dblclick.stop
+                  >
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path
+                        d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"
+                      />
                     </svg>
                   </div>
-                </template>
-                <button
-                  class="shrink-0 p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
-                  @click.stop="$store.queue.remove(item.originalIndex)"
-                  title="Remove from queue"
-                >
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                  </svg>
-                </button>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium truncate" x-text="item.track.title || 'Unknown'">
+                    </p>
+                    <p
+                      class="text-xs truncate"
+                      :class="item.isCurrentTrack ? 'text-primary/70' : 'text-muted-foreground'"
+                      x-text="item.track.artist || 'Unknown Artist'"
+                    >
+                    </p>
+                  </div>
+                  <template x-if="item.isCurrentTrack">
+                    <div class="shrink-0">
+                      <svg class="w-4 h-4 text-primary" fill="currentColor" viewBox="0 0 24 24">
+                        <path
+                          d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"
+                        />
+                      </svg>
+                    </div>
+                  </template>
+                  <button
+                    class="shrink-0 p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+                    @click.stop="$store.queue.remove(item.originalIndex)"
+                    title="Remove from queue"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            </div>
-          </template>
+            </template>
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Context menu -->
+  <div
+    x-show="contextMenu"
+    x-trap="contextMenu"
+    x-cloak
+    class="context-menu track-context-menu bg-card"
+    data-testid="now-playing-track-context-menu"
+    :style="contextMenu ? `left: ${contextMenu.x}px; top: ${contextMenu.y}px` : ''"
+    @click.outside="closeContextMenu()"
+  >
+    <template x-if="contextMenu">
+      <div>
+        <template x-for="(item, idx) in contextMenu.items" :key="idx">
+          <div>
+            <template x-if="item.type === 'separator'">
+              <div class="context-menu-separator"></div>
+            </template>
+            <template x-if="item.type !== 'separator'">
+              <div
+                class="context-menu-item relative"
+                :class="{ 'disabled': item.disabled, 'danger': item.danger }"
+                @click="if (!item.disabled && !item.hasSubmenu) { item.action(); closeContextMenu(); } else if (!item.disabled) { item.action(); }"
+                @mouseenter="if (item.hasSubmenu) { showPlaylistSubmenu = true; submenuY = $el.getBoundingClientRect().top; handleSubmenuEnter(); } else { showPlaylistSubmenu = false; }"
+                @mouseleave="if (item.hasSubmenu) { handleSubmenuLeave(); }"
+              >
+                <span class="w-4 text-center"></span>
+                <span x-text="item.label" class="flex-1"></span>
+                <span
+                  x-show="item.hasSubmenu"
+                  class="text-muted-foreground"
+                  x-text="submenuOnLeft ? '&#9664;' : '&#9654;'"
+                ></span>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </template>
+  </div>
+
+  <!-- Add to Playlist submenu -->
+  <div
+    x-show="contextMenu && showPlaylistSubmenu"
+    x-cloak
+    class="context-menu bg-card"
+    data-testid="now-playing-playlist-submenu"
+    :style="contextMenu ? `left: ${submenuOnLeft ? contextMenu.x - 180 : contextMenu.x + 180 + 45}px; top: ${submenuY}px; max-height: ${window.innerHeight - submenuY - 10}px; overflow-y: auto` : ''"
+    @mouseenter="handleSubmenuEnter()"
+    @mouseleave="handleSubmenuLeave()"
+  >
+    <div
+      class="context-menu-item"
+      @click="createPlaylistWithTracks()"
+    >
+      <span class="w-4 text-center">+</span>
+      <span>New Playlist...</span>
+    </div>
+    <div class="context-menu-separator" x-show="playlists.length > 0"></div>
+    <template x-for="playlist in playlists" :key="playlist.id">
+      <div
+        class="context-menu-item"
+        @click="addToPlaylist(playlist.id)"
+      >
+        <span class="w-4 text-center"></span>
+        <span x-text="playlist.name" class="truncate"></span>
+      </div>
+    </template>
+    <div x-show="playlists.length === 0" class="px-3 py-2 text-sm text-muted-foreground">
+      No playlists yet
     </div>
   </div>
 </div>
