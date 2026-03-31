@@ -587,19 +587,25 @@ describe('Queue Store - Property-Based Tests', () => {
         const originalLength = store.items.length;
         const currentTrackId = store.items[currentIdx].id;
 
+        // playNextTracks uses move semantics — duplicates are removed then re-inserted
+        // Count how many play-next tracks already exist in the queue (will be moved, not added)
+        const existingIds = new Set(tracks.map((t) => t.id));
+        const newCount = playNextTracks.filter((t) => !existingIds.has(t.id)).length;
+
         await store.playNextTracks(playNextTracks);
 
-        // Invariant: play-next tracks are at currentIndex + 1 through currentIndex + N
+        // Invariant: all play-next tracks are at play-next position (after current)
+        // currentIndex may have shifted if duplicates were removed from before it
+        const newCurrentIdx = store.items.findIndex((t) => t.id === currentTrackId);
         for (let i = 0; i < playNextTracks.length; i++) {
-          expect(store.items[currentIdx + 1 + i].id).toBe(playNextTracks[i].id);
+          expect(store.items[newCurrentIdx + 1 + i].id).toBe(playNextTracks[i].id);
         }
 
-        // Invariant: currentIndex unchanged (insert is after current, so currentIndex shifts only if insert is before)
-        // Since we insert after currentIndex, the current track stays at its position
-        expect(store.items[currentIdx].id).toBe(currentTrackId);
+        // Invariant: current track is still in the queue
+        expect(store.items.find((t) => t.id === currentTrackId)).toBeTruthy();
 
-        // Invariant: total queue length = original + play-next count
-        expect(store.items.length).toBe(originalLength + playNextTracks.length);
+        // Invariant: total queue length = original + truly new tracks (moved ones don't change count)
+        expect(store.items.length).toBe(originalLength + newCount);
       },
     );
 
@@ -620,25 +626,25 @@ describe('Queue Store - Property-Based Tests', () => {
         });
 
         const originalIds = tracks.map((t) => t.id);
-        const playNextIds = playNextTracks.map((t) => t.id);
+        // playNextTracks uses move semantics — duplicates are moved, not rejected
+        const existingIds = new Set(originalIds);
+        const newCount = playNextTracks.filter((t) => !existingIds.has(t.id)).length;
 
         const promise = store.playNextTracks(playNextTracks);
         resolvePromise();
         await promise;
 
-        // Invariant: all original tracks present
-        const resultIds = store.items.map((t) => t.id);
-        for (const id of originalIds) {
-          expect(resultIds).toContain(id);
-        }
-
         // Invariant: all play-next tracks present
-        for (const id of playNextIds) {
-          expect(resultIds).toContain(id);
+        const resultIds = store.items.map((t) => t.id);
+        for (const t of playNextTracks) {
+          expect(resultIds).toContain(t.id);
         }
 
-        // Invariant: total count matches
-        expect(store.items.length).toBe(tracks.length + playNextTracks.length);
+        // Invariant: no duplicates in queue
+        expect(new Set(resultIds).size).toBe(resultIds.length);
+
+        // Invariant: total count matches (original + truly new tracks)
+        expect(store.items.length).toBe(tracks.length + newCount);
       },
     );
 

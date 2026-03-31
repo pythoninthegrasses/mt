@@ -41,6 +41,9 @@ export function createQueueStore(Alpine) {
     // Promise tracking background queue build (set by queue-builder, awaited by playNextTracks)
     _buildQueuePromise: null,
 
+    // Track IDs added via "Play Next" - these are pinned after the current track during shuffle
+    _playNextTrackIds: new Set(),
+
     /**
      * Initialize queue from backend
      */
@@ -69,6 +72,7 @@ export function createQueueStore(Alpine) {
       this._originalOrder = [...this.items];
       this._repeatOnePending = false;
       this._playHistory = [];
+      this._playNextTrackIds = new Set();
 
       // Persist the reset state to backend
       try {
@@ -283,21 +287,47 @@ export function createQueueStore(Alpine) {
         await this._buildQueuePromise;
       }
 
+      // Move semantics: remove existing copies from queue before re-inserting at play-next position.
+      // This handles the case where the full library is in the queue and the user
+      // wants to move an existing track to play next.
+      // Skip tracks that are currently playing (can't move the current track).
+      const currentTrackId = this.currentIndex >= 0 ? this.items[this.currentIndex]?.id : null;
+      const tracksToInsert = [];
+      for (const t of tracksArray) {
+        if (t.id === currentTrackId) continue; // skip currently playing track
+        const existingIdx = this.items.findIndex((item) => item.id === t.id);
+        if (existingIdx >= 0) {
+          this.items.splice(existingIdx, 1);
+          const origIdx = this._originalOrder.findIndex((item) => item.id === t.id);
+          if (origIdx >= 0) this._originalOrder.splice(origIdx, 1);
+          if (existingIdx < this.currentIndex) {
+            this.currentIndex--;
+          }
+        }
+        tracksToInsert.push(t);
+      }
+      if (tracksToInsert.length === 0) return;
+
       // Append after any previously queued-next tracks (not before them)
       if (!this._playNextOffset) this._playNextOffset = 0;
       const insertIndex = (this.currentIndex >= 0 ? this.currentIndex + 1 : 0) +
         this._playNextOffset;
 
       console.log('[queue]', 'play_next_tracks', {
-        count: tracksArray.length,
-        trackIds: tracksArray.map((t) => t.id),
+        count: tracksToInsert.length,
+        trackIds: tracksToInsert.map((t) => t.id),
         insertIndex,
         playNextOffset: this._playNextOffset,
       });
 
-      this._playNextOffset += tracksArray.length;
+      this._playNextOffset += tracksToInsert.length;
 
-      await this.insert(insertIndex, tracksArray);
+      // Track these as pinned play-next tracks (preserved during shuffle)
+      for (const t of tracksToInsert) {
+        this._playNextTrackIds.add(t.id);
+      }
+
+      await this.insert(insertIndex, tracksToInsert);
     },
 
     /**
@@ -307,36 +337,55 @@ export function createQueueStore(Alpine) {
     async remove(index) {
       if (index < 0 || index >= this.items.length) return;
 
-      const removedTrack = this.items[index];
-      console.log('[queue]', 'remove_track', {
-        index,
-        trackId: removedTrack?.id,
-        trackTitle: removedTrack?.title,
-        wasCurrentTrack: index === this.currentIndex,
-        queueSizeBefore: this.items.length,
-      });
+      // Prevent QUEUE_STATE_CHANGED event from overwriting state during remove
+      this._updating = true;
 
-      // Update local state
-      this.items.splice(index, 1);
-
-      // Adjust current index
-      if (index < this.currentIndex) {
-        this.currentIndex--;
-      } else if (index === this.currentIndex) {
-        // Currently playing track was removed
-        if (this.items.length === 0) {
-          this.currentIndex = -1;
-          Alpine.store('player')?.stop();
-        } else if (this.currentIndex >= this.items.length) {
-          this.currentIndex = this.items.length - 1;
-        }
-      }
-
-      // Persist to backend
       try {
-        await queueApi.remove(index);
-      } catch (error) {
-        console.error('[queue] Failed to persist remove:', error);
+        const removedTrack = this.items[index];
+        console.log('[queue]', 'remove_track', {
+          index,
+          trackId: removedTrack?.id,
+          trackTitle: removedTrack?.title,
+          wasCurrentTrack: index === this.currentIndex,
+          queueSizeBefore: this.items.length,
+        });
+
+        // Update local state
+        this.items.splice(index, 1);
+
+        // Also remove from _originalOrder so unshuffle stays consistent
+        if (removedTrack) {
+          const origIdx = this._originalOrder.findIndex((t) => t.id === removedTrack.id);
+          if (origIdx >= 0) {
+            this._originalOrder.splice(origIdx, 1);
+          }
+          this._playNextTrackIds.delete(removedTrack.id);
+        }
+
+        // Adjust current index
+        if (index < this.currentIndex) {
+          this.currentIndex--;
+        } else if (index === this.currentIndex) {
+          // Currently playing track was removed
+          if (this.items.length === 0) {
+            this.currentIndex = -1;
+            Alpine.store('player')?.stop();
+          } else if (this.currentIndex >= this.items.length) {
+            this.currentIndex = this.items.length - 1;
+          }
+        }
+
+        // Persist to backend
+        try {
+          await queueApi.remove(index);
+          await queueApi.setCurrentIndex(this.currentIndex);
+        } catch (error) {
+          console.error('[queue] Failed to persist remove:', error);
+        }
+      } finally {
+        setTimeout(() => {
+          this._updating = false;
+        }, 50);
       }
     },
 
@@ -350,6 +399,7 @@ export function createQueueStore(Alpine) {
       this.items = [];
       this.currentIndex = -1;
       this._originalOrder = [];
+      this._playNextTrackIds = new Set();
       // _playHistory intentionally preserved - persists across queue rebuilds
 
       Alpine.store('player')?.stop();
@@ -420,6 +470,9 @@ export function createQueueStore(Alpine) {
 
       this.currentIndex = index;
       const track = this.items[index];
+
+      // If this was a play-next track, it's been consumed
+      this._playNextTrackIds.delete(track.id);
 
       await Alpine.store('player').playTrack(track);
       await queueApi.setCurrentIndex(this.currentIndex);
@@ -594,12 +647,12 @@ export function createQueueStore(Alpine) {
           // History preserved - track objects are matched by ID, survives reorder
         }
 
-        // Persist shuffle state and current index to backend
+        // Persist shuffle state to backend
         await queueApi.setShuffle(this.shuffle);
-        await queueApi.setCurrentIndex(this.currentIndex);
 
-        // Sync queue order to backend
+        // Sync queue order to backend, then set currentIndex AFTER so clear() doesn't leave stale state
         await this._syncQueueToBackend();
+        await queueApi.setCurrentIndex(this.currentIndex);
       } finally {
         setTimeout(() => {
           this._updating = false;
@@ -612,23 +665,31 @@ export function createQueueStore(Alpine) {
 
       const currentTrack = this.currentIndex >= 0 ? this.items[this.currentIndex] : null;
 
-      // Filter out current track by index to get tracks to shuffle
-      const otherTracks = currentTrack
-        ? this.items.filter((_, i) => i !== this.currentIndex)
-        : [...this.items];
+      // Separate play-next tracks (pinned) from regular tracks
+      const pinnedTracks = [];
+      const regularTracks = [];
 
-      // Fisher-Yates shuffle of other tracks
-      for (let i = otherTracks.length - 1; i > 0; i--) {
+      for (let i = 0; i < this.items.length; i++) {
+        if (i === this.currentIndex) continue;
+        if (this._playNextTrackIds.has(this.items[i].id)) {
+          pinnedTracks.push(this.items[i]);
+        } else {
+          regularTracks.push(this.items[i]);
+        }
+      }
+
+      // Fisher-Yates shuffle only the regular tracks
+      for (let i = regularTracks.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [otherTracks[i], otherTracks[j]] = [otherTracks[j], otherTracks[i]];
+        [regularTracks[i], regularTracks[j]] = [regularTracks[j], regularTracks[i]];
       }
 
       if (currentTrack) {
-        // Current track goes to index 0, shuffled tracks follow (task-213)
-        this.items = [currentTrack, ...otherTracks];
+        // Current track at 0, pinned play-next tracks next, then shuffled rest (task-213)
+        this.items = [currentTrack, ...pinnedTracks, ...regularTracks];
         this.currentIndex = 0;
       } else {
-        this.items = otherTracks;
+        this.items = [...pinnedTracks, ...regularTracks];
       }
 
       this._validateQueueIntegrity();

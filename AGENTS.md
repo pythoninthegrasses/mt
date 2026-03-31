@@ -49,6 +49,7 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 | Last.fm scrobbling | [Last.fm Integration](docs/lastfm.md) |
 | Themes, dark mode toggle fixes | [Theming Guide](docs/theming.md) |
 | Cross-platform builds, CI/CD | [Build Configuration](docs/builds.md) |
+| Shuffle, Play Next pinning | [Shuffle Implementation](docs/shuffle.md) |
 
 ## Architecture Overview
 

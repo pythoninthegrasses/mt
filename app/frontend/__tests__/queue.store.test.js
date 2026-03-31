@@ -34,6 +34,7 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
     _buildQueuePromise: null,
     _playHistory: [],
     _maxHistorySize: 100,
+    _playNextTrackIds: new Set(),
 
     _pushToHistory(index) {
       const track = this.items[index];
@@ -136,16 +137,51 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
         await this._buildQueuePromise;
       }
 
+      // Move semantics: remove existing copies, skip current track
+      const currentTrackId = this.currentIndex >= 0 ? this.items[this.currentIndex]?.id : null;
+      const tracksToInsert = [];
+      for (const t of tracksArray) {
+        if (t.id === currentTrackId) continue;
+        const existingIdx = this.items.findIndex((item) => item.id === t.id);
+        if (existingIdx >= 0) {
+          this.items.splice(existingIdx, 1);
+          const origIdx = this._originalOrder.findIndex((item) => item.id === t.id);
+          if (origIdx >= 0) this._originalOrder.splice(origIdx, 1);
+          if (existingIdx < this.currentIndex) {
+            this.currentIndex--;
+          }
+        }
+        tracksToInsert.push(t);
+      }
+      if (tracksToInsert.length === 0) return;
+
       if (!this._playNextOffset) this._playNextOffset = 0;
       const insertIndex = (this.currentIndex >= 0 ? this.currentIndex + 1 : 0) +
         this._playNextOffset;
-      this._playNextOffset += tracksArray.length;
-      this.insert(insertIndex, tracksArray);
+      this._playNextOffset += tracksToInsert.length;
+
+      // Track these as pinned play-next tracks (preserved during shuffle)
+      for (const t of tracksToInsert) {
+        this._playNextTrackIds.add(t.id);
+      }
+
+      this.insert(insertIndex, tracksToInsert);
     },
 
     remove(index) {
       if (index < 0 || index >= this.items.length) return;
+      const removedTrack = this.items[index];
       this.items.splice(index, 1);
+
+      // Also remove from _originalOrder so unshuffle stays consistent
+      if (removedTrack) {
+        const origIdx = this._originalOrder.findIndex((t) => t.id === removedTrack.id);
+        if (origIdx >= 0) {
+          this._originalOrder.splice(origIdx, 1);
+        }
+        this._playNextTrackIds.delete(removedTrack.id);
+      }
+
       if (index < this.currentIndex) {
         this.currentIndex--;
       } else if (index === this.currentIndex) {
@@ -161,6 +197,7 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
       this.items = [];
       this.currentIndex = -1;
       this._originalOrder = [];
+      this._playNextTrackIds = new Set();
       // History intentionally NOT cleared - persists across queue rebuilds
     },
 
@@ -188,6 +225,9 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
       }
       this._playNextOffset = 0;
       this.currentIndex = index;
+      // If this was a play-next track, it's been consumed
+      const track = this.items[index];
+      if (track) this._playNextTrackIds.delete(track.id);
     },
 
     toggleShuffle() {
@@ -208,21 +248,31 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
     _shuffleItems() {
       if (this.items.length < 2) return;
       const currentTrack = this.currentIndex >= 0 ? this.items[this.currentIndex] : null;
-      const otherTracks = currentTrack
-        ? this.items.filter((_, i) => i !== this.currentIndex)
-        : [...this.items];
 
-      // Fisher-Yates shuffle
-      for (let i = otherTracks.length - 1; i > 0; i--) {
+      // Separate play-next tracks (pinned) from regular tracks
+      const pinnedTracks = [];
+      const regularTracks = [];
+
+      for (let i = 0; i < this.items.length; i++) {
+        if (i === this.currentIndex) continue;
+        if (this._playNextTrackIds.has(this.items[i].id)) {
+          pinnedTracks.push(this.items[i]);
+        } else {
+          regularTracks.push(this.items[i]);
+        }
+      }
+
+      // Fisher-Yates shuffle only the regular tracks
+      for (let i = regularTracks.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [otherTracks[i], otherTracks[j]] = [otherTracks[j], otherTracks[i]];
+        [regularTracks[i], regularTracks[j]] = [regularTracks[j], regularTracks[i]];
       }
 
       if (currentTrack) {
-        this.items = [currentTrack, ...otherTracks];
+        this.items = [currentTrack, ...pinnedTracks, ...regularTracks];
         this.currentIndex = 0;
       } else {
-        this.items = otherTracks;
+        this.items = [...pinnedTracks, ...regularTracks];
       }
     },
 
@@ -555,6 +605,34 @@ describe('Queue Store - playNextTracks (Queue Next)', () => {
     store.playNextTracks(batch);
 
     expect(store.items.map((t) => t.title)).toEqual(['A', 'X', 'Y', 'B', 'C']);
+  });
+
+  test('playNextTracks moves existing track to play-next position', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    // Play Next track C which is already at index 2
+    const dupeC = { ...tracks[2] }; // same id as C
+    store.playNextTracks([dupeC]);
+
+    // C should be moved from index 2 to index 1 (play-next position)
+    expect(store.items.map((t) => t.title)).toEqual(['A', 'C', 'B', 'D', 'E']);
+    expect(store.items.length).toBe(5); // no duplicates
+  });
+
+  test('playNextTracks moves duplicate and inserts new tracks together', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    const dupeC = { ...tracks[2] };
+    const x = { id: 'x', title: 'X', artist: 'T', album: 'T', duration: 1000, filepath: '/x.mp3' };
+    store.playNextTracks([dupeC, x]);
+
+    // C moved to play-next, X inserted after C
+    expect(store.items.map((t) => t.title)).toEqual(['A', 'C', 'X', 'B', 'D']);
+    expect(store.items.length).toBe(5);
   });
 
   test('currentIndex adjusts when inserting before current track', () => {
@@ -1054,5 +1132,380 @@ describe('Queue Store - playNextTracks during background queue build', () => {
     // Expected order: [A (playing), X, Y, B, C]
     expect(store.items.map((t) => t.title)).toEqual(['A', 'X', 'Y', 'B', 'C']);
     expect(store.currentIndex).toBe(0);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Regression Tests: Remove from shuffled queue preserves order
+// -----------------------------------------------------------------------------
+
+describe('Queue Store - Remove from shuffled queue', () => {
+  function makeTracks(names) {
+    return names.map((name, i) => ({
+      id: `remove-track-${i}-${name}`,
+      title: name,
+      artist: 'Test',
+      album: 'Test',
+      duration: 180000,
+      filepath: `/music/${name}.mp3`,
+    }));
+  }
+
+  test('removing a non-current track from shuffled queue preserves play order', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0); // Playing A
+
+    // Enable shuffle - A goes to index 0, rest shuffled
+    store.toggleShuffle();
+    expect(store.currentIndex).toBe(0);
+    expect(store.currentTrack.title).toBe('A');
+
+    // Record the shuffled order
+    const shuffledOrder = store.items.map((t) => t.title);
+    const nextTrack = shuffledOrder[1]; // The track that should play after A
+
+    // Remove a track that is NOT the current or next track
+    const removeIdx = 3; // Some later track
+    const removedTitle = shuffledOrder[removeIdx];
+    store.remove(removeIdx);
+
+    // Current track should be unchanged
+    expect(store.currentIndex).toBe(0);
+    expect(store.currentTrack.title).toBe('A');
+
+    // Next track should be unchanged
+    expect(store.items[1].title).toBe(nextTrack);
+
+    // Queue length should decrease by 1
+    expect(store.items.length).toBe(4);
+
+    // Removed track should not be in the queue
+    expect(store.items.find((t) => t.title === removedTitle)).toBeUndefined();
+  });
+
+  test('removing track before current in shuffled queue adjusts currentIndex', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.toggleShuffle();
+
+    // Advance to index 2
+    store.playIndex(2);
+    const currentTrackId = store.currentTrack.id;
+
+    // Remove track at index 0 (before current)
+    store.remove(0);
+
+    // currentIndex should decrement
+    expect(store.currentIndex).toBe(1);
+    // Same track should still be playing
+    expect(store.currentTrack.id).toBe(currentTrackId);
+  });
+
+  test('playNext after remove from shuffled queue plays the correct next track', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.toggleShuffle();
+
+    // Record shuffled order
+    const expectedNext = store.items[1].id;
+
+    // Remove track at index 3 (not current, not next)
+    store.remove(3);
+
+    // playNext should advance to what was index 1
+    store.playNext();
+    expect(store.currentTrack.id).toBe(expectedNext);
+  });
+
+  test('removed track does not reappear when shuffle is disabled', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    // Enable shuffle
+    store.toggleShuffle();
+
+    // Remove track C
+    const cIndex = store.items.findIndex((t) => t.title === 'C');
+    store.remove(cIndex);
+
+    // Disable shuffle - should restore original order minus C
+    store.toggleShuffle();
+
+    const titles = store.items.map((t) => t.title);
+    expect(titles).not.toContain('C');
+    expect(titles.length).toBe(4);
+  });
+
+  test('_originalOrder is updated when removing during shuffle', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.toggleShuffle();
+
+    // Remove a track
+    const removedTrack = store.items[2];
+    store.remove(2);
+
+    // _originalOrder should not contain the removed track
+    expect(store._originalOrder.find((t) => t.id === removedTrack.id)).toBeUndefined();
+    expect(store._originalOrder.length).toBe(3);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Regression Tests: Shuffle does not repeat current track
+// -----------------------------------------------------------------------------
+
+describe('Queue Store - Shuffle does not repeat current track', () => {
+  function makeTracks(names) {
+    return names.map((name, i) => ({
+      id: `shuffle-track-${i}-${name}`,
+      title: name,
+      artist: 'Test',
+      album: 'Test',
+      duration: 180000,
+      filepath: `/music/${name}.mp3`,
+    }));
+  }
+
+  test('after shuffle toggle, playNext advances to a different track', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0); // Playing A
+
+    store.toggleShuffle();
+
+    // A should be at index 0
+    expect(store.currentIndex).toBe(0);
+    expect(store.currentTrack.title).toBe('A');
+
+    // playNext should go to index 1, which should NOT be A
+    store.playNext();
+    expect(store.currentIndex).toBe(1);
+    expect(store.currentTrack.title).not.toBe('A');
+  });
+
+  test('no duplicate tracks after shuffle', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    store.toggleShuffle();
+
+    const ids = store.items.map((t) => t.id);
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(ids.length);
+  });
+
+  test('shuffle from middle of queue puts current track at index 0', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(3); // Playing D
+
+    store.toggleShuffle();
+
+    expect(store.currentIndex).toBe(0);
+    expect(store.currentTrack.title).toBe('D');
+    expect(store.items[0].title).toBe('D');
+    // D should only appear once
+    expect(store.items.filter((t) => t.title === 'D').length).toBe(1);
+  });
+
+  test('full playthrough after shuffle plays each track exactly once', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E', 'F', 'G']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+    store.toggleShuffle();
+
+    const played = new Set();
+    played.add(store.currentTrack.id);
+
+    for (let i = 1; i < tracks.length; i++) {
+      store.playNext();
+      expect(played.has(store.currentTrack.id)).toBe(false);
+      played.add(store.currentTrack.id);
+    }
+
+    expect(played.size).toBe(tracks.length);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Regression Tests: Play Next tracks survive shuffle toggle
+// -----------------------------------------------------------------------------
+
+describe('Queue Store - Play Next tracks survive shuffle', () => {
+  function makeTracks(names) {
+    return names.map((name, i) => ({
+      id: `pn-track-${i}-${name}`,
+      title: name,
+      artist: 'Test',
+      album: 'Test',
+      duration: 180000,
+      filepath: `/music/${name}.mp3`,
+    }));
+  }
+
+  function makeTrack(name, idPrefix = 'pn-extra') {
+    return {
+      id: `${idPrefix}-${name}`,
+      title: name,
+      artist: 'Other',
+      album: 'Other',
+      duration: 180000,
+      filepath: `/music/${name}.mp3`,
+    };
+  }
+
+  test('play-next track stays immediately after current when shuffle is toggled', () => {
+    const tracks = makeTracks(['Here', 'All Time Lows', 'Stuck', 'Homewrecker', 'Oh It Is Love']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0); // Playing "Here"
+
+    // User adds "Funeral" via Play Next
+    const funeral = makeTrack('Funeral');
+    store.playNextTracks([funeral]);
+
+    // Verify: [Here*, Funeral, All Time Lows, ...]
+    expect(store.items[0].title).toBe('Here');
+    expect(store.items[1].title).toBe('Funeral');
+
+    // Toggle shuffle
+    store.toggleShuffle();
+
+    // "Here" should be at index 0, "Funeral" should be at index 1
+    expect(store.currentIndex).toBe(0);
+    expect(store.items[0].title).toBe('Here');
+    expect(store.items[1].title).toBe('Funeral');
+
+    // Queue length unchanged
+    expect(store.items.length).toBe(6);
+  });
+
+  test('multiple play-next tracks preserve their order during shuffle', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    const x = makeTrack('X');
+    const y = makeTrack('Y');
+    store.playNextTracks([x]);
+    store.playNextTracks([y]);
+
+    // Before shuffle: [A*, X, Y, B, C, D, E]
+    expect(store.items.map((t) => t.title)).toEqual(['A', 'X', 'Y', 'B', 'C', 'D', 'E']);
+
+    store.toggleShuffle();
+
+    // After shuffle: A at 0, X at 1, Y at 2, rest shuffled
+    expect(store.items[0].title).toBe('A');
+    expect(store.items[1].title).toBe('X');
+    expect(store.items[2].title).toBe('Y');
+    expect(store.items.length).toBe(7);
+  });
+
+  test('play-next track is consumed when it starts playing', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    const x = makeTrack('X');
+    store.playNextTracks([x]);
+
+    expect(store._playNextTrackIds.has(x.id)).toBe(true);
+
+    // Advance to X
+    store.playIndex(1, true);
+
+    // X is consumed - no longer pinned
+    expect(store._playNextTrackIds.has(x.id)).toBe(false);
+  });
+
+  test('consumed play-next track is shuffled normally on next toggle', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    const x = makeTrack('X');
+    store.playNextTracks([x]);
+
+    // Advance past X (consume it)
+    store.playNext(); // Now playing X at index 1
+    expect(store.currentTrack.title).toBe('X');
+
+    // Toggle shuffle - X should NOT be pinned anymore
+    store.toggleShuffle();
+    expect(store.items[0].title).toBe('X'); // current track at 0
+    // Index 1 should be a random track, not necessarily any specific one
+    // But X should not appear twice
+    expect(store.items.filter((t) => t.title === 'X').length).toBe(1);
+  });
+
+  test('unshuffle restores original order including play-next tracks', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    const x = makeTrack('X');
+    store.playNextTracks([x]);
+
+    // Before shuffle: [A*, X, B, C, D, E]
+    const orderBefore = store.items.map((t) => t.title);
+
+    store.toggleShuffle(); // shuffle
+    store.toggleShuffle(); // unshuffle
+
+    // Should restore original order including X
+    expect(store.items.map((t) => t.title)).toEqual(orderBefore);
+  });
+
+  test('play-next tracks cleared when queue is cleared', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    store.playNextTracks([makeTrack('X')]);
+    expect(store._playNextTrackIds.size).toBe(1);
+
+    store.clear();
+    expect(store._playNextTrackIds.size).toBe(0);
+  });
+
+  test('removing a play-next track removes it from pinned set', () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    const x = makeTrack('X');
+    store.playNextTracks([x]);
+
+    // Remove X (at index 1)
+    store.remove(1);
+
+    expect(store._playNextTrackIds.has(x.id)).toBe(false);
+
+    // Shuffle should work normally without the removed track
+    store.toggleShuffle();
+    expect(store.items.length).toBe(3);
+    expect(store.items[0].title).toBe('A');
+  });
+
+  test('no duplicates when play-next tracks exist during shuffle', () => {
+    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E', 'F', 'G']);
+    const store = createTestQueueStore(tracks);
+    store.playIndex(0);
+
+    store.playNextTracks([makeTrack('X'), makeTrack('Y')]);
+
+    store.toggleShuffle();
+
+    const ids = store.items.map((t) => t.id);
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(ids.length);
+    expect(store.items.length).toBe(9);
   });
 });
