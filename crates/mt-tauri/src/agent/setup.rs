@@ -88,11 +88,11 @@ pub async fn pull_model(app: &tauri::AppHandle, model: String) -> Result<PullMod
         }
     }
 
-    if !buffer.trim().is_empty() {
-        if let Some(progress) = parse_pull_progress_line(&buffer) {
-            last_status.clone_from(&progress.status);
-            let _ = app.emit("agent://pull-progress", &progress);
-        }
+    if !buffer.trim().is_empty()
+        && let Some(progress) = parse_pull_progress_line(&buffer)
+    {
+        last_status.clone_from(&progress.status);
+        let _ = app.emit("agent://pull-progress", &progress);
     }
 
     let success = last_status == "success";

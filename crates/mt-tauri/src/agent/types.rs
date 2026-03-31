@@ -169,20 +169,11 @@ pub struct PullProgress {
 }
 
 /// Persisted via tauri-plugin-store under key `"agent_onboarding"`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OnboardingState {
     pub completed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
-}
-
-impl Default for OnboardingState {
-    fn default() -> Self {
-        Self {
-            completed: false,
-            model: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize)]
