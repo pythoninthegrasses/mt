@@ -4,7 +4,7 @@ title: Genius playlist creator
 status: In Progress
 assignee: []
 created_date: '2026-02-18 05:58'
-updated_date: '2026-03-31 20:16'
+updated_date: '2026-03-31 21:18'
 labels:
   - feature
   - playlists
@@ -33,7 +33,7 @@ Design document: `~/.claude/plans/steady-juggling-scroll.md`
 - [ ] #5 Graceful degradation: works without Last.fm (local-only tools), works without Ollama (returns setup instructions)
 - [x] #6 Feature-flagged behind `agent` — zero overhead when disabled
 - [ ] #7 Onboarding wizard: Ollama check → model download → ready
-- [ ] #8 Agent evals pass (tool selection, output format, degradation)
+- [x] #8 Agent evals pass (tool selection, output format, degradation)
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -174,6 +174,24 @@ Both `cargo check --features agent` and `cargo check` pass.
 - `crates/mt-tauri/src/lib.rs` — agent module declaration + wrapper Tauri commands
 
 ## Next: Phase 5 (Onboarding + Setup)
+
+## Phase 6 Complete (2026-03-31)
+
+- Phase 6 (evals) complete — 13 heuristic eval tests in `evals.rs` using wiremock mock Ollama server
+- Categories: tool execution (3), output format (6), degradation (5)
+- Refactored `build_agent()` and `check_ollama()` to accept `base_url: &str` for test injection
+- Added `wiremock = "0.6"` to dev-dependencies
+- 753/753 tests pass with `cargo nextest run --workspace --features agent`
+- All 14 agent eval tests pass (13 new + 1 existing build_agent test)
+
+## Files Created/Modified (Phase 6)
+
+- `crates/mt-tauri/src/agent/evals.rs` — NEW: 13 eval tests with wiremock
+- `crates/mt-tauri/src/agent/mod.rs` — refactored build_agent/check_ollama signatures, added `mod evals`
+- `crates/mt-tauri/src/agent/setup.rs` — updated check_ollama_status caller
+- `crates/mt-tauri/Cargo.toml` — added wiremock dev-dependency
+
+## Next: Phase 7 (Frontend — Genius Sidebar Category + Prompt UI)
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
@@ -182,5 +200,5 @@ Both `cargo check --features agent` and `cargo check` pass.
 - [x] #2 cargo check (without agent) compiles — no regressions
 - [x] #3 cargo nextest run --workspace passes
 - [x] #4 Unit tests for each tool's call() method
-- [ ] #5 Agent evals pass with mock Ollama server
+- [x] #5 Agent evals pass with mock Ollama server
 <!-- DOD:END -->
