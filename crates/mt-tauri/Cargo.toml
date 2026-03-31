@@ -1,6 +1,6 @@
 [package]
 name = "mt-tauri"
-version = "1.1.0"
+version = "1.2.0"
 description = "Desktop music player for large collections"
 authors = ["pythoninthegrass"]
 edition = "2024"
