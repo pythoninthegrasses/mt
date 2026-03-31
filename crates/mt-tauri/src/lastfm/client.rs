@@ -24,6 +24,19 @@ impl LastFmClient {
         }
     }
 
+    #[cfg(all(test, feature = "agent"))]
+    pub(crate) fn new_unconfigured() -> Self {
+        Self {
+            config: ApiKeyConfig {
+                api_key: None,
+                api_secret: None,
+            },
+            rate_limiter: Arc::new(RateLimiter::new()),
+            http_client: reqwest::Client::new(),
+            base_url: "https://ws.audioscrobbler.com/2.0/".to_string(),
+        }
+    }
+
     /// Check if API is properly configured
     pub(crate) fn is_configured(&self) -> bool {
         self.config.is_configured()

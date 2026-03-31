@@ -26,10 +26,13 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  rust-lint:
-    name: Rust Lint and Format Check
-    runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: 15
+  rust:
+    name: Rust Lint, Format, and Test
+    runs-on: [macOS, ARM64, studio]
+    timeout-minutes: 20
+    env:
+      CARGO_INCREMENTAL: 1
+      CARGO_TERM_COLOR: always
 
     steps:
       - name: Setup macOS self-hosted runner PATH
@@ -40,18 +43,35 @@ jobs:
 
       - uses: actions/checkout@v6
 
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: nightly
-          components: clippy, rustfmt
-          cache: false
-
-      - name: Cargo clippy
-        run: cargo clippy --workspace -- -D warnings
+      - name: Setup Tauri build environment
+        uses: ./.github/actions/setup-tauri-build
 
       - name: Cargo fmt check
         run: cargo fmt --all -- --check
+
+      - name: Cargo clippy
+        run: cargo clippy --workspace --all-features -- -D warnings
+
+      - uses: cargo-bins/cargo-binstall@main
+
+      - name: Install cargo-tarpaulin
+        run: cargo binstall --no-confirm --force cargo-tarpaulin
+
+      - name: Run Rust tests with coverage
+        run: |
+          cargo tarpaulin --workspace --out Html --out Json --output-dir coverage \
+            --ignore-tests --skip-clean \
+            --exclude-files 'crates/mt-tauri/src/commands/*' 'crates/mt-tauri/src/lib.rs' 'crates/mt-tauri/src/main.rs' 'crates/mt-tauri/src/watcher.rs' 'crates/mt-tauri/src/dialog.rs' 'crates/mt-tauri/src/media_keys.rs' \
+            --fail-under 50
+
+      - name: Upload coverage report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-coverage
+          path: coverage/
+          retention-days: 30
 
   deno-lint:
     name: Deno Lint and Format Check
@@ -74,7 +94,7 @@ jobs:
 
   build:
     name: Build (${{ matrix.platform }})
-    needs: [rust-lint, deno-lint, vitest-tests, playwright-tests, rust-tests]
+    needs: [rust, deno-lint, vitest-tests, playwright-tests]
     strategy:
       fail-fast: false
       matrix:
@@ -215,41 +235,3 @@ jobs:
           path: test-results/
           retention-days: 30
 
-  rust-tests:
-    name: Rust Tests with Coverage
-    needs: rust-lint
-    runs-on: [macOS, ARM64, studio]
-    timeout-minutes: 10
-    env:
-      CARGO_INCREMENTAL: 1
-      CARGO_TERM_COLOR: always
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup Tauri build environment
-        uses: ./.github/actions/setup-tauri-build
-
-      - name: Check Rust build
-        run: cargo check --workspace --all-features
-
-      - uses: cargo-bins/cargo-binstall@main
-
-      - name: Install cargo-tarpaulin
-        run: cargo binstall --no-confirm --force cargo-tarpaulin
-
-      - name: Run Rust tests with coverage
-        run: |
-          cargo tarpaulin --workspace --out Html --out Json --output-dir coverage \
-            --ignore-tests --skip-clean \
-            --exclude-files 'crates/mt-tauri/src/commands/*' 'crates/mt-tauri/src/lib.rs' 'crates/mt-tauri/src/main.rs' 'crates/mt-tauri/src/watcher.rs' 'crates/mt-tauri/src/dialog.rs' 'crates/mt-tauri/src/media_keys.rs' \
-            --fail-under 50
-
-      - name: Upload coverage report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v7
-        with:
-          name: rust-coverage
-          path: coverage/
-          retention-days: 30

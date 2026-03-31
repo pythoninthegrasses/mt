@@ -9,6 +9,22 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Read pinned Rust toolchain from .tool-versions (Unix)
+      if: runner.os != 'Windows'
+      id: rust-version-unix
+      shell: bash
+      run: |
+        version=$(grep '^rust ' .tool-versions | awk '{print $2}')
+        echo "toolchain=${version}" >> "$GITHUB_OUTPUT"
+
+    - name: Read pinned Rust toolchain from .tool-versions (Windows)
+      if: runner.os == 'Windows'
+      id: rust-version-windows
+      shell: pwsh
+      run: |
+        $version = (Select-String -Path .tool-versions -Pattern '^rust ').Line -replace '^rust\s+',''
+        echo "toolchain=$version" >> $env:GITHUB_OUTPUT
+
     - name: Setup macOS self-hosted runner PATH
       if: runner.os == 'macOS'
       shell: bash
@@ -46,10 +62,11 @@ runs:
       run: npm ci
 
 
-    - name: Setup Rust nightly toolchain
+    - name: Setup Rust toolchain (${{ steps.rust-version-unix.outputs.toolchain || steps.rust-version-windows.outputs.toolchain }})
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
-        toolchain: nightly
+        toolchain: ${{ steps.rust-version-unix.outputs.toolchain || steps.rust-version-windows.outputs.toolchain }}
+        target: ${{ runner.os == 'Windows' && 'x86_64-pc-windows-msvc' || '' }}
         cache: false
 
     - name: Setup CI environment (macOS/Linux)

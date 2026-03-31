@@ -15,11 +15,13 @@ vars:
   CONFIG: '{{.CONFIG | default ""}}'
   CONFIG_FLAG: '{{if .CONFIG}}--config {{.CONFIG}}{{end}}'
   EXE_EXT: '{{if eq OS "windows"}}.exe{{end}}'
+  PINNED_RUST:
+    sh: grep '^rust ' {{.ROOT_DIR}}/.tool-versions | awk '{print $2}'
 
 env:
   PATH: "{{.CARGO_BIN}}:{{.MISE_SHIMS}}:{{.PATH}}"
   RUSTC_WRAPPER: ""
-  RUSTUP_TOOLCHAIN: nightly
+  RUSTUP_TOOLCHAIN: "{{.PINNED_RUST}}"
 
 tasks:
   setup:
@@ -33,27 +35,28 @@ tasks:
     platforms: [darwin, linux]
     cmds:
       - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs |
-          sh -s -- -y --default-toolchain nightly --no-modify-path
-      - rustup toolchain install nightly --profile minimal --no-self-update
-      - rustup default nightly
+          sh -s -- -y --default-toolchain {{.PINNED_RUST}} --no-modify-path
+      - rustup toolchain install {{.PINNED_RUST}} --profile minimal --no-self-update
+      - rustup default {{.PINNED_RUST}}
       - rustc --version
       - cargo --version
     status:
       - test -x "{{.CARGO_BIN}}/rustup"
       - test -x "{{.CARGO_BIN}}/rustc"
       - test -x "{{.CARGO_BIN}}/cargo"
-      - rustup run nightly rustc --version
+      - rustup run {{.PINNED_RUST}} rustc --version
 
   setup-rust-windows:
     desc: "Configure rustup nightly toolchain (Windows)"
     platforms: [windows]
     cmds:
-      - rustup toolchain install nightly --profile minimal --no-self-update --target x86_64-pc-windows-msvc
-      - rustup default nightly
+      - rustup toolchain install {{.PINNED_RUST}} --profile minimal --no-self-update --target x86_64-pc-windows-msvc
+      - rustup default {{.PINNED_RUST}}
       - rustc --version
       - cargo --version
     status:
-      - rustup run nightly rustc --version
+      - rustup run {{.PINNED_RUST}} rustc --version
+      - rustup target list --installed --toolchain {{.PINNED_RUST}} | findstr x86_64-pc-windows-msvc
 
   setup-cargo-tools:
     desc: "Install cargo-binstall and tauri-cli"
