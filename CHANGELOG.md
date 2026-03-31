@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.4](https://github.com/pythoninthegrasses/mt/compare/v1.2.3...v1.2.4) (2026-03-31)
+
+
+### Bug Fixes
+
+* **ci:** replace broken choco windows-sdk-10.1 with winget fallback ([747ca49](https://github.com/pythoninthegrasses/mt/commit/747ca49ce6eb9a1ca7a7d00c8f2a09ab8d559d46))
+
 ## [1.2.3](https://github.com/pythoninthegrasses/mt/compare/v1.2.2...v1.2.3) (2026-03-31)
 
 
