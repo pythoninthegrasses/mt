@@ -129,7 +129,7 @@ test.describe('Statistics Dashboard', () => {
     const cards = page.locator('[data-testid="stats-overview-cards"]');
     await expect(cards).toBeVisible();
 
-    await expect(page.locator('[data-testid="stats-total-plays"]')).toHaveText('1234');
+    await expect(page.locator('[data-testid="stats-total-plays"]')).toHaveText('1,234');
     await expect(page.locator('[data-testid="stats-artists-played"]')).toHaveText('42');
     await expect(page.locator('[data-testid="stats-listening-time"]')).toContainText('4d');
   });
@@ -140,8 +140,8 @@ test.describe('Statistics Dashboard', () => {
     const artistsSection = page.locator('[data-testid="stats-top-artists"]');
     await expect(artistsSection).toBeVisible();
 
-    // Check artists are listed in order
-    const artistNames = artistsSection.locator('.text-sm.truncate');
+    // Check artists are listed in order (artist name spans use text-[13px] + truncate)
+    const artistNames = artistsSection.locator('.truncate');
     await expect(artistNames.nth(0)).toHaveText('Radiohead');
     await expect(artistNames.nth(1)).toHaveText('Pink Floyd');
     await expect(artistNames.nth(2)).toHaveText('Tool');
@@ -154,7 +154,7 @@ test.describe('Statistics Dashboard', () => {
     await expect(playsSection).toBeVisible();
 
     // Check year labels
-    const labels = playsSection.locator('.tabular-nums.w-20');
+    const labels = playsSection.locator('.tabular-nums.w-14');
     await expect(labels).toHaveCount(3);
   });
 
@@ -165,7 +165,7 @@ test.describe('Statistics Dashboard', () => {
     await expect(genreSection).toBeVisible();
 
     // Check genre names
-    const genreNames = genreSection.locator('.text-sm.truncate');
+    const genreNames = genreSection.locator('.truncate');
     await expect(genreNames.nth(0)).toHaveText('Rock');
     await expect(genreNames.nth(1)).toHaveText('Electronic');
     await expect(genreNames.nth(2)).toHaveText('Jazz');
@@ -174,8 +174,10 @@ test.describe('Statistics Dashboard', () => {
   test('date range filter invokes with correct range', async ({ page }) => {
     await navigateToStats(page);
 
-    // Change to Last 7 Days
-    await page.locator('[data-testid="stats-date-range"]').selectOption('Last7Days');
+    // Change to Last 7 Days (custom dropdown, not a <select>)
+    await page.locator('[data-testid="stats-date-range"]').click();
+    await page.waitForTimeout(300);
+    await page.locator('button', { hasText: 'Last 7 days' }).click();
     await page.waitForTimeout(500);
 
     // Verify the invoke was called with the correct range

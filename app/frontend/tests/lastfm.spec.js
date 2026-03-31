@@ -1239,7 +1239,7 @@ test.describe('Last.fm Integration', () => {
       await page.click('[data-testid="lastfm-import-loved"]');
       await page.waitForTimeout(1000);
 
-      const authError = page.locator('[data-testid="toast-container"] div').filter({ hasText: /failed/i });
+      const authError = page.locator('[data-testid="toast-container"] div').filter({ hasText: /Failed to import loved tracks/i });
       await expect(authError).toBeVisible({ timeout: 3000 });
     });
 
