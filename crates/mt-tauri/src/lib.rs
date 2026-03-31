@@ -13,6 +13,9 @@ pub(crate) mod metadata;
 pub(crate) mod scanner;
 pub(crate) mod watcher;
 
+#[cfg(feature = "agent")]
+pub(crate) mod agent;
+
 #[cfg(test)]
 mod concurrency_test;
 
@@ -59,6 +62,40 @@ use watcher::{
     WatcherManager, watched_folders_add, watched_folders_get, watched_folders_list,
     watched_folders_remove, watched_folders_rescan, watched_folders_status, watched_folders_update,
 };
+
+#[cfg(feature = "agent")]
+#[tauri::command]
+async fn agent_generate_playlist(
+    prompt: String,
+    db: tauri::State<'_, db::Database>,
+) -> Result<agent::types::AgentResponse, String> {
+    agent::agent_generate_playlist(prompt, db).await
+}
+
+#[cfg(not(feature = "agent"))]
+#[tauri::command]
+async fn agent_generate_playlist() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({
+        "status": "error",
+        "message": "Agent feature is not enabled in this build"
+    }))
+}
+
+#[cfg(feature = "agent")]
+#[tauri::command]
+async fn agent_check_status() -> Result<agent::types::AgentStatusResponse, String> {
+    agent::agent_check_status().await
+}
+
+#[cfg(not(feature = "agent"))]
+#[tauri::command]
+async fn agent_check_status() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({
+        "available": false,
+        "model": "",
+        "message": "Agent feature is not enabled in this build"
+    }))
+}
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
@@ -448,6 +485,8 @@ pub fn run() {
             stats_generate_chart_grid,
             network_cache_status,
             network_cache_purge,
+            agent_generate_playlist,
+            agent_check_status,
         ])
         .setup(|app| {
             // Initialize database
