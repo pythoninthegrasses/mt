@@ -42,7 +42,7 @@ tasks:
       - test -x "{{.CARGO_BIN}}/rustup"
       - test -x "{{.CARGO_BIN}}/rustc"
       - test -x "{{.CARGO_BIN}}/cargo"
-      - rustc --version
+      - rustup run nightly rustc --version
 
   setup-rust-windows:
     desc: "Configure rustup nightly toolchain (Windows)"
@@ -53,8 +53,7 @@ tasks:
       - rustc --version
       - cargo --version
     status:
-      - rustup which rustc
-      - rustc --version
+      - rustup run nightly rustc --version
 
   setup-cargo-tools:
     desc: "Install cargo-binstall and tauri-cli"
