@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/pythoninthegrasses/mt/compare/v1.2.1...v1.2.2) (2026-03-31)
+
+
+### Performance Improvements
+
+* **deps:** remove mcp-bridge from default features to reduce release binary deps ([599a44f](https://github.com/pythoninthegrasses/mt/commit/599a44fa8abe53083919fe32f4ad4f7fd9ab988c))
+
 ## [1.2.1](https://github.com/pythoninthegrasses/mt/compare/v1.2.0...v1.2.1) (2026-03-31)
 
 
