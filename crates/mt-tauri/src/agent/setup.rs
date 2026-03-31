@@ -7,7 +7,7 @@ const AGENT_STORE_NAME: &str = "agent.json";
 const ONBOARDING_KEY: &str = "agent_onboarding";
 
 pub async fn check_ollama_status() -> OllamaStatus {
-    match super::check_ollama().await {
+    match super::check_ollama(OLLAMA_BASE_URL).await {
         Ok(models) => OllamaStatus {
             connected: true,
             models,

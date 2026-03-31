@@ -43,8 +43,8 @@ fn parse_model_names(tags_response: &serde_json::Value) -> Vec<String> {
 }
 
 /// Check if Ollama is reachable and return available model names.
-async fn check_ollama() -> Result<Vec<String>, AgentError> {
-    let url = format!("{OLLAMA_BASE_URL}/api/tags");
+pub(crate) async fn check_ollama(base_url: &str) -> Result<Vec<String>, AgentError> {
+    let url = format!("{base_url}/api/tags");
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build()
@@ -65,12 +65,13 @@ async fn check_ollama() -> Result<Vec<String>, AgentError> {
 }
 
 /// Build a Rig agent with all playlist tools and the system prompt.
-fn build_agent(
+pub(crate) fn build_agent(
     ctx: Arc<AgentContext>,
+    base_url: &str,
 ) -> rig::agent::Agent<ollama::CompletionModel<reqwest::Client>> {
     let client = ollama::Client::builder()
         .api_key(rig::client::Nothing)
-        .base_url(OLLAMA_BASE_URL)
+        .base_url(base_url)
         .build()
         .expect("build Ollama client");
 
@@ -154,7 +155,7 @@ pub async fn agent_generate_playlist(
     prompt: String,
     db: tauri::State<'_, Database>,
 ) -> Result<AgentResponse, String> {
-    let models = match check_ollama().await {
+    let models = match check_ollama(OLLAMA_BASE_URL).await {
         Ok(m) => m,
         Err(_) => return Ok(AgentResponse::no_ollama()),
     };
@@ -171,7 +172,7 @@ pub async fn agent_generate_playlist(
         db: db.inner().clone(),
         lastfm,
     });
-    let agent = build_agent(ctx);
+    let agent = build_agent(ctx, OLLAMA_BASE_URL);
 
     // 4. Run the agent: multi-turn tool-calling loop
     let response_text = agent
@@ -233,7 +234,7 @@ pub async fn agent_generate_playlist(
 
 /// Check if the agent is available (Ollama running + model downloaded).
 pub async fn agent_check_status() -> Result<AgentStatusResponse, String> {
-    match check_ollama().await {
+    match check_ollama(OLLAMA_BASE_URL).await {
         Ok(models) => {
             if has_default_model(&models) {
                 Ok(AgentStatusResponse {
@@ -384,7 +385,7 @@ mod tests {
         let db = Database::new_in_memory().expect("in-memory db");
         let lastfm = LastFmClient::new_unconfigured();
         let ctx = Arc::new(AgentContext { db, lastfm });
-        let _agent = build_agent(ctx);
+        let _agent = build_agent(ctx, OLLAMA_BASE_URL);
     }
 
     // -----------------------------------------------------------------------
@@ -415,3 +416,6 @@ mod tests {
         assert!(!has_default_model(&models));
     }
 }
+
+#[cfg(test)]
+mod evals;
