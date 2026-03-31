@@ -151,6 +151,46 @@ pub struct AgentStatusResponse {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct OllamaStatus {
+    pub connected: bool,
+    pub models: Vec<String>,
+}
+
+/// Emitted as Tauri event `agent://pull-progress` during model download.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PullProgress {
+    pub status: String,
+    #[serde(default)]
+    pub completed: Option<u64>,
+    #[serde(default)]
+    pub total: Option<u64>,
+}
+
+/// Persisted via tauri-plugin-store under key `"agent_onboarding"`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingState {
+    pub completed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+}
+
+impl Default for OnboardingState {
+    fn default() -> Self {
+        Self {
+            completed: false,
+            model: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PullModelResult {
+    pub success: bool,
+    pub model: String,
+    pub message: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,5 +244,65 @@ mod tests {
         assert_eq!(json, r#""no_ollama""#);
         let json = serde_json::to_string(&AgentStatus::NoModel).unwrap();
         assert_eq!(json, r#""no_model""#);
+    }
+
+    #[test]
+    fn ollama_status_serializes() {
+        let status = OllamaStatus {
+            connected: true,
+            models: vec!["llama3.2:1b".into(), "codellama:7b".into()],
+        };
+        let json = serde_json::to_value(&status).unwrap();
+        assert_eq!(json["connected"], true);
+        assert_eq!(json["models"][0], "llama3.2:1b");
+    }
+
+    #[test]
+    fn pull_progress_deserializes_full() {
+        let line = r#"{"status":"pulling","completed":500,"total":1000}"#;
+        let progress: PullProgress = serde_json::from_str(line).unwrap();
+        assert_eq!(progress.status, "pulling");
+        assert_eq!(progress.completed, Some(500));
+        assert_eq!(progress.total, Some(1000));
+    }
+
+    #[test]
+    fn pull_progress_deserializes_status_only() {
+        let line = r#"{"status":"success"}"#;
+        let progress: PullProgress = serde_json::from_str(line).unwrap();
+        assert_eq!(progress.status, "success");
+        assert_eq!(progress.completed, None);
+        assert_eq!(progress.total, None);
+    }
+
+    #[test]
+    fn onboarding_state_default_is_incomplete() {
+        let state = OnboardingState::default();
+        assert!(!state.completed);
+        assert!(state.model.is_none());
+    }
+
+    #[test]
+    fn onboarding_state_roundtrips() {
+        let state = OnboardingState {
+            completed: true,
+            model: Some("llama3.2:1b".into()),
+        };
+        let json = serde_json::to_string(&state).unwrap();
+        let restored: OnboardingState = serde_json::from_str(&json).unwrap();
+        assert!(restored.completed);
+        assert_eq!(restored.model.as_deref(), Some("llama3.2:1b"));
+    }
+
+    #[test]
+    fn pull_model_result_serializes() {
+        let result = PullModelResult {
+            success: true,
+            model: "llama3.2:1b".into(),
+            message: "Model pulled successfully".into(),
+        };
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["success"], true);
+        assert_eq!(json["model"], "llama3.2:1b");
     }
 }

@@ -5,6 +5,7 @@
 //! a playlist, and persist it to the database.
 
 pub mod prompt;
+pub mod setup;
 pub mod tools;
 pub mod types;
 

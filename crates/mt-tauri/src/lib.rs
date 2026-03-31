@@ -97,6 +97,72 @@ async fn agent_check_status() -> Result<serde_json::Value, String> {
     }))
 }
 
+#[cfg(feature = "agent")]
+#[tauri::command]
+async fn agent_check_ollama() -> Result<agent::types::OllamaStatus, String> {
+    Ok(agent::setup::check_ollama_status().await)
+}
+
+#[cfg(not(feature = "agent"))]
+#[tauri::command]
+async fn agent_check_ollama() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({
+        "connected": false,
+        "models": []
+    }))
+}
+
+#[cfg(feature = "agent")]
+#[tauri::command]
+async fn agent_pull_model(
+    app: tauri::AppHandle,
+    model: String,
+) -> Result<agent::types::PullModelResult, String> {
+    agent::setup::pull_model(&app, model).await
+}
+
+#[cfg(not(feature = "agent"))]
+#[tauri::command]
+async fn agent_pull_model() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({
+        "success": false,
+        "model": "",
+        "message": "Agent feature is not enabled in this build"
+    }))
+}
+
+#[cfg(feature = "agent")]
+#[tauri::command]
+fn agent_get_onboarding_state(
+    app: tauri::AppHandle,
+) -> Result<agent::types::OnboardingState, String> {
+    agent::setup::get_onboarding_state(&app)
+}
+
+#[cfg(not(feature = "agent"))]
+#[tauri::command]
+fn agent_get_onboarding_state() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({
+        "completed": false,
+        "model": null
+    }))
+}
+
+#[cfg(feature = "agent")]
+#[tauri::command]
+fn agent_set_onboarding_complete(
+    app: tauri::AppHandle,
+    model: Option<String>,
+) -> Result<(), String> {
+    agent::setup::set_onboarding_complete(&app, model)
+}
+
+#[cfg(not(feature = "agent"))]
+#[tauri::command]
+fn agent_set_onboarding_complete() -> Result<(), String> {
+    Ok(())
+}
+
 #[tracing::instrument(skip(state))]
 #[tauri::command]
 fn media_set_metadata(
@@ -487,6 +553,10 @@ pub fn run() {
             network_cache_purge,
             agent_generate_playlist,
             agent_check_status,
+            agent_check_ollama,
+            agent_pull_model,
+            agent_get_onboarding_state,
+            agent_set_onboarding_complete,
         ])
         .setup(|app| {
             // Initialize database
