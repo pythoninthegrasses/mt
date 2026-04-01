@@ -399,23 +399,50 @@ task tauri:build
 
 ### Docker Builds (Linux .deb)
 
-Linux amd64 packages can be built locally via Docker, which is useful for producing `.deb` packages from a macOS development machine.
+Linux amd64 builds use a multi-stage Dockerfile (`docker/Dockerfile.linux-amd64`) for both CI and local builds. The Dockerfile uses [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) to cache compiled dependencies separately from application code.
 
-| Architecture | Task | Dockerfile | Notes |
-| ------------- | ------ | ------------ | ------- |
-| amd64 | `task build:linux-amd64` | `docker/Dockerfile.linux-amd64` | QEMU emulation on Apple Silicon |
+**Stages:**
 
-Artifacts are written to `dist/linux-amd64/`.
+| Stage | Purpose | Target |
+| --------- | --------- | -------- |
+| `deps` | System packages, Rust nightly, Node.js, cargo-chef, tauri-cli | (base) |
+| `planner` | `cargo chef prepare` — generates recipe.json from manifests | (internal) |
+| `cook` | `cargo chef cook` — compiles all dependencies (cached layer) | (internal) |
+| `check` | `cargo check --workspace` | `--target check` (test workflow) |
+| `build` | `cargo tauri build` + `cargo tauri bundle` | (internal) |
+| `artifacts` | Extract `.deb` and binary | `--target artifacts` (release workflow) |
+
+**CI usage:**
+
+In CI, [Blacksmith Docker layer caching](https://docs.blacksmith.sh/blacksmith-caching/docker-builds) persists all layers on NVMe-backed sticky disks. After the first run, the `deps` and `cook` layers are cached — subsequent runs only rebuild changed source code.
+
+```yaml
+# test.yml — cargo check only
+- uses: useblacksmith/setup-docker-builder@v1
+- uses: useblacksmith/build-push-action@v2
+  with:
+    target: check
+
+# release.yml — full build + bundle, extract artifacts
+- uses: useblacksmith/setup-docker-builder@v1
+- uses: useblacksmith/build-push-action@v2
+  with:
+    target: artifacts
+    outputs: type=local,dest=dist
+```
+
+**Local usage:**
 
 ```bash
-# Build amd64 .deb
+# Build .deb via task (QEMU emulation on Apple Silicon)
 task build:linux-amd64
 
-# Copy to target machine
-scp dist/linux-amd64/*.deb zima:~/Downloads/
+# Or build directly with Docker
+docker build --platform linux/amd64 --target check -f docker/Dockerfile.linux-amd64 .
+docker build --platform linux/amd64 --target artifacts --output type=local,dest=dist -f docker/Dockerfile.linux-amd64 .
 
-# Debug shell (inspect build environment)
-task build:linux-amd64:shell
+# Copy to target machine
+scp dist/*.deb zima:~/Downloads/
 ```
 
 ### Windows (NSIS)
@@ -512,11 +539,14 @@ Runs on a self-hosted `[macOS, ARM64]` runner:
 
 ### `build-linux-amd64` — Linux amd64
 
-Runs on a configurable Blacksmith runner (default: `blacksmith-4vcpu-ubuntu-2404`, selectable via `linux-runner` workflow input):
+Runs on a configurable Blacksmith runner (default: `blacksmith-4vcpu-ubuntu-2404`, selectable via `linux-runner` workflow input). Uses a containerized build via `docker/Dockerfile.linux-amd64` with Blacksmith Docker layer caching:
 
-1. Sets up the Tauri build environment via the shared composite action
-2. Builds with `tauri-action` targeting `x86_64-unknown-linux-gnu --bundles deb`
-3. Attaches the `.deb` to the same draft GitHub Release
+1. Sets up the Blacksmith Docker builder (`useblacksmith/setup-docker-builder`)
+2. Builds via `useblacksmith/build-push-action` targeting the `artifacts` stage
+3. Extracts `.deb` and binary from the container to `dist/`
+4. Attaches the `.deb` to the same draft GitHub Release
+
+The test workflow (`test.yml`) uses the same Dockerfile but targets the `check` stage (`cargo check` only).
 
 ### `build-windows` — Windows x64
 
@@ -530,6 +560,26 @@ Runs on a self-hosted `[self-hosted, Windows, X64]` runner:
 6. Builds with `tauri-action` which calls the sign command for both the binary and NSIS installer
 7. Attaches the signed `.exe` to the same draft GitHub Release
 8. Cleans up the certificate and config override (runs in `always()` step)
+
+### CI Runner Policy
+
+Runner assignment is optimized for developer iteration speed (PR/push), not release throughput.
+
+| Job | Runner | Rationale |
+| ------ | -------- | ----------- |
+| `rust` (lint/test) | `[macOS, ARM64]` | Self-hosted, no queue contention |
+| `build(macos)` | `[macOS, ARM64]` | Eligible on all ARM64 self-hosted runners |
+| `build(linux)` | Blacksmith (configurable) | Containerized via Docker, deps cached by Blacksmith sticky disks |
+| `build(windows)` | `[self-hosted, Windows, X64]` | Self-hosted, registry-only cargo cache |
+| `deno-lint` | `blacksmith-4vcpu-ubuntu-2404` | Lightweight, vanilla runner |
+| `vitest-tests` | `blacksmith-4vcpu-ubuntu-2404` | Lightweight, vanilla runner |
+| `playwright-tests` | `[macOS, ARM64]` | Needs WebKit, self-hosted |
+
+**Linux runner toggle:** Both `test.yml` and `release.yml` accept a `linux-runner` workflow_dispatch input. Default is `blacksmith-4vcpu-ubuntu-2404`. To test a different runner label, trigger manually and select from the dropdown. No file edits required for rollback.
+
+**macOS runner broadening:** macOS jobs use `[macOS, ARM64]` (no `studio` pin) so they can schedule on any eligible self-hosted ARM64 runner.
+
+**Lightweight jobs stay on vanilla runners:** `deno-lint` and `vitest-tests` remain on standard Blacksmith runners. Migration to custom images is deferred until a measured benefit is demonstrated.
 
 #### Windows Toolchain Pinning
 
