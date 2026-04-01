@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "ollama-optimizer": {
+      "source": "luongnv89/skills",
+      "sourceType": "github",
+      "computedHash": "42eb369e1d9d857acc6251a7db70b9f93c525ab9d3f4bcff3cfc431c714d982b"
+    }
+  }
+}
