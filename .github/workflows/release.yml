@@ -128,24 +128,26 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Tauri build environment
-        uses: ./.github/actions/setup-tauri-build
+      - name: Setup Docker builder
+        uses: useblacksmith/setup-docker-builder@v1
 
-      - name: Build binary
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-          LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
-        run: task ci:build TARGET=x86_64-unknown-linux-gnu
-
-      - name: Bundle
-        run: task ci:bundle TARGET=x86_64-unknown-linux-gnu BUNDLES=deb
+      - name: Build and bundle via Docker
+        uses: useblacksmith/build-push-action@v2
+        with:
+          context: .
+          file: docker/Dockerfile.linux-amd64
+          target: artifacts
+          push: false
+          outputs: type=local,dest=dist
+          build-args: |
+            LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}
+            LASTFM_API_SECRET=${{ secrets.LASTFM_API_SECRET }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
           name: linux-amd64
-          path: target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+          path: dist/*.deb
           retention-days: 7
 
       - name: Upload release assets
@@ -154,7 +156,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ github.event.release.tag_name }}" \
-            target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+            dist/*.deb
 
   build-windows:
     name: Build Windows (x64)
