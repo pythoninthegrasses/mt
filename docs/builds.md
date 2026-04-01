@@ -522,7 +522,7 @@ Runs on `ubuntu-latest`:
 
 Runs on a self-hosted `[self-hosted, Windows, X64]` runner:
 
-1. Sets up the Tauri build environment (Chocolatey installs cmake and rustup; `RUSTUP_TOOLCHAIN=nightly-2026-02-09` is exported to `GITHUB_ENV` and `~/.cargo/bin` is prepended to `GITHUB_PATH` to ensure the nightly toolchain takes precedence)
+1. Sets up the Tauri build environment (Chocolatey installs cmake and rustup; `~/.cargo/bin` is prepended to `GITHUB_PATH`; `RUSTUP_TOOLCHAIN` is set to the fully qualified `nightly-2026-02-09-x86_64-pc-windows-msvc` to ensure the MSVC-hosted toolchain is used — see [Windows Toolchain Pinning](#windows-toolchain-pinning) below)
 2. Installs Windows SDK for `signtool.exe`
 3. Generates a self-signed `CodeSigningCert` and exports to PFX
 4. Builds the frontend explicitly (`npm run build` in `app/frontend/`)
@@ -530,6 +530,22 @@ Runs on a self-hosted `[self-hosted, Windows, X64]` runner:
 6. Builds with `tauri-action` which calls the sign command for both the binary and NSIS installer
 7. Attaches the signed `.exe` to the same draft GitHub Release
 8. Cleans up the certificate and config override (runs in `always()` step)
+
+#### Windows Toolchain Pinning
+
+The self-hosted Windows runner can accumulate stale rustup state across runs. In particular, a system-level settings file (`C:\Windows\system32\config\systemprofile\.rustup\settings.toml`) may set `default_host_triple` to `x86_64-pc-windows-gnu`. When `RUSTUP_TOOLCHAIN` is set to a bare channel name like `nightly-2026-02-09`, rustup resolves it using the default host triple — producing the GNU-hosted toolchain, which requires `dlltool.exe` (not present on MSVC-only runners) and fails with:
+
+```text
+error: error calling dlltool 'dlltool.exe': program not found
+```
+
+To prevent this, the CI configuration uses three layers of defense:
+
+1. **Fully qualified `RUSTUP_TOOLCHAIN`** (`taskfiles/ci.yml`): On Windows, the env var is set to `nightly-2026-02-09-x86_64-pc-windows-msvc` (with the host triple suffix), eliminating any ambiguity in toolchain resolution.
+
+2. **`rustup set default-host x86_64-pc-windows-msvc`** (`.github/actions/setup-tauri-build/action.yml` and `taskfiles/ci.yml`): Run before toolchain installation to override any stale GNU default.
+
+3. **Explicit `PINNED_RUST` passthrough** (`.github/actions/setup-tauri-build/action.yml`): The composite action extracts the Rust version from `.tool-versions` using PowerShell and passes it to `task ci:setup PINNED_RUST=...`, bypassing the Taskfile's `sh: grep | awk` which may fail when Git Bash utilities aren't in PATH.
 
 ## Linux System Dependencies
 

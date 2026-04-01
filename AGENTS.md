@@ -84,6 +84,16 @@ Three directories are involved — do NOT cross-link them:
 
 `cargo.yml` adds `~/.cargo/bin` to PATH so rustup tools are always findable. The `_setup-cargo-home` task symlinks project-local `CARGO_HOME/bin/` to `~/.cargo/bin/` — never to the mise install dir, which has its own internal symlink structure.
 
+### Windows CI Toolchain Constraint
+
+On Windows CI runners, `RUSTUP_TOOLCHAIN` MUST use the fully qualified name with host triple suffix (e.g. `nightly-2026-02-09-x86_64-pc-windows-msvc`). Bare channel names like `nightly-2026-02-09` resolve using the runner's default host triple, which can be stale GNU — causing `dlltool.exe` not found errors. See [Build Configuration — Windows Toolchain Pinning](docs/builds.md#windows-toolchain-pinning) for details.
+
+When modifying `taskfiles/ci.yml` or `.github/actions/setup-tauri-build/action.yml`:
+
+- Never set `RUSTUP_TOOLCHAIN` to a bare toolchain name on Windows
+- Always run `rustup set default-host x86_64-pc-windows-msvc` before toolchain installation
+- Pass `PINNED_RUST` explicitly from the composite action rather than relying on shell extraction in Task
+
 ## Queue and Shuffle Behavior
 
 The queue store (`app/frontend/js/stores/queue.js`) maintains tracks in **play order** — the `items` array always reflects the order tracks will be played.

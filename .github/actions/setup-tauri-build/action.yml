@@ -41,6 +41,14 @@ runs:
         $gitPath = (Get-ItemProperty 'HKLM:\SOFTWARE\GitForWindows' -ErrorAction SilentlyContinue).InstallPath
         if ($gitPath) { echo "$gitPath\usr\bin" >> $env:GITHUB_PATH }
 
+    - name: Set rustup default host to MSVC (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        if (Get-Command rustup -ErrorAction SilentlyContinue) {
+          rustup set default-host x86_64-pc-windows-msvc
+        }
+
     - name: Install Task
       uses: go-task/setup-task@v1
 
@@ -129,7 +137,7 @@ runs:
     - name: Setup CI environment (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
-      run: task ci:setup
+      run: task ci:setup PINNED_RUST=${{ steps.rust-version-windows.outputs.toolchain }}
 
     - name: Windows Defender exclusions
       if: runner.os == 'Windows'
