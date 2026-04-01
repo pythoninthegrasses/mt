@@ -147,10 +147,11 @@ runs:
         Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE"
         Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE\target"
 
-    - name: Cargo cache (Linux/Windows runners)
-      if: runner.os == 'Linux' || runner.os == 'Windows'
+    - name: Cargo registry cache (Windows)
+      if: runner.os == 'Windows'
       uses: Swatinem/rust-cache@v2
       with:
         cache-on-failure: "true"
+        cache-targets: "false"
       env:
         CARGO_INCREMENTAL: "0"
