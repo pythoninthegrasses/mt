@@ -8,8 +8,19 @@
   <!-- Search (Apple Music style pill) -->
   <div x-show="!isCollapsed" class="p-3">
     <div class="relative">
-      <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+      <svg
+        class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/50"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+        >
+        </path>
       </svg>
       <input
         type="text"
@@ -27,7 +38,13 @@
         data-testid="sidebar-search-clear"
       >
         <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path>
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="3"
+            d="M6 18L18 6M6 6l12 12"
+          >
+          </path>
         </svg>
       </button>
     </div>
@@ -37,7 +54,12 @@
   <nav class="flex-1 overflow-y-auto p-2 space-y-4">
     <!-- Library section -->
     <div>
-      <h3 x-show="!isCollapsed" class="text-[10px] font-semibold text-foreground/40 uppercase tracking-wider px-2 mb-2">Library</h3>
+      <h3
+        x-show="!isCollapsed"
+        class="text-[10px] font-semibold text-foreground/40 uppercase tracking-wider px-2 mb-2"
+      >
+        Library
+      </h3>
       <ul class="space-y-0.5">
         <template x-for="section in sections" :key="section.id">
           <li>
@@ -54,45 +76,155 @@
             >
               <!-- Icons -->
               <template x-if="section.icon === 'music'">
-                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                <svg
+                  class="shrink-0 transition-colors"
+                  :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+                  >
+                  </path>
                 </svg>
               </template>
               <template x-if="section.icon === 'users'">
-                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                <svg
+                  class="shrink-0 transition-colors"
+                  :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  >
+                  </path>
                 </svg>
               </template>
               <template x-if="section.icon === 'disc'">
-                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg
+                  class="shrink-0 transition-colors"
+                  :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <circle cx="12" cy="12" r="10" stroke-width="1.5"></circle>
                   <circle cx="12" cy="12" r="3" stroke-width="1.5"></circle>
                 </svg>
               </template>
               <template x-if="section.icon === 'speaker'">
-                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+                <svg
+                  class="shrink-0 transition-colors"
+                  :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                  >
+                  </path>
                 </svg>
               </template>
               <template x-if="section.icon === 'heart'">
-                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                <svg
+                  class="shrink-0 transition-colors"
+                  :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                  >
+                  </path>
                 </svg>
               </template>
               <template x-if="section.icon === 'clock'">
-                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                <svg
+                  class="shrink-0 transition-colors"
+                  :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  >
+                  </path>
                 </svg>
               </template>
               <template x-if="section.icon === 'sparkles'">
-                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+                <svg
+                  class="shrink-0 transition-colors"
+                  :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+                  >
+                  </path>
                 </svg>
               </template>
               <template x-if="section.icon === 'fire'">
-                <svg class="shrink-0 transition-colors" :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"></path>
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z"></path>
+                <svg
+                  class="shrink-0 transition-colors"
+                  :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"
+                  >
+                  </path>
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z"
+                  >
+                  </path>
+                </svg>
+              </template>
+              <template x-if="section.icon === 'genius'">
+                <svg
+                  class="shrink-0 transition-colors"
+                  :class="[isActive(section.id) ? 'text-primary' : 'text-foreground/50', isCollapsed ? 'w-[19px] h-[19px]' : 'w-4 h-4']"
+                  fill="currentColor"
+                  viewBox="0 0 512 512"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M 505.056213 182.780579 C 463.707642 185.248779 430.104095 159.527649 384.008545 159.008026 C 359.898956 158.74823 332.291565 164.723846 298.438202 187.067444 C 288.569519 177.324585 222.48671 177.324585 212.618027 187.067444 C 178.639725 164.723846 151.157272 158.878113 127.047676 159.008026 C 80.952126 159.397736 47.473507 185.248779 6 182.780579 L 6 226.298645 C 22.739307 226.818268 26.361994 228.766815 27.861036 241.107758 C 49.222389 409.074493 230.606537 372.831116 231.730804 232.274261 C 190.507141 191.873901 320.299225 191.873901 279.075562 232.274261 C 280.19986 372.831116 461.708923 409.074493 482.945343 241.107758 C 484.444397 228.766815 488.191986 226.818268 504.806366 226.298645 L 504.806366 182.780579 Z M 25.612473 200.707428 C 27.861036 200.707428 34.731647 202.656006 34.731647 204.994263 C 34.731647 207.33255 27.985956 209.281128 25.612473 209.281128 C 23.363909 209.281128 16.493298 207.33255 16.493298 204.994263 C 16.493298 202.656006 23.238989 200.707428 25.612473 200.707428 Z M 485.318817 200.707428 C 483.070251 200.707428 476.199646 202.656006 476.199646 204.994263 C 476.199646 207.33255 482.945343 209.281128 485.318817 209.281128 C 487.567383 209.281128 494.437988 207.33255 494.437988 204.994263 C 494.437988 202.656006 487.692322 200.707428 485.318817 200.707428 Z M 381.884888 173.42746 C 427.85553 173.42746 465.081757 197.979431 465.081757 243.446045 C 465.081757 289.042603 427.85553 338.925964 381.884888 338.925964 C 355.776581 338.925964 330.417786 324.376648 315.177521 302.162964 C 303.559937 285.27536 298.812958 263.191559 298.812958 243.575958 C 298.812958 197.979431 336.039185 173.557343 382.009827 173.557343 Z M 128.921478 173.42746 C 82.950844 173.42746 45.724625 197.979431 45.724625 243.446045 C 45.724625 289.042603 82.950844 338.925964 128.921478 338.925964 C 155.0298 338.925964 180.388611 324.376648 195.628876 302.162964 C 207.246445 285.27536 211.993423 263.191559 211.993423 243.575958 C 211.993423 197.979431 174.767197 173.557343 128.796555 173.557343 Z"
+                  >
+                  </path>
                 </svg>
               </template>
               <span x-show="!isCollapsed" x-text="section.label" class="truncate"></span>
@@ -105,7 +237,9 @@
     <!-- Playlists section -->
     <div x-show="!isCollapsed">
       <div class="flex items-center justify-between px-2 mb-2">
-        <h3 class="text-[10px] font-semibold text-foreground/40 uppercase tracking-wider">Playlists</h3>
+        <h3 class="text-[10px] font-semibold text-foreground/40 uppercase tracking-wider">
+          Playlists
+        </h3>
         <button
           class="p-0.5 text-[#8E8E93] hover:text-foreground transition-colors sidebar-no-select"
           @click="createPlaylist()"
@@ -114,17 +248,39 @@
           data-testid="create-playlist"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"></path>
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              d="M12 4v16m8-8H4"
+            >
+            </path>
           </svg>
         </button>
       </div>
-      <ul class="space-y-0.5" tabindex="0" @keydown="handlePlaylistKeydown($event)" data-testid="playlist-list">
+      <ul
+        class="space-y-0.5"
+        tabindex="0"
+        @keydown="handlePlaylistKeydown($event)"
+        data-testid="playlist-list"
+      >
         <template x-for="(playlist, index) in playlists" :key="playlist.id">
           <li>
             <template x-if="editingPlaylist?.playlistId === playlist.playlistId">
               <div class="flex items-center gap-2 px-2 py-1">
-                <svg class="w-4 h-4 shrink-0 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
+                <svg
+                  class="w-4 h-4 shrink-0 text-primary"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"
+                  >
+                  </path>
                 </svg>
                 <input
                   type="text"
@@ -161,8 +317,20 @@
                 :data-playlist-reorder-index="index"
                 :data-selected="isPlaylistSelected(playlist.playlistId) ? 'true' : 'false'"
               >
-                <svg class="w-4 h-4 shrink-0" :class="isActive(playlist.id) ? 'text-primary' : 'text-foreground/50'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
+                <svg
+                  class="w-4 h-4 shrink-0"
+                  :class="isActive(playlist.id) ? 'text-primary' : 'text-foreground/50'"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"
+                  >
+                  </path>
                 </svg>
                 <span x-text="playlist.name" class="truncate"></span>
               </button>
@@ -201,7 +369,6 @@
         </button>
       </div>
     </div>
-
   </nav>
 
   <!-- Bottom controls: Settings + Collapse toggle -->
@@ -217,8 +384,20 @@
       data-testid="sidebar-settings"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.5"
+          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+        >
+        </path>
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.5"
+          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+        >
+        </path>
       </svg>
     </button>
     <button
@@ -228,8 +407,20 @@
       :title="isCollapsed ? 'Expand' : 'Collapse'"
       data-testid="sidebar-collapse-toggle"
     >
-      <svg class="w-4 h-4 transition-transform" :class="isCollapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>
+      <svg
+        class="w-4 h-4 transition-transform"
+        :class="isCollapsed ? 'rotate-180' : ''"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.5"
+          d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+        >
+        </path>
       </svg>
     </button>
   </div>

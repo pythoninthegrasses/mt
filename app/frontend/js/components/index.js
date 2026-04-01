@@ -16,6 +16,7 @@ import { createAlbumsBrowser } from './albums-browser.js';
 import { createQueueView } from './queue-view.js';
 import { createMainContent } from './main-content.js';
 import { createStatsView } from './stats-view.js';
+import { createGeniusBrowser } from './genius-browser.js';
 
 export function initComponents(Alpine) {
   createLibraryBrowser(Alpine);
@@ -30,6 +31,7 @@ export function initComponents(Alpine) {
   createQueueView(Alpine);
   createMainContent(Alpine);
   createStatsView(Alpine);
+  createGeniusBrowser(Alpine);
 
   console.log('[components] All components registered');
 }

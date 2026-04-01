@@ -1,0 +1,309 @@
+<div
+  x-show="$store.ui.view === 'genius'"
+  x-cloak
+  x-data="geniusBrowser"
+  class="flex flex-col h-full select-none"
+  data-testid="genius-view"
+>
+  <!-- Header -->
+  <div class="px-4 py-3 border-b border-border/50 shrink-0">
+    <div class="flex items-center gap-2">
+      <svg class="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 512 512">
+        <path
+          fill-rule="evenodd"
+          d="M 505.056213 182.780579 C 463.707642 185.248779 430.104095 159.527649 384.008545 159.008026 C 359.898956 158.74823 332.291565 164.723846 298.438202 187.067444 C 288.569519 177.324585 222.48671 177.324585 212.618027 187.067444 C 178.639725 164.723846 151.157272 158.878113 127.047676 159.008026 C 80.952126 159.397736 47.473507 185.248779 6 182.780579 L 6 226.298645 C 22.739307 226.818268 26.361994 228.766815 27.861036 241.107758 C 49.222389 409.074493 230.606537 372.831116 231.730804 232.274261 C 190.507141 191.873901 320.299225 191.873901 279.075562 232.274261 C 280.19986 372.831116 461.708923 409.074493 482.945343 241.107758 C 484.444397 228.766815 488.191986 226.818268 504.806366 226.298645 L 504.806366 182.780579 Z M 25.612473 200.707428 C 27.861036 200.707428 34.731647 202.656006 34.731647 204.994263 C 34.731647 207.33255 27.985956 209.281128 25.612473 209.281128 C 23.363909 209.281128 16.493298 207.33255 16.493298 204.994263 C 16.493298 202.656006 23.238989 200.707428 25.612473 200.707428 Z M 485.318817 200.707428 C 483.070251 200.707428 476.199646 202.656006 476.199646 204.994263 C 476.199646 207.33255 482.945343 209.281128 485.318817 209.281128 C 487.567383 209.281128 494.437988 207.33255 494.437988 204.994263 C 494.437988 202.656006 487.692322 200.707428 485.318817 200.707428 Z M 381.884888 173.42746 C 427.85553 173.42746 465.081757 197.979431 465.081757 243.446045 C 465.081757 289.042603 427.85553 338.925964 381.884888 338.925964 C 355.776581 338.925964 330.417786 324.376648 315.177521 302.162964 C 303.559937 285.27536 298.812958 263.191559 298.812958 243.575958 C 298.812958 197.979431 336.039185 173.557343 382.009827 173.557343 Z M 128.921478 173.42746 C 82.950844 173.42746 45.724625 197.979431 45.724625 243.446045 C 45.724625 289.042603 82.950844 338.925964 128.921478 338.925964 C 155.0298 338.925964 180.388611 324.376648 195.628876 302.162964 C 207.246445 285.27536 211.993423 263.191559 211.993423 243.575958 C 211.993423 197.979431 174.767197 173.557343 128.796555 173.557343 Z"
+        >
+        </path>
+      </svg>
+      <h2 class="text-sm font-semibold">Genius</h2>
+      <span
+        class="text-[10px] text-foreground/40 bg-muted px-1.5 py-0.5 rounded-full uppercase tracking-wider"
+      >AI</span>
+    </div>
+    <p class="text-xs text-foreground/50 mt-1">
+      Describe a playlist and AI will create it from your library
+    </p>
+  </div>
+
+  <!-- Content area -->
+  <div class="flex-1 overflow-y-auto">
+    <!-- Onboarding: Checking -->
+    <template x-if="!onboardingComplete && onboardingStep === 'checking'">
+      <div class="flex flex-col items-center justify-center h-full gap-3 px-6">
+        <div class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin">
+        </div>
+        <p class="text-sm text-foreground/60">Checking Ollama status...</p>
+      </div>
+    </template>
+
+    <!-- Onboarding: Install Ollama -->
+    <template x-if="!onboardingComplete && onboardingStep === 'install-ollama'">
+      <div
+        class="flex flex-col items-center justify-center h-full gap-4 px-6 max-w-md mx-auto text-center"
+      >
+        <div class="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+          <svg
+            class="w-6 h-6 text-foreground/40"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+            >
+            </path>
+          </svg>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold mb-1">Ollama Required</h3>
+          <p class="text-xs text-foreground/50 leading-relaxed">
+            Genius uses a local AI model via Ollama. Install Ollama to get started — your music data
+            never leaves your computer.
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <a
+            href="https://ollama.com/download"
+            target="_blank"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+          >
+            Download Ollama
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+              >
+              </path>
+            </svg>
+          </a>
+          <button
+            @click="checkOllama()"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-muted text-foreground rounded-md hover:bg-muted/80 transition-colors"
+          >
+            Check Again
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <!-- Onboarding: Download Model -->
+    <template x-if="!onboardingComplete && onboardingStep === 'download-model'">
+      <div
+        class="flex flex-col items-center justify-center h-full gap-4 px-6 max-w-md mx-auto text-center"
+      >
+        <div class="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+          <svg
+            class="w-6 h-6 text-foreground/40"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+            >
+            </path>
+          </svg>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold mb-1">Download AI Model</h3>
+          <p class="text-xs text-foreground/50 leading-relaxed">
+            Ollama is running. Download the llama3.2:1b model (~1.3 GB) to enable playlist
+            generation.
+          </p>
+        </div>
+
+        <template x-if="!modelDownloading">
+          <button
+            @click="downloadModel()"
+            class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              >
+              </path>
+            </svg>
+            Download Model (1.3 GB)
+          </button>
+        </template>
+
+        <template x-if="modelDownloading">
+          <div class="w-full max-w-xs space-y-2">
+            <div class="w-full bg-muted rounded-full h-2 overflow-hidden">
+              <div
+                class="h-full bg-primary rounded-full transition-all duration-300"
+                :style="`width: ${pullProgress}%`"
+              >
+              </div>
+            </div>
+            <p class="text-[11px] text-foreground/40" x-text="pullProgress + '% — ' + pullStatus">
+            </p>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <!-- Main prompt interface (onboarding complete) -->
+    <template x-if="onboardingComplete">
+      <div class="flex flex-col h-full">
+        <!-- Prompt area -->
+        <div class="px-4 pt-4 pb-3">
+          <div class="relative">
+            <textarea
+              x-model="prompt"
+              @keydown.meta.enter="generate()"
+              @keydown.ctrl.enter="generate()"
+              placeholder="Describe a playlist... e.g. &quot;chill jazz from my library&quot; or &quot;something like Radiohead&quot;"
+              class="w-full text-sm bg-muted/50 border border-border rounded-lg px-3 py-2.5 pr-10 resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 placeholder:text-foreground/30"
+              rows="2"
+              :disabled="generating"
+              data-testid="genius-prompt"
+            ></textarea>
+            <button
+              @click="generate()"
+              :disabled="!prompt.trim() || generating"
+              class="absolute right-2 bottom-2.5 p-1.5 rounded-md transition-colors"
+              :class="prompt.trim() && !generating ? 'text-primary hover:bg-primary/10' : 'text-foreground/20 cursor-not-allowed'"
+              title="Generate (Cmd+Enter)"
+              data-testid="genius-generate"
+            >
+              <template x-if="!generating">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13 7l5 5m0 0l-5 5m5-5H6"
+                  >
+                  </path>
+                </svg>
+              </template>
+              <template x-if="generating">
+                <div
+                  class="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"
+                >
+                </div>
+              </template>
+            </button>
+          </div>
+          <p class="text-[10px] text-foreground/30 mt-1.5 px-1">Press Cmd+Enter to generate</p>
+        </div>
+
+        <!-- Result -->
+        <template x-if="result">
+          <div class="px-4 pb-3">
+            <div
+              class="rounded-lg border px-3 py-2.5 text-sm"
+              :class="{
+                'border-green-500/30 bg-green-500/5 text-green-700 dark:text-green-400': result.status === 'success',
+                'border-destructive/30 bg-destructive/5 text-destructive': result.status === 'error',
+                'border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400': result.status === 'no_ollama' || result.status === 'no_model',
+              }"
+            >
+              <template x-if="result.status === 'success'">
+                <div class="flex items-center justify-between gap-2">
+                  <span>
+                    Created <strong x-text="result.playlist_name"></strong>
+                    with <span x-text="result.track_count"></span> tracks
+                  </span>
+                  <button
+                    @click="navigateToPlaylist(result.playlist_id)"
+                    class="shrink-0 text-xs font-medium underline underline-offset-2 hover:no-underline"
+                  >
+                    View
+                  </button>
+                </div>
+              </template>
+              <template x-if="result.status !== 'success'">
+                <p x-text="result.message"></p>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <!-- Generating indicator -->
+        <template x-if="generating">
+          <div class="px-4 pb-3">
+            <div class="flex items-center gap-2 text-xs text-foreground/50">
+              <div
+                class="w-3.5 h-3.5 border-2 border-primary/50 border-t-transparent rounded-full animate-spin"
+              >
+              </div>
+              <span>Searching your library and generating playlist...</span>
+            </div>
+          </div>
+        </template>
+
+        <!-- History -->
+        <div class="flex-1 overflow-y-auto px-4 pb-4" x-show="history.length > 0">
+          <h3 class="text-[10px] font-semibold text-foreground/40 uppercase tracking-wider mb-2">
+            Recent
+          </h3>
+          <ul class="space-y-1.5">
+            <template x-for="(item, i) in history" :key="i">
+              <li
+                class="flex items-center justify-between gap-2 px-2.5 py-2 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors"
+              >
+                <div class="min-w-0">
+                  <p class="text-xs text-foreground/70 truncate" x-text="item.prompt"></p>
+                  <p class="text-[11px] text-foreground/40">
+                    <span x-text="item.playlist_name"></span> &middot; <span
+                      x-text="item.track_count"
+                    ></span> tracks
+                  </p>
+                </div>
+                <button
+                  @click="navigateToPlaylist(item.playlist_id)"
+                  class="shrink-0 text-[11px] text-primary hover:underline"
+                >
+                  Open
+                </button>
+              </li>
+            </template>
+          </ul>
+        </div>
+
+        <!-- Empty state (no history, no result, not generating) -->
+        <div
+          x-show="history.length === 0 && !result && !generating"
+          class="flex-1 flex flex-col items-center justify-center px-6 text-center"
+        >
+          <div class="space-y-3 max-w-xs">
+            <p class="text-xs text-foreground/40 leading-relaxed">Try prompts like:</p>
+            <div class="space-y-1.5">
+              <button
+                @click="prompt = 'make me a chill playlist from my library'; generate()"
+                class="w-full text-left text-xs text-foreground/50 hover:text-foreground/80 bg-muted/30 hover:bg-muted/50 px-3 py-2 rounded-md transition-colors"
+              >
+                "make me a chill playlist from my library"
+              </button>
+              <button
+                @click="prompt = 'something similar to what I listened to recently'; generate()"
+                class="w-full text-left text-xs text-foreground/50 hover:text-foreground/80 bg-muted/30 hover:bg-muted/50 px-3 py-2 rounded-md transition-colors"
+              >
+                "something similar to what I listened to recently"
+              </button>
+              <button
+                @click="prompt = 'find me post-punk artists I don\\'t usually listen to'; generate()"
+                class="w-full text-left text-xs text-foreground/50 hover:text-foreground/80 bg-muted/30 hover:bg-muted/50 px-3 py-2 rounded-md transition-colors"
+              >
+                "find me post-punk artists I don't usually listen to"
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>

@@ -31,6 +31,7 @@ export function createSidebar(Alpine) {
       { id: 'recent', label: 'Recently Played', icon: 'clock' },
       { id: 'added', label: 'Recently Added', icon: 'sparkles' },
       { id: 'top25', label: 'Top 25', icon: 'fire' },
+      { id: 'genius', label: 'Genius', icon: 'genius' },
     ],
 
     // Merge mixins
@@ -165,6 +166,9 @@ export function createSidebar(Alpine) {
           this.library.sortOrder = 'desc';
           await this.library.loadTop25();
           break;
+        case 'genius':
+          this.ui.setView('genius');
+          return;
       }
     },
 

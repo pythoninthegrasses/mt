@@ -18,8 +18,9 @@ import { lastfm } from './lastfm.js';
 import { lyrics } from './lyrics.js';
 import { settings } from './settings.js';
 import { stats } from './stats.js';
+import { agent } from './agent.js';
 
-export { audio, favorites, lastfm, library, lyrics, playlists, queue, settings, stats };
+export { agent, audio, favorites, lastfm, library, lyrics, playlists, queue, settings, stats };
 
 /**
  * Unified API object (backward compatibility).
@@ -30,6 +31,7 @@ export const api = {
     return request('/health');
   },
 
+  agent,
   audio,
   library,
   lyrics,

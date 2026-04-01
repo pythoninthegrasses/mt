@@ -60,6 +60,7 @@ task tauri:dev
 * Logo
   * [Music - Sentya Irma](https://thenounproject.com/icon/music-6387002/)
   * [mango tree - Aisyah](https://thenounproject.com/icon/mango-tree-6730625/)
+  * [Glasses - Iconic](https://thenounproject.com/icon/glasses-155583/)
 
 ## TODO
 
