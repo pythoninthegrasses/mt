@@ -16,12 +16,12 @@ vars:
   CONFIG_FLAG: '{{if .CONFIG}}--config {{.CONFIG}}{{end}}'
   EXE_EXT: '{{if eq OS "windows"}}.exe{{end}}'
   PINNED_RUST:
-    sh: grep '^rust ' {{.ROOT_DIR}}/.tool-versions | awk '{print $2}'
+    sh: grep '^rust ' {{.ROOT_DIR}}/.tool-versions 2>/dev/null | awk '{print $2}' || true
 
 env:
   PATH: "{{.CARGO_BIN}}:{{.MISE_SHIMS}}:{{.PATH}}"
   RUSTC_WRAPPER: ""
-  RUSTUP_TOOLCHAIN: '{{if eq OS "windows"}}{{.PINNED_RUST}}-x86_64-pc-windows-msvc{{else}}{{.PINNED_RUST}}{{end}}'
+  RUSTUP_TOOLCHAIN: '{{if and (eq OS "windows") .PINNED_RUST}}{{.PINNED_RUST}}-x86_64-pc-windows-msvc{{else if .PINNED_RUST}}{{.PINNED_RUST}}{{end}}'
 
 tasks:
   setup:
