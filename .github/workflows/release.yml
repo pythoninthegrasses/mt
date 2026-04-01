@@ -105,6 +105,7 @@ jobs:
       - name: Cleanup CI keychain
         if: always()
         run: |
+          security default-keychain -s login.keychain-db
           security delete-keychain ci_signing.keychain || true
           rm -f /tmp/auth_key.p8
 
