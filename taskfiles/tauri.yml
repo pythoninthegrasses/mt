@@ -195,7 +195,7 @@ tasks:
     desc: "Run Tauri in development mode"
     deps: [":deno:install", ":cargo:_setup-cargo-home", ":cargo:install-sccache"]
     cmds:
-      - deno run -A npm:@tauri-apps/cli dev
+      - deno run -A npm:@tauri-apps/cli dev -- --features agent
     interactive: true
     ignore_error: true
 
@@ -203,7 +203,7 @@ tasks:
     desc: "Run Tauri in development mode with MCP bridge for AI agent debugging"
     deps: [":deno:install", ":cargo:_setup-cargo-home", ":cargo:install-sccache"]
     cmds:
-      - deno run -A npm:@tauri-apps/cli dev -- --features mcp
+      - deno run -A npm:@tauri-apps/cli dev -- --features mcp,agent
     interactive: true
     ignore_error: true
 
