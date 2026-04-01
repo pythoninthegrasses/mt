@@ -407,8 +407,12 @@ def run_agent(
     host: str = OLLAMA_HOST,
     max_turns: int = MAX_TURNS,
     db_path: Path | None = None,
-    think: bool = False,
+    think: bool = DEFAULT_THINK,
+    temperature: float = DEFAULT_TEMPERATURE,
+    log_file: str | Path = DEFAULT_LOG_FILE,
 ) -> None:
+    _setup_logging(log_file)
+
     db_file = db_path or _db_path()
     if not db_file.exists():
         print(f"ERROR: Database not found at {db_file}", file=sys.stderr)
@@ -439,27 +443,46 @@ def run_agent(
         {"role": "user", "content": prompt},
     ]
 
+    log.info(
+        "session_start",
+        extra={
+            "data": {
+                "model": model,
+                "prompt": prompt,
+                "max_turns": max_turns,
+                "think": think,
+                "temperature": temperature,
+                "db_path": str(db_file),
+                "track_count": track_count,
+            }
+        },
+    )
+
     print(f"\n{'=' * 60}")
-    print(f"Model: {model} | Max turns: {max_turns} | Think: {think}")
+    print(
+        f"Model: {model} | Max turns: {max_turns} | Think: {think} | Temp: {temperature}"
+    )
     print(f"Prompt: {prompt}")
     print(f"{'=' * 60}\n")
 
     for turn in range(1, max_turns + 1):
         print(f"--- Turn {turn}/{max_turns} ---")
+        log.info("turn_start", extra={"data": {"turn": turn}})
 
         kwargs: dict = {
             "model": model,
             "messages": messages,
             "tools": TOOLS,
+            "options": {"temperature": temperature},
+            "think": think,
         }
-        if think:
-            kwargs["think"] = True
 
         response: ChatResponse = client.chat(**kwargs)
         msg = response.message
 
         if hasattr(msg, "thinking") and msg.thinking:
             print(f"\n<think>\n{msg.thinking}\n</think>")
+            log.info("thinking", extra={"data": {"text": msg.thinking[:500]}})
 
         if msg.tool_calls:
             messages.append(msg)
@@ -468,14 +491,39 @@ def run_agent(
                 name = tc.function.name
                 args = tc.function.arguments
                 print(f"  TOOL: {name}({json.dumps(args, separators=(',', ':'))})")
+                log.info("tool_call", extra={"data": {"tool": name, "args": args}})
 
                 handler = TOOL_DISPATCH.get(name, tool_stub)
                 try:
                     result = handler(conn, args)
                 except Exception as e:
                     result = {"error": str(e)}
+                    log.error(
+                        "tool_error", extra={"data": {"tool": name, "error": str(e)}}
+                    )
 
                 result_str = json.dumps(result, default=str)
+                if isinstance(result, list):
+                    log.info(
+                        "tool_result",
+                        extra={
+                            "data": {
+                                "tool": name,
+                                "count": len(result),
+                                "result": result,
+                            }
+                        },
+                    )
+                else:
+                    log.info(
+                        "tool_result",
+                        extra={
+                            "data": {
+                                "tool": name,
+                                "result": result,
+                            }
+                        },
+                    )
                 if isinstance(result, list) and result:
                     count = len(result)
                     if "artist" in result[0] and "title" in result[0]:
@@ -520,12 +568,13 @@ def run_agent(
                 )
         else:
             content = msg.content or ""
+            log.info("final_response", extra={"data": {"content": content}})
             print(f"\nFINAL RESPONSE:\n{textwrap.indent(content, '  ')}\n")
 
             parsed = parse_response(content)
             if parsed:
-                name, ids = parsed
-                print(f"PARSED: Playlist='{name}', Tracks={ids} ({len(ids)} tracks)")
+                pname, ids = parsed
+                print(f"PARSED: Playlist='{pname}', Tracks={ids} ({len(ids)} tracks)")
 
                 placeholders = ",".join("?" * len(ids))
                 valid = conn.execute(
@@ -537,6 +586,16 @@ def run_agent(
                     print(f"  [{t['id']}] {t['artist']} - {t['title']}")
                 if len(valid) > 10:
                     print(f"  ... and {len(valid) - 10} more")
+                log.info(
+                    "parse_success",
+                    extra={
+                        "data": {
+                            "playlist_name": pname,
+                            "track_ids": ids,
+                            "valid_count": len(valid),
+                        }
+                    },
+                )
             else:
                 print(
                     "PARSE FAILED: Response did not match 'Playlist: ... / Tracks: ...' format"
@@ -544,10 +603,17 @@ def run_agent(
                 print(
                     "(This is the bug -- the model didn't follow the expected format)"
                 )
+                log.info("parse_failure", extra={"data": {"content": content}})
 
+            log.info(
+                "session_end", extra={"data": {"reason": "success", "turns_used": turn}}
+            )
             conn.close()
             return
 
+    log.info(
+        "session_end", extra={"data": {"reason": "exhausted", "turns_used": max_turns}}
+    )
     print(f"\nWARNING: Exhausted {max_turns} turns without a final response.")
     conn.close()
 
@@ -583,7 +649,19 @@ def main() -> None:
     parser.add_argument(
         "--think",
         action="store_true",
+        default=DEFAULT_THINK,
         help="Enable extended thinking (qwen3 /think mode)",
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=DEFAULT_TEMPERATURE,
+        help=f"Sampling temperature (default: {DEFAULT_TEMPERATURE})",
+    )
+    parser.add_argument(
+        "--log-file",
+        default=DEFAULT_LOG_FILE,
+        help=f"JSONL log file path (default: {DEFAULT_LOG_FILE})",
     )
     args = parser.parse_args()
 
@@ -594,6 +672,8 @@ def main() -> None:
         max_turns=args.max_turns,
         db_path=args.db,
         think=args.think,
+        temperature=args.temperature,
+        log_file=args.log_file,
     )
 
 

@@ -3,10 +3,10 @@ id: TASK-307
 title: >-
   Add structured JSONL logging, temperature control, and think toggle to
   scripts/agent.py
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-01 22:05'
-updated_date: '2026-04-01 22:06'
+updated_date: '2026-04-01 22:17'
 labels:
   - scripts
   - agent
@@ -137,16 +137,22 @@ print(f"Model: {model} | Max turns: {max_turns} | Think: {think} | Temp: {temper
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 JSONL log file written to /tmp/ollama_python_agent.jsonl in append mode with one JSON object per line
-- [ ] #2 Each log entry has ts, level, event, and optional data fields
-- [ ] #3 Log covers: session_start, turn_start, tool_call, tool_result, tool_error, thinking, final_response, parse_success, parse_failure, session_end, session_exhausted
-- [ ] #4 Temperature defaults to 0.45, configurable via AGENT_TEMPERATURE env var and --temperature CLI flag
-- [ ] #5 Think defaults to False, configurable via AGENT_THINK env var and --think CLI flag
-- [ ] #6 Temperature passed to client.chat() via options={'temperature': ...} dict
-- [ ] #7 Think passed to client.chat() as think=True/False kwarg
-- [ ] #8 Session header displays: Model, Max turns, Think, Temperature
-- [ ] #9 --log-file CLI arg overrides AGENT_LOG_FILE default
-- [ ] #10 _setup_logging() called at start of run_agent()
-- [ ] #11 Tool results display as 'artist - track' format (not raw JSON) for track results
-- [ ] #12 All existing print() console output preserved alongside new file logging
+- [x] #1 JSONL log file written to /tmp/ollama_python_agent.jsonl in append mode with one JSON object per line
+- [x] #2 Each log entry has ts, level, event, and optional data fields
+- [x] #3 Log covers: session_start, turn_start, tool_call, tool_result, tool_error, thinking, final_response, parse_success, parse_failure, session_end, session_exhausted
+- [x] #4 Temperature defaults to 0.45, configurable via AGENT_TEMPERATURE env var and --temperature CLI flag
+- [x] #5 Think defaults to False, configurable via AGENT_THINK env var and --think CLI flag
+- [x] #6 Temperature passed to client.chat() via options={'temperature': ...} dict
+- [x] #7 Think passed to client.chat() as think=True/False kwarg
+- [x] #8 Session header displays: Model, Max turns, Think, Temperature
+- [x] #9 --log-file CLI arg overrides AGENT_LOG_FILE default
+- [x] #10 _setup_logging() called at start of run_agent()
+- [x] #11 Tool results display as 'artist - track' format (not raw JSON) for track results
+- [x] #12 All existing print() console output preserved alongside new file logging
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+All three features implemented in `scripts/agent.py`:\n\n**JSONL logging**: `_setup_logging()` wired up at start of `run_agent()`. Structured log entries with `ts`, `level`, `event`, `data` fields for: session_start, turn_start, tool_call, tool_result, tool_error, thinking, final_response, parse_success, parse_failure, session_end.\n\n**Temperature control**: Defaults to 0.45 via `AGENT_TEMPERATURE` env var, overridable with `--temperature` CLI flag. Passed to `client.chat()` via `options={'temperature': ...}`.\n\n**Think toggle**: Defaults to False via `AGENT_THINK` env var, overridable with `--think` CLI flag. Passed directly as `think=` kwarg to `client.chat()` (no conditional block). Session header shows both temperature and think state.\n\nAlso added `--log-file` CLI arg for log path override.
+<!-- SECTION:FINAL_SUMMARY:END -->
