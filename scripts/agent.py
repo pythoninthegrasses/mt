@@ -35,9 +35,9 @@ import sqlite3
 import sys
 import textwrap
 from datetime import datetime, timezone
+from ollama import Client, ChatResponse
 from pathlib import Path
 
-from ollama import Client, ChatResponse
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 ENV_FILE = SCRIPT_DIR.parent / ".env"
@@ -53,8 +53,10 @@ DEFAULT_MODEL = config("OLLAMA_MODEL", default="qwen3.5:9b")
 OLLAMA_HOST = config("OLLAMA_HOST", default="http://localhost:11434")
 MAX_TURNS = config("AGENT_MAX_TURNS", default=5, cast=int)
 DEFAULT_LOG_FILE = config("AGENT_LOG_FILE", default="/tmp/ollama_python_agent.jsonl")
-DEFAULT_TEMPERATURE = config("AGENT_TEMPERATURE", default=0.45, cast=float)
+DEFAULT_TEMPERATURE = config("AGENT_TEMPERATURE", default=0.2, cast=float)
 DEFAULT_THINK = config("AGENT_THINK", default=False, cast=bool)
+DEFAULT_SEED = config("AGENT_SEED", default=0, cast=int)
+MAX_PLAYLIST_TRACKS = config("AGENT_MAX_PLAYLIST_TRACKS", default=25, cast=int)
 LASTFM_API_KEY = config("LASTFM_API_KEY", default="")
 LASTFM_BASE_URL = "https://ws.audioscrobbler.com/2.0/"
 
@@ -80,25 +82,31 @@ def _setup_logging(log_file: str | Path) -> None:
     log.setLevel(logging.DEBUG)
 
 
-SYSTEM_PROMPT = """\
+def _build_system_prompt(max_tracks: int) -> str:
+    min_tracks = max(5, max_tracks // 2)
+    return f"""\
 You are a playlist generator for a local music library. You create playlists by querying the user's library and Last.fm for similar music.
 
 RULES:
 - Only suggest tracks that exist in the user's library (returned by tools)
-- When you have enough tracks (10-25), respond with the final playlist
+- Return {min_tracks}-{max_tracks} track IDs in the final playlist. Never more than {max_tracks}. Curate, don't dump
+- As soon as you have {min_tracks}+ candidate tracks, stop searching and respond with the playlist
+- You have LIMITED turns. Call multiple tools per turn. Do not waste turns on exploratory calls
+- Read hint messages in tool results — they tell you what to try next
 
 STRATEGY — pick the approach that fits the request:
 - Mood/vibe requests ("chill", "upbeat", "sad", "energetic"):
-  Start with get_top_artists_by_tag using Last.fm genre tags (e.g. chillout, downtempo, ambient, shoegaze, dream pop).
-  Do NOT use search_library for mood words — it only matches title/artist/album text, not vibe.
-  Use get_track_tags on candidate tracks to verify they match the mood.
+  Call get_top_artists_by_tag with 2-3 genre tags IN PARALLEL (e.g. chillout + dream pop + shoegaze).
+  Use limit=50 to cast a wide net. Do NOT use search_library for mood words — it only matches text, not vibe.
+  Then use get_similar_tracks on the best matches to expand the playlist.
 - Artist-based requests ("similar to Radiohead", "like Bjork"):
-  Use get_similar_artists and get_similar_tracks to find related music in the library.
+  Call get_similar_artists AND search_library(artist=...) in parallel on the first turn.
+  Then use get_similar_tracks on seed tracks to expand.
 - General/mixed requests:
   Use get_recently_played or get_top_artists to understand listening habits, then combine
   with get_similar_tracks, get_similar_artists, or get_top_artists_by_tag.
 - Regional requests ("Japanese music", "Brazilian"):
-  Use get_top_tracks_by_country.
+  Use get_top_tracks_by_country with limit=50.
 - search_library is for finding specific tracks by artist name, album, or title keyword.
 
 RESPONSE FORMAT (final answer only):
@@ -228,7 +236,7 @@ TOOLS = [
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Max similar tracks to fetch (default: 10)",
+                        "description": "Max similar tracks to check (default: 30)",
                     },
                 },
                 "required": ["artist", "track"],
@@ -249,7 +257,7 @@ TOOLS = [
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Max similar artists to fetch (default: 10)",
+                        "description": "Max similar artists to check (default: 30)",
                     },
                 },
                 "required": ["artist"],
@@ -270,7 +278,7 @@ TOOLS = [
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Max artists to fetch (default: 10)",
+                        "description": "Max artists to check (default: 50)",
                     },
                 },
                 "required": ["tag"],
@@ -291,7 +299,7 @@ TOOLS = [
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Max tracks to fetch (default: 10)",
+                        "description": "Max tracks to check (default: 50)",
                     },
                 },
                 "required": ["country"],
@@ -311,7 +319,7 @@ def _track_row_to_summary(row: sqlite3.Row) -> dict:
     }
 
 
-def tool_get_recently_played(conn: sqlite3.Connection, args: dict) -> list[dict]:
+def tool_get_recently_played(conn: sqlite3.Connection, args: dict) -> list[dict] | dict:
     days = args.get("days", 7)
     limit = args.get("limit", 20)
     rows = conn.execute(
@@ -320,10 +328,17 @@ def tool_get_recently_played(conn: sqlite3.Connection, args: dict) -> list[dict]
            ORDER BY last_played DESC LIMIT ?""",
         (f"-{days} days", limit),
     ).fetchall()
+    if not rows:
+        return {
+            "matches": 0,
+            "hint": f"No tracks played in the last {days} days. "
+            "Try a longer range (e.g. days=30), or use get_top_artists "
+            "with range='all_time' to see long-term preferences.",
+        }
     return [_track_row_to_summary(r) for r in rows]
 
 
-def tool_get_top_artists(conn: sqlite3.Connection, args: dict) -> list[dict]:
+def tool_get_top_artists(conn: sqlite3.Connection, args: dict) -> list[dict] | dict:
     range_str = args.get("range", "30days")
     limit = args.get("limit", 10)
     range_map = {
@@ -342,6 +357,21 @@ def tool_get_top_artists(conn: sqlite3.Connection, args: dict) -> list[dict]:
            GROUP BY l.artist ORDER BY play_count DESC LIMIT ?""",
         (interval, limit),
     ).fetchall()
+    if not rows:
+        broader = {"7days": "30days", "30days": "90days", "90days": "all_time"}
+        suggestion = broader.get(range_str)
+        if suggestion:
+            return {
+                "matches": 0,
+                "hint": f"No play history in range '{range_str}'. "
+                f"Try range='{suggestion}' for a broader window, or skip "
+                "to get_top_artists_by_tag with genre tags.",
+            }
+        return {
+            "matches": 0,
+            "hint": "No play history found. Use get_top_artists_by_tag with "
+            "genre tags, or search_library to explore the collection directly.",
+        }
     return [{"artist": r["artist"], "play_count": r["play_count"]} for r in rows]
 
 
@@ -374,10 +404,10 @@ def tool_search_library(conn: sqlite3.Connection, args: dict) -> list[dict]:
     return [_track_row_to_summary(r) for r in rows]
 
 
-def _lastfm_get(method: str, **params) -> dict:
-    """Make a Last.fm API GET request. Returns parsed JSON or empty dict on error."""
+def _lastfm_get(method: str, **params) -> dict | None:
+    """Make a Last.fm API GET request. Returns parsed JSON, or None on error."""
     if not LASTFM_API_KEY:
-        return {}
+        return None
     import httpx
 
     query = {"method": method, "api_key": LASTFM_API_KEY, "format": "json", **params}
@@ -386,10 +416,10 @@ def _lastfm_get(method: str, **params) -> dict:
         resp.raise_for_status()
         data = resp.json()
         if "error" in data:
-            return {}
+            return None
         return data
     except (httpx.HTTPError, ValueError):
-        return {}
+        return None
 
 
 def _find_track_in_library(
@@ -416,18 +446,34 @@ def _find_artist_tracks(
     return [_track_row_to_summary(r) for r in rows]
 
 
-def tool_get_similar_tracks(conn: sqlite3.Connection, args: dict) -> list[dict]:
+def tool_get_similar_tracks(conn: sqlite3.Connection, args: dict) -> list[dict] | dict:
     """Find tracks similar to a given track via Last.fm, cross-ref with local library."""
     artist = args.get("artist", "")
     track = args.get("track", "")
-    limit = args.get("limit", 10)
+    limit = args.get("limit", 30)
 
     data = _lastfm_get(
         "track.getSimilar", artist=artist, track=track, limit=limit, autocorrect=1
     )
+    if data is None:
+        return {
+            "matches": 0,
+            "hint": "Last.fm API unavailable. Try get_similar_artists or "
+            "get_top_artists_by_tag instead.",
+        }
+
     similar = data.get("similartracks", {}).get("track", [])
     if isinstance(similar, dict):
         similar = [similar]
+
+    if not similar:
+        return {
+            "matches": 0,
+            "lastfm_count": 0,
+            "hint": f"Last.fm has no similar tracks for '{artist} - {track}'. "
+            "Try get_similar_artists for broader matching, or search_library "
+            "to find tracks by this artist.",
+        }
 
     results = []
     for st in similar:
@@ -437,18 +483,50 @@ def tool_get_similar_tracks(conn: sqlite3.Connection, args: dict) -> list[dict]:
         )
         st_title = st.get("name", "")
         results.extend(_find_track_in_library(conn, artist_name, st_title))
+
+    if not results:
+        lastfm_artists = {
+            (
+                st.get("artist", {}).get("name", "")
+                if isinstance(st.get("artist", {}), dict)
+                else str(st.get("artist", ""))
+            )
+            for st in similar[:5]
+        }
+        return {
+            "matches": 0,
+            "lastfm_count": len(similar),
+            "hint": f"Last.fm returned {len(similar)} similar tracks but none are in "
+            f"your library. Similar artists include: {', '.join(lastfm_artists)}. "
+            "Try get_similar_artists or get_top_artists_by_tag instead.",
+        }
     return results
 
 
-def tool_get_similar_artists(conn: sqlite3.Connection, args: dict) -> list[dict]:
+def tool_get_similar_artists(conn: sqlite3.Connection, args: dict) -> list[dict] | dict:
     """Find similar artists via Last.fm, return their tracks from local library."""
     artist = args.get("artist", "")
-    limit = args.get("limit", 10)
+    limit = args.get("limit", 30)
 
     data = _lastfm_get("artist.getSimilar", artist=artist, limit=limit, autocorrect=1)
+    if data is None:
+        return {
+            "matches": 0,
+            "hint": "Last.fm API unavailable. Try search_library with artist name, "
+            "or get_top_artists_by_tag with a genre tag.",
+        }
+
     similar = data.get("similarartists", {}).get("artist", [])
     if isinstance(similar, dict):
         similar = [similar]
+
+    if not similar:
+        return {
+            "matches": 0,
+            "lastfm_count": 0,
+            "hint": f"Last.fm has no similar artists for '{artist}'. "
+            "Try get_top_artists_by_tag with a genre tag, or search_library.",
+        }
 
     results = []
     for sa in similar:
@@ -456,31 +534,73 @@ def tool_get_similar_artists(conn: sqlite3.Connection, args: dict) -> list[dict]
         tracks = _find_artist_tracks(conn, sa_name, limit=5)
         if tracks:
             results.append({"artist": sa_name, "sample_tracks": tracks})
+
+    if not results:
+        lastfm_names = [sa.get("name", "") for sa in similar[:5]]
+        return {
+            "matches": 0,
+            "lastfm_count": len(similar),
+            "hint": f"Last.fm returned {len(similar)} similar artists but none are in "
+            f"your library. They include: {', '.join(lastfm_names)}. "
+            "Try get_top_artists_by_tag with a genre tag for broader discovery.",
+        }
     return results
 
 
-def tool_get_track_tags(conn: sqlite3.Connection, args: dict) -> list[dict]:
+def tool_get_track_tags(conn: sqlite3.Connection, args: dict) -> list[dict] | dict:
     """Get mood/genre tags for a track from Last.fm."""
     artist = args.get("artist", "")
     track = args.get("track", "")
 
     data = _lastfm_get("track.getTopTags", artist=artist, track=track, autocorrect=1)
+    if data is None:
+        return {
+            "matches": 0,
+            "hint": "Last.fm API unavailable. Try get_top_artists_by_tag with "
+            "a genre guess, or get_similar_tracks to find related music.",
+        }
+
     tags = data.get("toptags", {}).get("tag", [])
     if isinstance(tags, dict):
         tags = [tags]
 
+    if not tags:
+        return {
+            "matches": 0,
+            "hint": f"No tags on Last.fm for '{artist} - {track}'. This track may be "
+            "too obscure. Try get_track_tags on a more popular track by this artist, "
+            "or use get_similar_artists to explore related music.",
+        }
     return [{"name": t.get("name", ""), "count": t.get("count", 0)} for t in tags[:10]]
 
 
-def tool_get_top_artists_by_tag(conn: sqlite3.Connection, args: dict) -> list[dict]:
+def tool_get_top_artists_by_tag(
+    conn: sqlite3.Connection, args: dict
+) -> list[dict] | dict:
     """Find top artists in a genre/tag via Last.fm, cross-ref with local library."""
     tag = args.get("tag", "")
-    limit = args.get("limit", 10)
+    limit = args.get("limit", 50)
 
     data = _lastfm_get("tag.getTopArtists", tag=tag, limit=limit)
+    if data is None:
+        return {
+            "matches": 0,
+            "hint": "Last.fm API unavailable. Try search_library with artist or "
+            "album keywords instead.",
+        }
+
     artists = data.get("topartists", {}).get("artist", [])
     if isinstance(artists, dict):
         artists = [artists]
+
+    if not artists:
+        return {
+            "matches": 0,
+            "lastfm_count": 0,
+            "hint": f"No artists on Last.fm for tag '{tag}'. Try a broader or "
+            "alternative tag name (e.g. 'electronic' instead of 'electronica', "
+            "'indie rock' instead of 'indie').",
+        }
 
     results = []
     for ta in artists:
@@ -488,18 +608,46 @@ def tool_get_top_artists_by_tag(conn: sqlite3.Connection, args: dict) -> list[di
         tracks = _find_artist_tracks(conn, ta_name, limit=5)
         if tracks:
             results.append({"artist": ta_name, "sample_tracks": tracks})
+
+    if not results:
+        lastfm_names = [ta.get("name", "") for ta in artists[:5]]
+        return {
+            "matches": 0,
+            "lastfm_count": len(artists),
+            "hint": f"Last.fm returned {len(artists)} artists for '{tag}' but none "
+            f"are in your library. They include: {', '.join(lastfm_names)}. "
+            "Try a broader tag, or use get_similar_artists on an artist you've "
+            "already found in the library.",
+        }
     return results
 
 
-def tool_get_top_tracks_by_country(conn: sqlite3.Connection, args: dict) -> list[dict]:
+def tool_get_top_tracks_by_country(
+    conn: sqlite3.Connection, args: dict
+) -> list[dict] | dict:
     """Find trending tracks in a country via Last.fm, cross-ref with local library."""
     country = args.get("country", "")
-    limit = args.get("limit", 10)
+    limit = args.get("limit", 50)
 
     data = _lastfm_get("geo.getTopTracks", country=country, limit=limit)
+    if data is None:
+        return {
+            "matches": 0,
+            "hint": "Last.fm API unavailable. Try search_library or "
+            "get_top_artists_by_tag instead.",
+        }
+
     tracks = data.get("tracks", {}).get("track", [])
     if isinstance(tracks, dict):
         tracks = [tracks]
+
+    if not tracks:
+        return {
+            "matches": 0,
+            "lastfm_count": 0,
+            "hint": f"No trending tracks on Last.fm for '{country}'. Check the "
+            "country name spelling (e.g. 'United States' not 'USA').",
+        }
 
     results = []
     for gt in tracks:
@@ -509,6 +657,15 @@ def tool_get_top_tracks_by_country(conn: sqlite3.Connection, args: dict) -> list
         )
         gt_title = gt.get("name", "")
         results.extend(_find_track_in_library(conn, artist_name, gt_title))
+
+    if not results:
+        return {
+            "matches": 0,
+            "lastfm_count": len(tracks),
+            "hint": f"Last.fm returned {len(tracks)} trending tracks for '{country}' "
+            "but none are in your library. Try increasing the limit, or use "
+            "get_top_artists_by_tag with a regional genre tag.",
+        }
     return results
 
 
@@ -525,9 +682,13 @@ TOOL_DISPATCH: dict[str, callable] = {
 
 
 def parse_response(text: str) -> tuple[str, list[int]] | None:
-    """Parse 'Playlist: ...\\nTracks: ...' from agent text. Returns (name, ids) or None."""
+    """Parse 'Playlist: ...\\nTracks: ...' from agent text. Returns (name, ids) or None.
+
+    Deduplicates and caps at MAX_PLAYLIST_TRACKS regardless of model output.
+    """
     name = None
-    track_ids = []
+    track_ids: list[int] = []
+    seen: set[int] = set()
     for line in text.splitlines():
         if line.startswith("Playlist:"):
             name = line[len("Playlist:") :].strip()
@@ -536,9 +697,12 @@ def parse_response(text: str) -> tuple[str, list[int]] | None:
             for tok in raw.split(","):
                 tok = tok.strip().strip("[]")
                 if tok.isdigit():
-                    track_ids.append(int(tok))
+                    tid = int(tok)
+                    if tid not in seen:
+                        seen.add(tid)
+                        track_ids.append(tid)
     if name and track_ids:
-        return name, track_ids
+        return name, track_ids[:MAX_PLAYLIST_TRACKS]
     return None
 
 
@@ -551,6 +715,7 @@ def run_agent(
     db_path: Path | None = None,
     think: bool = DEFAULT_THINK,
     temperature: float = DEFAULT_TEMPERATURE,
+    seed: int = DEFAULT_SEED,
     log_file: str | Path = DEFAULT_LOG_FILE,
 ) -> None:
     _setup_logging(log_file)
@@ -581,7 +746,7 @@ def run_agent(
         sys.exit(1)
 
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": _build_system_prompt(MAX_PLAYLIST_TRACKS)},
         {"role": "user", "content": prompt},
     ]
 
@@ -594,6 +759,7 @@ def run_agent(
                 "max_turns": max_turns,
                 "think": think,
                 "temperature": temperature,
+                "seed": seed,
                 "db_path": str(db_file),
                 "track_count": track_count,
             }
@@ -602,8 +768,9 @@ def run_agent(
 
     lastfm_status = "configured" if LASTFM_API_KEY else "not configured"
     print(f"\n{'=' * 60}")
+    seed_str = f" | Seed: {seed}" if seed else ""
     print(
-        f"Model: {model} | Max turns: {max_turns} | Think: {think} | Temp: {temperature}"
+        f"Model: {model} | Max turns: {max_turns} | Think: {think} | Temp: {temperature}{seed_str}"
     )
     print(f"Last.fm: {lastfm_status}")
     print(f"Prompt: {prompt}")
@@ -617,7 +784,11 @@ def run_agent(
             "model": model,
             "messages": messages,
             "tools": TOOLS,
-            "options": {"temperature": temperature},
+            "options": {
+                "temperature": temperature,
+                "top_p": 0.9,
+                **({"seed": seed} if seed else {}),
+            },
             "think": think,
         }
 
@@ -723,6 +894,10 @@ def run_agent(
                         print(f"    -> {count} results: {display}")
                 elif isinstance(result, list):
                     print("    -> 0 results: []")
+                elif isinstance(result, dict) and "hint" in result:
+                    lastfm = result.get("lastfm_count")
+                    extra = f" (Last.fm had {lastfm})" if lastfm else ""
+                    print(f"    -> 0 matches{extra}: {result['hint']}")
                 else:
                     display = (
                         result_str[:200] + "..."
@@ -831,6 +1006,12 @@ def main() -> None:
         help=f"Sampling temperature (default: {DEFAULT_TEMPERATURE})",
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_SEED,
+        help="Random seed for reproducible output (default: 0 = random)",
+    )
+    parser.add_argument(
         "--log-file",
         default=DEFAULT_LOG_FILE,
         help=f"JSONL log file path (default: {DEFAULT_LOG_FILE})",
@@ -845,6 +1026,7 @@ def main() -> None:
         db_path=args.db,
         think=args.think,
         temperature=args.temperature,
+        seed=args.seed,
         log_file=args.log_file,
     )
 
