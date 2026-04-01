@@ -7,7 +7,7 @@ Build configuration, performance tuning, signing, and distribution for mt.
 | Platform | Architecture | Runner | Bundle |
 | ---------- | ------------- | -------- | -------- |
 | macOS | ARM64 | Self-hosted `[macOS, ARM64]` | `.app`, `.dmg` |
-| Linux | amd64 | `ubuntu-latest` (CI) or Docker (`Dockerfile.linux-amd64`) | `.deb` |
+| Linux | amd64 | Blacksmith `blacksmith-4vcpu-ubuntu-2404` (configurable, see [CI Runner Policy](#ci-runner-policy)) | `.deb` |
 | Windows | x64 | Self-hosted `[self-hosted, Windows, X64]` | `.exe` (NSIS) |
 
 ## Taskfile Commands
@@ -512,7 +512,7 @@ Runs on a self-hosted `[macOS, ARM64]` runner:
 
 ### `build-linux-amd64` — Linux amd64
 
-Runs on `ubuntu-latest`:
+Runs on a configurable Blacksmith runner (default: `blacksmith-4vcpu-ubuntu-2404`, selectable via `linux-runner` workflow input):
 
 1. Sets up the Tauri build environment via the shared composite action
 2. Builds with `tauri-action` targeting `x86_64-unknown-linux-gnu --bundles deb`

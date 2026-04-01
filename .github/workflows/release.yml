@@ -13,6 +13,14 @@ on:
           - macos
           - linux
           - windows
+      linux-runner:
+        description: 'Linux runner label (custom image or vanilla fallback)'
+        required: false
+        default: 'blacksmith-4vcpu-ubuntu-2404'
+        type: choice
+        options:
+          - blacksmith-4vcpu-ubuntu-2404
+          - blacksmith-4vcpu-ubuntu-2404-mt
   release:
     types: [published]
 
@@ -32,7 +40,7 @@ jobs:
     if: >
       github.event_name == 'release' ||
       inputs.platform == 'all' || inputs.platform == 'macos' || inputs.platform == ''
-    runs-on: [macOS, ARM64, studio]
+    runs-on: [macOS, ARM64]
     timeout-minutes: 30
 
     steps:
@@ -114,7 +122,7 @@ jobs:
     if: >
       github.event_name == 'release' ||
       inputs.platform == 'all' || inputs.platform == 'linux' || inputs.platform == ''
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ inputs.linux-runner || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 30
 
     steps:

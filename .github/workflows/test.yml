@@ -2,6 +2,15 @@ name: Test
 
 on:
   workflow_dispatch:
+    inputs:
+      linux-runner:
+        description: 'Linux runner label (custom image or vanilla fallback)'
+        required: false
+        default: 'blacksmith-4vcpu-ubuntu-2404'
+        type: choice
+        options:
+          - blacksmith-4vcpu-ubuntu-2404
+          - blacksmith-4vcpu-ubuntu-2404-mt
   pull_request:
     paths:
       - 'crates/**'
@@ -28,7 +37,7 @@ env:
 jobs:
   rust:
     name: Rust Lint, Format, and Test
-    runs-on: [macOS, ARM64, studio]
+    runs-on: [macOS, ARM64]
     timeout-minutes: 20
     env:
       CARGO_INCREMENTAL: 1
@@ -100,10 +109,10 @@ jobs:
       matrix:
         include:
           - platform: macos
-            os: [macOS, ARM64, studio]
+            os: [macOS, ARM64]
             target: aarch64-apple-darwin
           - platform: linux
-            os: blacksmith-4vcpu-ubuntu-2404
+            os: ${{ inputs.linux-runner || 'blacksmith-4vcpu-ubuntu-2404' }}
             target: x86_64-unknown-linux-gnu
           - platform: windows
             os: [self-hosted, Windows, X64]
