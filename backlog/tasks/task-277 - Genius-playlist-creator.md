@@ -4,7 +4,7 @@ title: Genius playlist creator
 status: In Progress
 assignee: []
 created_date: '2026-02-18 05:58'
-updated_date: '2026-03-31 21:27'
+updated_date: '2026-04-02 21:01'
 labels:
   - feature
   - playlists
@@ -226,6 +226,87 @@ Cfg-gate fix: After merging main (which had reverted lastfm discovery methods), 
 ## Remaining
 
 - Phase 7: Frontend — Genius sidebar category, prompt UI, onboarding wizard UI
+
+## 2026-04-02: Agent Performance Fixes
+
+### Issues Identified from Logs
+1. **Parallel tool execution not working**: `with_tool_concurrency(8)` was configured but model wasn't calling multiple tools per turn
+2. **Token generation too long**: Final LLM turn took 63 seconds generating ~57 IDs with multiple recounts
+
+### Changes Made
+
+**mod.rs - Agent builder:**
+- Added `.max_tokens(1024)` to cap response length (prevents endless recounting)
+
+**prompt.rs - System prompt:**
+- Enhanced RULES section with explicit parallel tool calling instructions:
+  - "Call MULTIPLE tools PER TURN in PARALLEL"
+  - "When planning your strategy, call ALL independent tools at once"
+
+### Why These Fixes Work
+
+1. **max_tokens(1024)**: Limits the LLM to ~1024 tokens for the final response. The playlist format (name + 25 track IDs) needs only ~200-500 tokens. This prevents the model from generating excessive intermediate reasoning (listing 57 IDs, recounting, selecting, etc.) that was causing the 63-second response time.
+
+2. **Explicit parallel instructions**: The previous prompt mentioned "Call multiple tools per turn" but wasn't emphatic enough. The new language uses ALL CAPS for key concepts and provides concrete examples ("get_similar_artists + search_library + get_track_tags together") to guide the model toward parallel tool calling.
+
+### Test Results
+- All 757 tests pass with `cargo nextest run --workspace --features agent`
+- Both `cargo check --features agent` and `cargo check` compile cleanly
+
+## 2026-04-02: Python Reference Implementation Complete
+
+**Working Solution**: `scripts/agent.py` serves as the reference implementation for the Genius playlist creator.
+
+### Key Features Implemented (Python Script)
+
+1. **8 Agent Tools** - Full implementation matching Rust tool specifications:
+   - `get_recently_played` - Recently played tracks from local library
+   - `get_top_artists` - Top artists by play history
+   - `search_library` - Text search across title/artist/album
+   - `get_similar_tracks` - Last.fm similar tracks, cross-referenced with library
+   - `get_similar_artists` - Last.fm similar artists with library sample tracks
+   - `get_track_tags` - Last.fm mood/genre tags
+   - `get_top_artists_by_tag` - Genre-based artist discovery
+   - `get_top_tracks_by_country` - Regional track discovery
+
+2. **Artist Variety Priority** - System prompt enforces 1 track per artist by default, only adding 2nd tracks when artist diversity is exhausted
+
+3. **Shuffled Playlist Output** - `_shuffle_spread_artists()` uses greedy algorithm to spread same-artist tracks apart
+
+4. **Configurable Track Counts** - Environment variables:
+   - `AGENT_MIN_PLAYLIST_TRACKS` (default: 12)
+   - `AGENT_MAX_PLAYLIST_TRACKS` (default: 25)
+
+5. **Performance Tuning** - `num_predict: 2048` prevents response truncation
+
+### Rust Implementation Notes
+
+The Python script demonstrates the correct behavior for playlist generation:
+- Multi-turn tool calling with parallel execution
+- Last.fm cross-referencing with local library
+- Maximum artist variety (N tracks from N artists)
+- Post-generation shuffle for playback order
+
+When implementing the Rust version, use `scripts/agent.py` as the behavioral reference for:
+- System prompt wording (artist variety rules)
+- Tool response format and hint messages
+- Playlist shuffling algorithm
+- Token limit settings (2048 via `max_tokens`)
+
+### Usage
+
+```bash
+# Default: 12-25 tracks with maximum artist variety
+./scripts/agent.py "make me a chill playlist"
+
+# Custom range: 5-10 tracks
+AGENT_MIN_PLAYLIST_TRACKS=5 AGENT_MAX_PLAYLIST_TRACKS=10 ./scripts/agent.py "quick mix"
+
+# Faster execution with fewer turns
+./scripts/agent.py --max-turns 2 "make me a chill playlist"
+```
+
+Reference file: `scripts/agent.py` (1114 lines, fully functional)
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

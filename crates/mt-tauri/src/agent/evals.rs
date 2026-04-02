@@ -73,14 +73,14 @@ fn mark_played(ctx: &AgentContext, track_id: i64) {
 /// JSON body for a `/api/tags` response listing the default model.
 fn tags_response() -> serde_json::Value {
     serde_json::json!({
-        "models": [{ "name": "llama3.2:1b", "size": 1_000_000 }]
+        "models": [{ "name": "qwen3.5:9b", "size": 1_000_000 }]
     })
 }
 
 /// JSON body for an Ollama chat response that requests a tool call.
 fn tool_call_response(tool_name: &str, arguments: serde_json::Value) -> serde_json::Value {
     serde_json::json!({
-        "model": "llama3.2:1b",
+        "model": "qwen3.5:9b",
         "created_at": "2025-01-01T00:00:00Z",
         "message": {
             "role": "assistant",
@@ -101,7 +101,7 @@ fn tool_call_response(tool_name: &str, arguments: serde_json::Value) -> serde_js
 /// JSON body for an Ollama chat response that contains the final playlist text.
 fn final_response(text: &str) -> serde_json::Value {
     serde_json::json!({
-        "model": "llama3.2:1b",
+        "model": "qwen3.5:9b",
         "created_at": "2025-01-01T00:00:00Z",
         "message": {
             "role": "assistant",
@@ -390,7 +390,7 @@ async fn eval_degradation_ollama_healthy() {
     mount_tags(&server).await;
 
     let models = check_ollama(&server.uri()).await.expect("should succeed");
-    assert_eq!(models, vec!["llama3.2:1b"]);
+    assert_eq!(models, vec!["qwen3.5:9b"]);
 }
 
 /// Eval: agent gracefully handles an empty tool result (search returns no tracks).

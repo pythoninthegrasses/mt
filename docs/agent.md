@@ -22,12 +22,16 @@ to the Rust backend (`crates/mt-tauri/src/agent/`).
 
 **Components:**
 
-- **System prompt** — `_build_system_prompt(max_tracks)` generates a dynamic
-  prompt with strategy routing (mood, artist, regional, mixed) and
-  interpolated track count bounds.
+- **System prompt** — `_build_system_prompt(min_tracks, max_tracks)` generates a dynamic
+  prompt with strategy routing (mood, artist, regional, mixed), artist variety rules,
+  and interpolated track count bounds.
 - **8 tools** — 3 local (SQLite) + 5 Last.fm (httpx → cross-ref with library).
   All tools return actionable hints on empty results to guide the model's
   next action.
+- **Artist variety priority** — System prompt enforces 1 track per artist by default;
+  only adds 2nd tracks when unique artists are exhausted.
+- **Shuffled output** — `_shuffle_spread_artists()` uses greedy algorithm to spread
+  same-artist tracks apart in the final playlist order.
 - **JSONL logging** — Every session, turn, tool call, result, and parse
   outcome is logged to a structured JSONL file for analysis.
 - **Hard cap** — `parse_response()` deduplicates and truncates track IDs to
@@ -72,13 +76,18 @@ library. This finds Beach House, Cocteau Twins, Cigarettes After Sex — artists
 that are *actually* dreamy, not just containing the word "dream" in a track title.
 
 **2. Strategy-based system prompt** — Instead of a flat list of tool
-descriptions, the prompt routes by request type:
+descriptions, the prompt routes by request type and enforces artist variety:
 
 ```text
 - Mood/vibe requests → get_top_artists_by_tag with genre tags IN PARALLEL
 - Artist-based requests → get_similar_artists + get_similar_tracks
 - Regional requests → get_top_tracks_by_country
 - search_library is for specific artist/album/title lookups only
+
+Artist variety rules:
+- DEFAULT to 1 track per artist for MAXIMUM variety
+- Only add a 2nd track from same artist if you CANNOT find enough unique artists
+- PRIORITY: 20 tracks from 20 different artists > 20 tracks from 10 artists with 2 each
 ```
 
 **3. Actionable empty-result hints** — When a tool returns no matches, it
@@ -128,15 +137,32 @@ Exhausted 5 turns. Produced a 2-track playlist of keyword matches.
 25/25 valid tracks in 4 turns. Artists: Beach House, Cocteau Twins,
 Cigarettes After Sex, Alvvays, girl in red, The Radio Dept., M83, Grimes.
 
+**Artist variety after shuffling** — The final playlist order spreads same-artist
+tracks apart via greedy algorithm:
+
+```
+SHUFFLED order (artists spread out):
+  [68876] The Radio Dept. - Four Months In The Shade
+  [68658] Beach House - Sparks
+  [68791] Cocteau Twins - Tishbite
+  [68924] M83 - Karl
+  [68709] Grimes - Symphonia IX (My Wait Is U)
+  [69848] Alvvays - Next Of Kin
+  ... (10 different artists, 1-2 tracks each, no same-artist adjacency)
+```
+
 ## Determinism Controls
 
 | Lever | Default | Effect |
 |-------|---------|--------|
 | `AGENT_TEMPERATURE` | 0.2 | Lower = more deterministic token sampling |
 | `top_p` | 0.9 | Nucleus sampling cutoff (hardcoded) |
+| `num_predict` | 2048 | Maximum tokens to generate (prevents truncation) |
 | `AGENT_SEED` | 0 (random) | Fixed seed for reproducible output |
+| `AGENT_MIN_PLAYLIST_TRACKS` | 12 | Minimum tracks to include in playlist |
 | `AGENT_MAX_PLAYLIST_TRACKS` | 25 | Hard cap on output track count |
 | `parse_response()` | — | Deduplicates + truncates regardless of model output |
+| `_shuffle_spread_artists()` | — | Greedy shuffle to spread same-artist tracks apart |
 
 ## Applying to Rust Backend
 
@@ -153,11 +179,13 @@ The script mirrors the Rust agent in `crates/mt-tauri/src/agent/`:
 
 Changes validated in the Python script should be ported to Rust:
 
-1. **System prompt** — Copy the strategy-based prompt to `prompt.rs`
+1. **System prompt** — Copy the strategy-based prompt to `prompt.rs` with artist variety rules
 2. **Actionable hints** — Add hint metadata to Rust tool `Output` types
 3. **Default limits** — Increase `get_top_artists_by_tag` default from 10 to 50
 4. **Hard cap** — Add dedup + truncation to `parse_agent_response()`
 5. **Temperature/seed** — Pass through Ollama options in `build_agent()`
+6. **Token limit** — Set `max_tokens: 2048` in `build_agent()` to prevent response truncation
+7. **Track shuffling** — Port `_shuffle_spread_artists()` greedy algorithm to shuffle playlist order
 
 ## Usage
 
@@ -185,6 +213,7 @@ env var defaults.
 | `AGENT_TEMPERATURE` | `0.2` | `--temperature` |
 | `AGENT_THINK` | `false` | `--think` |
 | `AGENT_SEED` | `0` | `--seed` |
+| `AGENT_MIN_PLAYLIST_TRACKS` | `12` | — |
 | `AGENT_MAX_PLAYLIST_TRACKS` | `25` | — |
 | `AGENT_LOG_FILE` | `/tmp/ollama_python_agent.jsonl` | `--log-file` |
 | `LASTFM_API_KEY` | — | — |

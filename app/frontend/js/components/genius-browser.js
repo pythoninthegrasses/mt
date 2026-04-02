@@ -8,7 +8,7 @@
 
 import { agent } from '../api/agent.js';
 
-const DEFAULT_MODEL = 'llama3.2:1b';
+const DEFAULT_MODEL = 'qwen3.5:9b';
 
 export function createGeniusBrowser(Alpine) {
   Alpine.data('geniusBrowser', () => ({
@@ -198,10 +198,10 @@ export function createGeniusBrowser(Alpine) {
 
     navigateToPlaylist(playlistId) {
       const sidebar = document.querySelector('[x-data="sidebar"]');
-      if (sidebar && sidebar.__x) {
-        sidebar.__x.$data.loadPlaylist(`playlist-${playlistId}`);
+      const data = sidebar?._x_dataStack?.[0];
+      if (data?.loadPlaylist) {
+        data.loadPlaylist(`playlist-${playlistId}`);
       } else {
-        // Fallback: dispatch event for sidebar to pick up
         window.dispatchEvent(
           new CustomEvent('mt:navigate-playlist', { detail: { playlistId } }),
         );

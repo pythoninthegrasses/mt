@@ -27,6 +27,19 @@ use super::types::{AgentContext, AgentError, TrackSummary};
 use crate::db::{favorites, library, library::LibraryQuery, models::StatsDateRange, stats};
 
 // ---------------------------------------------------------------------------
+// ToolOutput — wrapper for tool results with actionable hints on empty results
+// ---------------------------------------------------------------------------
+
+/// Wrapper for tool results. Serializes to either a JSON array (Results) or
+/// `{"matches": 0, "hint": "..."}` (Hint), matching the Python agent's behavior.
+#[derive(Debug, Clone, Serialize)]
+#[serde(untagged)]
+pub enum ToolOutput<T: Serialize> {
+    Results(Vec<T>),
+    Hint { matches: usize, hint: String },
+}
+
+// ---------------------------------------------------------------------------
 // GetRecentlyPlayed
 // ---------------------------------------------------------------------------
 
@@ -48,7 +61,7 @@ impl Tool for GetRecentlyPlayed {
     const NAME: &'static str = "get_recently_played";
     type Error = AgentError;
     type Args = GetRecentlyPlayedArgs;
-    type Output = Vec<TrackSummary>;
+    type Output = ToolOutput<TrackSummary>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -73,7 +86,19 @@ impl Tool for GetRecentlyPlayed {
             .ctx
             .db
             .with_conn(|conn| favorites::get_recently_played(conn, days, limit))?;
-        Ok(tracks.iter().map(TrackSummary::from_track).collect())
+        if tracks.is_empty() {
+            return Ok(ToolOutput::Hint {
+                matches: 0,
+                hint: format!(
+                    "No tracks played in the last {days} days. \
+                     Try a longer range (e.g. days=30), or use get_top_artists \
+                     with range='all_time' to see long-term preferences."
+                ),
+            });
+        }
+        Ok(ToolOutput::Results(
+            tracks.iter().map(TrackSummary::from_track).collect(),
+        ))
     }
 }
 
@@ -117,7 +142,7 @@ impl Tool for GetTopArtists {
     const NAME: &'static str = "get_top_artists";
     type Error = AgentError;
     type Args = GetTopArtistsArgs;
-    type Output = Vec<ArtistSummary>;
+    type Output = ToolOutput<ArtistSummary>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -140,19 +165,42 @@ impl Tool for GetTopArtists {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let range = parse_date_range(args.range.as_deref().unwrap_or("30days"));
+        let range_str = args.range.as_deref().unwrap_or("30days");
+        let range = parse_date_range(range_str);
         let limit = args.limit.unwrap_or(10);
         let artists = self
             .ctx
             .db
             .with_conn(|conn| stats::get_top_artists(conn, &range, limit))?;
-        Ok(artists
-            .into_iter()
-            .map(|a| ArtistSummary {
-                artist: a.artist,
-                play_count: a.play_count,
-            })
-            .collect())
+        if artists.is_empty() {
+            let broader = match range_str {
+                "7days" => Some("30days"),
+                "30days" => Some("90days"),
+                "90days" => Some("all_time"),
+                _ => None,
+            };
+            let hint = if let Some(suggestion) = broader {
+                format!(
+                    "No play history in range '{range_str}'. \
+                     Try range='{suggestion}' for a broader window, or skip \
+                     to get_top_artists_by_tag with genre tags."
+                )
+            } else {
+                "No play history found. Use get_top_artists_by_tag with \
+                 genre tags, or search_library to explore the collection directly."
+                    .into()
+            };
+            return Ok(ToolOutput::Hint { matches: 0, hint });
+        }
+        Ok(ToolOutput::Results(
+            artists
+                .into_iter()
+                .map(|a| ArtistSummary {
+                    artist: a.artist,
+                    play_count: a.play_count,
+                })
+                .collect(),
+        ))
     }
 }
 
@@ -182,7 +230,7 @@ impl Tool for SearchLibrary {
     const NAME: &'static str = "search_library";
     type Error = AgentError;
     type Args = SearchLibraryArgs;
-    type Output = Vec<TrackSummary>;
+    type Output = ToolOutput<TrackSummary>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -213,7 +261,9 @@ impl Tool for SearchLibrary {
             .ctx
             .db
             .with_conn(|conn| library::get_all_tracks(conn, &query))?;
-        Ok(result.items.iter().map(TrackSummary::from_track).collect())
+        Ok(ToolOutput::Results(
+            result.items.iter().map(TrackSummary::from_track).collect(),
+        ))
     }
 }
 
@@ -228,7 +278,7 @@ pub struct GetSimilarTracksArgs {
     pub artist: String,
     /// Title of the seed track
     pub track: String,
-    /// Maximum number of similar tracks to fetch from Last.fm (default: 10)
+    /// Maximum number of similar tracks to fetch from Last.fm (default: 30)
     pub limit: Option<u32>,
 }
 
@@ -242,7 +292,7 @@ impl Tool for GetSimilarTracks {
     const NAME: &'static str = "get_similar_tracks";
     type Error = AgentError;
     type Args = GetSimilarTracksArgs;
-    type Output = Vec<TrackSummary>;
+    type Output = ToolOutput<TrackSummary>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -255,7 +305,7 @@ impl Tool for GetSimilarTracks {
                 "properties": {
                     "artist": { "type": "string", "description": "Artist of the seed track" },
                     "track": { "type": "string", "description": "Title of the seed track" },
-                    "limit": { "type": "integer", "description": "Max similar tracks to fetch (default: 10)" }
+                    "limit": { "type": "integer", "description": "Max similar tracks to check (default: 30)" }
                 },
                 "required": ["artist", "track"]
             }),
@@ -263,12 +313,35 @@ impl Tool for GetSimilarTracks {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let limit = args.limit.unwrap_or(10);
-        let similar = self
+        let limit = args.limit.unwrap_or(30);
+        let similar = match self
             .ctx
             .lastfm
             .get_similar_tracks(&args.artist, &args.track, limit)
-            .await?;
+            .await
+        {
+            Ok(s) => s,
+            Err(_) => {
+                return Ok(ToolOutput::Hint {
+                    matches: 0,
+                    hint: "Last.fm API unavailable. Try get_similar_artists or \
+                           get_top_artists_by_tag instead."
+                        .into(),
+                });
+            }
+        };
+
+        if similar.is_empty() {
+            return Ok(ToolOutput::Hint {
+                matches: 0,
+                hint: format!(
+                    "Last.fm has no similar tracks for '{} - {}'. \
+                     Try get_similar_artists for broader matching, or search_library \
+                     to find tracks by this artist.",
+                    args.artist, args.track
+                ),
+            });
+        }
 
         let mut results = Vec::new();
         for st in &similar {
@@ -280,7 +353,22 @@ impl Tool for GetSimilarTracks {
                 results.push(TrackSummary::from_track(track));
             }
         }
-        Ok(results)
+
+        if results.is_empty() {
+            let lastfm_artists: Vec<&str> =
+                similar.iter().take(5).map(|st| st.artist.name()).collect();
+            return Ok(ToolOutput::Hint {
+                matches: 0,
+                hint: format!(
+                    "Last.fm returned {} similar tracks but none are in \
+                     your library. Similar artists include: {}. \
+                     Try get_similar_artists or get_top_artists_by_tag instead.",
+                    similar.len(),
+                    lastfm_artists.join(", ")
+                ),
+            });
+        }
+        Ok(ToolOutput::Results(results))
     }
 }
 
@@ -293,7 +381,7 @@ impl Tool for GetSimilarTracks {
 pub struct GetSimilarArtistsArgs {
     /// Artist name to find similar artists for
     pub artist: String,
-    /// Maximum number of similar artists to fetch (default: 10)
+    /// Maximum number of similar artists to fetch (default: 30)
     pub limit: Option<u32>,
 }
 
@@ -314,7 +402,7 @@ impl Tool for GetSimilarArtists {
     const NAME: &'static str = "get_similar_artists";
     type Error = AgentError;
     type Args = GetSimilarArtistsArgs;
-    type Output = Vec<SimilarArtistMatch>;
+    type Output = ToolOutput<SimilarArtistMatch>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -324,7 +412,7 @@ impl Tool for GetSimilarArtists {
                 "type": "object",
                 "properties": {
                     "artist": { "type": "string", "description": "Artist to find similar artists for" },
-                    "limit": { "type": "integer", "description": "Max similar artists to fetch (default: 10)" }
+                    "limit": { "type": "integer", "description": "Max similar artists to check (default: 30)" }
                 },
                 "required": ["artist"]
             }),
@@ -332,18 +420,40 @@ impl Tool for GetSimilarArtists {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let limit = args.limit.unwrap_or(10);
-        let similar = self
+        let limit = args.limit.unwrap_or(30);
+        let similar = match self
             .ctx
             .lastfm
             .get_similar_artists(&args.artist, limit)
-            .await?;
+            .await
+        {
+            Ok(s) => s,
+            Err(_) => {
+                return Ok(ToolOutput::Hint {
+                    matches: 0,
+                    hint: "Last.fm API unavailable. Try search_library with artist name, \
+                           or get_top_artists_by_tag with a genre tag."
+                        .into(),
+                });
+            }
+        };
+
+        if similar.is_empty() {
+            return Ok(ToolOutput::Hint {
+                matches: 0,
+                hint: format!(
+                    "Last.fm has no similar artists for '{}'. \
+                     Try get_top_artists_by_tag with a genre tag, or search_library.",
+                    args.artist
+                ),
+            });
+        }
 
         let mut results = Vec::new();
         for sa in &similar {
             let query = LibraryQuery {
                 artist: Some(sa.name.clone()),
-                limit: 5,
+                limit: 2,
                 ..Default::default()
             };
             let library_tracks = self
@@ -361,7 +471,22 @@ impl Tool for GetSimilarArtists {
                 });
             }
         }
-        Ok(results)
+
+        if results.is_empty() {
+            let lastfm_names: Vec<&str> =
+                similar.iter().take(5).map(|sa| sa.name.as_str()).collect();
+            return Ok(ToolOutput::Hint {
+                matches: 0,
+                hint: format!(
+                    "Last.fm returned {} similar artists but none are in \
+                     your library. They include: {}. \
+                     Try get_top_artists_by_tag with a genre tag for broader discovery.",
+                    similar.len(),
+                    lastfm_names.join(", ")
+                ),
+            });
+        }
+        Ok(ToolOutput::Results(results))
     }
 }
 
@@ -394,7 +519,7 @@ impl Tool for GetTrackTags {
     const NAME: &'static str = "get_track_tags";
     type Error = AgentError;
     type Args = GetTrackTagsArgs;
-    type Output = Vec<TagSummary>;
+    type Output = ToolOutput<TagSummary>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -413,18 +538,43 @@ impl Tool for GetTrackTags {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let tags = self
+        let tags = match self
             .ctx
             .lastfm
             .get_track_top_tags(&args.artist, &args.track)
-            .await?;
-        Ok(tags
-            .into_iter()
-            .map(|t| TagSummary {
-                name: t.name,
-                count: t.count.unwrap_or(0),
-            })
-            .collect())
+            .await
+        {
+            Ok(t) => t,
+            Err(_) => {
+                return Ok(ToolOutput::Hint {
+                    matches: 0,
+                    hint: "Last.fm API unavailable. Try get_top_artists_by_tag with \
+                           a genre guess, or get_similar_tracks to find related music."
+                        .into(),
+                });
+            }
+        };
+
+        if tags.is_empty() {
+            return Ok(ToolOutput::Hint {
+                matches: 0,
+                hint: format!(
+                    "No tags on Last.fm for '{} - {}'. This track may be \
+                     too obscure. Try get_track_tags on a more popular track by this artist, \
+                     or use get_similar_artists to explore related music.",
+                    args.artist, args.track
+                ),
+            });
+        }
+        Ok(ToolOutput::Results(
+            tags.into_iter()
+                .take(10)
+                .map(|t| TagSummary {
+                    name: t.name,
+                    count: t.count.unwrap_or(0),
+                })
+                .collect(),
+        ))
     }
 }
 
@@ -437,7 +587,7 @@ impl Tool for GetTrackTags {
 pub struct GetTopArtistsByTagArgs {
     /// Genre/tag to search for (e.g. "shoegaze", "jazz", "indie rock")
     pub tag: String,
-    /// Maximum number of artists to fetch from Last.fm (default: 10)
+    /// Maximum number of artists to fetch from Last.fm (default: 50)
     pub limit: Option<u32>,
 }
 
@@ -451,7 +601,7 @@ impl Tool for GetTopArtistsByTag {
     const NAME: &'static str = "get_top_artists_by_tag";
     type Error = AgentError;
     type Args = GetTopArtistsByTagArgs;
-    type Output = Vec<SimilarArtistMatch>;
+    type Output = ToolOutput<SimilarArtistMatch>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -461,7 +611,7 @@ impl Tool for GetTopArtistsByTag {
                 "type": "object",
                 "properties": {
                     "tag": { "type": "string", "description": "Genre or tag (e.g. shoegaze, jazz, indie rock)" },
-                    "limit": { "type": "integer", "description": "Max artists to fetch (default: 10)" }
+                    "limit": { "type": "integer", "description": "Max artists to check (default: 50)" }
                 },
                 "required": ["tag"]
             }),
@@ -469,18 +619,41 @@ impl Tool for GetTopArtistsByTag {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let limit = args.limit.unwrap_or(10);
-        let tag_artists = self
+        let limit = args.limit.unwrap_or(50);
+        let tag_artists = match self
             .ctx
             .lastfm
             .get_top_artists_by_tag(&args.tag, limit)
-            .await?;
+            .await
+        {
+            Ok(a) => a,
+            Err(_) => {
+                return Ok(ToolOutput::Hint {
+                    matches: 0,
+                    hint: "Last.fm API unavailable. Try search_library with artist or \
+                           album keywords instead."
+                        .into(),
+                });
+            }
+        };
+
+        if tag_artists.is_empty() {
+            return Ok(ToolOutput::Hint {
+                matches: 0,
+                hint: format!(
+                    "No artists on Last.fm for tag '{}'. Try a broader or \
+                     alternative tag name (e.g. 'electronic' instead of 'electronica', \
+                     'indie rock' instead of 'indie').",
+                    args.tag
+                ),
+            });
+        }
 
         let mut results = Vec::new();
         for ta in &tag_artists {
             let query = LibraryQuery {
                 artist: Some(ta.name.clone()),
-                limit: 5,
+                limit: 2,
                 ..Default::default()
             };
             let library_tracks = self
@@ -498,7 +671,27 @@ impl Tool for GetTopArtistsByTag {
                 });
             }
         }
-        Ok(results)
+
+        if results.is_empty() {
+            let lastfm_names: Vec<&str> = tag_artists
+                .iter()
+                .take(5)
+                .map(|ta| ta.name.as_str())
+                .collect();
+            return Ok(ToolOutput::Hint {
+                matches: 0,
+                hint: format!(
+                    "Last.fm returned {} artists for '{}' but none \
+                     are in your library. They include: {}. \
+                     Try a broader tag, or use get_similar_artists on an artist you've \
+                     already found in the library.",
+                    tag_artists.len(),
+                    args.tag,
+                    lastfm_names.join(", ")
+                ),
+            });
+        }
+        Ok(ToolOutput::Results(results))
     }
 }
 
@@ -511,7 +704,7 @@ impl Tool for GetTopArtistsByTag {
 pub struct GetTopTracksByCountryArgs {
     /// Country name (e.g. "Japan", "Brazil", "Germany")
     pub country: String,
-    /// Maximum number of tracks to fetch from Last.fm (default: 10)
+    /// Maximum number of tracks to fetch from Last.fm (default: 50)
     pub limit: Option<u32>,
 }
 
@@ -525,7 +718,7 @@ impl Tool for GetTopTracksByCountry {
     const NAME: &'static str = "get_top_tracks_by_country";
     type Error = AgentError;
     type Args = GetTopTracksByCountryArgs;
-    type Output = Vec<TrackSummary>;
+    type Output = ToolOutput<TrackSummary>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
@@ -537,7 +730,7 @@ impl Tool for GetTopTracksByCountry {
                 "type": "object",
                 "properties": {
                     "country": { "type": "string", "description": "Country name (e.g. Japan, Brazil, Germany)" },
-                    "limit": { "type": "integer", "description": "Max tracks to fetch (default: 10)" }
+                    "limit": { "type": "integer", "description": "Max tracks to check (default: 50)" }
                 },
                 "required": ["country"]
             }),
@@ -545,12 +738,34 @@ impl Tool for GetTopTracksByCountry {
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
-        let limit = args.limit.unwrap_or(10);
-        let geo_tracks = self
+        let limit = args.limit.unwrap_or(50);
+        let geo_tracks = match self
             .ctx
             .lastfm
             .get_top_tracks_by_country(&args.country, limit)
-            .await?;
+            .await
+        {
+            Ok(t) => t,
+            Err(_) => {
+                return Ok(ToolOutput::Hint {
+                    matches: 0,
+                    hint: "Last.fm API unavailable. Try search_library or \
+                           get_top_artists_by_tag instead."
+                        .into(),
+                });
+            }
+        };
+
+        if geo_tracks.is_empty() {
+            return Ok(ToolOutput::Hint {
+                matches: 0,
+                hint: format!(
+                    "No trending tracks on Last.fm for '{}'. Check the \
+                     country name spelling (e.g. 'United States' not 'USA').",
+                    args.country
+                ),
+            });
+        }
 
         let mut results = Vec::new();
         for gt in &geo_tracks {
@@ -562,7 +777,20 @@ impl Tool for GetTopTracksByCountry {
                 results.push(TrackSummary::from_track(track));
             }
         }
-        Ok(results)
+
+        if results.is_empty() {
+            return Ok(ToolOutput::Hint {
+                matches: 0,
+                hint: format!(
+                    "Last.fm returned {} trending tracks for '{}' \
+                     but none are in your library. Try increasing the limit, or use \
+                     get_top_artists_by_tag with a regional genre tag.",
+                    geo_tracks.len(),
+                    args.country
+                ),
+            });
+        }
+        Ok(ToolOutput::Results(results))
     }
 }
 
@@ -633,7 +861,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[tokio::test]
-    async fn get_recently_played_returns_empty_for_fresh_db() {
+    async fn get_recently_played_returns_hint_for_fresh_db() {
         let ctx = test_context();
         let tool = GetRecentlyPlayed { ctx };
         let result = tool
@@ -643,7 +871,13 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(result.is_empty());
+        match result {
+            ToolOutput::Hint { matches, hint } => {
+                assert_eq!(matches, 0);
+                assert!(hint.contains("get_top_artists"));
+            }
+            ToolOutput::Results(_) => panic!("expected Hint, got Results"),
+        }
     }
 
     #[tokio::test]
@@ -660,9 +894,14 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].title, "Everlong");
-        assert_eq!(result[0].artist, "Foo Fighters");
+        match result {
+            ToolOutput::Results(tracks) => {
+                assert_eq!(tracks.len(), 1);
+                assert_eq!(tracks[0].title, "Everlong");
+                assert_eq!(tracks[0].artist, "Foo Fighters");
+            }
+            ToolOutput::Hint { .. } => panic!("expected Results, got Hint"),
+        }
     }
 
     #[tokio::test]
@@ -683,7 +922,10 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(result.len(), 3);
+        match result {
+            ToolOutput::Results(tracks) => assert_eq!(tracks.len(), 3),
+            ToolOutput::Hint { .. } => panic!("expected Results, got Hint"),
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -691,7 +933,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[tokio::test]
-    async fn get_top_artists_returns_empty_for_fresh_db() {
+    async fn get_top_artists_returns_hint_for_fresh_db() {
         let ctx = test_context();
         let tool = GetTopArtists { ctx };
         let result = tool
@@ -701,7 +943,13 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(result.is_empty());
+        match result {
+            ToolOutput::Hint { matches, hint } => {
+                assert_eq!(matches, 0);
+                assert!(hint.contains("get_top_artists_by_tag"));
+            }
+            ToolOutput::Results(_) => panic!("expected Hint, got Results"),
+        }
     }
 
     #[tokio::test]
@@ -728,9 +976,14 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(!result.is_empty());
-        assert_eq!(result[0].artist, "Radiohead");
-        assert_eq!(result[0].play_count, 3);
+        match result {
+            ToolOutput::Results(artists) => {
+                assert!(!artists.is_empty());
+                assert_eq!(artists[0].artist, "Radiohead");
+                assert_eq!(artists[0].play_count, 3);
+            }
+            ToolOutput::Hint { .. } => panic!("expected Results, got Hint"),
+        }
     }
 
     #[tokio::test]
@@ -770,7 +1023,10 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(result.is_empty());
+        match result {
+            ToolOutput::Results(tracks) => assert!(tracks.is_empty()),
+            ToolOutput::Hint { .. } => panic!("expected Results, got Hint"),
+        }
     }
 
     #[tokio::test]
@@ -791,8 +1047,13 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].title, "Everlong");
+        match result {
+            ToolOutput::Results(tracks) => {
+                assert_eq!(tracks.len(), 1);
+                assert_eq!(tracks[0].title, "Everlong");
+            }
+            ToolOutput::Hint { .. } => panic!("expected Results, got Hint"),
+        }
     }
 
     #[tokio::test]
@@ -813,8 +1074,13 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].title, "Creep");
+        match result {
+            ToolOutput::Results(tracks) => {
+                assert_eq!(tracks.len(), 1);
+                assert_eq!(tracks[0].title, "Creep");
+            }
+            ToolOutput::Hint { .. } => panic!("expected Results, got Hint"),
+        }
     }
 
     #[tokio::test]
@@ -836,7 +1102,10 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(result.len(), 3);
+        match result {
+            ToolOutput::Results(tracks) => assert_eq!(tracks.len(), 3),
+            ToolOutput::Hint { .. } => panic!("expected Results, got Hint"),
+        }
     }
 
     // -----------------------------------------------------------------------

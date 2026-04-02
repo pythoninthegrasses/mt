@@ -16,7 +16,7 @@ use rig::completion::Prompt;
 use rig::providers::ollama;
 use tracing::{debug, info, warn};
 
-use prompt::{DEFAULT_MODEL, MAX_AGENT_TURNS, OLLAMA_BASE_URL, SYSTEM_PROMPT};
+use prompt::{DEFAULT_MODEL, MAX_AGENT_TURNS, MAX_PLAYLIST_TRACKS, OLLAMA_BASE_URL};
 use tools::{
     GetRecentlyPlayed, GetSimilarArtists, GetSimilarTracks, GetTopArtists, GetTopArtistsByTag,
     GetTopTracksByCountry, GetTrackTags, SearchLibrary,
@@ -75,9 +75,16 @@ pub(crate) fn build_agent(
         .build()
         .expect("build Ollama client");
 
+    let system_prompt = prompt::build_system_prompt(MAX_PLAYLIST_TRACKS);
+
     client
         .agent(DEFAULT_MODEL)
-        .preamble(SYSTEM_PROMPT)
+        .preamble(&system_prompt)
+        .temperature(0.2)
+        .max_tokens(1024)
+        .additional_params(serde_json::json!({
+            "top_p": 0.9,
+        }))
         .tool(GetRecentlyPlayed {
             ctx: Arc::clone(&ctx),
         })
@@ -113,6 +120,7 @@ pub fn parse_agent_response(text: &str) -> Result<ParsedPlaylist, AgentError> {
         return Err(AgentError::ParseError("playlist name is empty".into()));
     }
 
+    let mut seen = std::collections::HashSet::new();
     let track_ids = text
         .lines()
         .find_map(|line| {
@@ -125,6 +133,8 @@ pub fn parse_agent_response(text: &str) -> Result<ParsedPlaylist, AgentError> {
                         let cleaned = t.trim_start_matches('[').trim_end_matches(']');
                         cleaned.parse::<i64>().ok()
                     })
+                    .filter(|id| seen.insert(*id))
+                    .take(MAX_PLAYLIST_TRACKS)
                     .collect::<Vec<_>>()
             })
         })
@@ -178,6 +188,7 @@ pub async fn agent_generate_playlist(
     let response_text = agent
         .prompt(&prompt)
         .multi_turn(MAX_AGENT_TURNS as usize)
+        .with_tool_concurrency(8)
         .await
         .map_err(|e| {
             warn!(error = %e, "Agent execution failed");
@@ -394,13 +405,13 @@ mod tests {
 
     #[test]
     fn has_default_model_exact_match() {
-        let models = vec!["llama3.2:1b".into(), "codellama:7b".into()];
+        let models = vec!["qwen3.5:9b".into(), "codellama:7b".into()];
         assert!(has_default_model(&models));
     }
 
     #[test]
     fn has_default_model_base_name_match() {
-        let models = vec!["llama3.2:latest".into(), "mistral:7b".into()];
+        let models = vec!["qwen3.5:latest".into(), "mistral:7b".into()];
         assert!(has_default_model(&models));
     }
 
@@ -414,6 +425,25 @@ mod tests {
     fn has_default_model_empty() {
         let models: Vec<String> = vec![];
         assert!(!has_default_model(&models));
+    }
+
+    #[test]
+    fn parse_dedup_removes_duplicates() {
+        let text = "Playlist: Dedup Test\nTracks: 1, 2, 3, 2, 1, 4";
+        let result = parse_agent_response(text).unwrap();
+        assert_eq!(result.track_ids, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn parse_truncates_at_max() {
+        let ids: Vec<String> = (1..=30).map(|i| i.to_string()).collect();
+        let text = format!("Playlist: Too Many\nTracks: {}", ids.join(", "));
+        let result = parse_agent_response(&text).unwrap();
+        assert_eq!(result.track_ids.len(), MAX_PLAYLIST_TRACKS);
+        assert_eq!(
+            result.track_ids,
+            (1..=25).map(|i| i as i64).collect::<Vec<_>>()
+        );
     }
 }
 

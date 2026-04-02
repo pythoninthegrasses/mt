@@ -56,6 +56,7 @@ DEFAULT_LOG_FILE = config("AGENT_LOG_FILE", default="/tmp/ollama_python_agent.js
 DEFAULT_TEMPERATURE = config("AGENT_TEMPERATURE", default=0.2, cast=float)
 DEFAULT_THINK = config("AGENT_THINK", default=False, cast=bool)
 DEFAULT_SEED = config("AGENT_SEED", default=0, cast=int)
+MIN_PLAYLIST_TRACKS = config("AGENT_MIN_PLAYLIST_TRACKS", default=12, cast=int)
 MAX_PLAYLIST_TRACKS = config("AGENT_MAX_PLAYLIST_TRACKS", default=25, cast=int)
 LASTFM_API_KEY = config("LASTFM_API_KEY", default="")
 LASTFM_BASE_URL = "https://ws.audioscrobbler.com/2.0/"
@@ -82,16 +83,23 @@ def _setup_logging(log_file: str | Path) -> None:
     log.setLevel(logging.DEBUG)
 
 
-def _build_system_prompt(max_tracks: int) -> str:
-    min_tracks = max(5, max_tracks // 2)
+def _build_system_prompt(min_tracks: int, max_tracks: int) -> str:
     return f"""\
 You are a playlist generator for a local music library. You create playlists by querying the user's library and Last.fm for similar music.
 
 RULES:
 - Only suggest tracks that exist in the user's library (returned by tools)
 - Return {min_tracks}-{max_tracks} track IDs in the final playlist. Never more than {max_tracks}. Curate, don't dump
-- As soon as you have {min_tracks}+ candidate tracks, stop searching and respond with the playlist
-- You have LIMITED turns. Call multiple tools per turn. Do not waste turns on exploratory calls
+- DEFAULT to 1 track per artist for MAXIMUM variety
+- Only add a 2nd track from same artist if you CANNOT find enough unique artists to meet {min_tracks}
+- PRIORITY: 20 tracks from 20 different artists > 20 tracks from 10 artists with 2 each
+- A playlist should feel like a JOURNEY through different artists, not an artist deep dive
+- When compiling: pick the BEST track from each artist, then move on
+- As soon as you have {min_tracks}+ tracks from varied artists, output the playlist immediately
+- Be CONCISE: do NOT list all discovered tracks in your response, just output Playlist: and Tracks:
+- You have LIMITED turns. Call MULTIPLE tools PER TURN in PARALLEL. Do not waste turns on sequential calls
+- When planning your strategy, call ALL independent tools at once (e.g. get_similar_artists + search_library + get_track_tags together)
+- Do NOT call search_library for artists you already have sample tracks for — use those sample track IDs directly
 - Read hint messages in tool results — they tell you what to try next
 
 STRATEGY — pick the approach that fits the request:
@@ -108,6 +116,7 @@ STRATEGY — pick the approach that fits the request:
 - Regional requests ("Japanese music", "Brazilian"):
   Use get_top_tracks_by_country with limit=50.
 - search_library is for finding specific tracks by artist name, album, or title keyword.
+- Use get_track_tags to understand a track's mood/genre before expanding with get_top_artists_by_tag.
 
 RESPONSE FORMAT (final answer only):
 Playlist: [descriptive name]
@@ -435,7 +444,7 @@ def _find_track_in_library(
 
 
 def _find_artist_tracks(
-    conn: sqlite3.Connection, artist: str, limit: int = 5
+    conn: sqlite3.Connection, artist: str, limit: int = 2
 ) -> list[dict]:
     """Find tracks by artist in local library."""
     rows = conn.execute(
@@ -681,6 +690,66 @@ TOOL_DISPATCH: dict[str, callable] = {
 }
 
 
+def _shuffle_spread_artists(tracks: list[dict]) -> list[int]:
+    """Shuffle tracks to spread out same-artist tracks for a better mix.
+    
+    Uses a greedy approach: repeatedly pick the track whose artist is least
+    recently used. This ensures no adjacent tracks from the same artist.
+    """
+    if not tracks:
+        return []
+    
+    from collections import Counter
+    
+    # Count tracks per artist
+    artist_counts = Counter(t["artist"] for t in tracks)
+    
+    # Group tracks by artist
+    by_artist: dict[str, list[int]] = {}
+    for t in tracks:
+        artist = t["artist"]
+        if artist not in by_artist:
+            by_artist[artist] = []
+        by_artist[artist].append(t["id"])
+    
+    # Shuffle each artist's tracks locally
+    import random
+    for artist_tracks in by_artist.values():
+        random.shuffle(artist_tracks)
+    
+    # Greedy selection: always pick from the artist with most remaining tracks
+    # who wasn't just played
+    result: list[int] = []
+    last_artist: str | None = None
+    
+    while sum(len(v) for v in by_artist.values()) > 0:
+        # Find artists with tracks remaining, excluding last_artist if possible
+        available = [
+            (artist, len(tracks)) 
+            for artist, tracks in by_artist.items() 
+            if tracks and artist != last_artist
+        ]
+        
+        # If no one else available, we have to use last_artist
+        if not available:
+            available = [
+                (artist, len(tracks)) 
+                for artist, tracks in by_artist.items() 
+                if tracks
+            ]
+        
+        # Pick artist with most remaining tracks (greedy)
+        available.sort(key=lambda x: -x[1])
+        chosen_artist = available[0][0]
+        
+        # Take one track from that artist
+        track_id = by_artist[chosen_artist].pop()
+        result.append(track_id)
+        last_artist = chosen_artist
+    
+    return result
+
+
 def parse_response(text: str) -> tuple[str, list[int]] | None:
     """Parse 'Playlist: ...\\nTracks: ...' from agent text. Returns (name, ids) or None.
 
@@ -746,7 +815,7 @@ def run_agent(
         sys.exit(1)
 
     messages = [
-        {"role": "system", "content": _build_system_prompt(MAX_PLAYLIST_TRACKS)},
+        {"role": "system", "content": _build_system_prompt(MIN_PLAYLIST_TRACKS, MAX_PLAYLIST_TRACKS)},
         {"role": "user", "content": prompt},
     ]
 
@@ -787,6 +856,7 @@ def run_agent(
             "options": {
                 "temperature": temperature,
                 "top_p": 0.9,
+                "num_predict": 2048,
                 **({"seed": seed} if seed else {}),
             },
             "think": think,
@@ -924,22 +994,31 @@ def run_agent(
                 print(f"PARSED: Playlist='{pname}', Tracks={ids} ({len(ids)} tracks)")
 
                 placeholders = ",".join("?" * len(ids))
-                valid = conn.execute(
+                valid_rows = conn.execute(
                     f"SELECT id, title, artist FROM library WHERE id IN ({placeholders})",
                     ids,
                 ).fetchall()
-                print(f"VALID:  {len(valid)}/{len(ids)} track IDs exist in library")
-                for t in valid[:10]:
+                print(f"VALID:  {len(valid_rows)}/{len(ids)} track IDs exist in library")
+                
+                # Convert to list of dicts and shuffle to spread out same-artist tracks
+                valid_dicts = [dict(v) for v in valid_rows]
+                shuffled_ids = _shuffle_spread_artists(valid_dicts)
+                print(f"\nSHUFFLED order (artists spread out):")
+                
+                # Reorder valid_rows to match shuffled order
+                valid_row_dict = {v["id"]: v for v in valid_dicts}
+                valid_shuffled = [valid_row_dict[tid] for tid in shuffled_ids if tid in valid_row_dict]
+                
+                for t in valid_shuffled:
                     print(f"  [{t['id']}] {t['artist']} - {t['title']}")
-                if len(valid) > 10:
-                    print(f"  ... and {len(valid) - 10} more")
+                
                 log.info(
                     "parse_success",
                     extra={
                         "data": {
                             "playlist_name": pname,
-                            "track_ids": ids,
-                            "valid_count": len(valid),
+                            "track_ids": shuffled_ids,
+                            "valid_count": len(valid_shuffled),
                         }
                     },
                 )
