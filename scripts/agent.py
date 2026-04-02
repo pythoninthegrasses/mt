@@ -59,6 +59,7 @@ DEFAULT_SEED = config("AGENT_SEED", default=0, cast=int)
 MIN_PLAYLIST_TRACKS = config("AGENT_MIN_PLAYLIST_TRACKS", default=12, cast=int)
 MAX_PLAYLIST_TRACKS = config("AGENT_MAX_PLAYLIST_TRACKS", default=25, cast=int)
 LASTFM_API_KEY = config("LASTFM_API_KEY", default="")
+PROMPT_OVERRIDE = config("PROMPT", default="")
 LASTFM_BASE_URL = "https://ws.audioscrobbler.com/2.0/"
 
 log = logging.getLogger("agent")
@@ -84,7 +85,7 @@ def _setup_logging(log_file: str | Path) -> None:
 
 
 def _build_system_prompt(min_tracks: int, max_tracks: int) -> str:
-    return f"""\
+    default_prompt = f"""\
 You are a playlist generator for a local music library. You create playlists by querying the user's library and Last.fm for similar music.
 
 RULES:
@@ -123,6 +124,13 @@ Playlist: [descriptive name]
 Tracks: [comma-separated track IDs]
 
 Only include track IDs you received from tool results. Never invent IDs."""
+
+    if PROMPT_OVERRIDE:
+        return PROMPT_OVERRIDE.replace("{min_tracks}", str(min_tracks)).replace(
+            "{max_tracks}", str(max_tracks)
+        )
+
+    return default_prompt
 
 
 def _db_path() -> Path:
@@ -692,18 +700,18 @@ TOOL_DISPATCH: dict[str, callable] = {
 
 def _shuffle_spread_artists(tracks: list[dict]) -> list[int]:
     """Shuffle tracks to spread out same-artist tracks for a better mix.
-    
+
     Uses a greedy approach: repeatedly pick the track whose artist is least
     recently used. This ensures no adjacent tracks from the same artist.
     """
     if not tracks:
         return []
-    
+
     from collections import Counter
-    
+
     # Count tracks per artist
     artist_counts = Counter(t["artist"] for t in tracks)
-    
+
     # Group tracks by artist
     by_artist: dict[str, list[int]] = {}
     for t in tracks:
@@ -711,42 +719,41 @@ def _shuffle_spread_artists(tracks: list[dict]) -> list[int]:
         if artist not in by_artist:
             by_artist[artist] = []
         by_artist[artist].append(t["id"])
-    
+
     # Shuffle each artist's tracks locally
     import random
+
     for artist_tracks in by_artist.values():
         random.shuffle(artist_tracks)
-    
+
     # Greedy selection: always pick from the artist with most remaining tracks
     # who wasn't just played
     result: list[int] = []
     last_artist: str | None = None
-    
+
     while sum(len(v) for v in by_artist.values()) > 0:
         # Find artists with tracks remaining, excluding last_artist if possible
         available = [
-            (artist, len(tracks)) 
-            for artist, tracks in by_artist.items() 
+            (artist, len(tracks))
+            for artist, tracks in by_artist.items()
             if tracks and artist != last_artist
         ]
-        
+
         # If no one else available, we have to use last_artist
         if not available:
             available = [
-                (artist, len(tracks)) 
-                for artist, tracks in by_artist.items() 
-                if tracks
+                (artist, len(tracks)) for artist, tracks in by_artist.items() if tracks
             ]
-        
+
         # Pick artist with most remaining tracks (greedy)
         available.sort(key=lambda x: -x[1])
         chosen_artist = available[0][0]
-        
+
         # Take one track from that artist
         track_id = by_artist[chosen_artist].pop()
         result.append(track_id)
         last_artist = chosen_artist
-    
+
     return result
 
 
@@ -815,7 +822,10 @@ def run_agent(
         sys.exit(1)
 
     messages = [
-        {"role": "system", "content": _build_system_prompt(MIN_PLAYLIST_TRACKS, MAX_PLAYLIST_TRACKS)},
+        {
+            "role": "system",
+            "content": _build_system_prompt(MIN_PLAYLIST_TRACKS, MAX_PLAYLIST_TRACKS),
+        },
         {"role": "user", "content": prompt},
     ]
 
@@ -836,12 +846,14 @@ def run_agent(
     )
 
     lastfm_status = "configured" if LASTFM_API_KEY else "not configured"
+    prompt_source = "env PROMPT override" if PROMPT_OVERRIDE else "default"
     print(f"\n{'=' * 60}")
     seed_str = f" | Seed: {seed}" if seed else ""
     print(
         f"Model: {model} | Max turns: {max_turns} | Think: {think} | Temp: {temperature}{seed_str}"
     )
     print(f"Last.fm: {lastfm_status}")
+    print(f"System prompt: {prompt_source}")
     print(f"Prompt: {prompt}")
     print(f"{'=' * 60}\n")
 
@@ -998,20 +1010,24 @@ def run_agent(
                     f"SELECT id, title, artist FROM library WHERE id IN ({placeholders})",
                     ids,
                 ).fetchall()
-                print(f"VALID:  {len(valid_rows)}/{len(ids)} track IDs exist in library")
-                
+                print(
+                    f"VALID:  {len(valid_rows)}/{len(ids)} track IDs exist in library"
+                )
+
                 # Convert to list of dicts and shuffle to spread out same-artist tracks
                 valid_dicts = [dict(v) for v in valid_rows]
                 shuffled_ids = _shuffle_spread_artists(valid_dicts)
                 print(f"\nSHUFFLED order (artists spread out):")
-                
+
                 # Reorder valid_rows to match shuffled order
                 valid_row_dict = {v["id"]: v for v in valid_dicts}
-                valid_shuffled = [valid_row_dict[tid] for tid in shuffled_ids if tid in valid_row_dict]
-                
+                valid_shuffled = [
+                    valid_row_dict[tid] for tid in shuffled_ids if tid in valid_row_dict
+                ]
+
                 for t in valid_shuffled:
                     print(f"  [{t['id']}] {t['artist']} - {t['title']}")
-                
+
                 log.info(
                     "parse_success",
                     extra={

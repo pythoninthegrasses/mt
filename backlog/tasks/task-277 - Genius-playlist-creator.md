@@ -4,7 +4,7 @@ title: Genius playlist creator
 status: In Progress
 assignee: []
 created_date: '2026-02-18 05:58'
-updated_date: '2026-04-02 21:01'
+updated_date: '2026-04-02 22:34'
 labels:
   - feature
   - playlists
@@ -12,7 +12,8 @@ labels:
   - agent
   - ollama
   - lastfm
-dependencies: []
+dependencies:
+  - TASK-308
 references:
   - docs/genius.md
 priority: high
@@ -150,163 +151,69 @@ Cfg-gate fix (fd8593a): After merging main (which had reverted the lastfm discov
 - Alpine.js store for agent state, basecoat/Tailwind for UI components
 
 Must satisfy AC #1 (prompt input), AC #2 (LLM interpretation), AC #3 (8 tools visible), AC #4 (local tracks only), AC #5 (graceful degradation UX).
+
+Documented next-step options only; not started in this commit:
+1. Continue Python-only validation before any Rust port.
+2. Prototype deterministic candidate aggregation/finalization in `scripts/agent.py` so the LLM does discovery/routing while Python enforces playlist policy.
+3. Candidate guard rails to evaluate: track count bounds, one-track-per-artist default, seed-artist cap for artist-based prompts, scoring by supporting tool sources, local genre, Last.fm similarity/tag evidence, and recency/history signals.
+4. Once Python business logic is stable across mood, artist-based, and mixed-history prompts, port the proven rules to Rust.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-## Current State (2026-03-31)
+## 2026-04-02: Python to Rust Migration Complete
 
-- Phase 1 (deps) complete — commit fc5846b
-- Phase 2 (types + prompt + module scaffold) complete — commit 2f121f7
-- Phase 3 (tools) complete — commit d9a37c9
-- Phase 4 (agent loop + Tauri commands) complete — commit d9a37c9
-- Phase 5 (onboarding + setup) complete — commit f1cf52c
-- Phase 6 (evals) complete — commit 27f9c2e, cfg-gate fix fd8593a
-- Merged into main and pushed (fast-forward merge fd8593a)
-
-753/753 tests pass with `cargo nextest run --workspace --features agent`.
-Both `cargo check --features agent` and `cargo check` compile cleanly (zero warnings).
-
-## Phase 5 Summary
-
-Added `setup.rs` with 4 public functions + 13 new tests:
-- `check_ollama_status()` — health check returning OllamaStatus (available/unavailable + model list)
-- `pull_model(app, model)` — POST streaming to Ollama, emits `agent://pull-progress` Tauri events
-- `get_onboarding_state(app)` — reads from `agent.json` store
-- `set_onboarding_complete(app, model)` — writes to `agent.json` store
-
-New types in `types.rs`: OllamaStatus, PullProgress, OnboardingState, PullModelResult
-
-4 new Tauri command pairs (cfg/not-cfg) wired in lib.rs:
-- `agent_check_ollama`, `agent_pull_model`, `agent_get_onboarding_state`, `agent_set_onboarding_complete`
-
-## Phase 6 Summary
-
-13 eval tests in `evals.rs` using wiremock mock Ollama server.
-Categories: tool execution (3), output format (6), degradation (5).
-Refactored `build_agent()` and `check_ollama()` to accept `base_url: &str` for test injection.
-Added `wiremock = "0.6"` to dev-dependencies.
-
-Cfg-gate fix: After merging main (which had reverted lastfm discovery methods), restored them and gated all discovery types, methods, and tests behind `#[cfg(feature = "agent")]`.
-
-## Key Design Decisions
-
-- Feature-flagged (`agent`) — zero overhead when disabled
-- Uses llama3.2:1b via Ollama — small enough for local inference
-- 8 tools covering local library + Last.fm APIs with graceful degradation
-- Heuristic evals (no LLM judge) for deterministic CI
-- Thin wrapper Tauri commands in lib.rs with cfg pairs (agent/not-agent) to keep generate_handler! unconditional
-- Agent module functions are plain async fns (not #[tauri::command]) — lib.rs wrappers handle Tauri integration
-- LastFmClient constructed fresh inside agent_generate_playlist (not managed as Tauri state)
-- Onboarding state persisted via tauri-plugin-store (`agent.json` with key `agent_onboarding`)
-- Model pull uses streaming POST to Ollama with Tauri event emission for progress
-
-## Rig API Notes (v0.27 + experimental)
-
-- `rig::client::CompletionClient` trait needed for `.agent()` method on client
-- `rig::completion::Prompt` trait needed for `.prompt()` method on agent
-- `.multi_turn(N)` (NOT `.max_turns(N)`) controls tool-call loop depth
-- `ollama::Client::builder().api_key(rig::client::Nothing).base_url(URL).build()` — builder pattern avoids env var panic
-- Agent construction requires Tokio runtime (for tool registration) — test with `#[tokio::test]`
-
-## Files Created/Modified
-
-- `crates/mt-tauri/src/agent/mod.rs` — module root, parse_agent_response, parse_model_names, has_default_model, check_ollama, build_agent, agent_generate_playlist, agent_check_status
-- `crates/mt-tauri/src/agent/types.rs` — AgentResponse, TrackSummary, AgentContext, AgentError, ParsedPlaylist, AgentStatusResponse, OllamaStatus, PullProgress, OnboardingState, PullModelResult
-- `crates/mt-tauri/src/agent/prompt.rs` — SYSTEM_PROMPT, DEFAULT_MODEL, OLLAMA_BASE_URL, MAX_AGENT_TURNS
-- `crates/mt-tauri/src/agent/tools.rs` — 8 Tool implementations
-- `crates/mt-tauri/src/agent/setup.rs` — check_ollama_status, pull_model, get/set_onboarding_state, parse_pull_progress_line
-- `crates/mt-tauri/src/agent/evals.rs` — 13 eval tests with wiremock
-- `crates/mt-tauri/src/lastfm/client.rs` — 5 discovery methods (cfg-gated behind agent feature)
-- `crates/mt-tauri/src/lastfm/types.rs` — response types for discovery methods (cfg-gated behind agent feature)
-- `crates/mt-tauri/Cargo.toml` — rig-core + schemars deps, wiremock dev-dependency
-- `crates/mt-tauri/src/lib.rs` — agent module declaration + 6 wrapper Tauri commands (cfg pairs)
-
-## Remaining
-
-- Phase 7: Frontend — Genius sidebar category, prompt UI, onboarding wizard UI
-
-## 2026-04-02: Agent Performance Fixes
-
-### Issues Identified from Logs
-1. **Parallel tool execution not working**: `with_tool_concurrency(8)` was configured but model wasn't calling multiple tools per turn
-2. **Token generation too long**: Final LLM turn took 63 seconds generating ~57 IDs with multiple recounts
+Successfully migrated the Python reference implementation to Rust:
 
 ### Changes Made
 
-**mod.rs - Agent builder:**
-- Added `.max_tokens(1024)` to cap response length (prevents endless recounting)
+**prompt.rs** - Updated system prompt with enhanced artist variety rules:
+- Added "DEFAULT to 1 track per artist for MAXIMUM variety"
+- Added "PRIORITY: 20 tracks from 20 different artists > 20 tracks from 10 artists with 2 each"
+- Added "A playlist should feel like a JOURNEY through different artists, not an artist deep dive"
+- Added "When compiling: pick the BEST track from each artist, then move on"
+- Converted to raw string literal (`r#"..."#`) for cleaner syntax
+- Added CRITICAL section warning against common mistakes (keyword searches)
 
-**prompt.rs - System prompt:**
-- Enhanced RULES section with explicit parallel tool calling instructions:
-  - "Call MULTIPLE tools PER TURN in PARALLEL"
-  - "When planning your strategy, call ALL independent tools at once"
+**mod.rs** - Added artist-spreading shuffle algorithm and duplicate name handling:
+- `shuffle_spread_artists()` function uses greedy approach to spread same-artist tracks apart
+- `generate_unique_playlist_name()` automatically appends (2), (3), etc. for duplicate names
+- Groups tracks by artist, shuffles each group locally, then greedily selects from the artist with most remaining tracks (excluding the last-played artist when possible)
+- Updated `agent_generate_playlist()` to:
+  1. Fetch track details (id + artist) for parsed track IDs
+  2. Shuffle using `shuffle_spread_artists()` before adding to playlist
+  3. Handle duplicate playlist names by appending numbers
+  4. Log validation count and shuffling info
 
-### Why These Fixes Work
+### Key Features Ported from Python
+1. **Artist variety priority** - System prompt enforces 1 track per artist by default
+2. **Shuffled output** - Greedy algorithm spreads same-artist tracks apart in final playlist
+3. **Track validation** - Verifies all track IDs exist in library before shuffling
+4. **Unique playlist names** - Automatically appends (2), (3), etc. if name exists
+5. **Configurable limits** - Min/max tracks dynamically calculated from MAX_PLAYLIST_TRACKS
 
-1. **max_tokens(1024)**: Limits the LLM to ~1024 tokens for the final response. The playlist format (name + 25 track IDs) needs only ~200-500 tokens. This prevents the model from generating excessive intermediate reasoning (listing 57 IDs, recounting, selecting, etc.) that was causing the 63-second response time.
+### Test Coverage
+- 5 unit tests for `shuffle_spread_artists()`:
+  - Empty input returns empty
+  - Spreads same-artist tracks apart (no adjacent duplicates)
+  - Preserves all tracks in output
+  - Single track works correctly
+  - Unique artists handled properly
+- 2 unit tests for `generate_unique_playlist_name()`:
+  - Returns base name when available
+  - Appends number when name exists
 
-2. **Explicit parallel instructions**: The previous prompt mentioned "Call multiple tools per turn" but wasn't emphatic enough. The new language uses ALL CAPS for key concepts and provides concrete examples ("get_similar_artists + search_library + get_track_tags together") to guide the model toward parallel tool calling.
+Total: 764 tests pass (762 existing + 2 new)
 
-### Test Results
-- All 757 tests pass with `cargo nextest run --workspace --features agent`
-- Both `cargo check --features agent` and `cargo check` compile cleanly
+2026-04-02: Added `PROMPT` override support to `scripts/agent.py` via python-decouple so prompt experiments can run without changing the default built-in system prompt. `_build_system_prompt()` now keeps the existing prompt for normal runs and uses the env-provided override when present, still interpolating `{min_tracks}` and `{max_tracks}`. Console output now reports whether the run used the default prompt or the override.
 
-## 2026-04-02: Python Reference Implementation Complete
+2026-04-02: Prompt experiment results in Python:
+- Mood request (`make me a chill playlist`): default prompt used 4 turns; override prompt used 2 turns with valid library-only output.
+- Artist-based request (`make me a playlist like Radiohead`): default prompt used 3 turns; override prompt used 2 turns, but prompt-only steering still leaked multiple seed-artist tracks.
+- Mixed-history request (`make me a chill playlist like what I listened to last Friday`): default prompt used 4 turns; override prompt used 2 turns and treated weak recent-history results as a weighting signal instead of spending extra turns matching them exactly.
 
-**Working Solution**: `scripts/agent.py` serves as the reference implementation for the Genius playlist creator.
-
-### Key Features Implemented (Python Script)
-
-1. **8 Agent Tools** - Full implementation matching Rust tool specifications:
-   - `get_recently_played` - Recently played tracks from local library
-   - `get_top_artists` - Top artists by play history
-   - `search_library` - Text search across title/artist/album
-   - `get_similar_tracks` - Last.fm similar tracks, cross-referenced with library
-   - `get_similar_artists` - Last.fm similar artists with library sample tracks
-   - `get_track_tags` - Last.fm mood/genre tags
-   - `get_top_artists_by_tag` - Genre-based artist discovery
-   - `get_top_tracks_by_country` - Regional track discovery
-
-2. **Artist Variety Priority** - System prompt enforces 1 track per artist by default, only adding 2nd tracks when artist diversity is exhausted
-
-3. **Shuffled Playlist Output** - `_shuffle_spread_artists()` uses greedy algorithm to spread same-artist tracks apart
-
-4. **Configurable Track Counts** - Environment variables:
-   - `AGENT_MIN_PLAYLIST_TRACKS` (default: 12)
-   - `AGENT_MAX_PLAYLIST_TRACKS` (default: 25)
-
-5. **Performance Tuning** - `num_predict: 2048` prevents response truncation
-
-### Rust Implementation Notes
-
-The Python script demonstrates the correct behavior for playlist generation:
-- Multi-turn tool calling with parallel execution
-- Last.fm cross-referencing with local library
-- Maximum artist variety (N tracks from N artists)
-- Post-generation shuffle for playback order
-
-When implementing the Rust version, use `scripts/agent.py` as the behavioral reference for:
-- System prompt wording (artist variety rules)
-- Tool response format and hint messages
-- Playlist shuffling algorithm
-- Token limit settings (2048 via `max_tokens`)
-
-### Usage
-
-```bash
-# Default: 12-25 tracks with maximum artist variety
-./scripts/agent.py "make me a chill playlist"
-
-# Custom range: 5-10 tracks
-AGENT_MIN_PLAYLIST_TRACKS=5 AGENT_MAX_PLAYLIST_TRACKS=10 ./scripts/agent.py "quick mix"
-
-# Faster execution with fewer turns
-./scripts/agent.py --max-turns 2 "make me a chill playlist"
-```
-
-Reference file: `scripts/agent.py` (1114 lines, fully functional)
+2026-04-02: Conclusion from prompt experiments: tighter stop rules materially reduce turn count, but prompt-only business-rule enforcement remains unreliable for cases like seed-artist caps. The most promising direction is to keep LLM-driven discovery/tool routing while moving playlist compilation and policy enforcement into deterministic business logic that scores and filters candidates using empirical evidence (tool source overlap, local genre, Last.fm tags/similarity, last played date, play history, and explicit duplicate-artist caps).
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
