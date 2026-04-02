@@ -50,6 +50,7 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 | Themes, dark mode toggle fixes | [Theming Guide](docs/theming.md) |
 | Cross-platform builds, CI/CD | [Build Configuration](docs/builds.md) |
 | Shuffle, Play Next pinning | [Shuffle Implementation](docs/shuffle.md) |
+| Agent script, prompt tuning | [Agent Script](docs/agent.md) |
 
 ## Architecture Overview
 
