@@ -66,10 +66,11 @@ use watcher::{
 #[cfg(feature = "agent")]
 #[tauri::command]
 async fn agent_generate_playlist(
+    app: tauri::AppHandle,
     prompt: String,
     db: tauri::State<'_, db::Database>,
 ) -> Result<agent::types::AgentResponse, String> {
-    agent::agent_generate_playlist(prompt, db).await
+    agent::agent_generate_playlist(app, prompt, db).await
 }
 
 #[cfg(not(feature = "agent"))]

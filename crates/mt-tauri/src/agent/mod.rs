@@ -9,6 +9,7 @@ pub mod setup;
 pub mod tools;
 pub mod types;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use rig::client::CompletionClient;
@@ -24,7 +25,115 @@ use tools::{
 use types::{AgentContext, AgentError, AgentResponse, AgentStatusResponse, ParsedPlaylist};
 
 use crate::db::{Database, playlists};
+use crate::events::{EventEmitter, PlaylistsUpdatedEvent};
 use crate::lastfm::LastFmClient;
+
+/// Generate a unique playlist name by appending a number if needed.
+///
+/// If the base name exists, tries "Name (2)", "Name (3)", etc.
+fn generate_unique_playlist_name(conn: &rusqlite::Connection, base_name: &str) -> crate::db::DbResult<String> {
+    // Check if base name is available
+    let exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM playlists WHERE name = ? LIMIT 1)",
+        [base_name],
+        |row| row.get(0),
+    )?;
+    
+    if !exists {
+        return Ok(base_name.to_string());
+    }
+    
+    // Find an available suffix
+    for i in 2..=100 {
+        let candidate = format!("{} ({})", base_name, i);
+        let exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM playlists WHERE name = ? LIMIT 1)",
+            [&candidate],
+            |row| row.get(0),
+        )?;
+        if !exists {
+            return Ok(candidate);
+        }
+    }
+    
+    // Fallback: append timestamp if all numbers are taken
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    Ok(format!("{} ({})", base_name, timestamp))
+}
+
+/// Shuffle tracks to spread out same-artist tracks for a better mix.
+///
+/// Uses a greedy approach: repeatedly pick the track whose artist is least
+/// recently used. This ensures no adjacent tracks from the same artist.
+fn shuffle_spread_artists(tracks: &[(i64, String)]) -> Vec<i64> {
+    if tracks.is_empty() {
+        return Vec::new();
+    }
+
+    // Group track IDs by artist
+    let mut by_artist: HashMap<&str, Vec<i64>> = HashMap::new();
+    let mut artist_keys: HashMap<i64, &str> = HashMap::new();
+
+    for (id, artist) in tracks {
+        by_artist
+            .entry(artist.as_str())
+            .or_default()
+            .push(*id);
+        artist_keys.insert(*id, artist.as_str());
+    }
+
+    // Shuffle each artist's tracks locally (for variety)
+    for artist_tracks in by_artist.values_mut() {
+        use rand::seq::SliceRandom;
+        artist_tracks.shuffle(&mut rand::rng());
+    }
+
+    // Greedy selection: always pick from the artist with most remaining tracks
+    // who wasn't just played
+    let mut result: Vec<i64> = Vec::with_capacity(tracks.len());
+    let mut last_artist: Option<&str> = None;
+
+    while result.len() < tracks.len() {
+        // Find artists with tracks remaining, excluding last_artist if possible
+        let mut available: Vec<(&str, usize)> = by_artist
+            .iter()
+            .filter(|(_, ids)| !ids.is_empty())
+            .filter(|(artist, _)| Some(**artist) != last_artist)
+            .map(|(artist, ids)| (*artist, ids.len()))
+            .collect();
+
+        // If no one else available, we have to use last_artist
+        if available.is_empty() {
+            available = by_artist
+                .iter()
+                .filter(|(_, ids)| !ids.is_empty())
+                .map(|(artist, ids)| (*artist, ids.len()))
+                .collect();
+        }
+
+        if available.is_empty() {
+            break;
+        }
+
+        // Pick artist with most remaining tracks (greedy)
+        available.sort_by(|a, b| b.1.cmp(&a.1));
+        let chosen_artist = available[0].0;
+
+        // Take one track from that artist
+        if let Some(ids) = by_artist.get_mut(chosen_artist) {
+            if let Some(track_id) = ids.pop() {
+                result.push(track_id);
+                last_artist = Some(chosen_artist);
+            }
+        }
+    }
+
+    result
+}
 
 /// Parse model names from Ollama's `/api/tags` JSON response.
 ///
@@ -162,6 +271,7 @@ fn has_default_model(models: &[String]) -> bool {
 ///
 /// Flow: health check → build agent → prompt (multi-turn) → parse → create playlist.
 pub async fn agent_generate_playlist(
+    app: tauri::AppHandle,
     prompt: String,
     db: tauri::State<'_, Database>,
 ) -> Result<AgentResponse, String> {
@@ -208,9 +318,46 @@ pub async fn agent_generate_playlist(
         }
     };
 
-    // 6. Create the playlist in the database
+    // 6. Fetch track details for the parsed IDs (to get artist names for shuffling)
+    let track_details: Vec<(i64, String)> = db
+        .with_conn(|conn| {
+            let mut results = Vec::new();
+            for id in &parsed.track_ids {
+                let mut stmt = conn.prepare("SELECT id, artist FROM library WHERE id = ? AND missing = 0 LIMIT 1")?;
+                let mut rows = stmt.query([id])?;
+                if let Some(row) = rows.next()? {
+                    let track_id: i64 = row.get(0)?;
+                    let artist: String = row.get(1)?;
+                    results.push((track_id, artist));
+                }
+            }
+            Ok(results)
+        })
+        .map_err(|e| format!("Failed to fetch track details: {e}"))?;
+
+    if track_details.is_empty() {
+        return Ok(AgentResponse::error(
+            "None of the selected tracks exist in your library".to_string()
+        ));
+    }
+
+    // 7. Shuffle tracks to spread out same-artist tracks
+    let shuffled_ids = shuffle_spread_artists(&track_details);
+    let valid_count = shuffled_ids.len();
+
+    info!(
+        requested = parsed.track_ids.len(),
+        valid = valid_count,
+        "Validated and shuffled tracks"
+    );
+
+    // 8. Create the playlist in the database (with unique name handling)
+    let playlist_name: String = db
+        .with_conn(|conn| generate_unique_playlist_name(conn, &parsed.name))
+        .map_err(|e: crate::db::DbError| format!("Failed to generate playlist name: {e}"))?;
+    
     let playlist = db
-        .with_conn(|conn| playlists::create_playlist(conn, &parsed.name))
+        .with_conn(|conn| playlists::create_playlist(conn, &playlist_name))
         .map_err(|e| format!("Failed to create playlist: {e}"))?;
 
     let playlist = match playlist {
@@ -218,27 +365,29 @@ pub async fn agent_generate_playlist(
         None => {
             return Ok(AgentResponse::error(format!(
                 "Playlist name '{}' already exists",
-                parsed.name
+                playlist_name
             )));
         }
     };
 
     let added = db
         .with_conn(|conn| {
-            playlists::add_tracks_to_playlist(conn, playlist.id, &parsed.track_ids, None)
+            playlists::add_tracks_to_playlist(conn, playlist.id, &shuffled_ids, None)
         })
         .map_err(|e| format!("Failed to add tracks to playlist: {e}"))?;
 
     info!(
         playlist_id = playlist.id,
-        playlist_name = %parsed.name,
+        playlist_name = %playlist_name,
         track_count = added,
         "Agent playlist created"
     );
 
+    let _ = app.emit_playlists_updated(PlaylistsUpdatedEvent::created(playlist.id));
+
     Ok(AgentResponse::success(
         playlist.id,
-        parsed.name,
+        playlist_name,
         added as usize,
     ))
 }
@@ -444,6 +593,129 @@ mod tests {
             result.track_ids,
             (1..=25).map(|i| i as i64).collect::<Vec<_>>()
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // shuffle_spread_artists tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn shuffle_spread_artists_empty_returns_empty() {
+        let tracks: Vec<(i64, String)> = vec![];
+        let result = shuffle_spread_artists(&tracks);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn shuffle_spread_artists_spreads_same_artist_apart() {
+        // 6 tracks: 3 from Artist A, 3 from Artist B
+        let tracks = vec![
+            (1, "Artist A".into()),
+            (2, "Artist A".into()),
+            (3, "Artist A".into()),
+            (4, "Artist B".into()),
+            (5, "Artist B".into()),
+            (6, "Artist B".into()),
+        ];
+        let result = shuffle_spread_artists(&tracks);
+        assert_eq!(result.len(), 6);
+
+        // Verify no two adjacent tracks have the same artist
+        // First, build a map of id -> artist
+        let artist_map: std::collections::HashMap<i64, &str> = tracks
+            .iter()
+            .map(|(id, artist)| (*id, artist.as_str()))
+            .collect();
+
+        for window in result.windows(2) {
+            let artist1 = artist_map.get(&window[0]).unwrap();
+            let artist2 = artist_map.get(&window[1]).unwrap();
+            assert_ne!(
+                artist1, artist2,
+                "Adjacent tracks should not have the same artist"
+            );
+        }
+    }
+
+    #[test]
+    fn shuffle_spread_artists_preserves_all_tracks() {
+        let tracks = vec![
+            (1, "Artist A".into()),
+            (2, "Artist B".into()),
+            (3, "Artist C".into()),
+            (4, "Artist A".into()),
+            (5, "Artist B".into()),
+        ];
+        let result = shuffle_spread_artists(&tracks);
+
+        // All 5 track IDs should be in the result
+        assert_eq!(result.len(), 5);
+        let mut sorted = result.clone();
+        sorted.sort();
+        assert_eq!(sorted, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn shuffle_spread_artists_single_track() {
+        let tracks = vec![(42, "Solo Artist".into())];
+        let result = shuffle_spread_artists(&tracks);
+        assert_eq!(result, vec![42]);
+    }
+
+    #[test]
+    fn shuffle_spread_artists_unique_artists_no_change_needed() {
+        // All different artists - order can stay as-is (shuffled locally per artist)
+        let tracks = vec![
+            (1, "Artist A".into()),
+            (2, "Artist B".into()),
+            (3, "Artist C".into()),
+            (4, "Artist D".into()),
+        ];
+        let result = shuffle_spread_artists(&tracks);
+        assert_eq!(result.len(), 4);
+        let mut sorted = result.clone();
+        sorted.sort();
+        assert_eq!(sorted, vec![1, 2, 3, 4]);
+    }
+
+    // -----------------------------------------------------------------------
+    // generate_unique_playlist_name tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn unique_name_returns_base_when_available() {
+        let db = Database::new_in_memory().expect("in-memory db");
+        let name = db
+            .with_conn(|conn| generate_unique_playlist_name(conn, "My Playlist"))
+            .expect("generate name");
+        assert_eq!(name, "My Playlist");
+    }
+
+    #[test]
+    fn unique_name_appends_number_when_exists() {
+        let db = Database::new_in_memory().expect("in-memory db");
+        
+        // Create first playlist
+        db.with_conn(|conn| playlists::create_playlist(conn, "Chill Vibes"))
+            .expect("create first")
+            .expect("first playlist created");
+        
+        // Second should get (2)
+        let name2 = db
+            .with_conn(|conn| generate_unique_playlist_name(conn, "Chill Vibes"))
+            .expect("generate name2");
+        assert_eq!(name2, "Chill Vibes (2)");
+        
+        // Create second playlist
+        db.with_conn(|conn| playlists::create_playlist(conn, &name2))
+            .expect("create second")
+            .expect("second playlist created");
+        
+        // Third should get (3)
+        let name3 = db
+            .with_conn(|conn| generate_unique_playlist_name(conn, "Chill Vibes"))
+            .expect("generate name3");
+        assert_eq!(name3, "Chill Vibes (3)");
     }
 }
 

@@ -42,6 +42,8 @@ export function createSidebar(Alpine) {
     contextMenuX: 0,
     contextMenuY: 0,
 
+    _onPlaylistsUpdated: null,
+
     init() {
       this._initSettings();
       console.log('[Sidebar] Component initialized, drag handlers available:', {
@@ -61,6 +63,18 @@ export function createSidebar(Alpine) {
       window.addEventListener('mt:create-playlist-with-tracks', async (e) => {
         await this.createPlaylistWithTracks(e.detail?.trackIds || []);
       });
+
+      this._onPlaylistsUpdated = () => {
+        this.loadPlaylists();
+      };
+      window.addEventListener('mt:playlists-updated', this._onPlaylistsUpdated);
+    },
+
+    destroy() {
+      if (this._onPlaylistsUpdated) {
+        window.removeEventListener('mt:playlists-updated', this._onPlaylistsUpdated);
+        this._onPlaylistsUpdated = null;
+      }
     },
 
     /**

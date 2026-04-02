@@ -274,6 +274,21 @@ describe('Playlist Event Propagation - Property-Based Tests', () => {
     );
   });
 
+  describe('Sidebar Playlist Refresh', () => {
+    it('reloads playlists when mt:playlists-updated fires after init', () => {
+      sidebar.loadSection = vi.fn();
+
+      sidebar.init();
+      sidebar.loadPlaylists.mockClear();
+
+      window.dispatchEvent(new CustomEvent('mt:playlists-updated'));
+
+      expect(sidebar.loadPlaylists).toHaveBeenCalledTimes(1);
+
+      sidebar.destroy?.();
+    });
+  });
+
   describe('New Playlist Creation Event Propagation', () => {
     test.prop([playlistNameArbitrary])(
       'committing a new playlist rename dispatches event',
