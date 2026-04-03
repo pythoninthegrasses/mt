@@ -117,9 +117,13 @@ STRATEGY — pick the approach that fits the request:
 - General/mixed requests:
   Use get_recently_played or get_top_artists to understand listening habits, then combine
   with get_similar_tracks, get_similar_artists, or get_top_artists_by_tag.
+- Decade/era requests ("90s rock", "80s pop", "2000s indie"):
+  Call search_library with decade="90s" AND genre="rock" (or relevant genre) with limit=50.
+  Also call get_top_artists_by_tag with era-appropriate genre tags IN PARALLEL.
+  The library has year metadata on most tracks — USE IT instead of guessing artist names.
 - Regional requests ("Japanese music", "Brazilian"):
   Use get_top_tracks_by_country with limit=50.
-- search_library is for finding specific tracks by artist name, album, or title keyword.
+- search_library supports keyword, artist, album, genre, decade, and year range filters.
 - Use get_track_tags to understand a track's mood/genre before expanding with get_top_artists_by_tag.
 
 RESPONSE FORMAT (final answer only):
@@ -206,7 +210,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "search_library",
-            "description": "Search the user's music library by keyword, artist, or album. Returns matching tracks.",
+            "description": "Search the user's music library by keyword, artist, album, genre, or year range. Returns matching tracks with year metadata.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -221,6 +225,22 @@ TOOLS = [
                     "album": {
                         "type": "string",
                         "description": "Filter by exact album name",
+                    },
+                    "genre": {
+                        "type": "string",
+                        "description": "Filter by genre (LIKE match, e.g. 'rock', 'jazz')",
+                    },
+                    "decade": {
+                        "type": "string",
+                        "description": "Filter by decade: '90s', '80s', '2000s', etc.",
+                    },
+                    "year_from": {
+                        "type": "integer",
+                        "description": "Filter tracks from this year onward (inclusive)",
+                    },
+                    "year_to": {
+                        "type": "integer",
+                        "description": "Filter tracks up to this year (inclusive)",
                     },
                     "limit": {
                         "type": "integer",
@@ -337,13 +357,20 @@ TOOLS = [
 
 
 def _track_row_to_summary(row: sqlite3.Row) -> dict:
-    return {
+    summary = {
         "id": row["id"],
         "title": row["title"] or "",
         "artist": row["artist"] or "",
         "album": row["album"],
         "genre": row["genre"],
     }
+    # Include year when available (not all queries select date)
+    try:
+        if row["date"]:
+            summary["year"] = row["date"]
+    except (IndexError, KeyError):
+        pass
+    return summary
 
 
 def tool_get_recently_played(conn: sqlite3.Connection, args: dict) -> list[dict] | dict:
@@ -402,11 +429,22 @@ def tool_get_top_artists(conn: sqlite3.Connection, args: dict) -> list[dict] | d
     return [{"artist": r["artist"], "play_count": r["play_count"]} for r in rows]
 
 
+DECADE_RANGES = {
+    "60s": (1960, 1969), "70s": (1970, 1979), "80s": (1980, 1989),
+    "90s": (1990, 1999), "2000s": (2000, 2009), "2010s": (2010, 2019),
+    "2020s": (2020, 2029),
+}
+
+
 def tool_search_library(conn: sqlite3.Connection, args: dict) -> list[dict]:
     limit = args.get("limit", 20)
     query = args.get("query")
     artist = args.get("artist")
     album = args.get("album")
+    genre = args.get("genre")
+    decade = args.get("decade")
+    year_from = args.get("year_from")
+    year_to = args.get("year_to")
 
     conditions = ["missing = 0"]
     params: list = []
@@ -421,11 +459,24 @@ def tool_search_library(conn: sqlite3.Connection, args: dict) -> list[dict]:
     if album:
         conditions.append("album = ?")
         params.append(album)
+    if genre:
+        conditions.append("genre LIKE ?")
+        params.append(f"%{genre}%")
+    if decade:
+        dr = DECADE_RANGES.get(decade.lower().strip())
+        if dr:
+            year_from, year_to = dr
+    if year_from:
+        conditions.append("CAST(date AS INTEGER) >= ?")
+        params.append(year_from)
+    if year_to:
+        conditions.append("CAST(date AS INTEGER) <= ?")
+        params.append(year_to)
 
     where = " AND ".join(conditions)
     params.append(limit)
     rows = conn.execute(
-        f"SELECT id, title, artist, album, genre FROM library WHERE {where} LIMIT ?",
+        f"SELECT id, title, artist, album, genre, date FROM library WHERE {where} ORDER BY RANDOM() LIMIT ?",
         params,
     ).fetchall()
     return [_track_row_to_summary(r) for r in rows]
