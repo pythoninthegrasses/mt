@@ -17,13 +17,14 @@
 
 Replicates the Rust agent flow (system prompt, tool definitions, multi-turn
 tool calling, response parsing) using the official Ollama Python library and
-the mt.db SQLite database.
+the mt.db SQLite database. After generating a playlist, runs an LLM-as-judge
+evaluation scoring concept match, instruction following, and track variety.
 
 Usage:
     uv run scripts/agent.py "make me a chill playlist"
     uv run scripts/agent.py --model qwen3.5:9b "90s rock deep cuts"
     uv run scripts/agent.py --model qwen3.5:9b --think "jazz deep cuts"
-    uv run scripts/agent.py --max-turns 3 "jazz from my library"
+    uv run scripts/agent.py --repeat-penalty 1.2 --temperature 0.4 "upbeat workout mix"
 """
 
 import argparse
