@@ -435,6 +435,27 @@ DECADE_RANGES = {
     "2020s": (2020, 2029),
 }
 
+# Parent genre -> subgenres that should also match.
+# "Indie" is college rock / indie rock — a subgenre of rock.
+GENRE_EXPANSIONS: dict[str, list[str]] = {
+    "rock": [
+        "indie", "alternative", "grunge", "punk", "post-punk", "post-rock",
+        "post-hardcore", "shoegaze", "brit-pop", "britpop", "psychedelic",
+        "progressive rock", "gothic rock", "punk rock", "indie rock",
+        "alternative rock", "alt. rock", "alternrock", "pop/rock",
+        "lo-fi", "alt. country-rock",
+    ],
+    "electronic": [
+        "electronica", "synth-pop", "progressive house", "industrial",
+    ],
+    "pop": [
+        "indie pop", "synth-pop",
+    ],
+    "folk": [
+        "indie/folk", "indie folk",
+    ],
+}
+
 
 def tool_search_library(conn: sqlite3.Connection, args: dict) -> list[dict]:
     limit = args.get("limit", 20)
@@ -460,8 +481,13 @@ def tool_search_library(conn: sqlite3.Connection, args: dict) -> list[dict]:
         conditions.append("album = ?")
         params.append(album)
     if genre:
-        conditions.append("genre LIKE ?")
-        params.append(f"%{genre}%")
+        genre_lower = genre.lower().strip()
+        subgenres = GENRE_EXPANSIONS.get(genre_lower, [])
+        # Match the genre itself plus any subgenres
+        genre_likes = [f"%{genre}%"] + [f"%{sg}%" for sg in subgenres]
+        placeholders = " OR ".join("genre LIKE ?" for _ in genre_likes)
+        conditions.append(f"({placeholders})")
+        params.extend(genre_likes)
     if decade:
         dr = DECADE_RANGES.get(decade.lower().strip())
         if dr:
