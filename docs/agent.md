@@ -36,6 +36,44 @@ to the Rust backend (`crates/mt-tauri/src/agent/`).
   outcome is logged to a structured JSONL file for analysis.
 - **Hard cap** — `parse_response()` deduplicates and truncates track IDs to
   `MAX_PLAYLIST_TRACKS` regardless of model output.
+- **Last-turn nudge** — On the final turn, a user message is injected telling
+  the model to output the playlist immediately. Prevents turn exhaustion when
+  `repeat_penalty` discourages the model from reusing its "compile now" pattern.
+- **Creative naming** — System prompt instructs the model to use evocative
+  synonyms for playlist names instead of parroting the user's request
+  (e.g. "chill" -> "Velvet Haze").
+
+## Usage
+
+```bash
+# Basic
+uv run scripts/agent.py "make me a chill playlist"
+
+# With options
+uv run scripts/agent.py --model qwen3.5:9b --seed 42 --temperature 0.1 "shoegaze deep cuts"
+
+# Extended thinking
+uv run scripts/agent.py --think --max-turns 8 "jazz from my library"
+```
+
+## Configuration
+
+All env vars are read from `.env` via `python-decouple`. CLI flags override
+env var defaults.
+
+| Env Var | Default | CLI Flag |
+|---------|---------|----------|
+| `OLLAMA_MODEL` | `qwen3.5:9b` | `--model` |
+| `OLLAMA_HOST` | `http://localhost:11434` | `--host` |
+| `AGENT_MAX_TURNS` | `5` | `--max-turns` |
+| `AGENT_TEMPERATURE` | `0.3` | `--temperature` |
+| `AGENT_THINK` | `false` | `--think` |
+| `AGENT_SEED` | `0` | `--seed` |
+| `AGENT_REPEAT_PENALTY` | `1.1` | `--repeat-penalty` |
+| `AGENT_MIN_PLAYLIST_TRACKS` | `12` | — |
+| `AGENT_MAX_PLAYLIST_TRACKS` | `25` | — |
+| `AGENT_LOG_FILE` | `/tmp/ollama_python_agent.jsonl` | `--log-file` |
+| `LASTFM_API_KEY` | — | — |
 
 ## Tools
 
@@ -120,49 +158,77 @@ on error messages as navigation.
 
 Exhausted 5 turns. Produced a 2-track playlist of keyword matches.
 
-**After** (Last.fm tools, strategy prompt, hints, temp=0.2, seed=42):
+**After** (Last.fm tools, strategy prompt, hints, repeat penalty, temp=0.3):
 
 ```jsonl
-{"event":"session_start","data":{"temperature":0.2,"seed":42,"prompt":"make me a chill playlist"}}
+{"event":"session_start","data":{"temperature":0.3,"repeat_penalty":1.1,"prompt":"make me a chill playlist"}}
 {"event":"tool_call","data":{"tool":"get_top_artists_by_tag","args":{"tag":"chillout","limit":50}}}
 {"event":"tool_call","data":{"tool":"get_top_artists_by_tag","args":{"tag":"dream pop","limit":50}}}
-{"event":"tool_call","data":{"tool":"get_top_artists_by_tag","args":{"tag":"shoegaze","limit":50}}}
-{"event":"tool_result","data":{"tool":"get_top_artists_by_tag","count":6}}
-{"event":"tool_call","data":{"tool":"get_similar_tracks","args":{"artist":"Cigarettes After Sex","track":"K."}}}
-{"event":"tool_call","data":{"tool":"get_similar_tracks","args":{"artist":"Beach House","track":"Sparks"}}}
-{"event":"parse_success","data":{"playlist_name":"Chill Vibes Collection","track_ids":[69727,70192,71486,"...21 more"],"valid_count":25}}
-{"event":"session_end","data":{"reason":"success","turns_used":4}}
+{"event":"tool_call","data":{"tool":"get_top_artists_by_tag","args":{"tag":"lo-fi","limit":50}}}
+{"event":"tool_call","data":{"tool":"get_top_artists_by_tag","args":{"tag":"ambient","limit":50}}}
+{"event":"parse_success","data":{"playlist_name":"Velvet Haze","track_ids":[68967,69901,"...12 more"],"valid_count":14}}
+{"event":"eval_scores","data":{"concept":2,"instruction":2,"variety":2,"harmonic_mean":2.0}}
+{"event":"session_end","data":{"reason":"success","turns_used":2}}
 ```
 
-25/25 valid tracks in 4 turns. Artists: Beach House, Cocteau Twins,
-Cigarettes After Sex, Alvvays, girl in red, The Radio Dept., M83, Grimes.
+14/14 valid tracks in 2 turns, 13 artists. Eval: 2/2 across all criteria.
 
 **Artist variety after shuffling** — The final playlist order spreads same-artist
 tracks apart via greedy algorithm:
 
 ```
 SHUFFLED order (artists spread out):
-  [68876] The Radio Dept. - Four Months In The Shade
+  [70060] Massive Attack - Angel
   [68658] Beach House - Sparks
-  [68791] Cocteau Twins - Tishbite
-  [68924] M83 - Karl
+  [68669] Car Seat Headrest - Sunburned Shirts
+  [68671] Cocteau Twins - Iceblink Luck
   [68709] Grimes - Symphonia IX (My Wait Is U)
-  [69848] Alvvays - Next Of Kin
-  ... (10 different artists, 1-2 tracks each, no same-artist adjacency)
+  [68734] Alvvays - Dives
+  ... (13 different artists, 1 track each)
+
+Summary: 14 tracks, 13 artists, 2/5 turns
 ```
 
 ## Determinism Controls
 
 | Lever | Default | Effect |
 |-------|---------|--------|
-| `AGENT_TEMPERATURE` | 0.2 | Lower = more deterministic token sampling |
+| `AGENT_TEMPERATURE` | 0.3 | Lower = more deterministic token sampling |
 | `top_p` | 0.9 | Nucleus sampling cutoff (hardcoded) |
 | `num_predict` | 2048 | Maximum tokens to generate (prevents truncation) |
+| `AGENT_REPEAT_PENALTY` | 1.1 | Penalizes repeated tokens to reduce gibberish (CTRL-style) |
 | `AGENT_SEED` | 0 (random) | Fixed seed for reproducible output |
 | `AGENT_MIN_PLAYLIST_TRACKS` | 12 | Minimum tracks to include in playlist |
 | `AGENT_MAX_PLAYLIST_TRACKS` | 25 | Hard cap on output track count |
 | `parse_response()` | — | Deduplicates + truncates regardless of model output |
 | `_shuffle_spread_artists()` | — | Greedy shuffle to spread same-artist tracks apart |
+
+## LLM-as-Judge Evaluation
+
+After generating a playlist, the agent runs an automated evaluation pass using
+the same Ollama model as judge. Inspired by the AxBench metrics from the
+[Eiffel Tower Llama](https://huggingface.co/spaces/dlouapre/eiffel-tower-llama)
+paper, three criteria are scored 0-2:
+
+| Criterion | What it measures |
+|-----------|-----------------|
+| **Concept match** | Does the playlist match the requested mood/genre/theme? |
+| **Instruction following** | Valid playlist format, correct track count? |
+| **Track variety** | Diverse artists vs. repetitive? |
+
+A **harmonic mean** of the three scores penalizes playlists that fail on any
+single dimension (e.g. on-theme but all from one artist scores poorly).
+
+Scores are logged to JSONL as `eval_scores` events, enabling A/B comparison
+of prompt or parameter changes:
+
+```bash
+# Compare harmonic means across runs
+jq 'select(.event == "eval_scores") | .data' /tmp/ollama_python_agent.jsonl
+```
+
+The evaluation uses `temperature=0.0` for deterministic judging and a 128-token
+cap since only three scores are needed.
 
 ## Applying to Rust Backend
 
@@ -183,37 +249,8 @@ Changes validated in the Python script should be ported to Rust:
 2. **Actionable hints** — Add hint metadata to Rust tool `Output` types
 3. **Default limits** — Increase `get_top_artists_by_tag` default from 10 to 50
 4. **Hard cap** — Add dedup + truncation to `parse_agent_response()`
-5. **Temperature/seed** — Pass through Ollama options in `build_agent()`
+5. **Temperature/seed/repeat_penalty** — Pass through Ollama options in `build_agent()`
 6. **Token limit** — Set `max_tokens: 2048` in `build_agent()` to prevent response truncation
 7. **Track shuffling** — Port `_shuffle_spread_artists()` greedy algorithm to shuffle playlist order
-
-## Usage
-
-```bash
-# Basic
-uv run scripts/agent.py "make me a chill playlist"
-
-# With options
-uv run scripts/agent.py --model qwen3.5:9b --seed 42 --temperature 0.1 "shoegaze deep cuts"
-
-# Extended thinking
-uv run scripts/agent.py --think --max-turns 8 "jazz from my library"
-```
-
-## Configuration
-
-All env vars are read from `.env` via `python-decouple`. CLI flags override
-env var defaults.
-
-| Env Var | Default | CLI Flag |
-|---------|---------|----------|
-| `OLLAMA_MODEL` | `qwen3.5:9b` | `--model` |
-| `OLLAMA_HOST` | `http://localhost:11434` | `--host` |
-| `AGENT_MAX_TURNS` | `5` | `--max-turns` |
-| `AGENT_TEMPERATURE` | `0.2` | `--temperature` |
-| `AGENT_THINK` | `false` | `--think` |
-| `AGENT_SEED` | `0` | `--seed` |
-| `AGENT_MIN_PLAYLIST_TRACKS` | `12` | — |
-| `AGENT_MAX_PLAYLIST_TRACKS` | `25` | — |
-| `AGENT_LOG_FILE` | `/tmp/ollama_python_agent.jsonl` | `--log-file` |
-| `LASTFM_API_KEY` | — | — |
+8. **Last-turn nudge** — Inject "output now" message on final turn to prevent exhaustion
+9. **Creative naming** — Port synonym-based playlist naming instructions to `prompt.rs`
