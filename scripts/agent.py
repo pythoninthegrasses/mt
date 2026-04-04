@@ -25,6 +25,9 @@ Usage:
     uv run scripts/agent.py --model qwen3.5:9b "90s rock deep cuts"
     uv run scripts/agent.py --model qwen3.5:9b --think "jazz deep cuts"
     uv run scripts/agent.py --repeat-penalty 1.2 --temperature 0.4 "upbeat workout mix"
+    uv run scripts/agent.py --batch
+    uv run scripts/agent.py --batch --model qwen3:14b
+    uv run scripts/agent.py --batch --prompts-file prompts.txt
 """
 
 import argparse
