@@ -27,6 +27,43 @@ export function createGeniusBrowser(Alpine) {
     result: null, // { status, playlist_id, playlist_name, track_count, message }
     history: [], // past generations for this session
 
+    // Animated prompt cycling
+    _animatedText: '',
+    _animatedVisible: false,
+    _animateTimer: null,
+    _promptExamples: [
+      'make me a chill playlist from my library',
+      'something similar to what I listened to recently',
+      "find me post-punk artists I don't usually listen to",
+      'upbeat tracks for a morning run',
+      'rainy day songs with acoustic guitars',
+      "deep cuts I haven't played in months",
+      'a late-night driving mix',
+      'something moody and atmospheric',
+      'high energy tracks for cleaning the house',
+      'jazz and soul from the 60s and 70s',
+      'songs that build slowly then explode',
+      'artists similar to Radiohead in my library',
+      'a Sunday morning coffee playlist',
+      'tracks with heavy bass lines',
+      'my most played songs from this year',
+      'something dreamy and shoegaze-y',
+      'a workout mix that keeps escalating',
+      'underrated albums I barely touched',
+      'folksy singer-songwriter vibes',
+      "electronic music that isn't too intense",
+      'songs to cook dinner to',
+      'a road trip playlist from my collection',
+      'melancholy but beautiful tracks',
+      'hip-hop and R&B from the 90s',
+      'everything by female vocalists',
+      'instrumental tracks only',
+      'songs under three minutes',
+      'a party mix from what I already have',
+      'blues and classic rock deep cuts',
+    ],
+    _promptIndex: 0,
+
     // Event cleanup
     _unlisten: null,
 
@@ -41,6 +78,8 @@ export function createGeniusBrowser(Alpine) {
       if (this.$store.ui.view === 'genius') {
         this._checkOnboarding();
       }
+
+      this._startPromptCycle();
     },
 
     destroy() {
@@ -48,10 +87,50 @@ export function createGeniusBrowser(Alpine) {
         this._unlisten();
         this._unlisten = null;
       }
+      this._stopPromptCycle();
     },
 
     get ui() {
       return this.$store.ui;
+    },
+
+    // --- Animated prompt cycling ---
+
+    _startPromptCycle() {
+      // Fisher-Yates shuffle for a fresh order each session
+      for (let i = this._promptExamples.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [this._promptExamples[i], this._promptExamples[j]] = [
+          this._promptExamples[j],
+          this._promptExamples[i],
+        ];
+      }
+      this._promptIndex = 0;
+      this._showNextPrompt();
+    },
+
+    _stopPromptCycle() {
+      if (this._animateTimer) {
+        clearTimeout(this._animateTimer);
+        this._animateTimer = null;
+      }
+    },
+
+    _showNextPrompt() {
+      // Fade in
+      this._animatedText = this._promptExamples[this._promptIndex];
+      this._animatedVisible = true;
+
+      // Hold visible for 3.9s, then fade out
+      this._animateTimer = setTimeout(() => {
+        this._animatedVisible = false;
+
+        // After fade-out completes (1.3s), advance and show next
+        this._animateTimer = setTimeout(() => {
+          this._promptIndex = (this._promptIndex + 1) % this._promptExamples.length;
+          this._showNextPrompt();
+        }, 1300);
+      }, 3900);
     },
 
     // --- Onboarding ---
