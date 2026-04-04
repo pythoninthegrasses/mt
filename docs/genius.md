@@ -80,9 +80,9 @@ Start with **metadata-based similarity** as the MVP — it requires no additiona
 
 The Genius view uses a chat-first layout:
 
-- **Background**: Large transparent glasses graphic centered and rotated ~35 degrees, low opacity so it doesn't obscure controls
+- **Background**: Large transparent glasses graphic centered and rotated ~45 degrees, low opacity so it doesn't obscure controls
 - **Empty state**: Animated prompt examples cycle with slow fade transitions ("make me a chill playlist from my library", etc.)
 - **Composer**: Positioned at the bottom of the view with a text area and generate button
-- **Keyboard shortcut**: Enter triggers generation, Shift+Enter inserts a new line
+- **Keyboard shortcut**: Shift+Enter triggers generation, Enter inserts a new line
 - **History**: Recent generations listed above the composer when present
 - **Onboarding**: Three-step wizard (check Ollama -> download model -> ready) shown before the main interface

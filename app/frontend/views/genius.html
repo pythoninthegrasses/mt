@@ -7,7 +7,7 @@
 >
   <!-- Background glasses graphic (AC#1) -->
   <svg
-    class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] max-w-[500px] text-foreground opacity-[0.03] rotate-[-35deg] pointer-events-none"
+    class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] max-w-[500px] text-foreground opacity-[0.03] rotate-[-45deg] pointer-events-none"
     fill="currentColor"
     viewBox="0 155 512 260"
     aria-hidden="true"
@@ -248,7 +248,7 @@
           <div class="relative">
             <textarea
               x-model="prompt"
-              @keydown.enter.prevent="if ($event.shiftKey) { prompt += '\n' } else { generate() }"
+              @keydown.shift.enter.prevent="generate()"
               placeholder="Describe a playlist..."
               class="w-full text-sm bg-muted/50 border border-border rounded-lg px-3 py-2.5 pr-14 resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 placeholder:text-foreground/30"
               rows="2"
@@ -260,7 +260,7 @@
               :disabled="!prompt.trim() || generating"
               class="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-colors"
               :class="prompt.trim() && !generating ? 'text-primary hover:bg-primary/10' : 'text-foreground/20 cursor-not-allowed'"
-              title="Generate (Enter)"
+              title="Generate (Shift+Enter)"
               data-testid="genius-generate"
             >
               <template x-if="!generating">
@@ -283,7 +283,7 @@
             </button>
           </div>
           <p class="text-[10px] text-foreground/30 mt-1.5 px-1">
-            Press Enter to generate, Shift+Enter for new line
+            Press Shift+Enter to generate, Enter for new line
           </p>
         </div>
       </div>
