@@ -46,6 +46,9 @@ pub struct LibraryQuery {
     pub search: Option<String>,
     pub artist: Option<String>,
     pub album: Option<String>,
+    pub genre: Option<String>,
+    pub year_from: Option<i64>,
+    pub year_to: Option<i64>,
     pub sort_by: LibrarySortColumn,
     pub sort_order: SortOrder,
     pub limit: i64,
@@ -88,6 +91,21 @@ pub(crate) fn get_all_tracks(
     if let Some(album) = &query.album {
         conditions.push("album = ?");
         params_vec.push(Box::new(album.clone()));
+    }
+
+    if let Some(genre) = &query.genre {
+        conditions.push("genre LIKE ?");
+        params_vec.push(Box::new(format!("%{genre}%")));
+    }
+
+    if let Some(year_from) = query.year_from {
+        conditions.push("CAST(date AS INTEGER) >= ?");
+        params_vec.push(Box::new(year_from));
+    }
+
+    if let Some(year_to) = query.year_to {
+        conditions.push("CAST(date AS INTEGER) <= ?");
+        params_vec.push(Box::new(year_to));
     }
 
     // Always filter out missing tracks from library view

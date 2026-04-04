@@ -31,18 +31,21 @@ use crate::lastfm::LastFmClient;
 /// Generate a unique playlist name by appending a number if needed.
 ///
 /// If the base name exists, tries "Name (2)", "Name (3)", etc.
-fn generate_unique_playlist_name(conn: &rusqlite::Connection, base_name: &str) -> crate::db::DbResult<String> {
+fn generate_unique_playlist_name(
+    conn: &rusqlite::Connection,
+    base_name: &str,
+) -> crate::db::DbResult<String> {
     // Check if base name is available
     let exists: bool = conn.query_row(
         "SELECT EXISTS(SELECT 1 FROM playlists WHERE name = ? LIMIT 1)",
         [base_name],
         |row| row.get(0),
     )?;
-    
+
     if !exists {
         return Ok(base_name.to_string());
     }
-    
+
     // Find an available suffix
     for i in 2..=100 {
         let candidate = format!("{} ({})", base_name, i);
@@ -55,7 +58,7 @@ fn generate_unique_playlist_name(conn: &rusqlite::Connection, base_name: &str) -
             return Ok(candidate);
         }
     }
-    
+
     // Fallback: append timestamp if all numbers are taken
     use std::time::{SystemTime, UNIX_EPOCH};
     let timestamp = SystemTime::now()
@@ -79,10 +82,7 @@ fn shuffle_spread_artists(tracks: &[(i64, String)]) -> Vec<i64> {
     let mut artist_keys: HashMap<i64, &str> = HashMap::new();
 
     for (id, artist) in tracks {
-        by_artist
-            .entry(artist.as_str())
-            .or_default()
-            .push(*id);
+        by_artist.entry(artist.as_str()).or_default().push(*id);
         artist_keys.insert(*id, artist.as_str());
     }
 
@@ -189,10 +189,11 @@ pub(crate) fn build_agent(
     client
         .agent(DEFAULT_MODEL)
         .preamble(&system_prompt)
-        .temperature(0.2)
-        .max_tokens(1024)
+        .temperature(0.3)
+        .max_tokens(2048)
         .additional_params(serde_json::json!({
             "top_p": 0.9,
+            "repeat_penalty": 1.1,
         }))
         .tool(GetRecentlyPlayed {
             ctx: Arc::clone(&ctx),
@@ -323,7 +324,9 @@ pub async fn agent_generate_playlist(
         .with_conn(|conn| {
             let mut results = Vec::new();
             for id in &parsed.track_ids {
-                let mut stmt = conn.prepare("SELECT id, artist FROM library WHERE id = ? AND missing = 0 LIMIT 1")?;
+                let mut stmt = conn.prepare(
+                    "SELECT id, artist FROM library WHERE id = ? AND missing = 0 LIMIT 1",
+                )?;
                 let mut rows = stmt.query([id])?;
                 if let Some(row) = rows.next()? {
                     let track_id: i64 = row.get(0)?;
@@ -337,7 +340,7 @@ pub async fn agent_generate_playlist(
 
     if track_details.is_empty() {
         return Ok(AgentResponse::error(
-            "None of the selected tracks exist in your library".to_string()
+            "None of the selected tracks exist in your library".to_string(),
         ));
     }
 
@@ -355,7 +358,7 @@ pub async fn agent_generate_playlist(
     let playlist_name: String = db
         .with_conn(|conn| generate_unique_playlist_name(conn, &parsed.name))
         .map_err(|e: crate::db::DbError| format!("Failed to generate playlist name: {e}"))?;
-    
+
     let playlist = db
         .with_conn(|conn| playlists::create_playlist(conn, &playlist_name))
         .map_err(|e| format!("Failed to create playlist: {e}"))?;
@@ -371,9 +374,7 @@ pub async fn agent_generate_playlist(
     };
 
     let added = db
-        .with_conn(|conn| {
-            playlists::add_tracks_to_playlist(conn, playlist.id, &shuffled_ids, None)
-        })
+        .with_conn(|conn| playlists::add_tracks_to_playlist(conn, playlist.id, &shuffled_ids, None))
         .map_err(|e| format!("Failed to add tracks to playlist: {e}"))?;
 
     info!(
@@ -694,23 +695,23 @@ mod tests {
     #[test]
     fn unique_name_appends_number_when_exists() {
         let db = Database::new_in_memory().expect("in-memory db");
-        
+
         // Create first playlist
         db.with_conn(|conn| playlists::create_playlist(conn, "Chill Vibes"))
             .expect("create first")
             .expect("first playlist created");
-        
+
         // Second should get (2)
         let name2 = db
             .with_conn(|conn| generate_unique_playlist_name(conn, "Chill Vibes"))
             .expect("generate name2");
         assert_eq!(name2, "Chill Vibes (2)");
-        
+
         // Create second playlist
         db.with_conn(|conn| playlists::create_playlist(conn, &name2))
             .expect("create second")
             .expect("second playlist created");
-        
+
         // Third should get (3)
         let name3 = db
             .with_conn(|conn| generate_unique_playlist_name(conn, "Chill Vibes"))

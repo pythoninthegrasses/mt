@@ -39,6 +39,31 @@ pub enum ToolOutput<T: Serialize> {
     Hint { matches: usize, hint: String },
 }
 
+/// Parse a decade string into (year_from, year_to) range.
+///
+/// Handles both short ("90s", "20s") and long ("1990s", "2020s") forms.
+/// Short forms < 100 are resolved relative to century: 20-99 → 1900s, 0-19 → 2000s.
+fn parse_decade(s: &str) -> (i64, i64) {
+    let trimmed = s.trim().to_lowercase();
+    let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
+
+    if let Ok(n) = digits.parse::<i64>() {
+        let start = if n >= 100 {
+            // Full century form: "1990s" → 1990, "1780s" → 1780
+            (n / 10) * 10
+        } else if n >= 20 {
+            // Short 20th century: "90s" → 1990, "60s" → 1960
+            1900 + n
+        } else {
+            // Short 21st century: "00s" → 2000, "10s" → 2010
+            2000 + n
+        };
+        (start, start + 9)
+    } else {
+        (1900, 2099)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // GetRecentlyPlayed
 // ---------------------------------------------------------------------------
@@ -209,7 +234,7 @@ impl Tool for GetTopArtists {
 // ---------------------------------------------------------------------------
 
 /// Args for `search_library` tool.
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 pub struct SearchLibraryArgs {
     /// Free-text search across title, artist, and album
     pub query: Option<String>,
@@ -217,6 +242,14 @@ pub struct SearchLibraryArgs {
     pub artist: Option<String>,
     /// Filter by exact album name
     pub album: Option<String>,
+    /// Filter by genre (LIKE match, e.g. "rock", "jazz")
+    pub genre: Option<String>,
+    /// Filter by decade: "90s", "80s", "2000s", etc.
+    pub decade: Option<String>,
+    /// Filter tracks from this year onward (inclusive)
+    pub year_from: Option<i64>,
+    /// Filter tracks up to this year (inclusive)
+    pub year_to: Option<i64>,
     /// Maximum number of tracks to return (default: 20)
     pub limit: Option<i64>,
 }
@@ -235,13 +268,17 @@ impl Tool for SearchLibrary {
     async fn definition(&self, _prompt: String) -> ToolDefinition {
         ToolDefinition {
             name: Self::NAME.into(),
-            description: "Search the user's music library by keyword, artist, or album. Returns matching tracks.".into(),
+            description: "Search the user's music library by keyword, artist, album, genre, or year range. Returns matching tracks with year metadata.".into(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "query": { "type": "string", "description": "Free-text search across title, artist, album" },
                     "artist": { "type": "string", "description": "Filter by exact artist name" },
                     "album": { "type": "string", "description": "Filter by exact album name" },
+                    "genre": { "type": "string", "description": "Filter by genre (LIKE match, e.g. 'rock', 'jazz')" },
+                    "decade": { "type": "string", "description": "Filter by decade: '90s', '80s', '2000s', etc." },
+                    "year_from": { "type": "integer", "description": "Filter tracks from this year onward (inclusive)" },
+                    "year_to": { "type": "integer", "description": "Filter tracks up to this year (inclusive)" },
                     "limit": { "type": "integer", "description": "Max tracks to return (default: 20)" }
                 }
             }),
@@ -250,10 +287,23 @@ impl Tool for SearchLibrary {
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
         let limit = args.limit.unwrap_or(20);
+
+        // Resolve decade to year range
+        let (year_from, year_to) = match args.decade.as_deref() {
+            Some(d) => {
+                let (from, to) = parse_decade(d);
+                (Some(from), Some(to))
+            }
+            None => (args.year_from, args.year_to),
+        };
+
         let query = LibraryQuery {
             search: args.query,
             artist: args.artist,
             album: args.album,
+            genre: args.genre,
+            year_from,
+            year_to,
             limit,
             ..Default::default()
         };
@@ -1017,9 +1067,7 @@ mod tests {
         let result = tool
             .call(SearchLibraryArgs {
                 query: Some("anything".into()),
-                artist: None,
-                album: None,
-                limit: None,
+                ..Default::default()
             })
             .await
             .unwrap();
@@ -1041,9 +1089,7 @@ mod tests {
         let result = tool
             .call(SearchLibraryArgs {
                 query: Some("Everlong".into()),
-                artist: None,
-                album: None,
-                limit: None,
+                ..Default::default()
             })
             .await
             .unwrap();
@@ -1067,10 +1113,8 @@ mod tests {
         };
         let result = tool
             .call(SearchLibraryArgs {
-                query: None,
                 artist: Some("Radiohead".into()),
-                album: None,
-                limit: None,
+                ..Default::default()
             })
             .await
             .unwrap();
@@ -1095,10 +1139,8 @@ mod tests {
         };
         let result = tool
             .call(SearchLibraryArgs {
-                query: None,
-                artist: None,
-                album: None,
                 limit: Some(3),
+                ..Default::default()
             })
             .await
             .unwrap();
@@ -1200,6 +1242,107 @@ mod tests {
                 name.chars().all(|c| c.is_lowercase() || c == '_'),
                 "tool name {name} is not snake_case"
             );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_decade tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_decade_short_20th_century() {
+        assert_eq!(parse_decade("90s"), (1990, 1999));
+        assert_eq!(parse_decade("60s"), (1960, 1969));
+        assert_eq!(parse_decade("20s"), (1920, 1929));
+    }
+
+    #[test]
+    fn parse_decade_short_21st_century() {
+        assert_eq!(parse_decade("00s"), (2000, 2009));
+        assert_eq!(parse_decade("10s"), (2010, 2019));
+    }
+
+    #[test]
+    fn parse_decade_full_form() {
+        assert_eq!(parse_decade("1990s"), (1990, 1999));
+        assert_eq!(parse_decade("2000s"), (2000, 2009));
+        assert_eq!(parse_decade("2020s"), (2020, 2029));
+        assert_eq!(parse_decade("1780s"), (1780, 1789));
+        assert_eq!(parse_decade("1850s"), (1850, 1859));
+    }
+
+    #[test]
+    fn parse_decade_invalid_fallback() {
+        assert_eq!(parse_decade("xyz"), (1900, 2099));
+        assert_eq!(parse_decade(""), (1900, 2099));
+    }
+
+    // -----------------------------------------------------------------------
+    // SearchLibrary genre/decade filter tests
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn search_library_filters_by_genre() {
+        let ctx = test_context();
+        insert_track(&ctx, "Everlong", "Foo Fighters", "TCATS", "Rock");
+        insert_track(&ctx, "Blue Train", "John Coltrane", "Blue Train", "Jazz");
+
+        let tool = SearchLibrary {
+            ctx: Arc::clone(&ctx),
+        };
+        let result = tool
+            .call(SearchLibraryArgs {
+                genre: Some("Jazz".into()),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        match result {
+            ToolOutput::Results(tracks) => {
+                assert_eq!(tracks.len(), 1);
+                assert_eq!(tracks[0].title, "Blue Train");
+            }
+            ToolOutput::Hint { .. } => panic!("expected Results, got Hint"),
+        }
+    }
+
+    #[tokio::test]
+    async fn search_library_filters_by_decade() {
+        let ctx = test_context();
+        // Insert tracks with year metadata
+        ctx.db
+            .with_conn(|conn| {
+                conn.execute(
+                    "INSERT INTO library (filepath, title, artist, album, genre, date, missing)
+                     VALUES ('/m/a.mp3', 'Smells Like Teen Spirit', 'Nirvana', 'Nevermind', 'Rock', '1991', 0)",
+                    [],
+                )?;
+                conn.execute(
+                    "INSERT INTO library (filepath, title, artist, album, genre, date, missing)
+                     VALUES ('/m/b.mp3', 'Everything In Its Right Place', 'Radiohead', 'Kid A', 'Rock', '2000', 0)",
+                    [],
+                )?;
+                Ok(())
+            })
+            .expect("insert tracks");
+
+        let tool = SearchLibrary {
+            ctx: Arc::clone(&ctx),
+        };
+        let result = tool
+            .call(SearchLibraryArgs {
+                decade: Some("90s".into()),
+                limit: Some(50),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        match result {
+            ToolOutput::Results(tracks) => {
+                assert_eq!(tracks.len(), 1);
+                assert_eq!(tracks[0].title, "Smells Like Teen Spirit");
+            }
+            ToolOutput::Hint { .. } => panic!("expected Results, got Hint"),
         }
     }
 }

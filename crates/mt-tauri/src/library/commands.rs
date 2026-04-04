@@ -55,6 +55,9 @@ pub(crate) fn library_get_all(
         search,
         artist,
         album,
+        genre: None,
+        year_from: None,
+        year_to: None,
         sort_by: sort_by
             .as_ref()
             .and_then(|s| s.parse().ok())

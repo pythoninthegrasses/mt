@@ -4,7 +4,7 @@ title: Genius playlist creator
 status: In Progress
 assignee: []
 created_date: '2026-02-18 05:58'
-updated_date: '2026-04-02 22:34'
+updated_date: '2026-04-04 03:49'
 labels:
   - feature
   - playlists
@@ -14,6 +14,7 @@ labels:
   - lastfm
 dependencies:
   - TASK-308
+  - TASK-277.1
 references:
   - docs/genius.md
 priority: high
@@ -32,13 +33,13 @@ Design document: `~/.claude/plans/steady-juggling-scroll.md`
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 User can enter a natural language prompt to generate a playlist
-- [ ] #2 System uses local LLM (Ollama + llama3.2:1b) to interpret prompts and call appropriate tools
-- [ ] #3 8 tools available: GetRecentlyPlayed, GetTopArtists, SearchLibrary, GetSimilarTracks, GetSimilarArtists, GetTrackTags, GetTopArtistsByTag, GetTopTracksByCountry
-- [ ] #4 Generated playlist only contains tracks that exist in user's local library
-- [ ] #5 Graceful degradation: works without Last.fm (local-only tools), works without Ollama (returns setup instructions)
+- [x] #1 User can enter a natural language prompt to generate a playlist
+- [x] #2 System uses local LLM (Ollama + qwen3.5:9b) to interpret prompts and call appropriate tools
+- [x] #3 8 tools available: GetRecentlyPlayed, GetTopArtists, SearchLibrary, GetSimilarTracks, GetSimilarArtists, GetTrackTags, GetTopArtistsByTag, GetTopTracksByCountry
+- [x] #4 Generated playlist only contains tracks that exist in user's local library
+- [x] #5 Graceful degradation: works without Last.fm (local-only tools), works without Ollama (returns setup instructions)
 - [x] #6 Feature-flagged behind `agent` — zero overhead when disabled
-- [ ] #7 Onboarding wizard: Ollama check → model download → ready
+- [x] #7 Onboarding wizard: Ollama check → model download → ready
 - [x] #8 Agent evals pass (tool selection, output format, degradation)
 <!-- AC:END -->
 
@@ -214,6 +215,34 @@ Total: 764 tests pass (762 existing + 2 new)
 - Mixed-history request (`make me a chill playlist like what I listened to last Friday`): default prompt used 4 turns; override prompt used 2 turns and treated weak recent-history results as a weighting signal instead of spending extra turns matching them exactly.
 
 2026-04-02: Conclusion from prompt experiments: tighter stop rules materially reduce turn count, but prompt-only business-rule enforcement remains unreliable for cases like seed-artist caps. The most promising direction is to keep LLM-driven discovery/tool routing while moving playlist compilation and policy enforcement into deterministic business logic that scores and filters candidates using empirical evidence (tool source overlap, local genre, Last.fm tags/similarity, last played date, play history, and explicit duplicate-artist caps).
+
+## 2026-04-03: Python-to-Rust migration finalized
+
+Swapped AC#2 model from llama3.2:1b to qwen3.5:9b (matches Python agent). Ported remaining Python logic to Rust via rig:
+
+### prompt.rs
+- Added PLAYLIST NAMING section (creative synonyms, not parroting user's words)
+- Added decade/era strategy (search_library with decade+genre, parallel get_top_artists_by_tag)
+- Documented all search_library filters (keyword, artist, album, genre, decade, year range)
+- Clarified search_library(query=...) vs search_library(genre=...) in CRITICAL section
+
+### tools.rs — SearchLibrary expanded
+- Added genre, decade, year_from, year_to args + tool definition
+- Programmatic `parse_decade()` handles any century ("90s" -> 1990-1999, "1780s" -> 1780-1789)
+- 6 new tests: parse_decade (4) + genre/decade filter integration (2)
+
+### db/library.rs — LibraryQuery expanded
+- Added genre (LIKE), year_from, year_to fields to LibraryQuery struct
+- Added filtering logic in get_all_tracks() SQL builder
+
+### mod.rs — build_agent() tuned
+- Temperature: 0.2 -> 0.3 (matches Python)
+- max_tokens: 1024 -> 2048 (prevents response truncation)
+- Added repeat_penalty: 1.1 (prevents token repetition/gibberish)
+- Preamble set via rig's `.preamble()` builder method
+
+### Test coverage
+770 tests pass (764 existing + 6 new). No regressions with or without agent feature.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

@@ -1,17 +1,17 @@
 ---
 id: TASK-301
 title: 'Global playback control shortcuts (stop after current, etc.) from all views'
-status: In Progress
+status: To Do
 assignee: []
 created_date: '2026-03-31 03:36'
-updated_date: '2026-03-31 03:38'
+updated_date: '2026-04-04 03:43'
 labels:
   - enhancement
   - ux
   - playback
 dependencies: []
 priority: medium
-ordinal: 1500
+ordinal: 2859.375
 ---
 
 ## Description

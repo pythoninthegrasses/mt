@@ -1,9 +1,10 @@
 ---
 id: TASK-277.1
 title: Refresh Genius chat-style UI
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-04-04 03:38'
+updated_date: '2026-04-04 03:43'
 labels:
   - feature
   - frontend
@@ -14,6 +15,7 @@ documentation:
   - docs/genius.md
 parent_task_id: TASK-277
 priority: medium
+ordinal: 2500
 ---
 
 ## Description

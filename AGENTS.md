@@ -25,6 +25,7 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 - microsoft/playwright
 - mrlesk/backlog.md
 - nextest-rs/nextest
+- proptest-rs/proptest
 - serial-ata/lofty-rs
 - sharkdp/hyperfine
 - taiko2k/tauon
@@ -32,6 +33,7 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 - tranxuanthang/lrclib
 - websites/deno
 - websites/last_fm_api
+- websites/rs_rig-core
 - websites/rs_tauri_2_9_5
 - websites/taskfile_dev
 
