@@ -46,7 +46,7 @@ to the Rust backend (`crates/mt-tauri/src/agent/`).
 ## Usage
 
 ```bash
-# Basic
+# Single prompt
 uv run scripts/agent.py "make me a chill playlist"
 
 # With options
@@ -54,7 +54,36 @@ uv run scripts/agent.py --model qwen3.5:9b --seed 42 --temperature 0.1 "shoegaze
 
 # Extended thinking
 uv run scripts/agent.py --think --max-turns 8 "jazz from my library"
+
+# Batch: run all 29 built-in prompt examples
+uv run scripts/agent.py --batch
+
+# Batch with a different model
+uv run scripts/agent.py --batch --model qwen3:14b
+
+# Batch from a file (one prompt per line, # comments ignored)
+uv run scripts/agent.py --batch --prompts-file prompts.txt
 ```
+
+Batch mode shares a single DB connection and Ollama client across all prompts,
+prints per-prompt results as they complete, and outputs a summary table:
+
+```
+================================================================================
+BATCH SUMMARY — qwen3.5:9b
+================================================================================
+#    Result  Time Tracks Artists Turns  C  I  V     H  Prompt
+--------------------------------------------------------------------------------
+1    PASS     35s     18      18  2/5   2  2  2  2.00  a Sunday morning coffee playlist
+2    PASS     20s     12      12  2/5   2  2  2  2.00  artists similar to Radiohead in my library
+3    FAIL     45s                  5/5                  tracks with heavy bass lines (parse_failure)
+--------------------------------------------------------------------------------
+Pass: 2/3 (67%)  Avg time: 33s  Total: 100s  Avg harmonic (pass): 2.00
+```
+
+`run_agent()` returns an `AgentResult` dataclass with status, playlist name,
+track IDs, valid count, unique artists, turns used, eval scores, harmonic mean,
+and elapsed time. `run_batch()` collects these for programmatic use.
 
 ## Configuration
 
@@ -74,6 +103,8 @@ env var defaults.
 | `AGENT_MAX_PLAYLIST_TRACKS` | `25` | — |
 | `AGENT_LOG_FILE` | `/tmp/ollama_python_agent.jsonl` | `--log-file` |
 | `LASTFM_API_KEY` | — | — |
+| — | — | `--batch` |
+| — | — | `--prompts-file` |
 
 ## Tools
 
@@ -230,6 +261,81 @@ jq 'select(.event == "eval_scores") | .data' /tmp/ollama_python_agent.jsonl
 The evaluation uses `temperature=0.0` for deterministic judging and a 128-token
 cap since only three scores are needed.
 
+## Model Selection
+
+The default model is `qwen3.5:9b` — chosen to fit 8GB unified memory devices
+(e.g. MacBook Air M3) while maintaining reliable tool calling. Larger models
+improve quality and reduce turn count but require more RAM.
+
+### Requirements
+
+The agent needs a model that can:
+
+- Make **parallel tool calls** (multiple tools in a single turn)
+- Follow a complex 8-tool system prompt with strategy routing
+- Produce structured output (`Playlist: name` / `Tracks: comma-separated IDs`)
+- Reason about user intent to select the right tool combination
+
+Models below ~4B parameters (e.g. llama3.2:1b) lack the reasoning capacity for
+this task. Parallel tool calling support in Ollama is required — models that only
+support single tool calls per turn (e.g. gpt-oss) double the number of turns needed.
+
+### Recommended models by device RAM
+
+| Device RAM | Model | Size (Q4) | Active Params | Notes |
+|------------|-------|-----------|---------------|-------|
+| 8GB | `qwen3.5:9b` | ~7GB | 9B dense | Default. Fits tight but works |
+| 8GB | `qwen3:8b` | ~5GB | 8B dense | Fallback if 3.5 has issues |
+| 16GB | `qwen3:14b` | ~9GB | 14B dense | Highest tool F1 (0.971) |
+| 32GB+ | `qwen3-coder:30b-a3b` | ~18GB | 3B active (MoE) | Fast inference, good quality |
+| 32GB+ | `glm-4.7-flash` | ~19GB | dense | Strong agent benchmarks |
+
+Sticking with the Qwen family across tiers keeps prompt behavior consistent —
+same tool calling format, same instruction following patterns.
+
+### Benchmark: 29 prompt examples (2026-04-04)
+
+Tested all 29 prompt examples from `genius-browser.js` against `qwen3.5:9b`
+with default settings. Full results in TASK-309.
+
+**Overall: 26/29 pass (89.7%), 3 parse failures, 0 errors**
+
+The 3 failures share a root cause: the model dumps 50-100+ track IDs then
+loops trying to self-correct, never producing clean `Playlist:` / `Tracks:`
+output. Affected prompts: "tracks with heavy bass lines", "melancholy but
+beautiful tracks", "blues and classic rock deep cuts".
+
+Two prompts scored Concept=0 due to library coverage gaps (no jazz/soul or
+hip-hop/R&B in the test library) — the model correctly identified the gap
+and fell back to related genres.
+
+### Model comparison on failure cases
+
+Tested the 3 failed prompts + 2 reference prompts across larger models:
+
+| Prompt | qwen3.5:9b | qwen3-coder:30b-a3b | glm-4.7-flash | qwen3.5:35b-a3b |
+|--------|-----------|---------------------|---------------|-----------------|
+| tracks with heavy bass lines | **FAIL** | PASS 42s H=2.00 | PASS 46s H=2.00 | PASS 60s H=1.50 |
+| melancholy but beautiful | **FAIL** | PASS 39s H=1.50 | PASS 75s H=2.00 | PASS 46s H=2.00 |
+| blues/classic rock deep cuts | **FAIL** | PASS 26s H=1.20 | PASS 58s H=1.50 | PASS 68s H=1.20 |
+| chill playlist | PASS ~30s H=2.00 | PASS 38s H=1.50 | PASS 47s H=2.00 | PASS 27s H=2.00 |
+| similar to Radiohead | PASS ~30s H=2.00 | PASS 23s H=2.00 | PASS 25s H=2.00 | PASS 41s H=2.00 |
+
+All 3 larger models pass the prompts that `qwen3.5:9b` failed — the failures
+are a reasoning/self-control issue at 9B scale, not a tool calling issue.
+
+`qwen3-coder:30b-a3b` (MoE, 3B active) is the fastest larger model due to low
+active parameter count on Apple Silicon. `glm-4.7-flash` has the most
+consistent eval scores. `qwen3.5:35b-a3b` was slower than expected and did not
+improve over the other two.
+
+### Speed observations
+
+End-to-end prompt completion time is dominated by **number of turns**, not raw
+token speed. A model completing in 2 turns at 30 tok/s beats a model needing 5
+turns at 100 tok/s. The primary optimization path is reducing turn count through
+better prompt engineering, not switching to faster models.
+
 ## Applying to Rust Backend
 
 The script mirrors the Rust agent in `crates/mt-tauri/src/agent/`:
@@ -241,7 +347,10 @@ The script mirrors the Rust agent in `crates/mt-tauri/src/agent/`:
 | `tool_get_similar_tracks()` | `tools.rs::GetSimilarTracks::call()` |
 | `_lastfm_get()` | `lastfm/client.rs::api_call()` |
 | `parse_response()` | `mod.rs::parse_agent_response()` |
-| `run_agent()` loop | `mod.rs::agent_generate_playlist()` |
+| `run_agent()` → `AgentResult` | `mod.rs::agent_generate_playlist()` |
+| `run_batch()` | — (Python-only test harness) |
+| `_connect()` | Managed by Tauri app state |
+| `BATCH_PROMPTS` | — (Python-only test data) |
 
 Changes validated in the Python script should be ported to Rust:
 

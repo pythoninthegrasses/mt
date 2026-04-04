@@ -36,6 +36,8 @@ import re
 import sqlite3
 import sys
 import textwrap
+import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from ollama import Client, ChatResponse
 from pathlib import Path
@@ -81,6 +83,8 @@ class _JSONFormatter(logging.Formatter):
 
 
 def _setup_logging(log_file: str | Path) -> None:
+    if log.handlers:
+        return
     handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
     handler.setFormatter(_JSONFormatter())
     log.addHandler(handler)
@@ -785,6 +789,57 @@ TOOL_DISPATCH: dict[str, callable] = {
 }
 
 
+@dataclass
+class AgentResult:
+    """Structured result from a single agent run."""
+    prompt: str
+    status: str  # "success", "parse_failure", "exhausted", "error"
+    playlist_name: str | None = None
+    track_ids: list[int] = field(default_factory=list)
+    valid_count: int = 0
+    unique_artists: int = 0
+    turns_used: int = 0
+    max_turns: int = 0
+    eval_scores: dict[str, int] | None = None
+    harmonic_mean: float = 0.0
+    elapsed_seconds: float = 0.0
+    error: str | None = None
+
+
+# Prompt examples from genius-browser.js for batch testing.
+BATCH_PROMPTS = [
+    "make me a chill playlist from my library",
+    "something similar to what I listened to recently",
+    "find me post-punk artists I don't usually listen to",
+    "upbeat tracks for a morning run",
+    "rainy day songs with acoustic guitars",
+    "deep cuts I haven't played in months",
+    "a late-night driving mix",
+    "something moody and atmospheric",
+    "high energy tracks for cleaning the house",
+    "jazz and soul from the 60s and 70s",
+    "songs that build slowly then explode",
+    "artists similar to Radiohead in my library",
+    "a Sunday morning coffee playlist",
+    "tracks with heavy bass lines",
+    "my most played songs from this year",
+    "something dreamy and shoegaze-y",
+    "a workout mix that keeps escalating",
+    "underrated albums I barely touched",
+    "folksy singer-songwriter vibes",
+    "electronic music that isn't too intense",
+    "songs to cook dinner to",
+    "a road trip playlist from my collection",
+    "melancholy but beautiful tracks",
+    "hip-hop and R&B from the 90s",
+    "everything by female vocalists",
+    "instrumental tracks only",
+    "songs under three minutes",
+    "a party mix from what I already have",
+    "blues and classic rock deep cuts",
+]
+
+
 def _shuffle_spread_artists(tracks: list[dict]) -> list[int]:
     """Shuffle tracks to spread out same-artist tracks for a better mix.
 
@@ -955,21 +1010,8 @@ def _evaluate_playlist(
     return None
 
 
-def run_agent(
-    prompt: str,
-    *,
-    model: str = DEFAULT_MODEL,
-    host: str = OLLAMA_HOST,
-    max_turns: int = MAX_TURNS,
-    db_path: Path | None = None,
-    think: bool = DEFAULT_THINK,
-    temperature: float = DEFAULT_TEMPERATURE,
-    seed: int = DEFAULT_SEED,
-    repeat_penalty: float = DEFAULT_REPEAT_PENALTY,
-    log_file: str | Path = DEFAULT_LOG_FILE,
-) -> None:
-    _setup_logging(log_file)
-
+def _connect(db_path: Path | None, host: str, model: str) -> tuple[sqlite3.Connection, Client]:
+    """Set up DB connection and Ollama client, validating both."""
     db_file = db_path or _db_path()
     if not db_file.exists():
         print(f"ERROR: Database not found at {db_file}", file=sys.stderr)
@@ -995,6 +1037,33 @@ def run_agent(
         )
         sys.exit(1)
 
+    return conn, client
+
+
+def run_agent(
+    prompt: str,
+    *,
+    model: str = DEFAULT_MODEL,
+    host: str = OLLAMA_HOST,
+    max_turns: int = MAX_TURNS,
+    db_path: Path | None = None,
+    think: bool = DEFAULT_THINK,
+    temperature: float = DEFAULT_TEMPERATURE,
+    seed: int = DEFAULT_SEED,
+    repeat_penalty: float = DEFAULT_REPEAT_PENALTY,
+    log_file: str | Path = DEFAULT_LOG_FILE,
+    conn: sqlite3.Connection | None = None,
+    client: Client | None = None,
+) -> AgentResult:
+    _setup_logging(log_file)
+    start_time = time.monotonic()
+
+    owns_conn = conn is None
+    if conn is None or client is None:
+        conn, client = _connect(db_path, host, model)
+
+    db_file = db_path or _db_path()
+
     messages = [
         {
             "role": "system",
@@ -1015,7 +1084,6 @@ def run_agent(
                 "repeat_penalty": repeat_penalty,
                 "seed": seed,
                 "db_path": str(db_file),
-                "track_count": track_count,
             }
         },
     )
@@ -1200,7 +1268,7 @@ def run_agent(
                 # Convert to list of dicts and shuffle to spread out same-artist tracks
                 valid_dicts = [dict(v) for v in valid_rows]
                 shuffled_ids = _shuffle_spread_artists(valid_dicts)
-                print(f"\nSHUFFLED order (artists spread out):")
+                print("\nSHUFFLED order (artists spread out):")
 
                 # Reorder valid_rows to match shuffled order
                 valid_row_dict = {v["id"]: v for v in valid_dicts}
@@ -1230,10 +1298,11 @@ def run_agent(
                 )
 
                 # LLM-as-judge evaluation
-                print(f"\n--- Evaluation ---")
+                print("\n--- Evaluation ---")
                 eval_scores = _evaluate_playlist(
                     client, model, prompt, pname, valid_shuffled,
                 )
+                harmonic = 0.0
                 if eval_scores:
                     harmonic = _harmonic_mean(list(eval_scores.values()))
                     print(
@@ -1249,6 +1318,25 @@ def run_agent(
                 else:
                     print("  Evaluation failed (could not parse judge response)")
                     log.warning("eval_parse_failure")
+
+                log.info(
+                    "session_end", extra={"data": {"reason": "success", "turns_used": turn}}
+                )
+                if owns_conn:
+                    conn.close()
+                return AgentResult(
+                    prompt=prompt,
+                    status="success",
+                    playlist_name=pname,
+                    track_ids=shuffled_ids,
+                    valid_count=len(valid_shuffled),
+                    unique_artists=unique_artists,
+                    turns_used=turn,
+                    max_turns=max_turns,
+                    eval_scores=eval_scores,
+                    harmonic_mean=harmonic,
+                    elapsed_seconds=time.monotonic() - start_time,
+                )
             else:
                 print(
                     "PARSE FAILED: Response did not match 'Playlist: ... / Tracks: ...' format"
@@ -1258,17 +1346,125 @@ def run_agent(
                 )
                 log.info("parse_failure", extra={"data": {"content": content}})
 
-            log.info(
-                "session_end", extra={"data": {"reason": "success", "turns_used": turn}}
-            )
-            conn.close()
-            return
+                log.info(
+                    "session_end", extra={"data": {"reason": "parse_failure", "turns_used": turn}}
+                )
+                if owns_conn:
+                    conn.close()
+                return AgentResult(
+                    prompt=prompt,
+                    status="parse_failure",
+                    turns_used=turn,
+                    max_turns=max_turns,
+                    elapsed_seconds=time.monotonic() - start_time,
+                )
 
     log.info(
         "session_end", extra={"data": {"reason": "exhausted", "turns_used": max_turns}}
     )
     print(f"\nWARNING: Exhausted {max_turns} turns without a final response.")
+    if owns_conn:
+        conn.close()
+    return AgentResult(
+        prompt=prompt,
+        status="exhausted",
+        turns_used=max_turns,
+        max_turns=max_turns,
+        elapsed_seconds=time.monotonic() - start_time,
+    )
+
+
+def run_batch(
+    prompts: list[str],
+    *,
+    model: str = DEFAULT_MODEL,
+    host: str = OLLAMA_HOST,
+    max_turns: int = MAX_TURNS,
+    db_path: Path | None = None,
+    think: bool = DEFAULT_THINK,
+    temperature: float = DEFAULT_TEMPERATURE,
+    seed: int = DEFAULT_SEED,
+    repeat_penalty: float = DEFAULT_REPEAT_PENALTY,
+    log_file: str | Path = DEFAULT_LOG_FILE,
+) -> list[AgentResult]:
+    """Run multiple prompts sequentially, sharing one DB connection and client."""
+    _setup_logging(log_file)
+    conn, client = _connect(db_path, host, model)
+    total = len(prompts)
+    results: list[AgentResult] = []
+
+    for i, prompt in enumerate(prompts, 1):
+        print(f"\n{'=' * 60}")
+        print(f"[{i}/{total}] \"{prompt}\"")
+        print(f"{'=' * 60}")
+
+        result = run_agent(
+            prompt,
+            model=model,
+            host=host,
+            max_turns=max_turns,
+            think=think,
+            temperature=temperature,
+            seed=seed,
+            repeat_penalty=repeat_penalty,
+            log_file=log_file,
+            conn=conn,
+            client=client,
+        )
+        results.append(result)
+
+        status_icon = "PASS" if result.status == "success" else "FAIL"
+        print(f"\n  [{i}/{total}] {status_icon} ({result.elapsed_seconds:.0f}s)")
+
     conn.close()
+    _print_batch_summary(results, model)
+    return results
+
+
+def _print_batch_summary(results: list[AgentResult], model: str) -> None:
+    """Print a summary table of batch results."""
+    passed = [r for r in results if r.status == "success"]
+    failed = [r for r in results if r.status != "success"]
+    total_time = sum(r.elapsed_seconds for r in results)
+
+    print(f"\n{'=' * 80}")
+    print(f"BATCH SUMMARY — {model}")
+    print(f"{'=' * 80}")
+    print(f"{'#':<4} {'Result':<6} {'Time':>5} {'Tracks':>6} {'Artists':>7} "
+          f"{'Turns':>5} {'C':>2} {'I':>2} {'V':>2} {'H':>5}  Prompt")
+    print("-" * 80)
+
+    for i, r in enumerate(results, 1):
+        status = "PASS" if r.status == "success" else "FAIL"
+        if r.status == "success":
+            c = r.eval_scores.get("concept", "-") if r.eval_scores else "-"
+            ins = r.eval_scores.get("instruction", "-") if r.eval_scores else "-"
+            v = r.eval_scores.get("variety", "-") if r.eval_scores else "-"
+            h = f"{r.harmonic_mean:.2f}" if r.eval_scores else "-"
+            print(f"{i:<4} {status:<6} {r.elapsed_seconds:>4.0f}s {r.valid_count:>6} "
+                  f"{r.unique_artists:>7} {r.turns_used:>2}/{r.max_turns:<2} "
+                  f"{c:>2} {ins:>2} {v:>2} {h:>5}  {r.prompt}")
+        else:
+            reason = r.status.replace("_", " ")
+            print(f"{i:<4} {status:<6} {r.elapsed_seconds:>4.0f}s "
+                  f"{'':>6} {'':>7} {r.turns_used:>2}/{r.max_turns:<2} "
+                  f"{'':>2} {'':>2} {'':>2} {'':>5}  {r.prompt} ({reason})")
+
+    print("-" * 80)
+
+    avg_time = total_time / len(results) if results else 0
+    avg_harmonic = (
+        sum(r.harmonic_mean for r in passed) / len(passed)
+        if passed else 0
+    )
+    print(
+        f"Pass: {len(passed)}/{len(results)} ({100 * len(passed) / len(results):.0f}%)  "
+        f"Avg time: {avg_time:.0f}s  "
+        f"Total: {total_time:.0f}s  "
+        f"Avg harmonic (pass): {avg_harmonic:.2f}"
+    )
+    if failed:
+        print(f"Failures: {', '.join(repr(r.prompt) for r in failed)}")
 
 
 def main() -> None:
@@ -1278,12 +1474,27 @@ def main() -> None:
         epilog=textwrap.dedent("""\
             examples:
               uv run scripts/agent.py "make me a chill playlist"
-              uv run scripts/agent.py --model llama3.2:1b "90s rock"
               uv run scripts/agent.py --model qwen3.5:9b --think "jazz deep cuts"
               uv run scripts/agent.py --max-turns 3 "upbeat workout mix"
+              uv run scripts/agent.py --batch
+              uv run scripts/agent.py --batch --model qwen3:14b
+              uv run scripts/agent.py --batch --prompts-file prompts.txt
         """),
     )
-    parser.add_argument("prompt", help="Natural language playlist prompt")
+    parser.add_argument(
+        "prompt", nargs="?", default=None, help="Natural language playlist prompt"
+    )
+    parser.add_argument(
+        "--batch",
+        action="store_true",
+        help="Run all built-in prompt examples (from genius-browser.js)",
+    )
+    parser.add_argument(
+        "--prompts-file",
+        type=Path,
+        default=None,
+        help="File with one prompt per line (use with --batch)",
+    )
     parser.add_argument(
         "--model",
         default=DEFAULT_MODEL,
@@ -1330,18 +1541,43 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    run_agent(
-        args.prompt,
-        model=args.model,
-        host=args.host,
-        max_turns=args.max_turns,
-        db_path=args.db,
-        think=args.think,
-        temperature=args.temperature,
-        seed=args.seed,
-        repeat_penalty=args.repeat_penalty,
-        log_file=args.log_file,
-    )
+    if args.batch:
+        if args.prompts_file:
+            prompts = [
+                line.strip()
+                for line in args.prompts_file.read_text().splitlines()
+                if line.strip() and not line.strip().startswith("#")
+            ]
+        else:
+            prompts = BATCH_PROMPTS
+
+        run_batch(
+            prompts,
+            model=args.model,
+            host=args.host,
+            max_turns=args.max_turns,
+            db_path=args.db,
+            think=args.think,
+            temperature=args.temperature,
+            seed=args.seed,
+            repeat_penalty=args.repeat_penalty,
+            log_file=args.log_file,
+        )
+    elif args.prompt:
+        run_agent(
+            args.prompt,
+            model=args.model,
+            host=args.host,
+            max_turns=args.max_turns,
+            db_path=args.db,
+            think=args.think,
+            temperature=args.temperature,
+            seed=args.seed,
+            repeat_penalty=args.repeat_penalty,
+            log_file=args.log_file,
+        )
+    else:
+        parser.error("Either provide a prompt or use --batch")
 
 
 if __name__ == "__main__":
