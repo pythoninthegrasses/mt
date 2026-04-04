@@ -25,6 +25,7 @@ export function createGeniusBrowser(Alpine) {
     prompt: '',
     generating: false,
     result: null, // { status, playlist_id, playlist_name, track_count, message }
+    _resultTimeout: null,
     history: [], // past generations for this session
 
     // Animated prompt cycling
@@ -86,6 +87,10 @@ export function createGeniusBrowser(Alpine) {
       if (this._unlisten) {
         this._unlisten();
         this._unlisten = null;
+      }
+      if (this._resultTimeout) {
+        clearTimeout(this._resultTimeout);
+        this._resultTimeout = null;
       }
       this._stopPromptCycle();
     },
@@ -241,6 +246,11 @@ export function createGeniusBrowser(Alpine) {
 
       this.generating = true;
       this.result = null;
+      if (this._resultTimeout) {
+        clearTimeout(this._resultTimeout);
+        this._resultTimeout = null;
+      }
+      this.prompt = '';
 
       try {
         const response = await agent.generatePlaylist(trimmed);
@@ -253,13 +263,19 @@ export function createGeniusBrowser(Alpine) {
             playlist_id: response.playlist_id,
             track_count: response.track_count,
           });
-          this.prompt = '';
           // Notify sidebar to refresh playlists
           window.dispatchEvent(new CustomEvent('mt:playlists-updated'));
           this.ui.toast(
             `Created "${response.playlist_name}" with ${response.track_count} tracks`,
             'success',
           );
+          // Auto-dismiss success banner after 5 seconds
+          this._resultTimeout = setTimeout(() => {
+            if (this.result?.status === 'success') {
+              this.result = null;
+            }
+            this._resultTimeout = null;
+          }, 5000);
         } else if (response.status === 'no_ollama') {
           this.onboardingComplete = false;
           this.onboardingStep = 'install-ollama';

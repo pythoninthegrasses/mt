@@ -198,18 +198,17 @@
             </div>
           </template>
 
-          <!-- Generating indicator -->
-          <template x-if="generating">
-            <div class="px-4 pt-4 pb-3">
-              <div class="flex items-center gap-2 text-xs text-foreground/50">
-                <div
-                  class="w-3.5 h-3.5 border-2 border-primary/50 border-t-transparent rounded-full animate-spin"
-                >
-                </div>
-                <span>Searching your library and generating playlist...</span>
-              </div>
+          <!-- Generating spinner -->
+          <div
+            x-show="generating"
+            class="flex flex-col items-center justify-center h-full gap-4"
+          >
+            <div
+              class="w-14 h-14 border-[3px] border-foreground border-t-transparent rounded-full animate-spin"
+            >
             </div>
-          </template>
+            <p class="text-sm text-foreground/40">Generating playlist...</p>
+          </div>
 
           <!-- History -->
           <div class="px-4 pb-4" x-show="history.length > 0">
@@ -248,7 +247,7 @@
           <div class="relative">
             <textarea
               x-model="prompt"
-              @keydown.shift.enter.prevent="generate()"
+              @keydown.enter.prevent="if (!$event.shiftKey) generate(); else { $event.target.setRangeText('\n', $event.target.selectionStart, $event.target.selectionEnd, 'end') }"
               placeholder="Describe a playlist..."
               class="w-full text-sm bg-muted/50 border border-border rounded-lg px-3 py-2.5 pr-14 resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 placeholder:text-foreground/30"
               rows="2"
@@ -260,30 +259,22 @@
               :disabled="!prompt.trim() || generating"
               class="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-colors"
               :class="prompt.trim() && !generating ? 'text-primary hover:bg-primary/10' : 'text-foreground/20 cursor-not-allowed'"
-              title="Generate (Shift+Enter)"
+              title="Generate (Enter)"
               data-testid="genius-generate"
             >
-              <template x-if="!generating">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M13 7l5 5m0 0l-5 5m5-5H6"
-                  >
-                  </path>
-                </svg>
-              </template>
-              <template x-if="generating">
-                <div
-                  class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 7l5 5m0 0l-5 5m5-5H6"
                 >
-                </div>
-              </template>
+                </path>
+              </svg>
             </button>
           </div>
           <p class="text-[10px] text-foreground/30 mt-1.5 px-1">
-            Press Shift+Enter to generate, Enter for new line
+            Press Enter to generate, Shift+Enter for new line
           </p>
         </div>
       </div>

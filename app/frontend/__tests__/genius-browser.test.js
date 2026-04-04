@@ -162,6 +162,67 @@ describe('Genius Browser', () => {
       expect(instance.history).toHaveLength(1);
       expect(instance.prompt).toBe('');
     });
+
+    it('clears prompt immediately when generation starts', async () => {
+      const instance = createInstance();
+      instance.onboardingComplete = true;
+      instance.prompt = 'test prompt';
+
+      // Use a deferred promise so we can check state mid-generation
+      let resolve;
+      mockAgent.generatePlaylist.mockReturnValue(
+        new Promise((r) => {
+          resolve = r;
+        }),
+      );
+
+      const genPromise = instance.generate();
+
+      // Prompt should be cleared while still generating
+      expect(instance.prompt).toBe('');
+      expect(instance.generating).toBe(true);
+
+      resolve({ status: 'success', playlist_name: 'Test', playlist_id: 1, track_count: 5 });
+      globalThis.window = { dispatchEvent: vi.fn() };
+      globalThis.CustomEvent = class CustomEvent {
+        constructor(type, opts) {
+          this.type = type;
+          this.detail = opts?.detail;
+        }
+      };
+      await genPromise;
+    });
+
+    it('auto-dismisses success result after 5 seconds', async () => {
+      const instance = createInstance();
+      instance.onboardingComplete = true;
+      instance.prompt = 'test prompt';
+      mockAgent.generatePlaylist.mockResolvedValue({
+        status: 'success',
+        playlist_name: 'Test',
+        playlist_id: 1,
+        track_count: 5,
+      });
+
+      globalThis.window = { dispatchEvent: vi.fn() };
+      globalThis.CustomEvent = class CustomEvent {
+        constructor(type, opts) {
+          this.type = type;
+          this.detail = opts?.detail;
+        }
+      };
+
+      await instance.generate();
+
+      expect(instance.result).not.toBeNull();
+      expect(instance.result.status).toBe('success');
+
+      // After 5 seconds, result should auto-dismiss
+      vi.advanceTimersByTime(5000);
+      expect(instance.result).toBeNull();
+      // But history entry should remain
+      expect(instance.history).toHaveLength(1);
+    });
   });
 
   describe('onboarding', () => {
