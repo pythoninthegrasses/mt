@@ -1,5 +1,59 @@
 # Changelog
 
+## [1.3.0](https://github.com/pythoninthegrasses/mt/compare/v1.2.4...v1.3.0) (2026-04-04)
+
+
+### Features
+
+* **agent:** add batch mode and model selection docs ([a203129](https://github.com/pythoninthegrasses/mt/commit/a203129c5043e3969c6a044f11f0b2331d5330f4))
+* **agent:** add decade/genre filters, tune model params, update backlog ([2bee235](https://github.com/pythoninthegrasses/mt/commit/2bee2358982cc094fa025669e50d7205e7d3a1e1))
+* **agent:** add decade/year/genre filters to search_library ([fb232af](https://github.com/pythoninthegrasses/mt/commit/fb232af14caa213dee2656719f6ecab58abc5057))
+* **agent:** add heuristic evals with wiremock mock Ollama server (Phase 6) ([27f9c2e](https://github.com/pythoninthegrasses/mt/commit/27f9c2edb93ccd36d6ef13cd920fc4d2335da950))
+* **agent:** add onboarding and Ollama setup commands (Phase 5) ([f1cf52c](https://github.com/pythoninthegrasses/mt/commit/f1cf52c58af9ca52466c2feb09b5da23a881c71a))
+* **agent:** add performance fixes and artist variety controls ([c8c0ccf](https://github.com/pythoninthegrasses/mt/commit/c8c0ccfd5901030aaf0531a75d6386cc91cb39ef))
+* **agent:** add Python Ollama agent script with JSONL logging scaffolding ([4f29c97](https://github.com/pythoninthegrasses/mt/commit/4f29c972929feb254e8463f6e67772e8b256872b))
+* **agent:** add Python prompt override harness ([d5b5416](https://github.com/pythoninthegrasses/mt/commit/d5b541623b4c1411ec0b87c124bf5bf1dff88acc))
+* **agent:** add repeat penalty, LLM-as-judge eval, creative naming ([4ac5ca6](https://github.com/pythoninthegrasses/mt/commit/4ac5ca6e1e36079007d6c4f71b3fdf6e6e6d80d6))
+* **agent:** add rig-core + schemars deps and implementation plan for TASK-277 ([fc5846b](https://github.com/pythoninthegrasses/mt/commit/fc5846ba3c55bf8a019ff8779898b849546f86c2))
+* **agent:** add types, prompt, module scaffold and wire into lib.rs ([2f121f7](https://github.com/pythoninthegrasses/mt/commit/2f121f7a5d4dd1f8fc603eb23643892f6feb35c8))
+* **agent:** expand genre filter with parent-subgenre mapping ([a063a5c](https://github.com/pythoninthegrasses/mt/commit/a063a5c714584dfba08461f0f2bd9fcc0dd42a1f))
+* **agent:** implement Last.fm tools and strategy-based system prompt ([e063a28](https://github.com/pythoninthegrasses/mt/commit/e063a2817f46e810adfee47231bbbdb5a7c405ca))
+* **agent:** implement tools and agent loop for playlist generation ([d9a37c9](https://github.com/pythoninthegrasses/mt/commit/d9a37c9b8ea52d65af45d1f0173fb9b629ee21bb))
+* **agent:** tighten Rust playlist prompt guidance ([103776b](https://github.com/pythoninthegrasses/mt/commit/103776bb9ed416672d9001aa74257709b3457fb7))
+* **agent:** wire up JSONL logging, temperature control, and think toggle ([8fec18b](https://github.com/pythoninthegrasses/mt/commit/8fec18bbcc071f17bfea590f81a6f91fa3a8220c))
+* **backlog:** add genius UI refresh task ([13bd3f5](https://github.com/pythoninthegrasses/mt/commit/13bd3f582123c298361b44e48a698f37466843fd))
+* **genius:** add frontend UI for Genius playlist creator ([4953fab](https://github.com/pythoninthegrasses/mt/commit/4953fab6e68f5136f57d3922a7ee33bf36bc0056))
+* **genius:** Enter to generate, auto-dismiss banner, centered spinner ([765c54d](https://github.com/pythoninthegrasses/mt/commit/765c54d210954b607484123d6e979ff80c961a33))
+* **genius:** refresh chat-style UI layout ([8604bd6](https://github.com/pythoninthegrasses/mt/commit/8604bd6787e00068d68b28160f14f93a56bb8926))
+* **genius:** update keyboard shortcut to Shift+Enter, fix glasses angle ([c7de133](https://github.com/pythoninthegrasses/mt/commit/c7de1339d82a21b01c4af4113250fbbb03557a8f))
+
+
+### Bug Fixes
+
+* **agent:** cfg-gate lastfm discovery types, methods, and tests behind agent feature ([fd8593a](https://github.com/pythoninthegrasses/mt/commit/fd8593a3b92333bda22667aaa68a6c4db2886592))
+* **agent:** cfg-gate new_unconfigured behind test+agent to fix dead_code error ([b8b2d3e](https://github.com/pythoninthegrasses/mt/commit/b8b2d3e3c202b670efddafef66da77e9535fc1d9))
+* **ci:** enforce nightly toolchain in tauri build setup action ([4a8ac10](https://github.com/pythoninthegrasses/mt/commit/4a8ac102dd99d94b1ded1c6475bc8381c924e514))
+* **ci:** force MSVC host toolchain on Windows to prevent dlltool errors ([b92b2d0](https://github.com/pythoninthegrasses/mt/commit/b92b2d078e8ac4aa8bd9c7123bd64567823245dd))
+* **ci:** guard RUSTUP_TOOLCHAIN against empty PINNED_RUST on Windows ([31abafc](https://github.com/pythoninthegrasses/mt/commit/31abafcf6f5eb5aa927fd5bb3e5ecec745da5ef8))
+* **ci:** harden nightly status guards for ci setup tasks ([c4bd4f3](https://github.com/pythoninthegrasses/mt/commit/c4bd4f378091b800c9f3624a110e628f1befd356))
+* **ci:** pin Rust toolchain from .tool-versions and add MSVC target on Windows ([cdf8ef4](https://github.com/pythoninthegrasses/mt/commit/cdf8ef40fbe735ad4a1a0244558bda77485eb765))
+* **ci:** restore default keychain after release build cleanup ([f74c32f](https://github.com/pythoninthegrasses/mt/commit/f74c32fc7f5a155c56d8814b23c9c1d6f2dbb419))
+* **ci:** use pwsh for toolchain extraction on Windows, restore macOS build ([dc8a7d7](https://github.com/pythoninthegrasses/mt/commit/dc8a7d7f8f345aca333714671e053a7800405c71))
+* **clippy:** derive Default for OnboardingState, collapse nested if ([1855050](https://github.com/pythoninthegrasses/mt/commit/18550507c3bead36e266642b85d206f4f008e7a6))
+* **genius:** crop glasses SVG viewBox to match sidebar icon size ([3ec1869](https://github.com/pythoninthegrasses/mt/commit/3ec18699b161c91e3020aeff41c2a844887338c2))
+* **playlists:** refresh agent-created playlists ([a96e616](https://github.com/pythoninthegrasses/mt/commit/a96e6161f7d2b2325fe1f8f7c0b45811c9d9309f))
+* remove orphaned new_unconfigured test helper ([75df683](https://github.com/pythoninthegrasses/mt/commit/75df68321f6596a2fc7972897656305586ec1e60))
+
+
+### Performance Improvements
+
+* **ci:** merge rust-lint and rust-tests into single job, drop macOS build ([a3c2e3b](https://github.com/pythoninthegrasses/mt/commit/a3c2e3b233c6af1f9613477faa269053003e9fdf))
+
+
+### Reverts
+
+* remove unused lastfm agent types and methods from main ([3520dc7](https://github.com/pythoninthegrasses/mt/commit/3520dc7cd5e137e2d06d582a109940e8ebace613))
+
 ## [1.2.4](https://github.com/pythoninthegrasses/mt/compare/v1.2.3...v1.2.4) (2026-03-31)
 
 
