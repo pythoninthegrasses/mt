@@ -127,4 +127,4 @@ RUN cargo tauri bundle \
 FROM scratch AS artifacts
 
 COPY --from=build /build/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb /
-COPY --from=build /build/target/x86_64-unknown-linux-gnu/release/mt-tauri /mt-tauri
+COPY --from=build /build/target/x86_64-unknown-linux-gnu/release/mt /mt
