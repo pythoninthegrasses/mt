@@ -1,0 +1,10 @@
+failure-threshold: warning
+
+ignored:
+  - DL3008        # pin versions in apt-get
+  - DL3059        # multiple consecutive RUN (intentional in multi-stage)
+  - DL4006        # pipefail -- macOS container tool does not support SHELL
+
+trustedRegistries:
+  - docker.io
+  - ghcr.io

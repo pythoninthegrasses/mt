@@ -399,7 +399,7 @@ task tauri:build
 
 ### Docker Builds (Linux .deb)
 
-Linux amd64 builds use a multi-stage Dockerfile (`docker/Dockerfile.linux-amd64`) for both CI and local builds. The Dockerfile uses [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) to cache compiled dependencies separately from application code.
+Linux amd64 builds use a multi-stage Dockerfile (`docker/linux/Dockerfile`) for both CI and local builds. The Dockerfile uses [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) to cache compiled dependencies separately from application code.
 
 **Stages:**
 
@@ -438,8 +438,8 @@ In CI, [Blacksmith Docker layer caching](https://docs.blacksmith.sh/blacksmith-c
 task build:linux-amd64
 
 # Or build directly with Docker
-docker build --platform linux/amd64 --target check -f docker/Dockerfile.linux-amd64 .
-docker build --platform linux/amd64 --target artifacts --output type=local,dest=dist -f docker/Dockerfile.linux-amd64 .
+docker build --platform linux/amd64 --target check -f docker/linux/Dockerfile .
+docker build --platform linux/amd64 --target artifacts --output type=local,dest=dist -f docker/linux/Dockerfile .
 
 # Copy to target machine
 scp dist/*.deb zima:~/Downloads/
@@ -539,7 +539,7 @@ Runs on a self-hosted `[macOS, ARM64]` runner:
 
 ### `build-linux-amd64` — Linux amd64
 
-Runs on a configurable Blacksmith runner (default: `blacksmith-4vcpu-ubuntu-2404`, selectable via `linux-runner` workflow input). Uses a containerized build via `docker/Dockerfile.linux-amd64` with Blacksmith Docker layer caching:
+Runs on a configurable Blacksmith runner (default: `blacksmith-4vcpu-ubuntu-2404`, selectable via `linux-runner` workflow input). Uses a containerized build via `docker/linux/Dockerfile` with Blacksmith Docker layer caching:
 
 1. Sets up the Blacksmith Docker builder (`useblacksmith/setup-docker-builder`)
 2. Builds via `useblacksmith/build-push-action` targeting the `artifacts` stage

@@ -277,7 +277,7 @@ tasks:
 
         docker build \
           --platform linux/amd64 \
-          -f docker/Dockerfile.linux-amd64 \
+          -f docker/linux/Dockerfile \
           --build-arg LASTFM_API_KEY=${LASTFM_API_KEY:-} \
           --build-arg LASTFM_API_SECRET=${LASTFM_API_SECRET:-} \
           --target artifacts \
@@ -296,7 +296,7 @@ tasks:
       - "zig-core/build.zig"
       - "app/frontend/js/**/*.js"
       - "app/frontend/index.html"
-      - "docker/Dockerfile.linux-amd64"
+      - "docker/linux/Dockerfile"
     generates:
       - "dist/linux-amd64/*.deb"
 
@@ -318,7 +318,7 @@ tasks:
       - |
         docker build \
           --platform linux/amd64 \
-          -f docker/Dockerfile.linux-amd64 \
+          -f docker/linux/Dockerfile \
           --target builder \
           -t mt-builder:linux-amd64 \
           .

@@ -149,7 +149,7 @@ jobs:
         uses: useblacksmith/build-push-action@v2
         with:
           context: .
-          file: docker/Dockerfile.linux-amd64
+          file: docker/linux/Dockerfile
           target: check
           push: false
 

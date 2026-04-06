@@ -145,6 +145,13 @@ cargo nextest run --workspace                     # Tests (falls back to cargo t
 cargo check --manifest-path src-tauri/Cargo.toml  # Fast type check (no binary)
 ```
 
+**Dockerfiles**:
+
+```bash
+hadolint docker/linux/Dockerfile                         # Lint Linux Dockerfile
+hadolint docker/macos/Dockerfile                         # Lint macOS Dockerfile
+```
+
 ### When to Run
 
 - **Before committing**: `task lint && task format`
