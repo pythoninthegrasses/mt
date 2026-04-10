@@ -149,7 +149,6 @@ cargo check --manifest-path src-tauri/Cargo.toml  # Fast type check (no binary)
 
 ```bash
 hadolint docker/linux/Dockerfile                         # Lint Linux Dockerfile
-hadolint docker/macos/Dockerfile                         # Lint macOS Dockerfile
 ```
 
 ### When to Run
