@@ -1,10 +1,10 @@
 ---
 id: TASK-312
 title: Containerize macOS self-hosted GitHub Actions runner
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-06 07:02'
-updated_date: '2026-04-06 07:02'
+updated_date: '2026-04-10 00:54'
 labels:
   - ci
   - infrastructure

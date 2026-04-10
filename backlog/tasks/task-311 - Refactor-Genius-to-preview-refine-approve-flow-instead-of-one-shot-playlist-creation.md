@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-04-04 08:59'
-updated_date: '2026-04-04 09:07'
+updated_date: '2026-04-07 15:19'
 labels:
   - genius
   - ux
@@ -18,6 +18,7 @@ references:
   - crates/mt-tauri/src/agent/mod.rs
   - app/frontend/js/components/genius-browser.js
 priority: medium
+ordinal: 3000
 ---
 
 ## Description
