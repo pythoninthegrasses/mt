@@ -210,11 +210,6 @@ target
 # Contains mutation testing data
 **/mutants.out*/
 
-# macOS container build context (large tarballs from `runner.sh prepare`)
-docker/macos/*.tar
-docker/macos/*.tar.gz
-docker/macos/*.pkg
-
 # INCLUDE
 !**/.gitkeep
 !**/*.example
