@@ -3252,7 +3252,7 @@ dependencies = [
 
 [[package]]
 name = "mt-tauri"
-version = "1.2.4"
+version = "1.3.0"
 dependencies = [
  "ab_glyph",
  "base64 0.22.1",
