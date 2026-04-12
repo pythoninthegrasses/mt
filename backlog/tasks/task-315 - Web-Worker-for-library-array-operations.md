@@ -1,10 +1,10 @@
 ---
 id: TASK-315
 title: Web Worker for library array operations
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-12 06:56'
-updated_date: '2026-04-12 06:59'
+updated_date: '2026-04-12 08:25'
 labels:
   - performance
   - frontend
@@ -95,3 +95,15 @@ If TASK-314 (pagination) is implemented first, the worker's role shifts from pro
 - [ ] #6 Worker gracefully handles errors and can be re-initialized
 - [ ] #7 All existing Vitest and Playwright E2E tests pass
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Closed without implementation
+
+TASK-314 (cursor-based pagination) reduced the per-operation working set from the full track collection to 500 tracks per page. At that size, `.filter()`, `.reduce()`, and array spread operations complete in sub-millisecond time on the main thread — well below the 50ms long-task threshold this task was targeting.
+
+The task description itself anticipated this outcome: "Only implement if profiling after TASK-313 and TASK-314 shows measurable main-thread blocking. If TASK-314 reduces the working set to ~500 tracks per page, the main-thread cost may already be negligible."
+
+Adding a Web Worker would introduce async complexity, message serialization overhead, and harder debugging for no measurable benefit. Marked as done on 2026-04-12.
+<!-- SECTION:NOTES:END -->
