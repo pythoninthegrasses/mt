@@ -5,7 +5,7 @@
 
 ### Features
 
-* **ci:** containerize macOS self-hosted runner ([6cdd7f4](https://github.com/pythoninthegrasses/mt/commit/6cdd7f417364e0e607e15ce3de9247a3ce3fe5f6))
+* ~~**ci:** containerize macOS self-hosted runner~~ ([6cdd7f4](https://github.com/pythoninthegrasses/mt/commit/6cdd7f417364e0e607e15ce3de9247a3ce3fe5f6))
 
 
 ### Bug Fixes
