@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.4.0](https://github.com/pythoninthegrasses/mt/compare/v1.3.0...v1.4.0) (2026-04-12)
+
+
+### Features
+
+* **ci:** containerize macOS self-hosted runner ([6cdd7f4](https://github.com/pythoninthegrasses/mt/commit/6cdd7f417364e0e607e15ce3de9247a3ce3fe5f6))
+
+
+### Bug Fixes
+
+* **ci:** add rustfmt/clippy components, fix Windows npm path ([10a20ee](https://github.com/pythoninthegrasses/mt/commit/10a20ee3635ec38de310e2ffc6f55d346e6f73fe))
+* **ci:** harden Playwright tests, fix Windows backslash in Task templates ([07f722a](https://github.com/pythoninthegrasses/mt/commit/07f722a42413dd07349bf1d91874beb9a2265826))
+* **ci:** make Windows Defender exclusions non-fatal ([790bbd7](https://github.com/pythoninthegrasses/mt/commit/790bbd7a9c1daf7025a261fc4dab4b7cf1ec5174))
+* **ci:** resolve clippy errors, switch to GitHub-hosted runners ([e2b8916](https://github.com/pythoninthegrasses/mt/commit/e2b8916d702a44baa2272ab4dbd1872366cd109f))
+* **docker:** correct binary name in artifacts COPY ([962c129](https://github.com/pythoninthegrasses/mt/commit/962c129f5c5408016a6ab8c40be9dfc085bbd280))
+
 ## [1.3.0](https://github.com/pythoninthegrasses/mt/compare/v1.2.4...v1.3.0) (2026-04-04)
 
 
