@@ -37,8 +37,8 @@ env:
 jobs:
   rust:
     name: Rust Lint, Format, and Test
-    runs-on: macos-latest
-    timeout-minutes: 30
+    runs-on: [macOS, ARM64]
+    timeout-minutes: 20
     env:
       CARGO_INCREMENTAL: 1
       CARGO_TERM_COLOR: always
@@ -103,7 +103,7 @@ jobs:
       matrix:
         include:
           - platform: macos
-            os: macos-latest
+            os: [macOS, ARM64]
             target: aarch64-apple-darwin
           - platform: linux
             os: ${{ inputs.linux-runner || 'blacksmith-4vcpu-ubuntu-2404' }}
@@ -201,7 +201,7 @@ jobs:
 
   playwright-tests:
     name: Playwright E2E Tests
-    runs-on: macos-latest
+    runs-on: [macOS, ARM64]
     timeout-minutes: 20
 
     steps:
