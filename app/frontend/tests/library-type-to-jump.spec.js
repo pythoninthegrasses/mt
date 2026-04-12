@@ -404,8 +404,9 @@ test.describe('Type-to-jump artist navigation (task-255)', () => {
     // because stripped "la's" starts with "la".
     await page.evaluate(() => {
       const library = window.Alpine.store('library');
-      // Insert in backend sort order: "La's" < "Lana Del Rey" alphabetically
-      library.tracks.unshift(
+      // Prepend test tracks via _setSectionTracks to bypass paginated getter
+      const existing = library.filteredTracks;
+      const testTracks = [
         {
           id: 9999,
           title: 'There She Goes',
@@ -422,8 +423,9 @@ test.describe('Type-to-jump artist navigation (task-255)', () => {
           duration: 180,
           filepath: '/music/test/decoy.mp3',
         },
-      );
-      library.applyFilters();
+      ];
+      library._setSectionTracks([...testTracks, ...existing]);
+      library.totalTracks = testTracks.length + existing.length;
       window.Alpine.store('ui').sortIgnoreWords = true;
       window.Alpine.store('ui').sortIgnoreWordsList = 'the, a, an, la, le, les, los, las, el';
     });

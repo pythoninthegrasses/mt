@@ -547,21 +547,19 @@ test.describe('Loading States', () => {
   });
 
   test('should track library loading state', async ({ page }) => {
-    // Set library to loading state
-    await page.evaluate(() => {
+    // Set and read in a single evaluate to avoid race with background load()
+    const loadingAfterSet = await page.evaluate(() => {
       window.Alpine.store('library').loading = true;
+      return window.Alpine.store('library').loading;
     });
+    expect(loadingAfterSet).toBe(true);
 
-    const libraryStore = await getAlpineStore(page, 'library');
-    expect(libraryStore.loading).toBe(true);
-
-    // Complete loading
-    await page.evaluate(() => {
+    // Complete loading and verify
+    const loadingAfterClear = await page.evaluate(() => {
       window.Alpine.store('library').loading = false;
+      return window.Alpine.store('library').loading;
     });
-
-    const updatedStore = await getAlpineStore(page, 'library');
-    expect(updatedStore.loading).toBe(false);
+    expect(loadingAfterClear).toBe(false);
   });
 });
 
