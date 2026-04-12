@@ -143,6 +143,7 @@ runs:
     - name: Windows Defender exclusions
       if: runner.os == 'Windows'
       shell: pwsh
+      continue-on-error: true
       run: |
         Add-MpPreference -ExclusionPath "$env:USERPROFILE\.cargo"
         Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE"
