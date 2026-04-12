@@ -1,10 +1,13 @@
 name: 'Setup Tauri Build Environment'
-description: 'Install Task, Node.js, and platform deps for Tauri builds'
+description: 'Install Task, Rust, and platform deps. Use mode=check to skip Node.js, frontend deps, and cargo tools.'
 
 inputs:
   node-version:
     description: 'Node.js version'
     default: '20'
+  mode:
+    description: 'Setup mode: "full" installs everything for Tauri builds; "check" installs only Rust + Task for cargo check/clippy'
+    default: 'full'
 
 runs:
   using: 'composite'
@@ -53,22 +56,22 @@ runs:
       uses: go-task/setup-task@v1
 
     - name: Setup Node.js
+      if: inputs.mode == 'full'
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
 
     - name: Install frontend dependencies (non-Windows)
-      if: runner.os != 'Windows'
+      if: inputs.mode == 'full' && runner.os != 'Windows'
       shell: bash
       working-directory: ./app/frontend
       run: npm ci
 
     - name: Install frontend dependencies (Windows)
-      if: runner.os == 'Windows'
+      if: inputs.mode == 'full' && runner.os == 'Windows'
       shell: pwsh
       working-directory: ./app/frontend
       run: npm ci
-
 
     - name: Setup Rust toolchain (${{ steps.rust-version-unix.outputs.toolchain || steps.rust-version-windows.outputs.toolchain }})
       uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -78,10 +81,15 @@ runs:
         target: ${{ runner.os == 'Windows' && 'x86_64-pc-windows-msvc' || '' }}
         cache: false
 
-    - name: Setup CI environment (macOS/Linux)
-      if: runner.os != 'Windows'
+    - name: Setup CI environment (macOS/Linux, full)
+      if: inputs.mode == 'full' && runner.os != 'Windows'
       shell: bash
       run: task ci:setup
+
+    - name: Setup CI environment (macOS/Linux, check)
+      if: inputs.mode == 'check' && runner.os != 'Windows'
+      shell: bash
+      run: task ci:setup-check
 
     - name: Install system dependencies (Windows)
       if: runner.os == 'Windows'
@@ -122,7 +130,7 @@ runs:
         }
 
     - name: Install cargo-binstall (Windows)
-      if: runner.os == 'Windows'
+      if: inputs.mode == 'full' && runner.os == 'Windows'
       shell: pwsh
       run: |
         if (-not (Get-Command cargo-binstall -ErrorAction SilentlyContinue)) {
@@ -135,10 +143,15 @@ runs:
           Remove-Item $zip
         }
 
-    - name: Setup CI environment (Windows)
-      if: runner.os == 'Windows'
+    - name: Setup CI environment (Windows, full)
+      if: inputs.mode == 'full' && runner.os == 'Windows'
       shell: pwsh
       run: task ci:setup PINNED_RUST=${{ steps.rust-version-windows.outputs.toolchain }}
+
+    - name: Setup CI environment (Windows, check)
+      if: inputs.mode == 'check' && runner.os == 'Windows'
+      shell: pwsh
+      run: task ci:setup-check PINNED_RUST=${{ steps.rust-version-windows.outputs.toolchain }}
 
     - name: Windows Defender exclusions
       if: runner.os == 'Windows'

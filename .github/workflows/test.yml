@@ -48,6 +48,8 @@ jobs:
 
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
+        with:
+          mode: check
 
       - name: Cargo fmt check
         run: cargo fmt --all -- --check
@@ -155,6 +157,8 @@ jobs:
       - name: Setup Tauri build environment
         if: runner.os != 'Linux'
         uses: ./.github/actions/setup-tauri-build
+        with:
+          mode: check
 
       - name: Cargo check (macOS)
         if: runner.os == 'macOS'

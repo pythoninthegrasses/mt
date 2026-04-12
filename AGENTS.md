@@ -10,6 +10,7 @@ mt is a desktop music player designed for large music collections, built with Ta
 
 - ALWAYS use atomic commits — see [Git Workflow](docs/git-workflow.md) for interactive staging, patch mode, and worktree management
 - NEVER create *.backup files. This is a version controlled repo
+- NEVER add section-divider comments (e.g. `// --- Section Name ---`, `# === Foo ===`) unless explicitly asked. Let code structure and naming speak for itself.
 
 ## Context7
 

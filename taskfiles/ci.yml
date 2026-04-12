@@ -25,10 +25,14 @@ env:
 
 tasks:
   setup:
-    desc: "Setup CI build environment"
+    desc: "Setup CI build environment (full: Rust + cargo tools)"
     deps: [setup-system-deps, setup-rust, setup-rust-windows]
     cmds:
       - task: setup-cargo-tools
+
+  setup-check:
+    desc: "Setup CI check environment (Rust only, no cargo-binstall/tauri-cli)"
+    deps: [setup-system-deps, setup-rust, setup-rust-windows]
 
   setup-rust:
     desc: "Install rustup and nightly toolchain (macOS/Linux)"
