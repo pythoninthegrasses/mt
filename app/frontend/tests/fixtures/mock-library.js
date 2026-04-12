@@ -227,7 +227,7 @@ function filterAndSortTracks(tracks, params) {
       (t) =>
         t.title?.toLowerCase().includes(query) ||
         t.artist?.toLowerCase().includes(query) ||
-        t.album?.toLowerCase().includes(query)
+        t.album?.toLowerCase().includes(query),
     );
 
     // Calculate and attach search scores for ranking
@@ -246,14 +246,14 @@ function filterAndSortTracks(tracks, params) {
   // Artist filter
   if (params.artist) {
     result = result.filter(
-      (t) => t.artist?.toLowerCase() === params.artist.toLowerCase()
+      (t) => t.artist?.toLowerCase() === params.artist.toLowerCase(),
     );
   }
 
   // Album filter
   if (params.album) {
     result = result.filter(
-      (t) => t.album?.toLowerCase() === params.album.toLowerCase()
+      (t) => t.album?.toLowerCase() === params.album.toLowerCase(),
     );
   }
 
@@ -351,6 +351,35 @@ export async function setupLibraryMocks(page, state) {
     });
   });
 
+  // GET /api/library/count - get filtered count and total duration (pagination support)
+  await page.route(/\/api\/library\/count(\?.*)?$/, async (route, request) => {
+    if (request.method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+
+    const url = new URL(request.url());
+    const params = Object.fromEntries(url.searchParams);
+    state.apiCalls.push({ method: 'GET', url: '/api/library/count', params });
+
+    // Use filterAndSortTracks without pagination to get all matching tracks
+    const filtered = filterAndSortTracks(state.tracks, {
+      ...params,
+      limit: undefined,
+      offset: undefined,
+    });
+    const totalDuration = filtered.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        total: filtered.total,
+        total_duration: totalDuration,
+      }),
+    });
+  });
+
   // GET /api/library/stats - get library statistics
   await page.route(/\/api\/library\/stats(\?.*)?$/, async (route, request) => {
     if (request.method() !== 'GET') {
@@ -437,7 +466,8 @@ export async function setupLibraryMocks(page, state) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        data:
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
         mime_type: 'image/png',
         source: 'mock',
       }),
@@ -661,7 +691,6 @@ export async function setupLibraryMocks(page, state) {
   });
 }
 
-
 /**
  * Helper to clear API call history
  * @param {Object} state - State from createLibraryState()
@@ -686,4 +715,3 @@ export function findApiCalls(state, method, urlPattern) {
     return urlPattern.test(call.url);
   });
 }
-

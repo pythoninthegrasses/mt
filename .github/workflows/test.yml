@@ -99,11 +99,9 @@ jobs:
 
   build:
     name: Build (${{ matrix.platform }})
-    # Only gate on deno-lint (fast, validates frontend source).
-    # Test jobs (rust, vitest, playwright) run in parallel — they don't
-    # produce artifacts the build matrix consumes, so waiting for them
-    # just lengthens wall-clock time.
-    needs: [deno-lint]
+    # Gate on lint/format/test jobs so builds don't burn CI minutes
+    # when basic checks fail.
+    needs: [deno-lint, rust]
     strategy:
       fail-fast: false
       matrix:
