@@ -581,6 +581,20 @@ Runner assignment is optimized for developer iteration speed (PR/push), not rele
 
 **Lightweight jobs stay on vanilla runners:** `deno-lint` and `vitest-tests` remain on standard Blacksmith runners. Migration to custom images is deferred until a measured benefit is demonstrated.
 
+#### Test Workflow Dependency Graph
+
+The test workflow (`test.yml`) runs five jobs. The build matrix only gates on `deno-lint` — the test jobs run in parallel and do not block cross-platform build verification:
+
+```text
+deno-lint ──► build(macos, linux, windows)
+
+rust             (independent)
+vitest-tests     (independent)
+playwright-tests (independent)
+```
+
+The `rust`, `vitest-tests`, and `playwright-tests` jobs do not produce artifacts consumed by the build matrix (`cargo check` per platform). Decoupling them from the build reduces wall-clock time by allowing cross-platform checks to start as soon as `deno-lint` completes (~2-3 min) rather than waiting for the slowest test job (~15-20 min).
+
 #### Windows Toolchain Pinning
 
 The self-hosted Windows runner can accumulate stale rustup state across runs. In particular, a system-level settings file (`C:\Windows\system32\config\systemprofile\.rustup\settings.toml`) may set `default_host_triple` to `x86_64-pc-windows-gnu`. When `RUSTUP_TOOLCHAIN` is set to a bare channel name like `nightly-2026-02-09`, rustup resolves it using the default host triple — producing the GNU-hosted toolchain, which requires `dlltool.exe` (not present on MSVC-only runners) and fails with:

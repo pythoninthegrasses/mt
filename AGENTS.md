@@ -151,6 +151,13 @@ cargo check --manifest-path src-tauri/Cargo.toml  # Fast type check (no binary)
 hadolint docker/linux/Dockerfile                         # Lint Linux Dockerfile
 ```
 
+**GitHub Actions workflows**:
+
+```bash
+actionlint .github/workflows/test.yml                    # Lint single workflow
+actionlint                                               # Lint all workflows
+```
+
 ### When to Run
 
 - **Before committing**: `task lint && task format`

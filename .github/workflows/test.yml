@@ -97,7 +97,11 @@ jobs:
 
   build:
     name: Build (${{ matrix.platform }})
-    needs: [rust, deno-lint, vitest-tests, playwright-tests]
+    # Only gate on deno-lint (fast, validates frontend source).
+    # Test jobs (rust, vitest, playwright) run in parallel — they don't
+    # produce artifacts the build matrix consumes, so waiting for them
+    # just lengthens wall-clock time.
+    needs: [deno-lint]
     strategy:
       fail-fast: false
       matrix:
