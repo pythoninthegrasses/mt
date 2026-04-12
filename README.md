@@ -30,9 +30,9 @@
 <!-- DOWNLOADS:START -->
 | Platform | Architecture | Download |
 |----------|--------------|----------|
-| macOS | Apple Silicon (ARM64) | [mt_1.3.1_aarch64.dmg](https://github.com/pythoninthegrasses/mt/releases/download/v1.3.1/mt_1.3.1_aarch64.dmg) |
-| Linux | x86_64 (amd64) | [mt_1.3.1_amd64.deb](https://github.com/pythoninthegrasses/mt/releases/download/v1.3.1/mt_1.3.1_amd64.deb) |
-| Windows | x64 | [mt_1.3.1_x64-setup.exe](https://github.com/pythoninthegrasses/mt/releases/download/v1.3.1/mt_1.3.1_x64-setup.exe) |
+| macOS | Apple Silicon (ARM64) | [mt_1.3.2_aarch64.dmg](https://github.com/pythoninthegrasses/mt/releases/download/v1.3.2/mt_1.3.2_aarch64.dmg) |
+| Linux | x86_64 (amd64) | [mt_1.3.2_amd64.deb](https://github.com/pythoninthegrasses/mt/releases/download/v1.3.2/mt_1.3.2_amd64.deb) |
+| Windows | x64 | [mt_1.3.2_x64-setup.exe](https://github.com/pythoninthegrasses/mt/releases/download/v1.3.2/mt_1.3.2_x64-setup.exe) |
 <!-- DOWNLOADS:END -->
 
 ## Development
