@@ -3,10 +3,10 @@ id: TASK-322
 title: >-
   Phase 2: Convert logic-heavy Playwright specs to Vitest and reduce visual
   tests
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-12 09:10'
-updated_date: '2026-04-12 09:11'
+updated_date: '2026-04-12 09:23'
 labels:
   - ci
   - testing
@@ -21,7 +21,7 @@ references:
   - app/frontend/__tests__/playback-regression.test.js
   - app/frontend/__tests__/shortcuts.test.js
 priority: medium
-ordinal: 57500
+ordinal: 40125
 ---
 
 ## Description
@@ -43,10 +43,10 @@ Estimated savings: ~1,500 lines of Playwright, new Vitest coverage for sorting/s
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 sorting-ignore-words logic tests exist in Vitest
-- [ ] #2 keyboard-shortcuts logic tests exist in Vitest
-- [ ] #3 playback.spec.js reduced to hardware-dependent E2E tests only
-- [ ] #4 visual-regression.spec.js reduced to 7-8 critical snapshots
-- [ ] #5 startup-fouc.spec.js reduced to 3-4 tests
-- [ ] #6 All Vitest and remaining Playwright tests pass
+- [x] #1 sorting-ignore-words logic tests exist in Vitest
+- [x] #2 keyboard-shortcuts logic tests exist in Vitest
+- [x] #3 playback.spec.js reduced to hardware-dependent E2E tests only
+- [x] #4 visual-regression.spec.js reduced to 7-8 critical snapshots
+- [x] #5 startup-fouc.spec.js reduced to 3-4 tests
+- [x] #6 All Vitest and remaining Playwright tests pass
 <!-- AC:END -->

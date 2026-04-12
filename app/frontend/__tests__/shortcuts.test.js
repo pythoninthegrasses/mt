@@ -90,6 +90,8 @@ describe('keyboard shortcuts', () => {
     mockUi.modal = null;
     mockQueue.stopAfterCurrent = false;
     mockLibrary.searchQuery = '';
+    mockPlayer.volume = 50;
+    mockPlayer.currentTime = 30000;
     initKeyboardShortcuts();
   });
 
@@ -177,6 +179,115 @@ describe('keyboard shortcuts', () => {
       const event = createKeyEvent('Comma', { metaKey: true, key: ',' });
       keydownHandler(event);
       expect(mockUi.toggleSettings).toHaveBeenCalled();
+    });
+  });
+
+  describe('Escape context-aware behavior', () => {
+    it('should close settings when view is settings', () => {
+      mockUi.view = 'settings';
+      const event = createKeyEvent('Escape', { key: 'Escape' });
+      keydownHandler(event);
+      expect(mockUi.toggleSettings).toHaveBeenCalled();
+      expect(event.preventDefault).toHaveBeenCalled();
+    });
+
+    it('should close modal when modal is open', () => {
+      mockUi.modal = 'someModal';
+      const event = createKeyEvent('Escape', { key: 'Escape' });
+      keydownHandler(event);
+      expect(mockUi.closeModal).toHaveBeenCalled();
+      expect(event.preventDefault).toHaveBeenCalled();
+    });
+
+    it('should clear search query when no modal or settings open', () => {
+      mockLibrary.searchQuery = 'test';
+      const event = createKeyEvent('Escape', { key: 'Escape' });
+      keydownHandler(event);
+      expect(mockLibrary.searchQuery).toBe('');
+      expect(mockLibrary.search).toHaveBeenCalledWith('');
+    });
+
+    it('should do nothing when no modal, settings, or search active', () => {
+      mockLibrary.searchQuery = '';
+      const event = createKeyEvent('Escape', { key: 'Escape' });
+      keydownHandler(event);
+      expect(mockUi.toggleSettings).not.toHaveBeenCalled();
+      expect(mockUi.closeModal).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('volume and seek shortcuts', () => {
+    it('should increase volume on ArrowUp', () => {
+      const event = createKeyEvent('ArrowUp', { key: 'ArrowUp' });
+      keydownHandler(event);
+      expect(mockPlayer.setVolume).toHaveBeenCalledWith(55);
+    });
+
+    it('should decrease volume on ArrowDown', () => {
+      const event = createKeyEvent('ArrowDown', { key: 'ArrowDown' });
+      keydownHandler(event);
+      expect(mockPlayer.setVolume).toHaveBeenCalledWith(45);
+    });
+
+    it('should go next on ArrowRight', () => {
+      const event = createKeyEvent('ArrowRight', { key: 'ArrowRight' });
+      keydownHandler(event);
+      expect(mockPlayer.next).toHaveBeenCalled();
+    });
+
+    it('should seek forward on Cmd+ArrowRight', () => {
+      const event = createKeyEvent('ArrowRight', { key: 'ArrowRight', metaKey: true });
+      keydownHandler(event);
+      expect(mockPlayer.seek).toHaveBeenCalledWith(35000);
+    });
+
+    it('should go previous on ArrowLeft', () => {
+      const event = createKeyEvent('ArrowLeft', { key: 'ArrowLeft' });
+      keydownHandler(event);
+      expect(mockPlayer.previous).toHaveBeenCalled();
+    });
+
+    it('should seek back on Cmd+ArrowLeft', () => {
+      const event = createKeyEvent('ArrowLeft', { key: 'ArrowLeft', metaKey: true });
+      keydownHandler(event);
+      expect(mockPlayer.seek).toHaveBeenCalledWith(25000);
+    });
+
+    it('should clamp seek back to 0', () => {
+      mockPlayer.currentTime = 2000;
+      const event = createKeyEvent('ArrowLeft', { key: 'ArrowLeft', metaKey: true });
+      keydownHandler(event);
+      expect(mockPlayer.seek).toHaveBeenCalledWith(0);
+    });
+  });
+
+  describe('input suppression', () => {
+    it('should NOT trigger playback shortcuts when typing in INPUT', () => {
+      const event = createKeyEvent('Space', {
+        key: ' ',
+        target: { tagName: 'INPUT', isContentEditable: false },
+      });
+      keydownHandler(event);
+      expect(mockPlayer.togglePlay).not.toHaveBeenCalled();
+    });
+
+    it('should NOT trigger playback shortcuts when typing in TEXTAREA', () => {
+      const event = createKeyEvent('ArrowUp', {
+        key: 'ArrowUp',
+        target: { tagName: 'TEXTAREA', isContentEditable: false },
+      });
+      keydownHandler(event);
+      expect(mockPlayer.setVolume).not.toHaveBeenCalled();
+    });
+
+    it('should still trigger modifier shortcuts in INPUT fields', () => {
+      const event = createKeyEvent('KeyM', {
+        metaKey: true,
+        shiftKey: true,
+        target: { tagName: 'INPUT', isContentEditable: false },
+      });
+      keydownHandler(event);
+      expect(mockPlayer.toggleMute).toHaveBeenCalled();
     });
   });
 

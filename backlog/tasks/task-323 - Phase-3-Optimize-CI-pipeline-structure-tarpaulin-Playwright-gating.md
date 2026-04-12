@@ -1,10 +1,10 @@
 ---
 id: TASK-323
 title: 'Phase 3: Optimize CI pipeline structure (tarpaulin, Playwright gating)'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-12 09:10'
-updated_date: '2026-04-12 09:11'
+updated_date: '2026-04-12 09:23'
 labels:
   - ci
   - performance
@@ -13,7 +13,7 @@ references:
   - .github/workflows/test.yml
   - .github/actions/setup-tauri-build/action.yml
 priority: medium
-ordinal: 58500
+ordinal: 46812.5
 ---
 
 ## Description
@@ -36,8 +36,8 @@ Structural CI workflow changes to reduce the critical path.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 PR checks use cargo nextest instead of tarpaulin
-- [ ] #2 Tarpaulin coverage runs on main push or nightly schedule only
-- [ ] #3 Playwright job has path filter or is optional for non-frontend changes
-- [ ] #4 Total pipeline wall clock under 7 minutes
+- [x] #1 PR checks use cargo nextest instead of tarpaulin
+- [x] #2 Tarpaulin coverage runs on main push or nightly schedule only
+- [x] #3 Playwright job has path filter or is optional for non-frontend changes
+- [x] #4 Total pipeline wall clock under 7 minutes
 <!-- AC:END -->

@@ -1,10 +1,10 @@
 ---
 id: TASK-324
 title: Consolidate test suite and optimize CI pipeline (10min -> sub-7min)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-12 09:10'
-updated_date: '2026-04-12 09:11'
+updated_date: '2026-04-12 09:23'
 labels:
   - ci
   - testing
@@ -18,7 +18,7 @@ references:
   - app/frontend/tests/
   - app/frontend/__tests__/
 priority: high
-ordinal: 56500
+ordinal: 26750
 ---
 
 ## Description
@@ -38,7 +38,7 @@ Tracking task for reducing CI pipeline wall clock from ~10 minutes to under 7 mi
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 CI pipeline wall clock under 7 minutes on typical PR
-- [ ] #2 No test coverage regression (Vitest covers what Playwright dropped)
-- [ ] #3 All remaining Playwright specs test real E2E behavior, not pure logic
+- [x] #1 CI pipeline wall clock under 7 minutes on typical PR
+- [x] #2 No test coverage regression (Vitest covers what Playwright dropped)
+- [x] #3 All remaining Playwright specs test real E2E behavior, not pure logic
 <!-- AC:END -->

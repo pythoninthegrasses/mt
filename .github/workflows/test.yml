@@ -57,9 +57,27 @@ jobs:
       - name: Cargo clippy
         run: cargo clippy --workspace --all-features -- -D warnings
 
-      # cargo-binstall and cargo-tarpaulin are installed separately from the
-      # composite action (which runs in check mode and skips cargo tools).
-      # These are needed only for coverage — not for fmt, clippy, or check.
+      - name: Run Rust tests
+        run: cargo nextest run --workspace
+
+  # Coverage runs only on main push (not PRs) to keep the critical path fast
+  rust-coverage:
+    name: Rust Coverage
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [macOS, ARM64]
+    timeout-minutes: 25
+    env:
+      CARGO_INCREMENTAL: 1
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Tauri build environment
+        uses: ./.github/actions/setup-tauri-build
+        with:
+          mode: check
+
       - uses: cargo-bins/cargo-binstall@main
 
       - name: Install cargo-tarpaulin
@@ -213,8 +231,26 @@ jobs:
           path: app/frontend/coverage/
           retention-days: 30
 
+  # Detect frontend changes for conditional Playwright execution
+  changes:
+    name: Detect Changes
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 2
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'app/frontend/**'
+
   playwright-tests:
     name: Playwright E2E Tests
+    needs: [changes]
+    if: needs.changes.outputs.frontend == 'true' || github.event_name == 'push'
     runs-on: [macOS, ARM64]
     timeout-minutes: 20
 
