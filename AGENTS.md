@@ -10,7 +10,6 @@ mt is a desktop music player designed for large music collections, built with Ta
 
 - ALWAYS use atomic commits — see [Git Workflow](docs/git-workflow.md) for interactive staging, patch mode, and worktree management
 - NEVER create *.backup files. This is a version controlled repo
-- NEVER add section-divider comments (e.g. `// --- Section Name ---`, `# === Foo ===`) unless explicitly asked. Let code structure and naming speak for itself.
 
 ## Context7
 
@@ -32,6 +31,7 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 - taiko2k/tauon
 - tailwindlabs/tailwindcss
 - tranxuanthang/lrclib
+- useblacksmith/setup-docker-builder
 - websites/deno
 - websites/last_fm_api
 - websites/rs_rig-core
