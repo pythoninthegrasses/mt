@@ -210,7 +210,10 @@ pub(crate) fn find_sort_offset(
     // Match against artist with optional ignore-words prefix stripping,
     // mirroring the frontend's stripIgnoredPrefix + artist comparison.
     let artist_expr = if let Some(ref words) = query.ignore_words {
-        format!("LOWER(strip_sort_prefix(artist, '{}'))", words.replace('\'', "''"))
+        format!(
+            "LOWER(strip_sort_prefix(artist, '{}'))",
+            words.replace('\'', "''")
+        )
     } else {
         "LOWER(artist)".to_string()
     };
