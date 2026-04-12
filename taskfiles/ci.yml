@@ -34,6 +34,13 @@ tasks:
     desc: "Setup CI check environment (Rust only, no cargo-binstall/tauri-cli)"
     deps: [setup-system-deps, setup-rust, setup-rust-windows]
 
+  setup-test:
+    desc: "Setup CI test environment (Rust + cargo-nextest)"
+    deps: [setup-system-deps, setup-rust, setup-rust-windows]
+    cmds:
+      - task: _install-cargo-binstall
+      - task: _install-cargo-nextest
+
   setup-rust:
     desc: "Install rustup and nightly toolchain (macOS/Linux)"
     platforms: [darwin, linux]
@@ -78,6 +85,13 @@ tasks:
           https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
     status:
       - test -x "{{.CARGO_BIN}}/cargo-binstall"
+
+  _install-cargo-nextest:
+    internal: true
+    cmds:
+      - cargo binstall cargo-nextest --locked --no-confirm
+    status:
+      - command -v cargo-nextest
 
   _install-tauri-cli:
     internal: true

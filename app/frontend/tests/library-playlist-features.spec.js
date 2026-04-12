@@ -18,6 +18,14 @@ test.describe('Playlist Feature Parity - Library Browser (task-150)', () => {
     clearApiCalls(playlistState);
     // Setup playlist API mocks before navigation
     await setupPlaylistMocks(page, playlistState);
+    // Mock library count endpoint (pagination support)
+    await page.route(/\/api\/library\/count(\?.*)?$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ total: 2, total_duration: 380 }),
+      });
+    });
     // Also mock library tracks endpoint
     await page.route(/\/api\/library(\?.*)?$/, async (route) => {
       await route.fulfill({
@@ -292,6 +300,15 @@ test.describe('Playlist load regression guard (task-179)', () => {
     const libraryCalls = [];
 
     await setupPlaylistMocks(page, playlistState);
+
+    // Mock library count endpoint (pagination support)
+    await page.route(/\/api\/library\/count(\?.*)?$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ total: 1, total_duration: 180 }),
+      });
+    });
 
     await page.route(/\/api\/library(\?.*)?$/, async (route, request) => {
       if (request.method() !== 'GET') {

@@ -626,9 +626,13 @@ describe('Queue Store - Property-Based Tests', () => {
         });
 
         const originalIds = tracks.map((t) => t.id);
-        // playNextTracks uses move semantics — duplicates are moved, not rejected
+        // playNextTracks uses move semantics — duplicates within the input are
+        // also deduplicated, so count only unique new IDs
         const existingIds = new Set(originalIds);
-        const newCount = playNextTracks.filter((t) => !existingIds.has(t.id)).length;
+        const uniqueNewIds = new Set(
+          playNextTracks.filter((t) => !existingIds.has(t.id)).map((t) => t.id),
+        );
+        const newCount = uniqueNewIds.size;
 
         const promise = store.playNextTracks(playNextTracks);
         resolvePromise();

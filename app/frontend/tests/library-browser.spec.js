@@ -60,6 +60,7 @@ test.describe('Library Browser', () => {
     await page.evaluate(() => {
       window.Alpine.store('library').tracks = [];
       window.Alpine.store('library').filteredTracks = [];
+      window.Alpine.store('library').totalTracks = 0;
       window.Alpine.store('library').loading = false;
     });
 

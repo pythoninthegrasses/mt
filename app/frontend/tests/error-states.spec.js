@@ -1,17 +1,7 @@
-import { test, expect } from '@playwright/test';
-import {
-  waitForAlpine,
-  getAlpineStore,
-  setAlpineStoreProperty,
-} from './fixtures/helpers.js';
-import {
-  createLibraryState,
-  setupLibraryMocks,
-} from './fixtures/mock-library.js';
-import {
-  createPlaylistState,
-  setupPlaylistMocks,
-} from './fixtures/mock-playlists.js';
+import { expect, test } from '@playwright/test';
+import { getAlpineStore, setAlpineStoreProperty, waitForAlpine } from './fixtures/helpers.js';
+import { createLibraryState, setupLibraryMocks } from './fixtures/mock-library.js';
+import { createPlaylistState, setupPlaylistMocks } from './fixtures/mock-playlists.js';
 
 /**
  * Error States and Toast Notification Tests
@@ -59,6 +49,18 @@ test.describe('Network Failure Handling', () => {
     let requestCount = 0;
     const libraryState = createLibraryState({ trackCount: 10 });
 
+    // Mock /api/library/count (pagination support)
+    await page.route(/\/api\/library\/count(\?.*)?$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          total: libraryState.tracks.length,
+          total_duration: libraryState.tracks.reduce((sum, t) => sum + (t.duration || 0), 0),
+        }),
+      });
+    });
+
     // First request fails, subsequent succeed
     await page.route(/\/api\/library(\?.*)?$/, async (route) => {
       requestCount++;
@@ -91,7 +93,9 @@ test.describe('Network Failure Handling', () => {
     await waitForAlpine(page);
 
     // Wait for tracks to load
-    await page.waitForSelector('[data-track-id]', { state: 'visible', timeout: 5000 }).catch(() => {});
+    await page.waitForSelector('[data-track-id]', { state: 'visible', timeout: 5000 }).catch(
+      () => {},
+    );
 
     const libraryStore = await getAlpineStore(page, 'library');
     expect(libraryStore.tracks.length).toBeGreaterThan(0);
@@ -849,6 +853,18 @@ test.describe('Concurrent Request Handling', () => {
   test('should handle multiple concurrent API requests', async ({ page }) => {
     let requestCount = 0;
     const libraryState = createLibraryState({ trackCount: 10 });
+
+    // Mock /api/library/count (pagination support)
+    await page.route(/\/api\/library\/count(\?.*)?$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          total: libraryState.tracks.length,
+          total_duration: libraryState.tracks.reduce((sum, t) => sum + (t.duration || 0), 0),
+        }),
+      });
+    });
 
     await page.route(/\/api\/library(\?.*)?$/, async (route) => {
       requestCount++;

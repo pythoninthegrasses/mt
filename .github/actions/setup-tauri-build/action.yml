@@ -6,7 +6,7 @@ inputs:
     description: 'Node.js version'
     default: '20'
   mode:
-    description: 'Setup mode: "full" installs everything for Tauri builds; "check" installs only Rust + Task for cargo check/clippy'
+    description: 'Setup mode: "full" installs everything for Tauri builds; "check" installs only Rust + Task for cargo check/clippy; "test" adds cargo-nextest via binstall'
     default: 'full'
 
 runs:
@@ -107,6 +107,11 @@ runs:
       shell: bash
       run: task ci:setup-check
 
+    - name: Setup CI environment (macOS/Linux, test)
+      if: inputs.mode == 'test' && runner.os != 'Windows'
+      shell: bash
+      run: task ci:setup-test
+
     - name: Install system dependencies (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
@@ -146,7 +151,7 @@ runs:
         }
 
     - name: Install cargo-binstall (Windows)
-      if: inputs.mode == 'full' && runner.os == 'Windows'
+      if: (inputs.mode == 'full' || inputs.mode == 'test') && runner.os == 'Windows'
       shell: pwsh
       run: |
         if (-not (Get-Command cargo-binstall -ErrorAction SilentlyContinue)) {
@@ -168,6 +173,11 @@ runs:
       if: inputs.mode == 'check' && runner.os == 'Windows'
       shell: pwsh
       run: task ci:setup-check PINNED_RUST=${{ steps.rust-version-windows.outputs.toolchain }}
+
+    - name: Setup CI environment (Windows, test)
+      if: inputs.mode == 'test' && runner.os == 'Windows'
+      shell: pwsh
+      run: task ci:setup-test PINNED_RUST=${{ steps.rust-version-windows.outputs.toolchain }}
 
     - name: Windows Defender exclusions
       if: runner.os == 'Windows'

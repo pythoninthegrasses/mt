@@ -1,13 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { getAlpineStore, waitForAlpine } from './fixtures/helpers.js';
 import {
-  waitForAlpine,
-  getAlpineStore,
-} from './fixtures/helpers.js';
-import {
-  createPlaylistState,
-  setupPlaylistMocks,
   clearApiCalls,
+  createPlaylistState,
   findApiCalls,
+  setupPlaylistMocks,
 } from './fixtures/mock-playlists.js';
 
 test.describe('Sidebar Navigation', () => {
@@ -104,7 +101,9 @@ test.describe('Sidebar Collapse/Expand', () => {
     const initialBox = await sidebar.boundingBox();
 
     // Click collapse button
-    const collapseButton = page.locator('aside button[title*="Collapse"], aside button[title*="Expand"]').last();
+    const collapseButton = page.locator(
+      'aside button[title*="Collapse"], aside button[title*="Expand"]',
+    ).last();
     await collapseButton.click();
 
     // Wait for transition
@@ -129,7 +128,9 @@ test.describe('Sidebar Collapse/Expand', () => {
     const collapsedBox = await sidebar.boundingBox();
 
     // Click expand button
-    const expandButton = page.locator('aside button[title*="Expand"], aside button[title*="Collapse"]').last();
+    const expandButton = page.locator(
+      'aside button[title*="Expand"], aside button[title*="Collapse"]',
+    ).last();
     await expandButton.click();
 
     // Wait for transition
@@ -457,14 +458,36 @@ test.describe('Playlist Feature Parity (task-150)', () => {
   test.beforeEach(async ({ page }) => {
     clearApiCalls(playlistState);
     await setupPlaylistMocks(page, playlistState);
+    // Mock library count endpoint (pagination support)
+    await page.route(/\/api\/library\/count(\?.*)?$/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ total: 2, total_duration: 380 }),
+      });
+    });
     await page.route(/\/api\/library(\?.*)?$/, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           tracks: [
-            { id: 101, title: 'Track A', artist: 'Artist A', album: 'Album A', duration: 180, filepath: '/music/track-a.mp3' },
-            { id: 102, title: 'Track B', artist: 'Artist B', album: 'Album B', duration: 200, filepath: '/music/track-b.mp3' },
+            {
+              id: 101,
+              title: 'Track A',
+              artist: 'Artist A',
+              album: 'Album A',
+              duration: 180,
+              filepath: '/music/track-a.mp3',
+            },
+            {
+              id: 102,
+              title: 'Track B',
+              artist: 'Artist B',
+              album: 'Album B',
+              duration: 200,
+              filepath: '/music/track-b.mp3',
+            },
           ],
           total: 2,
         }),
@@ -545,7 +568,9 @@ test.describe('Playlist Feature Parity (task-150)', () => {
 
   test('AC#6: should show drag handle in playlist view', async ({ page }) => {
     await page.evaluate(() => {
-      const libraryBrowser = window.Alpine.$data(document.querySelector('[x-data="libraryBrowser"]'));
+      const libraryBrowser = window.Alpine.$data(
+        document.querySelector('[x-data="libraryBrowser"]'),
+      );
       libraryBrowser.currentPlaylistId = 1;
     });
 
@@ -557,7 +582,9 @@ test.describe('Playlist Feature Parity (task-150)', () => {
 
   test('AC#6: should hide drag handle outside playlist view', async ({ page }) => {
     await page.evaluate(() => {
-      const libraryBrowser = window.Alpine.$data(document.querySelector('[x-data="libraryBrowser"]'));
+      const libraryBrowser = window.Alpine.$data(
+        document.querySelector('[x-data="libraryBrowser"]'),
+      );
       libraryBrowser.currentPlaylistId = null;
     });
 
@@ -829,7 +856,7 @@ test.describe('Playlist Multi-Select and Batch Delete (task-161)', () => {
     await playlist1.click({ modifiers: ['Meta'] });
     await playlistList.focus();
 
-    page.once('dialog', async dialog => {
+    page.once('dialog', async (dialog) => {
       expect(dialog.type()).toBe('confirm');
       expect(dialog.message()).toContain('Delete playlist');
       await dialog.dismiss();
@@ -845,7 +872,7 @@ test.describe('Playlist Multi-Select and Batch Delete (task-161)', () => {
     await playlist1.click({ modifiers: ['Meta'] });
     await playlistList.focus();
 
-    page.once('dialog', async dialog => {
+    page.once('dialog', async (dialog) => {
       expect(dialog.type()).toBe('confirm');
       await dialog.dismiss();
     });
@@ -860,7 +887,7 @@ test.describe('Playlist Multi-Select and Batch Delete (task-161)', () => {
     await playlist1.click({ modifiers: ['Meta'] });
     await playlistList.focus();
 
-    page.once('dialog', async dialog => {
+    page.once('dialog', async (dialog) => {
       await dialog.accept();
     });
 
@@ -878,7 +905,7 @@ test.describe('Playlist Multi-Select and Batch Delete (task-161)', () => {
     await playlist1.click({ modifiers: ['Meta'] });
     await playlistList.focus();
 
-    page.once('dialog', async dialog => {
+    page.once('dialog', async (dialog) => {
       await dialog.dismiss();
     });
 
@@ -942,7 +969,7 @@ test.describe('Playlist Multi-Select and Batch Delete (task-161)', () => {
     await playlist2.click({ modifiers: ['Meta'] });
     await playlistList.focus();
 
-    page.once('dialog', async dialog => {
+    page.once('dialog', async (dialog) => {
       expect(dialog.message()).toContain('Delete selected playlists');
       expect(dialog.message()).toContain('Test Playlist 1');
       expect(dialog.message()).toContain('Test Playlist 2');
