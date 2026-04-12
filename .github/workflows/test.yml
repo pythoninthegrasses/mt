@@ -57,6 +57,9 @@ jobs:
       - name: Cargo clippy
         run: cargo clippy --workspace --all-features -- -D warnings
 
+      # cargo-binstall and cargo-tarpaulin are installed separately from the
+      # composite action (which runs in check mode and skips cargo tools).
+      # These are needed only for coverage — not for fmt, clippy, or check.
       - uses: cargo-bins/cargo-binstall@main
 
       - name: Install cargo-tarpaulin
