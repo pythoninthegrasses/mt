@@ -237,7 +237,8 @@ jobs:
           } | ConvertTo-Json -Depth 5
           $configPath = "${{ runner.temp }}\sign-override.json"
           $config | Out-File -FilePath $configPath -Encoding utf8
-          echo "SIGN_CONFIG_PATH=$configPath" >> $env:GITHUB_ENV
+          # Use forward slashes so Task template expansion doesn't eat backslashes
+          echo "SIGN_CONFIG_PATH=$($configPath -replace '\\','/')" >> $env:GITHUB_ENV
 
       - name: Build binary
         shell: pwsh

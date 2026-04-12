@@ -456,11 +456,16 @@ test.describe('Type-to-jump artist navigation (task-255)', () => {
 
     // Type "i" to start type-to-jump
     await page.keyboard.press('i');
-    await page.waitForTimeout(50);
+
+    // Wait for Alpine to set typeToJumpActive before pressing space
+    await page.waitForFunction(
+      () => window.Alpine.store('ui').typeToJumpActive === true,
+      { timeout: 2000 },
+    );
 
     // Now press space - should NOT toggle play/pause
     await page.keyboard.press(' ');
-    await page.waitForTimeout(50);
+    await page.waitForTimeout(100);
 
     // Player should STILL be playing (space was consumed by type-to-jump, not shortcuts)
     const isPlayingAfterSpace = await page.evaluate(() => {
@@ -470,7 +475,7 @@ test.describe('Type-to-jump artist navigation (task-255)', () => {
 
     // Continue typing to match "I Break Horses"
     await page.keyboard.type('br');
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(200);
 
     const selectedArtist = await page.evaluate(() => {
       const browserEl = document.querySelector('[x-data="libraryBrowser"]');

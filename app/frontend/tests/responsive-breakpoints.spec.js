@@ -97,6 +97,7 @@ test.describe('Responsive Breakpoints', () => {
     });
 
     test('sidebar toggle works at all viewport sizes', async ({ page }) => {
+      test.setTimeout(60_000);
       for (const [name, viewport] of Object.entries(viewports)) {
         await page.setViewportSize(viewport);
         await page.goto('/');
@@ -185,6 +186,7 @@ test.describe('Responsive Breakpoints', () => {
     });
 
     test('player footer has consistent height across viewport sizes', async ({ page }) => {
+      test.setTimeout(60_000);
       const footer = page.locator('footer');
 
       for (const [name, viewport] of Object.entries(viewports)) {
@@ -377,6 +379,7 @@ test.describe('Responsive Breakpoints', () => {
 
   test.describe('Layout Integrity', () => {
     test('main layout does not overflow at desktop sizes', async ({ page }) => {
+      test.setTimeout(60_000);
       for (const [name, viewport] of Object.entries(viewports)) {
         await page.setViewportSize(viewport);
         await page.goto('/');

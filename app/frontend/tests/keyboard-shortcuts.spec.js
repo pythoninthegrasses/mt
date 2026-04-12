@@ -271,31 +271,33 @@ test.describe('Library Keyboard Shortcuts', () => {
     });
 
     test('should not remove tracks when typing in input field', async ({ page }) => {
-      // Get initial track count
-      const initialCount = await page.locator('[data-track-id]').count();
+      // Select a track so the Delete shortcut has something to act on
+      await page.locator('[data-track-id]').nth(0).click();
+      await page.waitForTimeout(100);
 
-      // Focus on search input (if available)
-      const searchInput = page.locator('[data-testid="search-input"], input[type="search"], input[placeholder*="Search"]').first();
+      const selectedBefore = await page.evaluate(() => {
+        const el = document.querySelector('[x-data="libraryBrowser"]');
+        return el ? window.Alpine.$data(el).selectedTracks.size : 0;
+      });
+      expect(selectedBefore).toBe(1);
 
-      if (await searchInput.isVisible()) {
-        await searchInput.click();
-        await searchInput.fill('test');
+      // Focus the search input
+      const searchInput = page.locator(
+        '[data-testid="search-input"], input[type="search"], input[placeholder*="Search"]',
+      ).first();
+      await expect(searchInput).toBeVisible();
+      await searchInput.click();
 
-        // Select a track first
-        await page.locator('[data-track-id]').nth(0).click({ modifiers: ['Meta'] });
+      // Capture track count before pressing Delete
+      const countBefore = await page.locator('[data-track-id]').count();
 
-        // Focus back on search input
-        await searchInput.click();
+      // Press Delete while focused in input — should NOT trigger track removal shortcut
+      await page.keyboard.press('Delete');
+      await page.waitForTimeout(200);
 
-        // Press Delete while in input - should NOT delete track
-        await page.keyboard.press('Delete');
-
-        await page.waitForTimeout(200);
-
-        // Track count should be unchanged
-        const afterCount = await page.locator('[data-track-id]').count();
-        expect(afterCount).toBe(initialCount);
-      }
+      // Track count in DOM should be unchanged
+      const countAfter = await page.locator('[data-track-id]').count();
+      expect(countAfter).toBe(countBefore);
     });
 
     test('should do nothing when pressing Delete with no selection', async ({ page }) => {
