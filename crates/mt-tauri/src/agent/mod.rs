@@ -120,15 +120,15 @@ fn shuffle_spread_artists(tracks: &[(i64, String)]) -> Vec<i64> {
         }
 
         // Pick artist with most remaining tracks (greedy)
-        available.sort_by(|a, b| b.1.cmp(&a.1));
+        available.sort_by_key(|b| std::cmp::Reverse(b.1));
         let chosen_artist = available[0].0;
 
         // Take one track from that artist
-        if let Some(ids) = by_artist.get_mut(chosen_artist) {
-            if let Some(track_id) = ids.pop() {
-                result.push(track_id);
-                last_artist = Some(chosen_artist);
-            }
+        if let Some(ids) = by_artist.get_mut(chosen_artist)
+            && let Some(track_id) = ids.pop()
+        {
+            result.push(track_id);
+            last_artist = Some(chosen_artist);
         }
     }
 

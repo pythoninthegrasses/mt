@@ -37,19 +37,13 @@ env:
 jobs:
   rust:
     name: Rust Lint, Format, and Test
-    runs-on: [macOS, ARM64]
-    timeout-minutes: 20
+    runs-on: macos-latest
+    timeout-minutes: 30
     env:
       CARGO_INCREMENTAL: 1
       CARGO_TERM_COLOR: always
 
     steps:
-      - name: Setup macOS self-hosted runner PATH
-        shell: bash
-        run: |
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          echo "/opt/homebrew/bin:/opt/homebrew/sbin" >> $GITHUB_PATH
-
       - uses: actions/checkout@v6
 
       - name: Setup Tauri build environment
@@ -109,13 +103,13 @@ jobs:
       matrix:
         include:
           - platform: macos
-            os: [macOS, ARM64]
+            os: macos-latest
             target: aarch64-apple-darwin
           - platform: linux
             os: ${{ inputs.linux-runner || 'blacksmith-4vcpu-ubuntu-2404' }}
             target: x86_64-unknown-linux-gnu
           - platform: windows
-            os: [self-hosted, Windows, X64]
+            os: windows-latest
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -207,7 +201,7 @@ jobs:
 
   playwright-tests:
     name: Playwright E2E Tests
-    runs-on: [macOS, ARM64]
+    runs-on: macos-latest
     timeout-minutes: 20
 
     steps:
