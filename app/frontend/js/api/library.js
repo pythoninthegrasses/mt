@@ -8,6 +8,63 @@ import { ApiError, invoke, request } from './shared.js';
 
 export const library = {
   /**
+   * Get filtered count and total duration without loading track data
+   * @param {object} params - Filter parameters
+   * @param {string} [params.search] - Search query
+   * @param {string} [params.artist] - Artist filter
+   * @param {string} [params.album] - Album filter
+   * @returns {Promise<{total: number, total_duration: number}>}
+   */
+  async getCount(params = {}) {
+    if (invoke) {
+      try {
+        return await invoke('library_get_count', {
+          search: params.search || null,
+          artist: params.artist || null,
+          album: params.album || null,
+        });
+      } catch (error) {
+        console.error('[api.library.getCount] Tauri error:', error);
+        throw new ApiError(500, error.toString());
+      }
+    }
+    const query = new URLSearchParams();
+    if (params.search) query.set('search', params.search);
+    const queryString = query.toString();
+    return request(`/library/count${queryString ? `?${queryString}` : ''}`);
+  },
+
+  /**
+   * Find the 0-based offset of the first row matching a prefix in the current sort order
+   * @param {object} params - Filter/sort parameters plus prefix
+   * @param {string} params.prefix - Prefix to search for
+   * @param {string} [params.search] - Search query
+   * @param {string} [params.sort] - Sort field
+   * @param {string} [params.order] - Sort order
+   * @param {string} [params.ignoreWords] - Ignore words for sort
+   * @returns {Promise<number|null>} 0-based offset or null
+   */
+  async findOffset(params = {}) {
+    if (invoke) {
+      try {
+        return await invoke('library_find_offset', {
+          search: params.search || null,
+          artist: params.artist || null,
+          album: params.album || null,
+          sortBy: params.sort || null,
+          sortOrder: params.order || null,
+          ignoreWords: params.ignoreWords || null,
+          prefix: params.prefix,
+        });
+      } catch (error) {
+        console.error('[api.library.findOffset] Tauri error:', error);
+        throw new ApiError(500, error.toString());
+      }
+    }
+    return null;
+  },
+
+  /**
    * Get all tracks in library (uses Tauri command)
    * @param {object} params - Query parameters
    * @param {string} [params.search] - Search query

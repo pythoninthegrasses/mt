@@ -94,6 +94,65 @@ pub(crate) fn library_get_all(
     Ok(response)
 }
 
+/// Get filtered count and total duration without loading track data
+#[allow(clippy::too_many_arguments)]
+#[tracing::instrument(skip(db))]
+#[tauri::command]
+pub(crate) fn library_get_count(
+    db: State<'_, Database>,
+    search: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+) -> Result<crate::db::LibraryCount, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    let query = library::LibraryQuery {
+        search,
+        artist,
+        album,
+        ..Default::default()
+    };
+    library::get_filtered_count(&conn, &query).map_err(|e| e.to_string())
+}
+
+/// Find the 0-based offset of the first row matching a prefix in the current sort order
+#[allow(clippy::too_many_arguments)]
+#[tracing::instrument(skip(db))]
+#[tauri::command]
+pub(crate) fn library_find_offset(
+    db: State<'_, Database>,
+    search: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+    sort_by: Option<String>,
+    sort_order: Option<String>,
+    ignore_words: Option<String>,
+    prefix: String,
+) -> Result<Option<i64>, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    let query = library::LibraryQuery {
+        search,
+        artist,
+        album,
+        sort_by: sort_by
+            .as_ref()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_default(),
+        sort_order: sort_order
+            .as_ref()
+            .map(|s| {
+                if s.to_lowercase() == "asc" {
+                    SortOrder::Asc
+                } else {
+                    SortOrder::Desc
+                }
+            })
+            .unwrap_or(SortOrder::Desc),
+        ignore_words,
+        ..Default::default()
+    };
+    library::find_sort_offset(&conn, &query, &prefix).map_err(|e| e.to_string())
+}
+
 /// Get library statistics
 #[tracing::instrument(skip(db))]
 #[tauri::command]

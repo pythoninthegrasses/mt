@@ -16,14 +16,14 @@ import { promptToAddWatchedFolders } from '../utils/watched-folders.js';
 /**
  * Compute summary stats and update store state after a section fetch.
  * Shared between loadSection and backgroundRefreshSection.
+ * Sets _sectionTracks for non-paginated sections.
  */
 export function applySectionData(store, section, tracks, data) {
   window.Alpine.disableEffectScheduling(() => {
-    store.tracks = tracks;
+    store._setSectionTracks(tracks);
     store.totalTracks = data?.total ?? tracks.length;
     store.totalDuration = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
     store._lastLoadedSection = section;
-    store.filteredTracks = [...tracks];
   });
 }
 
@@ -96,8 +96,7 @@ export async function loadSection(store, section, fetchFn, opts = {}) {
     }
   } catch (error) {
     console.error(`[${logTag}] Failed to load ${section}:`, error);
-    store.tracks = [];
-    store.filteredTracks = [];
+    store._setSectionTracks([]);
   } finally {
     store.loading = false;
   }
@@ -134,11 +133,12 @@ export async function backgroundRefreshSection(store, section, fetchFn, opts = {
 }
 
 // ---------------------------------------------------------------------------
-// Main library load / refresh (the "all" section)
+// Main library load / refresh (the "all" section) — paginated
 // ---------------------------------------------------------------------------
 
 /**
- * Load library tracks from backend.
+ * Load library tracks from backend using pagination.
+ * Fetches count + first page only; remaining pages load on demand via scroll.
  * @param {object} store - Library store instance
  * @param {Object} [options]
  * @param {boolean} [options.forceReload=false] - Force reload even if data exists
@@ -165,7 +165,6 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
     store.totalTracks = cached.totalTracks;
     store.totalDuration = cached.totalDuration;
     store._lastLoadedSection = loadSection;
-    // Fall through to fetch below — tracks stay from previous section (no flash)
   }
 
   console.log('[library]', 'load', {
@@ -176,13 +175,20 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
   });
 
   store.loading = true;
-  // DON'T clear tracks - keep showing previous data while loading
-  // This prevents spinner from showing when switching between sections
-  // The spinner only shows when library.loading && library.tracks.length === 0
 
   try {
     const _t0 = performance.now();
-    const data = await store._fetchLibraryData();
+
+    // Reset to paginated mode
+    store._resetPages();
+
+    // Fetch count and first page in parallel
+    const filterParams = store._getFilterParams();
+    const [countData] = await Promise.all([
+      library.getCount(filterParams),
+      store._fetchPage(0),
+    ]);
+
     const _t1 = performance.now();
 
     if (store.currentSection !== loadSection || store.currentSection?.startsWith('playlist-')) {
@@ -193,42 +199,37 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
       return;
     }
 
-    const rawTracks = data.tracks || [];
-    const _t2 = performance.now();
-
     window.Alpine.disableEffectScheduling(() => {
-      store.tracks = rawTracks;
-      store.totalTracks = data.total || rawTracks.length;
-      store.totalDuration = rawTracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+      store.totalTracks = countData.total;
+      store.totalDuration = countData.total_duration;
       store._lastLoadedSection = loadSection;
-      store.allTracks = rawTracks;
       store._dataVersion++;
-      store.filteredTracks = [...rawTracks];
     });
-    store._updateCache(loadSection, data);
-    const _t3 = performance.now();
 
-    // applyFilters inlined into the batch above
-    const _t4 = performance.now();
+    store._updateCache(loadSection, {
+      total: countData.total,
+      totalDuration: countData.total_duration,
+    });
+    const _t2 = performance.now();
 
     window._perfLibLoad = {
       fetch_ms: Math.round(_t1 - _t0),
-      assign_tracks_ms: Math.round(_t2 - _t1),
-      process_ms: Math.round(_t3 - _t2),
-      applyFilters_ms: Math.round(_t4 - _t3),
-      total_ms: Math.round(_t4 - _t0),
+      process_ms: Math.round(_t2 - _t1),
+      total_ms: Math.round(_t2 - _t0),
+      page0_tracks: store._trackPages[0]?.length || 0,
+      total_tracks: countData.total,
     };
     console.log('[perf] library.load breakdown:', window._perfLibLoad);
     console.log('[library]', 'load_complete', {
-      trackCount: store.tracks.length,
-      totalDuration: Math.round(store.totalDuration / 1000) + 's',
+      page0Count: store._trackPages[0]?.length || 0,
+      totalTracks: countData.total,
       section: loadSection,
     });
   } catch (error) {
     console.error('[library]', 'load_error', { error: error.message });
-    // Ensure tracks stay cleared on error
-    store.tracks = [];
-    store.filteredTracks = [];
+    store._resetPages();
+    store.totalTracks = 0;
+    store.totalDuration = 0;
   } finally {
     store.loading = false;
   }
@@ -245,35 +246,32 @@ export async function backgroundRefreshLibrary(store, section) {
 
   try {
     console.log('[library] background refresh starting for:', section);
-    const data = await store._fetchLibraryData();
 
-    // _fetchLibraryData always returns the full library
-    const refreshedTracks = data.tracks || [];
+    const filterParams = store._getFilterParams();
+    const countData = await library.getCount(filterParams);
 
-    // Only update section-specific state if still on same section
     if (store.currentSection === section) {
+      // Reset and reload page 0
+      store._resetPages();
+      await store._fetchPage(0);
+
       window.Alpine.disableEffectScheduling(() => {
-        store.allTracks = refreshedTracks;
+        store.totalTracks = countData.total;
+        store.totalDuration = countData.total_duration;
         store._dataVersion++;
-        store.tracks = refreshedTracks;
-        store.totalTracks = data.total || refreshedTracks.length;
-        store.totalDuration = refreshedTracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-        store.filteredTracks = [...refreshedTracks];
       });
-      store._updateCache(section, data);
+      store._updateCache(section, {
+        total: countData.total,
+        totalDuration: countData.total_duration,
+      });
 
       console.log('[library] background refresh complete:', {
         section,
-        trackCount: store.tracks.length,
-      });
-    } else {
-      window.Alpine.disableEffectScheduling(() => {
-        store.allTracks = refreshedTracks;
-        store._dataVersion++;
+        totalTracks: countData.total,
+        page0Count: store._trackPages[0]?.length || 0,
       });
     }
   } catch (error) {
-    // Silent fail for background refresh
     console.log('[library] background refresh failed:', error.message);
   } finally {
     store._backgroundRefreshing = false;
@@ -424,14 +422,17 @@ export function removeFromQueue(Alpine, idSet) {
 export function removeTracksLocallyOp(store, Alpine, trackIds) {
   if (!trackIds || trackIds.length === 0) return;
 
-  // Fast path: clearing the entire library — skip reactive filtering
-  if (trackIds.length >= store.allTracks.length) {
-    store.allTracks = [];
-    store._dataVersion++;
-    store.tracks = [];
-    store.filteredTracks = [];
-    store.totalTracks = 0;
-    store.totalDuration = 0;
+  const currentTracks = store.filteredTracks;
+
+  // Fast path: clearing the entire library
+  if (trackIds.length >= currentTracks.length) {
+    window.Alpine.disableEffectScheduling(() => {
+      store._resetPages();
+      store._setSectionTracks([]);
+      store.totalTracks = 0;
+      store.totalDuration = 0;
+      store._dataVersion++;
+    });
     store._clearCache();
 
     const queue = Alpine.store('queue');
@@ -443,20 +444,41 @@ export function removeTracksLocallyOp(store, Alpine, trackIds) {
   }
 
   const idSet = new Set(trackIds);
-  const newAllTracks = store.allTracks.filter((t) => !idSet.has(t.id));
-  const newTracks = store.tracks.filter((t) => !idSet.has(t.id));
-  // Filter filteredTracks directly — removing items from a sorted list preserves
-  // sort order, so re-running applyFilters() (O(n log n) sort) is unnecessary.
-  const newFilteredTracks = store.filteredTracks.filter((t) => !idSet.has(t.id));
+  let removedCount = 0;
 
-  window.Alpine.disableEffectScheduling(() => {
-    store.allTracks = newAllTracks;
-    store._dataVersion++;
-    store.tracks = newTracks;
-    store.totalTracks = newTracks.length;
-    store.totalDuration = newTracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-    store.filteredTracks = newFilteredTracks;
-  });
+  if (store._sectionTracks) {
+    // Non-paginated section: filter the flat array
+    const newTracks = store._sectionTracks.filter((t) => !idSet.has(t.id));
+    removedCount = store._sectionTracks.length - newTracks.length;
+    const newDuration = newTracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+
+    window.Alpine.disableEffectScheduling(() => {
+      store._setSectionTracks(newTracks);
+      store.totalTracks = newTracks.length;
+      store.totalDuration = newDuration;
+      store._dataVersion++;
+    });
+  } else {
+    // Paginated section: filter each loaded page
+    for (const [pageIdx, page] of Object.entries(store._trackPages)) {
+      const before = page.length;
+      store._trackPages[pageIdx] = page.filter((t) => !idSet.has(t.id));
+      removedCount += before - store._trackPages[pageIdx].length;
+    }
+
+    window.Alpine.disableEffectScheduling(() => {
+      store.totalTracks = Math.max(0, store.totalTracks - removedCount);
+      // Recompute duration from loaded pages
+      let duration = 0;
+      for (const page of Object.values(store._trackPages)) {
+        for (const t of page) {
+          duration += t.duration || 0;
+        }
+      }
+      store.totalDuration = duration;
+      store._dataVersion++;
+    });
+  }
   store._clearCache();
 
   // Remove from queue if present

@@ -26,8 +26,34 @@ export function virtualScrollMixin() {
     },
 
     scrollToTrack(trackId) {
-      const idx = this.library.filteredTracks.findIndex((t) => t.id === trackId);
-      if (idx === -1) return;
+      const lib = this.library;
+
+      // For non-paginated sections, search the flat array directly
+      if (!lib._isPaginated || !lib._isPaginated()) {
+        const tracks = lib.filteredTracks;
+        const idx = tracks.findIndex((t) => t.id === trackId);
+        if (idx === -1) return;
+        this._scrollToRowIndex(idx);
+        return;
+      }
+
+      // For paginated sections, compute the global index from the page map
+      for (const [pageIdx, page] of Object.entries(lib._trackPages)) {
+        const localIdx = page.findIndex((t) => t.id === trackId);
+        if (localIdx !== -1) {
+          const globalIdx = parseInt(pageIdx, 10) * lib._pageSize + localIdx;
+          this._scrollToRowIndex(globalIdx);
+          return;
+        }
+      }
+    },
+
+    scrollToOffset(offset) {
+      if (offset < 0 || offset >= this.library.totalTracks) return;
+      this._scrollToRowIndex(offset);
+    },
+
+    _scrollToRowIndex(idx) {
       const container = this.$refs.scrollContainer;
       if (!container) return;
       const trackTop = idx * this._rowHeight;

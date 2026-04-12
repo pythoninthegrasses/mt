@@ -319,14 +319,14 @@ export function createLibraryBrowser(Alpine) {
     },
 
     get startIndex() {
-      const trackCount = this.library.filteredTracks.length;
+      const trackCount = this.library.totalTracks;
       if (trackCount === 0) return 0;
       const scrollTop = Math.min(this._scrollTop, trackCount * this._rowHeight);
       return Math.max(0, Math.floor(scrollTop / this._rowHeight) - this._bufferRows);
     },
 
     get endIndex() {
-      const trackCount = this.library.filteredTracks.length;
+      const trackCount = this.library.totalTracks;
       if (trackCount === 0) return 0;
       const scrollTop = Math.min(this._scrollTop, trackCount * this._rowHeight);
       const visibleRows = Math.ceil(this._containerHeight / this._rowHeight);
@@ -337,17 +337,36 @@ export function createLibraryBrowser(Alpine) {
     },
 
     get visibleTracks() {
-      const tracks = this.library.filteredTracks;
-      const end = Math.min(this.endIndex, tracks.length);
+      const lib = this.library;
+      // Access _dataVersion to create Alpine reactive dependency on page loads
+      void lib._dataVersion;
+      const end = Math.min(this.endIndex, lib.totalTracks);
       const result = [];
+
+      // Trigger page prefetch for visible range + 1 page ahead
+      if (lib._isPaginated()) {
+        const pageSize = lib._pageSize;
+        const firstPage = Math.floor(this.startIndex / pageSize);
+        const lastPage = Math.floor(Math.max(0, end - 1) / pageSize);
+        // Prefetch 1 page ahead in scroll direction
+        for (let p = firstPage; p <= lastPage + 1; p++) {
+          lib._ensurePage(p);
+        }
+      }
+
       for (let i = this.startIndex; i < end; i++) {
-        result.push({ track: tracks[i], globalIndex: i });
+        const track = lib.getTrackAtIndex(i);
+        if (track) {
+          result.push({ track, globalIndex: i });
+        } else {
+          result.push({ track: { _placeholder: true }, globalIndex: i });
+        }
       }
       return result;
     },
 
     get totalContentHeight() {
-      return this.library.filteredTracks.length * this._rowHeight;
+      return this.library.totalTracks * this._rowHeight;
     },
 
     get offsetY() {

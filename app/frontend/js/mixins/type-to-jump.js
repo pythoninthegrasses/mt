@@ -4,6 +4,9 @@ import { DEFAULT_SORT_IGNORE_WORDS } from '../constants.js';
  * Type-to-jump mixin for library browser.
  * Handles keyboard-driven artist navigation: type a letter to jump to matching artist,
  * repeat the same letter to cycle through matching artists.
+ *
+ * When tracks are paginated and a match isn't found in loaded pages, falls back
+ * to a backend offset lookup to jump directly to the target page.
  */
 export function typeToJumpMixin() {
   return {
@@ -86,6 +89,7 @@ export function typeToJumpMixin() {
     /**
      * Find and scroll to first track with artist matching the query.
      * Prefers stripped prefix match (ignore words removed) over raw artist name match.
+     * Falls back to backend offset lookup when match not found in loaded tracks.
      * @param {string} query - The search query (typed characters)
      */
     jumpToMatchingArtist(query) {
@@ -117,7 +121,46 @@ export function typeToJumpMixin() {
         this.selectedTracks.clear();
         this.selectedTracks.add(fallback.id);
         this.scrollToTrack(fallback.id);
+        return;
       }
+
+      // No match in loaded tracks — try backend offset lookup for paginated mode
+      if (this.library._isPaginated() && !this.library._allPagesLoaded) {
+        this._jumpViaBackend(normalizedQuery);
+      }
+    },
+
+    /**
+     * Backend-assisted jump: ask for the offset of the first matching row,
+     * ensure the target page is loaded, and scroll to it.
+     * Fire-and-forget from the keyboard handler — no spinner.
+     * @param {string} prefix - Lowercase search prefix
+     */
+    async _jumpViaBackend(prefix) {
+      const offset = await this.library._jumpToPrefix(prefix);
+      if (offset === null || offset === undefined) return;
+
+      // Scroll immediately — shimmer rows show while page loads
+      this.scrollToOffset(offset);
+
+      // Wait for the page to load, then select the track
+      const checkAndSelect = () => {
+        const track = this.library.getTrackAtIndex(offset);
+        if (track) {
+          this.selectedTracks.clear();
+          this.selectedTracks.add(track.id);
+        } else {
+          // Page still loading — retry once after a short delay
+          setTimeout(() => {
+            const t = this.library.getTrackAtIndex(offset);
+            if (t) {
+              this.selectedTracks.clear();
+              this.selectedTracks.add(t.id);
+            }
+          }, 200);
+        }
+      };
+      checkAndSelect();
     },
 
     /**
@@ -145,7 +188,13 @@ export function typeToJumpMixin() {
         }
       }
 
-      if (matchingArtists.length === 0) return;
+      if (matchingArtists.length === 0) {
+        // No match in loaded tracks — try backend for paginated mode
+        if (this.library._isPaginated() && !this.library._allPagesLoaded) {
+          this._jumpViaBackend(char);
+        }
+        return;
+      }
 
       // Advance cycle index (initialize on first cycle after a fresh letter press)
       if (this._cycleChar !== char) {

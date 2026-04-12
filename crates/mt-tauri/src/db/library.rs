@@ -7,8 +7,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::db::{
-    DbResult, FileFingerprint, LibrarySortColumn, LibraryStats, PaginatedResult, SortOrder, Track,
-    TrackMetadata,
+    DbResult, FileFingerprint, LibraryCount, LibrarySortColumn, LibraryStats, PaginatedResult,
+    SortOrder, Track, TrackMetadata,
 };
 
 /// Map a database row to a Track struct
@@ -67,11 +67,9 @@ impl LibraryQuery {
     }
 }
 
-/// Get tracks from the library with filtering and pagination
-pub(crate) fn get_all_tracks(
-    conn: &Connection,
-    query: &LibraryQuery,
-) -> DbResult<PaginatedResult<Track>> {
+/// Build WHERE clause and params from a LibraryQuery.
+/// Shared by get_all_tracks, get_filtered_count, and find_sort_offset.
+fn build_library_where(query: &LibraryQuery) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
     let mut conditions = Vec::new();
     let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
@@ -117,9 +115,19 @@ pub(crate) fn get_all_tracks(
         format!("WHERE {}", conditions.join(" AND "))
     };
 
+    (where_clause, params_vec)
+}
+
+/// Get tracks from the library with filtering and pagination
+pub(crate) fn get_all_tracks(
+    conn: &Connection,
+    query: &LibraryQuery,
+) -> DbResult<PaginatedResult<Track>> {
+    let (where_clause, params_vec) = build_library_where(query);
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+
     // Get total count
     let count_sql = format!("SELECT COUNT(*) FROM library {}", where_clause);
-    let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
     let total: i64 = conn.query_row(&count_sql, params_refs.as_slice(), |row| row.get(0))?;
 
     // Get tracks
@@ -154,6 +162,89 @@ pub(crate) fn get_all_tracks(
         items: tracks,
         total,
     })
+}
+
+/// Get filtered count and total duration without loading track data.
+pub(crate) fn get_filtered_count(
+    conn: &Connection,
+    query: &LibraryQuery,
+) -> DbResult<LibraryCount> {
+    let (where_clause, params_vec) = build_library_where(query);
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+
+    let sql = format!(
+        "SELECT COUNT(*), COALESCE(SUM(duration), 0) FROM library {}",
+        where_clause
+    );
+
+    let (total, total_duration) = conn.query_row(&sql, params_refs.as_slice(), |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)? as i64))
+    })?;
+
+    Ok(LibraryCount {
+        total,
+        total_duration,
+    })
+}
+
+/// Find the 0-based row offset of the first row whose artist starts with
+/// `prefix` in the current sort order. Matches against artist with optional
+/// ignore-words stripping (same logic as frontend type-to-jump).
+/// Returns `None` if no match.
+pub(crate) fn find_sort_offset(
+    conn: &Connection,
+    query: &LibraryQuery,
+    prefix: &str,
+) -> DbResult<Option<i64>> {
+    let (where_clause, params_vec) = build_library_where(query);
+
+    let order_by = format!(
+        "{} {}{}",
+        query.sort_by.as_order_by(query.ignore_words.as_deref()),
+        query.sort_order.as_sql(),
+        query
+            .sort_by
+            .secondary_order_by(query.ignore_words.as_deref())
+    );
+
+    // Match against artist with optional ignore-words prefix stripping,
+    // mirroring the frontend's stripIgnoredPrefix + artist comparison.
+    let artist_expr = if let Some(ref words) = query.ignore_words {
+        format!("LOWER(strip_sort_prefix(artist, '{}'))", words.replace('\'', "''"))
+    } else {
+        "LOWER(artist)".to_string()
+    };
+
+    let sql = format!(
+        "WITH ranked AS (
+            SELECT artist, {artist_expr} AS match_val, ROW_NUMBER() OVER (ORDER BY {order_by}) AS rn
+            FROM library
+            {where_clause}
+        )
+        SELECT rn - 1 FROM ranked
+        WHERE match_val LIKE ? ESCAPE '\\' OR LOWER(artist) LIKE ? ESCAPE '\\'
+        ORDER BY rn
+        LIMIT 1"
+    );
+
+    let like_pattern = format!(
+        "{}%",
+        prefix
+            .to_lowercase()
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+    );
+
+    let mut all_params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+    all_params.push(&like_pattern);
+    all_params.push(&like_pattern);
+
+    let result = conn
+        .query_row(&sql, all_params.as_slice(), |row| row.get::<_, i64>(0))
+        .ok();
+
+    Ok(result)
 }
 
 /// Find all library tracks matching a given artist and title.
@@ -3059,5 +3150,113 @@ mod tests {
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0][0].filepath, "/music/dir_b/song.mp3");
         assert_eq!(groups[0][1].filepath, "/music/dir_a/song.mp3");
+    }
+
+    fn insert_test_tracks_for_pagination(conn: &Connection) {
+        let artists = ["Alpha", "Beta", "Gamma", "Delta", "Zeta"];
+        for (i, artist) in artists.iter().enumerate() {
+            let metadata = TrackMetadata {
+                title: Some(format!("Song {}", i + 1)),
+                artist: Some(artist.to_string()),
+                album: Some("Album".to_string()),
+                duration: Some((i as f64 + 1.0) * 60.0),
+                ..Default::default()
+            };
+            add_track(conn, &format!("/music/{}.mp3", i), &metadata).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_get_filtered_count_no_filter() {
+        let conn = setup_test_db();
+        insert_test_tracks_for_pagination(&conn);
+
+        let query = LibraryQuery::default();
+        let count = get_filtered_count(&conn, &query).unwrap();
+        assert_eq!(count.total, 5);
+        // Duration: 60 + 120 + 180 + 240 + 300 = 900 seconds
+        assert_eq!(count.total_duration, 900);
+    }
+
+    #[test]
+    fn test_get_filtered_count_with_search() {
+        let conn = setup_test_db();
+        insert_test_tracks_for_pagination(&conn);
+
+        let query = LibraryQuery {
+            search: Some("Alpha".to_string()),
+            ..Default::default()
+        };
+        let count = get_filtered_count(&conn, &query).unwrap();
+        assert_eq!(count.total, 1);
+        assert_eq!(count.total_duration, 60);
+    }
+
+    #[test]
+    fn test_get_all_tracks_pagination() {
+        let conn = setup_test_db();
+        insert_test_tracks_for_pagination(&conn);
+
+        let query = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            limit: 2,
+            offset: 0,
+            ..Default::default()
+        };
+        let result = get_all_tracks(&conn, &query).unwrap();
+        assert_eq!(result.total, 5);
+        assert_eq!(result.items.len(), 2);
+        assert_eq!(result.items[0].artist.as_deref(), Some("Alpha"));
+        assert_eq!(result.items[1].artist.as_deref(), Some("Beta"));
+
+        // Second page
+        let query2 = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            limit: 2,
+            offset: 2,
+            ..Default::default()
+        };
+        let result2 = get_all_tracks(&conn, &query2).unwrap();
+        assert_eq!(result2.total, 5);
+        assert_eq!(result2.items.len(), 2);
+        assert_eq!(result2.items[0].artist.as_deref(), Some("Delta"));
+        assert_eq!(result2.items[1].artist.as_deref(), Some("Gamma"));
+    }
+
+    #[test]
+    fn test_find_sort_offset_artist_prefix() {
+        let conn = setup_test_db();
+        insert_test_tracks_for_pagination(&conn);
+
+        let query = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            ..Default::default()
+        };
+        // Sorted ASC: Alpha(0), Beta(1), Delta(2), Gamma(3), Zeta(4)
+        let offset = find_sort_offset(&conn, &query, "z").unwrap();
+        assert_eq!(offset, Some(4));
+
+        let offset = find_sort_offset(&conn, &query, "d").unwrap();
+        assert_eq!(offset, Some(2));
+
+        let offset = find_sort_offset(&conn, &query, "a").unwrap();
+        assert_eq!(offset, Some(0));
+    }
+
+    #[test]
+    fn test_find_sort_offset_no_match() {
+        let conn = setup_test_db();
+        insert_test_tracks_for_pagination(&conn);
+
+        let query = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            ..Default::default()
+        };
+        let offset = find_sort_offset(&conn, &query, "xyz").unwrap();
+        assert_eq!(offset, None);
     }
 }

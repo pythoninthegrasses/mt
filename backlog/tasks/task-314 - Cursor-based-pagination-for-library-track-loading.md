@@ -1,10 +1,10 @@
 ---
 id: TASK-314
 title: Cursor-based pagination for library track loading
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-12 06:55'
-updated_date: '2026-04-12 06:59'
+updated_date: '2026-04-12 08:21'
 labels:
   - performance
   - frontend
@@ -88,13 +88,116 @@ TASK-313 adds Alpine batch updates. This task's page-fetch callbacks will trigge
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Backend exposes library_get_count command returning total track count and duration for current filter
-- [ ] #2 Backend library_get_all supports cursor-based pagination with configurable page_size
-- [ ] #3 Frontend library store uses sparse page map instead of loading all tracks into flat arrays
-- [ ] #4 Virtual scroll fetches pages on demand as user scrolls, with 1-page prefetch ahead of scroll direction
-- [ ] #5 Skeleton/shimmer placeholder rows display while pages are loading
-- [ ] #6 getTrack(id) falls back to single-track IPC call if track is not in a loaded page
-- [ ] #7 Search and sort changes invalidate page cache and re-fetch from page 0
-- [ ] #8 Initial library load transfers only count metadata + first page (500 tracks)
-- [ ] #9 All existing Rust, Vitest, and Playwright E2E tests pass
+- [x] #1 Backend exposes library_get_count command returning total track count and duration for current filter
+- [x] #2 Backend library_get_all supports cursor-based pagination with configurable page_size
+- [x] #3 Frontend library store uses sparse page map instead of loading all tracks into flat arrays
+- [x] #4 Virtual scroll fetches pages on demand as user scrolls, with 1-page prefetch ahead of scroll direction
+- [x] #5 Skeleton/shimmer placeholder rows display while pages are loading
+- [x] #6 getTrack(id) falls back to single-track IPC call if track is not in a loaded page
+- [x] #7 Search and sort changes invalidate page cache and re-fetch from page 0
+- [x] #8 Initial library load transfers only count metadata + first page (500 tracks)
+- [x] #9 All existing Rust, Vitest, and Playwright E2E tests pass
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Changes
+
+### Backend (Rust)
+
+**`crates/mt-tauri/src/db/models.rs`**
+- Added `LibraryCount { total: i64, total_duration: i64 }` struct for lightweight count responses
+
+**`crates/mt-tauri/src/db/library.rs`**
+- Extracted `build_library_where()` helper from `get_all_tracks()` to share WHERE clause building across queries
+- Added `get_filtered_count()` — returns count + total duration without loading track data
+- Added `find_sort_offset()` — finds the 0-based row offset of the first row whose sort column matches a prefix, using a CTE with `ROW_NUMBER()` window function
+- Added 5 tests: count no-filter, count with search, pagination boundaries, offset prefix match, offset no match
+
+**`crates/mt-tauri/src/library/commands.rs`**
+- Added `library_get_count` Tauri command (search/artist/album filter params)
+- Added `library_find_offset` Tauri command (filter + sort params + prefix)
+
+**`crates/mt-tauri/src/lib.rs`**
+- Registered both new commands in `invoke_handler`
+
+### Frontend API
+
+**`app/frontend/js/api/library.js`**
+- Added `getCount(params)` method invoking `library_get_count`
+- Added `findOffset(params)` method invoking `library_find_offset`
+
+### Frontend Store (Sparse Page Map)
+
+**`app/frontend/js/stores/library.js`**
+- Replaced flat `tracks[]`/`filteredTracks[]`/`allTracks[]` arrays with sparse page map: `_trackPages: {}`, `_loadingPages: {}`, `_pageSize: 500`
+- Added `_sectionTracks` for non-paginated sections (favorites, recent, playlists) — these continue loading all tracks in a single fetch
+- Added `_fetchPage(pageIndex)` with generation-based stale response detection
+- Added `_ensurePage(pageIndex)`, `_resetPages()`, `getTrackAtIndex(i)`, `_loadAllPages()`
+- Added backward-compat `filteredTracks`/`tracks`/`allTracks` getters that concatenate loaded pages
+- Added setters that route to `_setSectionTracks()` for backward compat with `applySectionData`
+- Added `_jumpToPrefix(prefix)` for backend-assisted type-to-jump
+- Added `getTrackAsync(id)` fallback to single-track IPC call
+- `addAllToQueue()` loads all pages first if not all loaded
+- `rescanTrack()` updated to search page map
+
+**`app/frontend/js/utils/library-operations.js`**
+- `loadLibraryData()` now fetches count + page 0 in parallel instead of all tracks
+- `removeTracksLocallyOp()` handles both paginated (filter each page) and non-paginated (filter flat array) modes
+- `backgroundRefreshLibrary()` resets pages and reloads count + page 0
+- `applySectionData()` uses `_setSectionTracks()` for non-paginated sections
+
+### Virtual Scroll
+
+**`app/frontend/js/components/library-browser.js`**
+- `startIndex`/`endIndex` now bound by `totalTracks` (from count endpoint) instead of `filteredTracks.length`
+- `visibleTracks` returns placeholder objects `{ _placeholder: true }` for unloaded pages
+- `totalContentHeight` uses `totalTracks` so scrollbar is correctly sized from initial load
+- Prefetch trigger: ensures pages for visible range + 1 page ahead in scroll direction
+
+**`app/frontend/js/mixins/virtual-scroll.js`**
+- Added `scrollToOffset(offset)` for type-to-jump navigation
+- Extracted `_scrollToRowIndex()` shared by `scrollToTrack` and `scrollToOffset`
+
+### Shimmer Placeholder Rows
+
+**`app/frontend/views/library.html`**
+- Track row div conditionally renders shimmer or real content based on `item.track._placeholder`
+- Shimmer: animated pulse bars for title/artist/album columns, varying widths per row
+- All column `x-if` templates guarded with `!item.track._placeholder &&`
+- Event handlers guarded against placeholder items
+- Container `x-show` and loading/empty state use `totalTracks` instead of array lengths
+
+### Backend-Assisted Type-to-Jump
+
+**`app/frontend/js/mixins/type-to-jump.js`**
+- `jumpToMatchingArtist()` falls back to `_jumpViaBackend()` when no match in loaded tracks
+- `cycleToNextArtist()` same fallback
+- `_jumpViaBackend()`: calls `library_find_offset` for the row offset, scrolls immediately (shimmer shows briefly), selects track once page loads
+
+### Tests
+
+**Rust** (5 new tests, 688 total pass):
+- `test_get_filtered_count_no_filter`, `test_get_filtered_count_with_search`
+- `test_get_all_tracks_pagination`, `test_find_sort_offset_artist_prefix`, `test_find_sort_offset_no_match`
+
+**Vitest** (12 new tests, 47 total in library.store.test.js):
+- `getTrackAtIndex` from loaded/unloaded pages, non-zero page, out-of-bounds
+- `getTrack` across pages, not found
+- `filteredTracks` getter concatenation, empty, non-paginated mode
+- `_resetPages` clears state, `_isPaginated` detection
+
+## Bug Fixes (post-implementation)
+
+### `find_sort_offset` matched sort column instead of artist
+The backend `find_sort_offset` was matching the prefix against the sort expression (`COALESCE(NULLIF(album_artist, ''), artist)` for artist sort), which could match `album_artist` values that don't correspond to the display artist. For example, typing "z" could match an album_artist starting with Z while the display artist was "Meat Puppets".
+
+Fixed to match against `artist` column specifically, with `strip_sort_prefix()` for ignore-words support and a raw `LOWER(artist)` fallback — mirroring the frontend's `stripIgnoredPrefix` + artist comparison logic.
+
+### `scrollToTrack` computed wrong global index for sparse pages
+`scrollToTrack` used `filteredTracks.findIndex()` to determine the scroll position. But `filteredTracks` concatenates loaded pages contiguously, so a track on page 5 (with pages 1-4 unloaded) would get an incorrect offset. Fixed to iterate `_trackPages` directly and compute `pageIndex * pageSize + localIndex` for the true global position.
+
+### `visibleTracks` getter missing Alpine reactive dependency
+When a new page loads, `_trackPages[pageIndex]` is set and `_dataVersion` incremented. But `visibleTracks` didn't access `_dataVersion`, so Alpine wouldn't re-render when pages loaded. Added `void lib._dataVersion` to create the reactive dependency.
+<!-- SECTION:NOTES:END -->

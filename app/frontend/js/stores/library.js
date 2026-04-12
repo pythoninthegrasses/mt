@@ -3,6 +3,10 @@
  *
  * Handles track loading, searching, sorting, and
  * library scanning via Tauri backend.
+ *
+ * Uses a sparse page map for the "all" section to avoid loading
+ * the entire library into JS memory. Other sections (favorites,
+ * recent, playlists) load all tracks in a single fetch.
  */
 
 import { library as libraryApi } from '../api/library.js';
@@ -33,11 +37,6 @@ export { applySectionData };
 
 export function createLibraryStore(Alpine) {
   Alpine.store('library', {
-    // Track data
-    tracks: [],
-    filteredTracks: [],
-    allTracks: [],
-
     // Search and filter state
     searchQuery: '',
     sortBy: 'default',
@@ -51,9 +50,19 @@ export function createLibraryStore(Alpine) {
     scanStatus: null,
     scanJobId: null,
 
-    // Statistics
+    // Statistics (from count endpoint for "all" section, or computed for other sections)
     totalTracks: 0,
     totalDuration: 0,
+
+    // Sparse page map for paginated loading (used by "all" section)
+    _trackPages: {},
+    _loadingPages: {},
+    _pageSize: 500,
+    _loadGeneration: 0,
+    _allPagesLoaded: false,
+
+    // Non-paginated track storage (used by non-"all" sections: favorites, recent, playlists)
+    _sectionTracks: null,
 
     // Internal
     _searchDebounce: null,
@@ -115,8 +124,14 @@ export function createLibraryStore(Alpine) {
     },
 
     _filterByLibrary(tracks) {
-      if (this.allTracks.length === 0) return [];
-      const ids = new Set(this.allTracks.map((t) => t.id));
+      if (this._isPaginated()) {
+        // With paginated loading, we don't have all tracks to filter against.
+        // Just return the tracks as-is since non-"all" sections filter independently.
+        return tracks;
+      }
+      const allTracks = this.filteredTracks;
+      if (allTracks.length === 0) return [];
+      const ids = new Set(allTracks.map((t) => t.id));
       return tracks.filter((t) => ids.has(t.id));
     },
 
@@ -131,7 +146,168 @@ export function createLibraryStore(Alpine) {
       this._persistCache();
     },
 
-    async _fetchLibraryData() {
+    // -----------------------------------------------------------------------
+    // Pagination helpers
+    // -----------------------------------------------------------------------
+
+    _isPaginated() {
+      return this._sectionTracks === null;
+    },
+
+    _resetPages() {
+      this._loadGeneration++;
+      this._trackPages = {};
+      this._loadingPages = {};
+      this._allPagesLoaded = false;
+      this._sectionTracks = null;
+    },
+
+    _setSectionTracks(tracks) {
+      this._sectionTracks = tracks;
+      this._trackPages = {};
+      this._loadingPages = {};
+      this._allPagesLoaded = true;
+    },
+
+    async _fetchPage(pageIndex) {
+      const gen = this._loadGeneration;
+      if (this._trackPages[pageIndex] || this._loadingPages[pageIndex]) return;
+      this._loadingPages[pageIndex] = true;
+
+      try {
+        const sortKeyMap = {
+          default: 'artist',
+          index: 'track_number',
+          dateAdded: 'added_date',
+          lastPlayed: 'last_played',
+          playCount: 'play_count',
+          year: 'date',
+          genre: 'genre',
+          trackTotal: 'track_total',
+          discNumber: 'disc_number',
+        };
+
+        const uiStore = Alpine.store('ui');
+        const ignoreWords = uiStore.sortIgnoreWords ? uiStore.sortIgnoreWordsList : null;
+
+        const data = await libraryApi.getTracks({
+          search: this.searchQuery.trim() || null,
+          sort: sortKeyMap[this.sortBy] || this.sortBy,
+          order: this.sortOrder,
+          limit: this._pageSize,
+          offset: pageIndex * this._pageSize,
+          ignoreWords,
+        });
+
+        // Discard stale response
+        if (this._loadGeneration !== gen) return;
+
+        const tracks = data.tracks || [];
+        this._trackPages[pageIndex] = tracks;
+
+        if (tracks.length < this._pageSize) {
+          this._allPagesLoaded = true;
+        }
+
+        // Trigger Alpine reactivity by incrementing version
+        this._dataVersion++;
+
+        console.log('[library] page loaded:', {
+          pageIndex,
+          trackCount: tracks.length,
+          totalPages: Math.ceil(this.totalTracks / this._pageSize),
+        });
+      } catch (error) {
+        console.error('[library] page fetch failed:', { pageIndex, error: error.message });
+      } finally {
+        if (this._loadGeneration === gen) {
+          delete this._loadingPages[pageIndex];
+        }
+      }
+    },
+
+    _ensurePage(pageIndex) {
+      if (pageIndex < 0) return;
+      const maxPage = Math.ceil(this.totalTracks / this._pageSize) - 1;
+      if (pageIndex > maxPage) return;
+      if (!this._trackPages[pageIndex] && !this._loadingPages[pageIndex]) {
+        this._fetchPage(pageIndex);
+      }
+    },
+
+    getTrackAtIndex(i) {
+      if (this._sectionTracks) {
+        return this._sectionTracks[i] || null;
+      }
+      const pageIndex = Math.floor(i / this._pageSize);
+      const page = this._trackPages[pageIndex];
+      if (!page) return null;
+      return page[i % this._pageSize] || null;
+    },
+
+    async _loadAllPages() {
+      if (this._allPagesLoaded) return;
+      const totalPages = Math.ceil(this.totalTracks / this._pageSize);
+      const unloaded = [];
+      for (let i = 0; i < totalPages; i++) {
+        if (!this._trackPages[i] && !this._loadingPages[i]) {
+          unloaded.push(i);
+        }
+      }
+      // Fetch in batches of 4
+      for (let i = 0; i < unloaded.length; i += 4) {
+        const batch = unloaded.slice(i, i + 4);
+        await Promise.all(batch.map((p) => this._fetchPage(p)));
+      }
+      this._allPagesLoaded = true;
+    },
+
+    // -----------------------------------------------------------------------
+    // Backward-compatible getters for code that iterates all loaded tracks
+    // -----------------------------------------------------------------------
+
+    get filteredTracks() {
+      // For non-paginated sections, return the flat array
+      if (this._sectionTracks) return this._sectionTracks;
+
+      // For paginated sections, concatenate loaded pages in order
+      // Access _dataVersion to create Alpine reactive dependency
+      void this._dataVersion;
+      const result = [];
+      const pageCount = Math.ceil(this.totalTracks / this._pageSize);
+      for (let i = 0; i < pageCount; i++) {
+        const page = this._trackPages[i];
+        if (page) result.push(...page);
+      }
+      return result;
+    },
+
+    get tracks() {
+      return this.filteredTracks;
+    },
+
+    get allTracks() {
+      return this.filteredTracks;
+    },
+
+    // Setters for backward compat (used by applySectionData, removeTracksLocallyOp, etc.)
+    set filteredTracks(val) {
+      this._setSectionTracks(val);
+    },
+
+    set tracks(val) {
+      this._setSectionTracks(val);
+    },
+
+    set allTracks(_val) {
+      // No-op — allTracks is derived from tracks/filteredTracks
+    },
+
+    // -----------------------------------------------------------------------
+    // Sort/filter params for API calls
+    // -----------------------------------------------------------------------
+
+    _getSortParams() {
       const sortKeyMap = {
         default: 'artist',
         index: 'track_number',
@@ -143,17 +319,27 @@ export function createLibraryStore(Alpine) {
         trackTotal: 'track_total',
         discNumber: 'disc_number',
       };
-
       const uiStore = Alpine.store('ui');
-      const ignoreWords = uiStore.sortIgnoreWords ? uiStore.sortIgnoreWordsList : null;
-
-      return await libraryApi.getTracks({
+      return {
         search: this.searchQuery.trim() || null,
         sort: sortKeyMap[this.sortBy] || this.sortBy,
         order: this.sortOrder,
+        ignoreWords: uiStore.sortIgnoreWords ? uiStore.sortIgnoreWordsList : null,
+      };
+    },
+
+    _getFilterParams() {
+      return {
+        search: this.searchQuery.trim() || null,
+      };
+    },
+
+    async _fetchLibraryData() {
+      const params = this._getSortParams();
+      return await libraryApi.getTracks({
+        ...params,
         limit: 999999,
         offset: 0,
-        ignoreWords,
       });
     },
 
@@ -249,7 +435,7 @@ export function createLibraryStore(Alpine) {
         console.log('[navigation]', 'load_playlist_complete', {
           playlistId,
           playlistName: data.name,
-          trackCount: this.tracks.length,
+          trackCount: this.filteredTracks.length,
         });
         return data;
       };
@@ -319,7 +505,9 @@ export function createLibraryStore(Alpine) {
     },
 
     applyFilters() {
-      this.filteredTracks = [...this.tracks];
+      // No-op for paginated mode — filtering is done server-side.
+      // For non-paginated sections this is called by applySectionData which
+      // sets _sectionTracks directly.
     },
 
     setSortBy(field) {
@@ -370,7 +558,50 @@ export function createLibraryStore(Alpine) {
     },
 
     getTrack(trackId) {
-      return this.tracks.find((t) => t.id === trackId) || null;
+      // Search loaded pages/section tracks
+      if (this._sectionTracks) {
+        return this._sectionTracks.find((t) => t.id === trackId) || null;
+      }
+      for (const page of Object.values(this._trackPages)) {
+        const found = page.find((t) => t.id === trackId);
+        if (found) return found;
+      }
+      return null;
+    },
+
+    async getTrackAsync(trackId) {
+      const local = this.getTrack(trackId);
+      if (local) return local;
+      try {
+        return await libraryApi.getTrack(trackId);
+      } catch (error) {
+        console.error('[library] getTrackAsync failed:', error);
+        return null;
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // Type-to-jump backend-assisted offset lookup
+    // -----------------------------------------------------------------------
+
+    async _jumpToPrefix(prefix) {
+      try {
+        const params = this._getSortParams();
+        const offset = await libraryApi.findOffset({
+          ...params,
+          prefix,
+        });
+        if (offset === null || offset === undefined) return null;
+
+        // Ensure the target page is loaded
+        const pageIndex = Math.floor(offset / this._pageSize);
+        this._ensurePage(pageIndex);
+
+        return offset;
+      } catch (error) {
+        console.error('[library] _jumpToPrefix failed:', error);
+        return null;
+      }
     },
 
     // -----------------------------------------------------------------------
@@ -382,6 +613,10 @@ export function createLibraryStore(Alpine) {
     },
 
     async addAllToQueue(playNow = false) {
+      // For paginated mode, load all pages first
+      if (this._isPaginated() && !this._allPagesLoaded) {
+        await this._loadAllPages();
+      }
       await Alpine.store('queue').add(this.filteredTracks, playNow);
     },
 
@@ -406,12 +641,14 @@ export function createLibraryStore(Alpine) {
     },
 
     get artists() {
-      const artistSet = new Set(this.tracks.map((t) => t.artist).filter(Boolean));
+      const tracks = this.filteredTracks;
+      const artistSet = new Set(tracks.map((t) => t.artist).filter(Boolean));
       return Array.from(artistSet).sort();
     },
 
     get albums() {
-      const albumSet = new Set(this.tracks.map((t) => t.album).filter(Boolean));
+      const tracks = this.filteredTracks;
+      const albumSet = new Set(tracks.map((t) => t.album).filter(Boolean));
       return Array.from(albumSet).sort();
     },
 
@@ -423,10 +660,22 @@ export function createLibraryStore(Alpine) {
       try {
         const updatedTrack = await libraryApi.rescanTrack(trackId);
         if (updatedTrack) {
-          const index = this.tracks.findIndex((t) => t.id === trackId);
-          if (index >= 0) {
-            this.tracks[index] = updatedTrack;
-            this.applyFilters();
+          // Update track in the appropriate storage
+          if (this._sectionTracks) {
+            const index = this._sectionTracks.findIndex((t) => t.id === trackId);
+            if (index >= 0) {
+              this._sectionTracks[index] = updatedTrack;
+              this._dataVersion++;
+            }
+          } else {
+            for (const page of Object.values(this._trackPages)) {
+              const index = page.findIndex((t) => t.id === trackId);
+              if (index >= 0) {
+                page[index] = updatedTrack;
+                this._dataVersion++;
+                break;
+              }
+            }
           }
         }
       } catch (error) {

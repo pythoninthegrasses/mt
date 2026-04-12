@@ -375,3 +375,189 @@ describe('Library Store - Sort Settings', () => {
     expect(store.searchQuery).toBe('');
   });
 });
+
+// -----------------------------------------------------------------------------
+// Tests: Pagination - Sparse Page Map
+// -----------------------------------------------------------------------------
+
+/**
+ * Create a page-map-aware store for pagination testing
+ */
+function createPaginatedStore(pageSize = 5) {
+  return {
+    _trackPages: {},
+    _loadingPages: {},
+    _pageSize: pageSize,
+    _loadGeneration: 0,
+    _allPagesLoaded: false,
+    _sectionTracks: null,
+    _dataVersion: 0,
+    totalTracks: 0,
+    totalDuration: 0,
+
+    _isPaginated() {
+      return this._sectionTracks === null;
+    },
+
+    _resetPages() {
+      this._loadGeneration++;
+      this._trackPages = {};
+      this._loadingPages = {};
+      this._allPagesLoaded = false;
+      this._sectionTracks = null;
+    },
+
+    _setSectionTracks(tracks) {
+      this._sectionTracks = tracks;
+      this._trackPages = {};
+      this._loadingPages = {};
+      this._allPagesLoaded = true;
+    },
+
+    getTrackAtIndex(i) {
+      if (this._sectionTracks) {
+        return this._sectionTracks[i] || null;
+      }
+      const pageIndex = Math.floor(i / this._pageSize);
+      const page = this._trackPages[pageIndex];
+      if (!page) return null;
+      return page[i % this._pageSize] || null;
+    },
+
+    getTrack(trackId) {
+      if (this._sectionTracks) {
+        return this._sectionTracks.find((t) => t.id === trackId) || null;
+      }
+      for (const page of Object.values(this._trackPages)) {
+        const found = page.find((t) => t.id === trackId);
+        if (found) return found;
+      }
+      return null;
+    },
+
+    get filteredTracks() {
+      if (this._sectionTracks) return this._sectionTracks;
+      void this._dataVersion;
+      const result = [];
+      const pageCount = Math.ceil(this.totalTracks / this._pageSize);
+      for (let i = 0; i < pageCount; i++) {
+        const page = this._trackPages[i];
+        if (page) result.push(...page);
+      }
+      return result;
+    },
+  };
+}
+
+function makeTracks(count, startId = 1) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `track-${startId + i}`,
+    title: `Song ${startId + i}`,
+    artist: `Artist ${startId + i}`,
+    duration: 180000,
+  }));
+}
+
+describe('Paginated Store - getTrackAtIndex', () => {
+  it('returns track from loaded page', () => {
+    const store = createPaginatedStore(3);
+    store.totalTracks = 9;
+    store._trackPages[0] = makeTracks(3);
+    expect(store.getTrackAtIndex(0).id).toBe('track-1');
+    expect(store.getTrackAtIndex(2).id).toBe('track-3');
+  });
+
+  it('returns null for unloaded page', () => {
+    const store = createPaginatedStore(3);
+    store.totalTracks = 9;
+    store._trackPages[0] = makeTracks(3);
+    expect(store.getTrackAtIndex(3)).toBeNull();
+    expect(store.getTrackAtIndex(6)).toBeNull();
+  });
+
+  it('returns correct track from non-zero page', () => {
+    const store = createPaginatedStore(3);
+    store.totalTracks = 9;
+    store._trackPages[1] = makeTracks(3, 4);
+    expect(store.getTrackAtIndex(3).id).toBe('track-4');
+    expect(store.getTrackAtIndex(5).id).toBe('track-6');
+  });
+
+  it('returns null for out-of-bounds index', () => {
+    const store = createPaginatedStore(3);
+    store.totalTracks = 3;
+    store._trackPages[0] = makeTracks(3);
+    expect(store.getTrackAtIndex(3)).toBeNull();
+  });
+});
+
+describe('Paginated Store - getTrack', () => {
+  it('finds track in loaded page', () => {
+    const store = createPaginatedStore(3);
+    store._trackPages[0] = makeTracks(3);
+    store._trackPages[2] = makeTracks(3, 7);
+    expect(store.getTrack('track-8').id).toBe('track-8');
+  });
+
+  it('returns null for track not in any loaded page', () => {
+    const store = createPaginatedStore(3);
+    store._trackPages[0] = makeTracks(3);
+    expect(store.getTrack('track-99')).toBeNull();
+  });
+});
+
+describe('Paginated Store - filteredTracks getter', () => {
+  it('concatenates loaded pages in order', () => {
+    const store = createPaginatedStore(3);
+    store.totalTracks = 9;
+    store._trackPages[0] = makeTracks(3);
+    store._trackPages[2] = makeTracks(3, 7);
+    const tracks = store.filteredTracks;
+    expect(tracks.length).toBe(6);
+    expect(tracks[0].id).toBe('track-1');
+    expect(tracks[3].id).toBe('track-7');
+  });
+
+  it('returns empty array when no pages loaded', () => {
+    const store = createPaginatedStore(3);
+    store.totalTracks = 9;
+    expect(store.filteredTracks).toEqual([]);
+  });
+
+  it('returns section tracks for non-paginated mode', () => {
+    const store = createPaginatedStore(3);
+    const tracks = makeTracks(5);
+    store._setSectionTracks(tracks);
+    expect(store.filteredTracks).toBe(tracks);
+  });
+});
+
+describe('Paginated Store - _resetPages', () => {
+  it('clears all page state', () => {
+    const store = createPaginatedStore(3);
+    store._trackPages[0] = makeTracks(3);
+    store._loadingPages[1] = true;
+    store._allPagesLoaded = true;
+    const oldGen = store._loadGeneration;
+
+    store._resetPages();
+
+    expect(store._trackPages).toEqual({});
+    expect(store._loadingPages).toEqual({});
+    expect(store._allPagesLoaded).toBe(false);
+    expect(store._loadGeneration).toBe(oldGen + 1);
+  });
+});
+
+describe('Paginated Store - _isPaginated', () => {
+  it('returns true when _sectionTracks is null', () => {
+    const store = createPaginatedStore();
+    expect(store._isPaginated()).toBe(true);
+  });
+
+  it('returns false when section tracks are set', () => {
+    const store = createPaginatedStore();
+    store._setSectionTracks([]);
+    expect(store._isPaginated()).toBe(false);
+  });
+});

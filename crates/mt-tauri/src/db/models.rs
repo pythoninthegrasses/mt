@@ -192,6 +192,13 @@ pub struct LibraryStats {
     pub total_albums: i64,
 }
 
+/// Lightweight count + duration for paginated library queries
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LibraryCount {
+    pub total: i64,
+    pub total_duration: i64,
+}
+
 /// Listening statistics overview
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListeningStats {

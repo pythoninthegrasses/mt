@@ -92,7 +92,7 @@
     <!-- Track list - no scroll, parent handles both -->
     <div class="track-list min-h-full w-full relative">
       <!-- Loading state (shown during library fetch OR active scan with empty library) -->
-      <template x-if="(library.loading || library.scanning) && library.tracks.length === 0">
+      <template x-if="(library.loading || library.scanning) && library.totalTracks === 0">
         <div
           class="flex items-center justify-center py-12"
         >
@@ -129,7 +129,7 @@
 
       <!-- Empty state -->
       <div
-        x-show="!library.loading && !library.scanning && library.filteredTracks.length === 0"
+        x-show="!library.loading && !library.scanning && library.totalTracks === 0"
         class="absolute inset-0 flex items-center justify-center"
       >
         <!-- Liked Songs empty state -->
@@ -201,29 +201,32 @@
 
       <!-- Track rows (CSS Grid matching header) - Virtual scroll -->
       <div
-        x-show="library.filteredTracks.length > 0"
+        x-show="library.totalTracks > 0"
         :style="`height: ${totalContentHeight}px; position: relative;`"
       >
         <div :style="`transform: translateY(${offsetY}px); will-change: transform;`">
-          <template x-for="item in visibleTracks" :key="item.track.id">
+          <template x-for="item in visibleTracks" :key="item.track._placeholder ? 'ph-' + item.globalIndex : item.track.id">
             <div
               class="grid border-b border-border/30 text-sm cursor-default select-none"
-              :style="getTrackRowStyle(item)"
-              :class="getTrackRowClasses(item)"
-              :data-track-id="item.track.id"
-              draggable="true"
-              @dragstart="handleTrackDragStart($event, item.track)"
+              :style="item.track._placeholder ? `grid-template-columns: ${getGridTemplateColumns()}; height: ${_rowHeight}px;` : getTrackRowStyle(item)"
+              :class="item.track._placeholder ? '' : getTrackRowClasses(item)"
+              :data-track-id="item.track._placeholder ? undefined : item.track.id"
+              :draggable="!item.track._placeholder"
+              @dragstart="!item.track._placeholder && handleTrackDragStart($event, item.track)"
               @dragend="handleTrackDragEnd($event)"
-              @click="handleRowClick($event, item.track, item.globalIndex)"
-              @dblclick="handleDoubleClick(item.track, item.globalIndex)"
-              @contextmenu="handleContextMenu($event, item.track, item.globalIndex)"
+              @click="!item.track._placeholder && handleRowClick($event, item.track, item.globalIndex)"
+              @dblclick="!item.track._placeholder && handleDoubleClick(item.track, item.globalIndex)"
+              @contextmenu="!item.track._placeholder && handleContextMenu($event, item.track, item.globalIndex)"
             >
               <template x-for="col in columns" :key="col.key">
                 <div
-                  :class="getTrackCellClasses(col, item)"
+                  :class="item.track._placeholder ? 'py-1.5 px-4 overflow-hidden' : getTrackCellClasses(col, item)"
                   :data-column="col.key"
                 >
-                  <template x-if="col.key === 'status'">
+                  <template x-if="item.track._placeholder && (col.key === 'title' || col.key === 'artist' || col.key === 'album')">
+                    <div class="h-3 my-1 rounded bg-muted-foreground/10 animate-pulse" :style="`width: ${40 + (item.globalIndex * 13 + col.key.length * 7) % 40}%`"></div>
+                  </template>
+                  <template x-if="!item.track._placeholder && col.key === 'status'">
                     <span class="flex items-center justify-center w-full h-full">
                       <!-- In playlist view: show drag handle -->
                       <span
@@ -273,44 +276,44 @@
                       </button>
                     </span>
                   </template>
-                  <template x-if="col.key === 'index'">
+                  <template x-if="!item.track._placeholder && col.key === 'index'">
                     <span x-text="getIndexDisplay(item)"></span>
                   </template>
-                  <template x-if="col.key === 'title'">
+                  <template x-if="!item.track._placeholder && col.key === 'title'">
                     <span
                       class="truncate"
                       :class="item.track.missing ? 'text-muted-foreground/70 italic' : ''"
                       x-text="item.track.title || item.track.filename || 'Unknown'"
                     ></span>
                   </template>
-                  <template x-if="col.key === 'artist'">
+                  <template x-if="!item.track._placeholder && col.key === 'artist'">
                     <span x-text="item.track.artist || 'Unknown Artist'"></span>
                   </template>
-                  <template x-if="col.key === 'album'">
+                  <template x-if="!item.track._placeholder && col.key === 'album'">
                     <span x-text="item.track.album || ''"></span>
                   </template>
-                  <template x-if="col.key === 'lastPlayed'">
+                  <template x-if="!item.track._placeholder && col.key === 'lastPlayed'">
                     <span x-text="formatRelativeTime(item.track.last_played)"></span>
                   </template>
-                  <template x-if="col.key === 'dateAdded'">
+                  <template x-if="!item.track._placeholder && col.key === 'dateAdded'">
                     <span x-text="formatRelativeTime(item.track.added_date)"></span>
                   </template>
-                  <template x-if="col.key === 'playCount'">
+                  <template x-if="!item.track._placeholder && col.key === 'playCount'">
                     <span x-text="item.track.play_count || 0"></span>
                   </template>
-                  <template x-if="col.key === 'duration'">
+                  <template x-if="!item.track._placeholder && col.key === 'duration'">
                     <span x-text="formatDuration(item.track.duration)"></span>
                   </template>
-                  <template x-if="col.key === 'year'">
+                  <template x-if="!item.track._placeholder && col.key === 'year'">
                     <span x-text="item.track.date || ''"></span>
                   </template>
-                  <template x-if="col.key === 'genre'">
+                  <template x-if="!item.track._placeholder && col.key === 'genre'">
                     <span x-text="item.track.genre || ''"></span>
                   </template>
-                  <template x-if="col.key === 'trackTotal'">
+                  <template x-if="!item.track._placeholder && col.key === 'trackTotal'">
                     <span x-text="item.track.track_total || ''"></span>
                   </template>
-                  <template x-if="col.key === 'discNumber'">
+                  <template x-if="!item.track._placeholder && col.key === 'discNumber'">
                     <span x-text="item.track.disc_number || ''"></span>
                   </template>
                 </div>
