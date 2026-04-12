@@ -165,12 +165,30 @@ actionlint                                               # Lint all workflows
 - **After changing frontend code**: `cd app/frontend && npx vitest run`
 - **After changing Rust code**: `cargo nextest run --workspace`
 
+## Test Boundaries
+
+Each test layer has a clear responsibility. Do NOT write a Playwright E2E test for something that belongs in Vitest or Rust tests.
+
+| What to test | Where | Why |
+|---|---|---|
+| Store logic (queue, player, library mutations) | Vitest `__tests__/` | Fast, isolated, supports property-based testing |
+| Pure functions (sorting, filtering, formatting) | Vitest `__tests__/` | No DOM needed |
+| CSS details (padding, user-select, computed styles) | Nowhere (design review) | Brittle, low value |
+| User interaction flows (click, drag, context menu) | Playwright `tests/` | Needs real browser |
+| Cross-component integration (play track -> queue updates -> Now Playing renders) | Playwright `tests/` | Tests wiring between components |
+| Backend logic (audio, DB, concurrency) | Rust `#[test]` / proptest | Must run in Rust |
+
+**Rules:**
+- Playwright tests MUST involve real user interactions (clicks, keyboard, drag). If a test only calls `page.evaluate()` to manipulate Alpine stores, it belongs in Vitest.
+- Never duplicate store logic tests between Playwright and Vitest. Vitest is authoritative for store behavior.
+- Tag Playwright tests that need the Tauri runtime with `@tauri`. Default CI mode (`fast`) skips these.
+
 ## Implementation Notes
 
 1. **Components**: Modular, single-responsibility. Use Alpine.js for interactivity, basecoat/Tailwind for styling.
 2. **IPC**: All backend operations via Tauri commands. Use async/await. Emit events for real-time updates.
 3. **File Organization**: Frontend in `app/frontend/`, backend in `src-tauri/src/`. Keep files under 500 LOC.
-4. **Testing**: Unit tests + Playwright E2E. All integration tests MUST use Playwright.
+4. **Testing**: See [Test Boundaries](#test-boundaries) above and [Testing Guide](docs/testing.md) for the full decision framework.
 5. **Code Style**: `deno lint` + `deno fmt` (frontend), `cargo fmt` + `cargo clippy` (backend). Run formatters before committing.
 
 <!-- BACKLOG.MD MCP GUIDELINES START -->

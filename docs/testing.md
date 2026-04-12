@@ -9,8 +9,8 @@ MT uses a three-tier testing strategy:
 | Layer | Framework | Tests | Purpose |
 |-------|-----------|-------|---------|
 | **Rust Backend** | `cargo test` | ~596 | Unit tests for audio, database, and IPC logic |
-| **Vitest Unit** | Vitest | ~246 | Frontend store logic (queue, player state) |
-| **Playwright E2E** | Playwright | ~633 | Integration and end-to-end user flows |
+| **Vitest Unit** | Vitest | ~391 | Frontend store logic, property-based tests |
+| **Playwright E2E** | Playwright | ~650 | Integration and end-to-end user flows |
 
 ## Running Tests
 
@@ -97,8 +97,8 @@ Tests are controlled by the `E2E_MODE` environment variable:
 
 | Mode | Browsers | @tauri tests | Tests | Duration |
 |------|----------|--------------|-------|----------|
-| `fast` (default) | WebKit only | Skipped | ~633 | ~1m |
-| `full` | All 3 | Skipped | ~1899 | ~3m |
+| `fast` (default) | WebKit only | Skipped | ~650 | ~1m |
+| `full` | All 3 | Skipped | ~1950 | ~3m |
 | `tauri` | All 3 | Included | ~2000+ | ~4m |
 
 ```bash
@@ -140,6 +140,35 @@ Available fixtures:
 
 - `mock-library.js`: Library API (`/api/library`, track CRUD)
 - `mock-playlists.js`: Playlist API (`/api/playlists`, playlist CRUD)
+
+---
+
+## Where to Write New Tests
+
+Each layer has a clear boundary. Putting a test in the wrong layer wastes CI time and creates redundancy.
+
+| What you're testing | Write it in | NOT in |
+|---|---|---|
+| Store logic (queue add/remove, shuffle, loop, player state) | Vitest `__tests__/` | Playwright |
+| Pure functions (sorting, filtering, formatting) | Vitest `__tests__/` | Playwright |
+| Property-based invariants (queue identity, order preservation) | Vitest `__tests__/` with fast-check | Playwright |
+| CSS values (padding, computed styles, user-select) | Nowhere — verify in design review | Playwright |
+| User interaction flows (click to play, drag to reorder, context menu) | Playwright `tests/` | Vitest |
+| Cross-component wiring (play track -> queue populates -> Now Playing renders) | Playwright `tests/` | Vitest |
+| Backend logic (audio engine, DB queries, concurrency) | Rust `#[test]` / proptest | Frontend tests |
+
+### Decision checklist for new Playwright tests
+
+Before adding a Playwright E2E test, ask:
+
+1. **Does this test call `page.evaluate()` to manipulate Alpine stores?** If the test primarily sets store state and checks store state, it belongs in Vitest.
+2. **Does this test click buttons, type text, or drag elements?** Real user interactions justify Playwright.
+3. **Is there already a Vitest test for this logic?** Check `__tests__/` first. Do not duplicate coverage.
+4. **Does this test check CSS computed values?** CSS assertion tests are brittle and low-value — skip them.
+
+### Tauri-tagged tests
+
+Tests requiring the Tauri runtime (IPC commands, native dialogs) use the `@tauri` tag in their `test.describe` block. CI runs in `fast` mode (WebKit only, `@tauri` skipped). Use `E2E_MODE=tauri` locally to include them.
 
 ---
 
