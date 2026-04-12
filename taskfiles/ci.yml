@@ -110,8 +110,9 @@ tasks:
 
   frontend-build:
     desc: "Build frontend assets"
+    dir: "{{.ROOT_DIR}}/app/frontend"
     cmds:
-      - npm --prefix {{.ROOT_DIR}}/app/frontend run build
+      - npm run build
     sources:
       - "{{.ROOT_DIR}}/app/frontend/js/**/*"
       - "{{.ROOT_DIR}}/app/frontend/css/**/*"

@@ -74,6 +74,7 @@ runs:
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         toolchain: ${{ steps.rust-version-unix.outputs.toolchain || steps.rust-version-windows.outputs.toolchain }}
+        components: rustfmt, clippy
         target: ${{ runner.os == 'Windows' && 'x86_64-pc-windows-msvc' || '' }}
         cache: false
 
