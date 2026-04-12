@@ -18,11 +18,13 @@ import { promptToAddWatchedFolders } from '../utils/watched-folders.js';
  * Shared between loadSection and backgroundRefreshSection.
  */
 export function applySectionData(store, section, tracks, data) {
-  store.tracks = tracks;
-  store.totalTracks = data?.total ?? tracks.length;
-  store.totalDuration = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-  store._lastLoadedSection = section;
-  store.applyFilters();
+  window.Alpine.disableEffectScheduling(() => {
+    store.tracks = tracks;
+    store.totalTracks = data?.total ?? tracks.length;
+    store.totalDuration = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+    store._lastLoadedSection = section;
+    store.filteredTracks = [...tracks];
+  });
 }
 
 /**
@@ -191,19 +193,22 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
       return;
     }
 
-    store.tracks = data.tracks || [];
+    const rawTracks = data.tracks || [];
     const _t2 = performance.now();
-    store.totalTracks = data.total || store.tracks.length;
-    store.totalDuration = store.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-    store._lastLoadedSection = loadSection;
-    store._updateCache(loadSection, data);
 
-    // _fetchLibraryData always returns the full library, so keep allTracks in sync
-    store.allTracks = store.tracks;
-    store._dataVersion++;
+    window.Alpine.disableEffectScheduling(() => {
+      store.tracks = rawTracks;
+      store.totalTracks = data.total || rawTracks.length;
+      store.totalDuration = rawTracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+      store._lastLoadedSection = loadSection;
+      store.allTracks = rawTracks;
+      store._dataVersion++;
+      store.filteredTracks = [...rawTracks];
+    });
+    store._updateCache(loadSection, data);
     const _t3 = performance.now();
 
-    store.applyFilters();
+    // applyFilters inlined into the batch above
     const _t4 = performance.now();
 
     window._perfLibLoad = {
@@ -243,20 +248,28 @@ export async function backgroundRefreshLibrary(store, section) {
     const data = await store._fetchLibraryData();
 
     // _fetchLibraryData always returns the full library
-    store.allTracks = data.tracks || [];
-    store._dataVersion++;
+    const refreshedTracks = data.tracks || [];
 
     // Only update section-specific state if still on same section
     if (store.currentSection === section) {
-      store.tracks = store.allTracks;
-      store.totalTracks = data.total || store.tracks.length;
-      store.totalDuration = store.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+      window.Alpine.disableEffectScheduling(() => {
+        store.allTracks = refreshedTracks;
+        store._dataVersion++;
+        store.tracks = refreshedTracks;
+        store.totalTracks = data.total || refreshedTracks.length;
+        store.totalDuration = refreshedTracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+        store.filteredTracks = [...refreshedTracks];
+      });
       store._updateCache(section, data);
-      store.applyFilters();
 
       console.log('[library] background refresh complete:', {
         section,
         trackCount: store.tracks.length,
+      });
+    } else {
+      window.Alpine.disableEffectScheduling(() => {
+        store.allTracks = refreshedTracks;
+        store._dataVersion++;
       });
     }
   } catch (error) {
@@ -430,15 +443,21 @@ export function removeTracksLocallyOp(store, Alpine, trackIds) {
   }
 
   const idSet = new Set(trackIds);
-  store.allTracks = store.allTracks.filter((t) => !idSet.has(t.id));
-  store._dataVersion++;
-  store.tracks = store.tracks.filter((t) => !idSet.has(t.id));
-  store.totalTracks = store.tracks.length;
-  store.totalDuration = store.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-  store._clearCache();
+  const newAllTracks = store.allTracks.filter((t) => !idSet.has(t.id));
+  const newTracks = store.tracks.filter((t) => !idSet.has(t.id));
   // Filter filteredTracks directly — removing items from a sorted list preserves
   // sort order, so re-running applyFilters() (O(n log n) sort) is unnecessary.
-  store.filteredTracks = store.filteredTracks.filter((t) => !idSet.has(t.id));
+  const newFilteredTracks = store.filteredTracks.filter((t) => !idSet.has(t.id));
+
+  window.Alpine.disableEffectScheduling(() => {
+    store.allTracks = newAllTracks;
+    store._dataVersion++;
+    store.tracks = newTracks;
+    store.totalTracks = newTracks.length;
+    store.totalDuration = newTracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+    store.filteredTracks = newFilteredTracks;
+  });
+  store._clearCache();
 
   // Remove from queue if present
   removeFromQueue(Alpine, idSet);

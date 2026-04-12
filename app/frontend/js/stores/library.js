@@ -415,30 +415,6 @@ export function createLibraryStore(Alpine) {
       return Array.from(albumSet).sort();
     },
 
-    get tracksByArtist() {
-      const grouped = {};
-      for (const track of this.filteredTracks) {
-        const artist = track.artist || 'Unknown Artist';
-        if (!grouped[artist]) {
-          grouped[artist] = [];
-        }
-        grouped[artist].push(track);
-      }
-      return grouped;
-    },
-
-    get tracksByAlbum() {
-      const grouped = {};
-      for (const track of this.filteredTracks) {
-        const album = track.album || 'Unknown Album';
-        if (!grouped[album]) {
-          grouped[album] = [];
-        }
-        grouped[album].push(track);
-      }
-      return grouped;
-    },
-
     // -----------------------------------------------------------------------
     // Rescan and scan progress
     // -----------------------------------------------------------------------

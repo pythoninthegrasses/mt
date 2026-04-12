@@ -5,8 +5,8 @@
  * Tauri backend or API mocking.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { test, fc } from '@fast-check/vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fc, test } from '@fast-check/vitest';
 
 // -----------------------------------------------------------------------------
 // Test Helpers: Create isolated library store instances for testing
@@ -60,38 +60,6 @@ function createTestLibraryStore(initialTracks = []) {
     },
 
     /**
-     * Get tracks grouped by artist
-     * Uses Object.create(null) to avoid prototype pollution with artist names like "toString"
-     */
-    get tracksByArtist() {
-      const grouped = Object.create(null);
-      for (const track of this.filteredTracks) {
-        const artist = track.artist || 'Unknown Artist';
-        if (!grouped[artist]) {
-          grouped[artist] = [];
-        }
-        grouped[artist].push(track);
-      }
-      return grouped;
-    },
-
-    /**
-     * Get tracks grouped by album
-     * Uses Object.create(null) to avoid prototype pollution with album names like "valueOf"
-     */
-    get tracksByAlbum() {
-      const grouped = Object.create(null);
-      for (const track of this.filteredTracks) {
-        const album = track.album || 'Unknown Album';
-        if (!grouped[album]) {
-          grouped[album] = [];
-        }
-        grouped[album].push(track);
-      }
-      return grouped;
-    },
-
-    /**
      * Get track by ID
      * @param {string} trackId - Track ID
      * @returns {Object|null} Track object or null
@@ -119,7 +87,6 @@ const trackArb = fc.record({
 
 /** Generate an array of tracks */
 const tracksArb = fc.array(trackArb, { minLength: 0, maxLength: 30 });
-
 
 // -----------------------------------------------------------------------------
 // Tests: formattedTotalDuration Getter
@@ -165,7 +132,7 @@ describe('Library Store - formattedTotalDuration', () => {
 
       // Should match either "Xh Ym" or "X min"
       expect(result).toMatch(/^(\d+h \d+m|\d+ min)$/);
-    }
+    },
   );
 
   test.prop([fc.integer({ min: 0, max: 59 * 60 * 1000 })])(
@@ -176,7 +143,7 @@ describe('Library Store - formattedTotalDuration', () => {
       const result = store.formattedTotalDuration;
 
       expect(result).toMatch(/^\d+ min$/);
-    }
+    },
   );
 
   test.prop([fc.integer({ min: 60 * 60 * 1000, max: 100 * 60 * 60 * 1000 })])(
@@ -187,7 +154,7 @@ describe('Library Store - formattedTotalDuration', () => {
       const result = store.formattedTotalDuration;
 
       expect(result).toMatch(/^\d+h \d+m$/);
-    }
+    },
   );
 });
 
@@ -283,101 +250,6 @@ describe('Library Store - albums getter', () => {
 });
 
 // -----------------------------------------------------------------------------
-// Tests: tracksByArtist and tracksByAlbum Getters
-// -----------------------------------------------------------------------------
-
-describe('Library Store - tracksByArtist getter', () => {
-  it('returns empty object for empty library', () => {
-    const store = createTestLibraryStore([]);
-    expect(store.tracksByArtist).toEqual({});
-  });
-
-  it('groups tracks by artist', () => {
-    const tracks = [
-      { id: '1', artist: 'Artist A', title: 'Song 1' },
-      { id: '2', artist: 'Artist B', title: 'Song 2' },
-      { id: '3', artist: 'Artist A', title: 'Song 3' },
-    ];
-    const store = createTestLibraryStore(tracks);
-    const grouped = store.tracksByArtist;
-
-    expect(Object.keys(grouped)).toEqual(['Artist A', 'Artist B']);
-    expect(grouped['Artist A'].length).toBe(2);
-    expect(grouped['Artist B'].length).toBe(1);
-  });
-
-  it('uses "Unknown Artist" for tracks without artist', () => {
-    const tracks = [
-      { id: '1', artist: null, title: 'Song 1' },
-      { id: '2', artist: '', title: 'Song 2' },
-      { id: '3', artist: undefined, title: 'Song 3' },
-    ];
-    const store = createTestLibraryStore(tracks);
-    const grouped = store.tracksByArtist;
-
-    expect(Object.keys(grouped)).toEqual(['Unknown Artist']);
-    expect(grouped['Unknown Artist'].length).toBe(3);
-  });
-
-  test.prop([tracksArb])('total tracks equals sum of grouped tracks', (tracks) => {
-    const store = createTestLibraryStore(tracks);
-    const grouped = store.tracksByArtist;
-    const totalGrouped = Object.values(grouped).reduce((sum, arr) => sum + arr.length, 0);
-    expect(totalGrouped).toBe(tracks.length);
-  });
-
-  test.prop([tracksArb])('each track appears exactly once', (tracks) => {
-    const store = createTestLibraryStore(tracks);
-    const grouped = store.tracksByArtist;
-    const allGroupedIds = Object.values(grouped)
-      .flat()
-      .map((t) => t.id);
-    const uniqueIds = new Set(allGroupedIds);
-    expect(uniqueIds.size).toBe(tracks.length);
-  });
-});
-
-describe('Library Store - tracksByAlbum getter', () => {
-  it('returns empty object for empty library', () => {
-    const store = createTestLibraryStore([]);
-    expect(store.tracksByAlbum).toEqual({});
-  });
-
-  it('groups tracks by album', () => {
-    const tracks = [
-      { id: '1', album: 'Album A', title: 'Song 1' },
-      { id: '2', album: 'Album B', title: 'Song 2' },
-      { id: '3', album: 'Album A', title: 'Song 3' },
-    ];
-    const store = createTestLibraryStore(tracks);
-    const grouped = store.tracksByAlbum;
-
-    expect(Object.keys(grouped)).toEqual(['Album A', 'Album B']);
-    expect(grouped['Album A'].length).toBe(2);
-    expect(grouped['Album B'].length).toBe(1);
-  });
-
-  it('uses "Unknown Album" for tracks without album', () => {
-    const tracks = [
-      { id: '1', album: null, title: 'Song 1' },
-      { id: '2', album: '', title: 'Song 2' },
-    ];
-    const store = createTestLibraryStore(tracks);
-    const grouped = store.tracksByAlbum;
-
-    expect(Object.keys(grouped)).toEqual(['Unknown Album']);
-    expect(grouped['Unknown Album'].length).toBe(2);
-  });
-
-  test.prop([tracksArb])('total tracks equals sum of grouped tracks', (tracks) => {
-    const store = createTestLibraryStore(tracks);
-    const grouped = store.tracksByAlbum;
-    const totalGrouped = Object.values(grouped).reduce((sum, arr) => sum + arr.length, 0);
-    expect(totalGrouped).toBe(tracks.length);
-  });
-});
-
-// -----------------------------------------------------------------------------
 // Tests: getTrack Method
 // -----------------------------------------------------------------------------
 
@@ -413,7 +285,6 @@ describe('Library Store - getTrack', () => {
     expect(found).toBe(randomTrack);
   });
 });
-
 
 // -----------------------------------------------------------------------------
 // Tests: Statistics and State
