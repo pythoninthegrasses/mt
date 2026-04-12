@@ -608,6 +608,8 @@ The `check` mode skips Node.js, frontend dependencies, and cargo tools (cargo-bi
 
 Jobs using `mode: check` in `test.yml`: `rust` (lint/test) and `build` matrix (cross-platform `cargo check`).
 
+On Windows, the composite action also bootstraps `git` and `pwsh` via Chocolatey if they are missing from the runner image. This runs before all other steps (using `shell: powershell` for compatibility with bare images) so that `actions/checkout` can use system git and subsequent `pwsh`-shell steps work. The bootstrap is idempotent — it skips installation when the tools are already present.
+
 #### Windows Toolchain Pinning
 
 The self-hosted Windows runner can accumulate stale rustup state across runs. In particular, a system-level settings file (`C:\Windows\system32\config\systemprofile\.rustup\settings.toml`) may set `default_host_triple` to `x86_64-pc-windows-gnu`. When `RUSTUP_TOOLCHAIN` is set to a bare channel name like `nightly-2026-02-09`, rustup resolves it using the default host triple — producing the GNU-hosted toolchain, which requires `dlltool.exe` (not present on MSVC-only runners) and fails with:

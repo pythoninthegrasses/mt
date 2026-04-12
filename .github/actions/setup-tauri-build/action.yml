@@ -12,6 +12,22 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Bootstrap Windows prerequisites (git, pwsh)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $ProgressPreference = 'SilentlyContinue'
+        $toInstall = @()
+        if (-not (Get-Command git -ErrorAction SilentlyContinue)) { $toInstall += 'git' }
+        if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) { $toInstall += 'pwsh' }
+        if ($toInstall.Count -gt 0) {
+          choco install @toInstall -y
+        }
+        $gitPath = (Get-ItemProperty 'HKLM:\SOFTWARE\GitForWindows' -ErrorAction SilentlyContinue).InstallPath
+        if ($gitPath) {
+          echo "$gitPath\cmd" >> $env:GITHUB_PATH
+        }
+
     - name: Read pinned Rust toolchain from .tool-versions (Unix)
       if: runner.os != 'Windows'
       id: rust-version-unix

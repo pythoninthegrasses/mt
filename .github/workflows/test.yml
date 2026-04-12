@@ -121,22 +121,6 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Bootstrap Windows prerequisites
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          $toInstall = @()
-          if (-not (Get-Command git -ErrorAction SilentlyContinue)) { $toInstall += 'git' }
-          if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) { $toInstall += 'pwsh' }
-          if ($toInstall.Count -gt 0) {
-            choco install @toInstall -y
-          }
-          $gitPath = (Get-ItemProperty 'HKLM:\SOFTWARE\GitForWindows' -ErrorAction SilentlyContinue).InstallPath
-          if ($gitPath) {
-            echo "$gitPath\cmd" >> $env:GITHUB_PATH
-          }
-
       - uses: actions/checkout@v6
 
       # Linux: containerized cargo check with Blacksmith Docker layer caching
