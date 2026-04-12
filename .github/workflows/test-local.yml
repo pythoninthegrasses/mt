@@ -20,13 +20,15 @@ jobs:
       - name: Install Deno
         run: |
           curl -fsSL https://deno.land/install.sh | sh
-          echo "$HOME/.deno/bin" >> $GITHUB_PATH
+          echo "$HOME/.deno/bin" >> "$GITHUB_PATH"
 
       - name: Check Deno formatting
-        run: $HOME/.deno/bin/deno fmt --check
+        run: |
+          "$HOME/.deno/bin/deno" fmt --check
 
       - name: Run Deno lint
-        run: $HOME/.deno/bin/deno lint
+        run: |
+          "$HOME/.deno/bin/deno" lint
 
   # Vitest unit tests
   vitest-tests:
@@ -87,7 +89,7 @@ jobs:
           fi
           echo "Working directory: $(pwd)"
           echo "Node version: $(node --version)"
-          ls -la app/frontend/ | head -5
+          find app/frontend/ -maxdepth 1 | head -5
 
       - name: Install frontend dependencies
         working-directory: ./app/frontend
