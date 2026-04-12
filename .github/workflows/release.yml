@@ -163,7 +163,7 @@ jobs:
     if: >
       github.event_name == 'release' ||
       inputs.platform == 'all' || inputs.platform == 'windows' || inputs.platform == ''
-    runs-on: windows-latest
+    runs-on: blacksmith-4vcpu-windows-2025
     timeout-minutes: 45
 
     steps:
