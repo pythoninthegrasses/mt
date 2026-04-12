@@ -123,19 +123,40 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Linux: skip Docker build when cargo-check inputs haven't changed.
+      # Hash covers everything the Dockerfile check target copies:
+      # Cargo manifests, lockfile, Rust source, cargo config, and the
+      # Dockerfile itself.  Cache hit means cargo check already passed
+      # for these exact inputs — no need to spin up Docker at all.
+      - name: Check cargo-check cache (Linux)
+        if: runner.os == 'Linux'
+        id: cargo-check-cache
+        uses: actions/cache@v4
+        with:
+          path: .cargo-check-sentinel
+          key: linux-cargo-check-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'crates/**/*.rs', 'crates/**/Cargo.toml', 'crates/**/.cargo/**', 'docker/linux/Dockerfile') }}
+
+      - name: Skip notice (Linux)
+        if: runner.os == 'Linux' && steps.cargo-check-cache.outputs.cache-hit == 'true'
+        run: echo "cargo check inputs unchanged — skipping Docker build"
+
       # Linux: containerized cargo check with Blacksmith Docker layer caching
       - name: Setup Docker builder (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.cargo-check-cache.outputs.cache-hit != 'true'
         uses: useblacksmith/setup-docker-builder@v1
 
       - name: Cargo check (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.cargo-check-cache.outputs.cache-hit != 'true'
         uses: useblacksmith/build-push-action@v2
         with:
           context: .
           file: docker/linux/Dockerfile
           target: check
           push: false
+
+      - name: Write cargo-check sentinel (Linux)
+        if: runner.os == 'Linux' && steps.cargo-check-cache.outputs.cache-hit != 'true'
+        run: date -u > .cargo-check-sentinel
 
       # macOS/Windows: bare-metal setup + cargo check
       - name: Setup Tauri build environment

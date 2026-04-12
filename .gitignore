@@ -1,6 +1,7 @@
 # ETC
 *.db*
 *.sqlite
+.cargo-check-sentinel
 .playwright-mcp/
 .sisyphus/
 .task/

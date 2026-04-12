@@ -416,14 +416,17 @@ Linux amd64 builds use a multi-stage Dockerfile (`docker/linux/Dockerfile`) for 
 
 In CI, [Blacksmith Docker layer caching](https://docs.blacksmith.sh/blacksmith-caching/docker-builds) persists all layers on NVMe-backed sticky disks. After the first run, the `deps` and `cook` layers are cached — subsequent runs only rebuild changed source code.
 
+The test workflow (`test.yml`) uses a hash-based skip optimization: before spinning up Docker, it computes a hash of all files that affect `cargo check` output (`Cargo.toml`, `Cargo.lock`, `crates/**/*.rs`, crate manifests, cargo config, and the Dockerfile). If the hash matches a previous successful run (via `actions/cache`), the entire Docker build is skipped. This eliminates ~65s of Docker orchestration overhead on runs where Rust source hasn't changed — reducing the Linux job from ~75s to ~5s on cache hit.
+
 ```yaml
-# test.yml — cargo check only
-- uses: useblacksmith/setup-docker-builder@v1
-- uses: useblacksmith/build-push-action@v2
+# test.yml — cargo check only (with hash-based skip)
+- uses: actions/cache@v4        # check if inputs changed
+- uses: useblacksmith/setup-docker-builder@v1  # skip if cache hit
+- uses: useblacksmith/build-push-action@v2     # skip if cache hit
   with:
     target: check
 
-# release.yml — full build + bundle, extract artifacts
+# release.yml — full build + bundle, extract artifacts (no skip)
 - uses: useblacksmith/setup-docker-builder@v1
 - uses: useblacksmith/build-push-action@v2
   with:
