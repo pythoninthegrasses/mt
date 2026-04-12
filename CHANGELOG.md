@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.4.1](https://github.com/pythoninthegrasses/mt/compare/v1.4.0...v1.4.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* **ci:** add library count mock for pagination and gate builds on rust job ([858a1e1](https://github.com/pythoninthegrasses/mt/commit/858a1e1941acdcace8f84373709a7094345af87d))
+* **ci:** add missing library count mocks, fix property test dedup, gate Playwright on tests ([1c45b25](https://github.com/pythoninthegrasses/mt/commit/1c45b25247dbe1f86a57c7f08148189f04fa1a29))
+* **ci:** bump dorny/paths-filter v3 to v4 for Node.js 24 compatibility ([23ec368](https://github.com/pythoninthegrasses/mt/commit/23ec368255497e3b395763165c62182c140ad4ba))
+* **ci:** install binstall tools to CARGO_BIN so they're on PATH ([105a630](https://github.com/pythoninthegrasses/mt/commit/105a63091cd542173d49b7056c1e8653f2b8dbfc))
+* **ci:** resolve actionlint shellcheck warnings and bump setup-node to v6 ([f88dddb](https://github.com/pythoninthegrasses/mt/commit/f88dddbf9d3dbf8e156719dc3087682070e701c2))
+* **test:** fix all queue property test dedup assertions for move semantics ([71ad8a6](https://github.com/pythoninthegrasses/mt/commit/71ad8a68d413cefd80bffe74b838b8b6ad168d7e))
+* **test:** fix type-to-jump pagination compat and loading state race ([17364ab](https://github.com/pythoninthegrasses/mt/commit/17364ab9ab494e9ba09f6b9f29dc6c22f54d164f))
+
+
+### Performance Improvements
+
+* **ci:** skip Docker build for Linux cargo check when inputs unchanged ([a8eade7](https://github.com/pythoninthegrasses/mt/commit/a8eade7773a0943f0cc53f428599f5dd7d3cadd5))
+* **frontend:** batch Alpine.js reactive updates in library store mutations ([ec25d06](https://github.com/pythoninthegrasses/mt/commit/ec25d06ed75b10aea30c9c84cbd752b4b69372f7))
+* **library:** paginate track loading with sparse page map and on-demand fetching ([cb6876d](https://github.com/pythoninthegrasses/mt/commit/cb6876dbe93000175143992acbd57bb442752f58))
+
 ## [1.4.0](https://github.com/pythoninthegrasses/mt/compare/v1.3.0...v1.4.0) (2026-04-12)
 
 
