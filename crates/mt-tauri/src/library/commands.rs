@@ -1677,7 +1677,7 @@ mod tests {
 
         #[test]
         fn test_section_unknown() {
-            let conn = setup_test_db();
+            let _conn = setup_test_db();
             // We can't directly test the match arm since it's inside the command,
             // but the DB-level helpers cover each section type. This tests the
             // response struct serialization for completeness.
