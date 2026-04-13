@@ -10,8 +10,6 @@
  */
 
 import { library as libraryApi } from '../api/library.js';
-import { favorites } from '../api/favorites.js';
-import { playlists } from '../api/playlists.js';
 import {
   buildCacheEntry,
   createCacheSaver,

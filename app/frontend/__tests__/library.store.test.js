@@ -569,13 +569,23 @@ describe('Paginated Store - _isPaginated', () => {
 describe('loadLibraryData - FOUC regression', () => {
   let loadLibraryData;
 
+  let mockGetSection;
+
   beforeEach(async () => {
     vi.resetModules();
 
-    // Mock the library API
+    // Mock the library API with getSection (unified endpoint)
+    mockGetSection = vi.fn().mockResolvedValue({
+      section: 'all',
+      tracks: makeTracks(50),
+      total_tracks: 50,
+      total_duration: 3600,
+      has_more: false,
+      revision: 1,
+    });
     vi.doMock('../js/api/library.js', () => ({
       library: {
-        getCount: vi.fn().mockResolvedValue({ total: 50, total_duration: 3600 }),
+        getSection: mockGetSection,
       },
     }));
 
@@ -603,7 +613,6 @@ describe('loadLibraryData - FOUC regression', () => {
     store.currentSection = 'all';
     store._lastLoadedSection = 'all';
     store._sectionCache = {};
-    store._fetchPage = vi.fn().mockResolvedValue(undefined);
     store._getFilterParams = () => ({});
     store._updateCache = vi.fn();
     return store;
@@ -613,14 +622,21 @@ describe('loadLibraryData - FOUC regression', () => {
     const store = createLoadStore();
     const statesDuringFetch = [];
 
-    // Capture state when _fetchPage is called (during the await)
-    store._fetchPage = vi.fn().mockImplementation(() => {
+    // Capture state when getSection is called (during the await)
+    mockGetSection.mockImplementation(() => {
       statesDuringFetch.push({
         totalTracks: store.totalTracks,
         loading: store.loading,
         pagesEmpty: Object.keys(store._trackPages).length === 0,
       });
-      return Promise.resolve();
+      return Promise.resolve({
+        section: 'all',
+        tracks: makeTracks(50),
+        total_tracks: 50,
+        total_duration: 3600,
+        has_more: false,
+        revision: 1,
+      });
     });
 
     await loadLibraryData(store);
@@ -644,9 +660,16 @@ describe('loadLibraryData - FOUC regression', () => {
     };
 
     const tracksSeenDuringFetch = [];
-    store._fetchPage = vi.fn().mockImplementation(() => {
+    mockGetSection.mockImplementation(() => {
       tracksSeenDuringFetch.push(store.totalTracks);
-      return Promise.resolve();
+      return Promise.resolve({
+        section: 'all',
+        tracks: makeTracks(50),
+        total_tracks: 50,
+        total_duration: 3600,
+        has_more: false,
+        revision: 1,
+      });
     });
 
     await loadLibraryData(store);
