@@ -140,7 +140,28 @@ export const library = {
         throw new ApiError(500, error.toString());
       }
     }
-    // HTTP fallback: compose from existing /library + /library/count endpoints
+    // HTTP fallback: dispatch to the appropriate REST endpoint per section
+    const section = params.section || 'all';
+
+    // Playlist sections use the playlists REST endpoint
+    const playlistMatch = section.match(/^playlist-(\d+)$/);
+    if (playlistMatch) {
+      const data = await request(`/playlists/${playlistMatch[1]}`);
+      const tracks = (data.tracks || []).map((item) => item.track || item);
+      const totalDuration = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+      return {
+        section,
+        tracks,
+        total_tracks: tracks.length,
+        total_duration: totalDuration,
+        page: null,
+        page_size: null,
+        has_more: false,
+        revision: 0,
+      };
+    }
+
+    // All other sections compose from /library + /library/count
     const query = new URLSearchParams();
     if (params.search) query.set('search', params.search);
     if (params.artist) query.set('artist', params.artist);
@@ -155,7 +176,7 @@ export const library = {
       request(`/library/count${qs ? `?${qs}` : ''}`),
     ]);
     return {
-      section: params.section || 'all',
+      section,
       tracks: trackData.tracks || [],
       total_tracks: countData.total ?? (trackData.tracks || []).length,
       total_duration: countData.total_duration ?? 0,
