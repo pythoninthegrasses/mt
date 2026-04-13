@@ -12,6 +12,7 @@ pub(crate) mod models;
 pub(crate) mod playlists;
 pub(crate) mod queue;
 pub(crate) mod removed;
+pub(crate) mod revision;
 pub(crate) mod schema;
 pub(crate) mod scrobble;
 pub(crate) mod settings;

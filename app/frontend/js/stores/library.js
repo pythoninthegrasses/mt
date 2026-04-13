@@ -10,8 +10,6 @@
  */
 
 import { library as libraryApi } from '../api/library.js';
-import { favorites } from '../api/favorites.js';
-import { playlists } from '../api/playlists.js';
 import {
   buildCacheEntry,
   createCacheSaver,
@@ -72,6 +70,7 @@ export function createLibraryStore(Alpine) {
     _sectionCache: {},
     _backgroundRefreshing: false,
     _dataVersion: 0,
+    _lastRevision: undefined,
     _saveCache: null,
 
     async init() {
@@ -364,7 +363,7 @@ export function createLibraryStore(Alpine) {
     },
 
     loadFavorites() {
-      return this._loadSection('liked', () => favorites.get({ limit: 1000 }));
+      return this._loadSection('liked', null);
     },
 
     _backgroundRefreshFavorites() {
@@ -373,55 +372,35 @@ export function createLibraryStore(Alpine) {
         ? 'liked'
         : null;
       if (!section) return;
-      return this._backgroundRefreshSection(
-        'liked',
-        () => favorites.get({ limit: 1000 }),
-      );
+      return this._backgroundRefreshSection('liked', null);
     },
 
     loadRecentlyPlayed(days = 14) {
-      return this._loadSection(
-        'recent',
-        () => favorites.getRecentlyPlayed({ days, limit: 100 }),
-      );
+      return this._loadSection('recent', null, { days });
     },
 
     _backgroundRefreshRecentlyPlayed(days = 14) {
-      return this._backgroundRefreshSection(
-        'recent',
-        () => favorites.getRecentlyPlayed({ days, limit: 100 }),
-      );
+      return this._backgroundRefreshSection('recent', null, { days });
     },
 
     loadRecentlyAdded(days = 14) {
-      return this._loadSection(
-        'added',
-        () => favorites.getRecentlyAdded({ days, limit: 100 }),
-      );
+      return this._loadSection('added', null, { days });
     },
 
     _backgroundRefreshRecentlyAdded(days = 14) {
-      return this._backgroundRefreshSection(
-        'added',
-        () => favorites.getRecentlyAdded({ days, limit: 100 }),
-      );
+      return this._backgroundRefreshSection('added', null, { days });
     },
 
     loadTop25() {
-      return this._loadSection('top25', () => favorites.getTop25());
+      return this._loadSection('top25', null);
     },
 
     _backgroundRefreshTop25() {
-      return this._backgroundRefreshSection(
-        'top25',
-        () => favorites.getTop25(),
-      );
+      return this._backgroundRefreshSection('top25', null);
     },
 
     loadPlaylist(playlistId) {
       const section = `playlist-${playlistId}`;
-      const transformPlaylist = (_rawTracks, data) =>
-        (data.tracks || []).map((item) => item.track || item);
 
       const cachePlaylist = (data) => {
         this._sectionCache[section] = {
@@ -434,7 +413,6 @@ export function createLibraryStore(Alpine) {
 
         console.log('[navigation]', 'load_playlist_complete', {
           playlistId,
-          playlistName: data.name,
           trackCount: this.filteredTracks.length,
         });
         return data;
@@ -442,8 +420,8 @@ export function createLibraryStore(Alpine) {
 
       console.log('[navigation]', 'load_playlist', { playlistId });
 
-      return this._loadSection(section, () => playlists.get(playlistId), {
-        transform: transformPlaylist,
+      // The unified endpoint returns flat Track objects for playlists
+      return this._loadSection(section, null, {
         onSuccess: cachePlaylist,
         logTag: 'navigation',
       });
@@ -451,25 +429,18 @@ export function createLibraryStore(Alpine) {
 
     _backgroundRefreshPlaylist(playlistId) {
       const section = `playlist-${playlistId}`;
-      const transformPlaylist = (_rawTracks, data) =>
-        (data.tracks || []).map((item) => item.track || item);
 
-      return this._backgroundRefreshSection(
-        section,
-        () => playlists.get(playlistId),
-        {
-          transform: transformPlaylist,
-          onSuccess: (data) => {
-            this._sectionCache[section] = {
-              totalTracks: this.totalTracks,
-              totalDuration: this.totalDuration,
-              playlistName: data.name,
-              timestamp: Date.now(),
-            };
-            this._persistCache();
-          },
+      return this._backgroundRefreshSection(section, null, {
+        onSuccess: (data) => {
+          this._sectionCache[section] = {
+            totalTracks: this.totalTracks,
+            totalDuration: this.totalDuration,
+            playlistName: data.name,
+            timestamp: Date.now(),
+          };
+          this._persistCache();
         },
-      );
+      });
     },
 
     // -----------------------------------------------------------------------

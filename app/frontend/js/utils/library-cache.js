@@ -11,14 +11,20 @@ const SETTINGS_KEY = 'library:sectionCache';
 
 /**
  * Compute summary stats for a section from fetched data.
- * @param {{ tracks?: Array, total?: number }} data - Backend response
+ *
+ * When `data` includes `total_tracks` and `total_duration` (from the backend
+ * `library_get_section` response), those authoritative values are used
+ * directly. Otherwise falls back to computing from the tracks array.
+ *
+ * @param {{ tracks?: Array, total?: number, total_tracks?: number, total_duration?: number }} data
  * @returns {{ totalTracks: number, totalDuration: number, timestamp: number }}
  */
 export function buildCacheEntry(data) {
   const tracks = data.tracks || [];
   return {
-    totalTracks: data.total || tracks.length,
-    totalDuration: tracks.reduce((sum, t) => sum + (t.duration || 0), 0),
+    totalTracks: data.total_tracks ?? data.total ?? tracks.length,
+    totalDuration: data.total_duration ??
+      tracks.reduce((sum, t) => sum + (t.duration || 0), 0),
     timestamp: Date.now(),
   };
 }

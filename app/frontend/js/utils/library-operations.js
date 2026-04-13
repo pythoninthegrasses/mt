@@ -17,12 +17,18 @@ import { promptToAddWatchedFolders } from '../utils/watched-folders.js';
  * Compute summary stats and update store state after a section fetch.
  * Shared between loadSection and backgroundRefreshSection.
  * Sets _sectionTracks for non-paginated sections.
+ *
+ * When `data` contains `total_tracks` and `total_duration` (from the
+ * backend `library_get_section` response), those authoritative values
+ * are used directly. Otherwise falls back to computing from the tracks
+ * array for backward compatibility.
  */
 export function applySectionData(store, section, tracks, data) {
   window.Alpine.disableEffectScheduling(() => {
     store._setSectionTracks(tracks);
-    store.totalTracks = data?.total ?? tracks.length;
-    store.totalDuration = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+    store.totalTracks = data?.total_tracks ?? data?.total ?? tracks.length;
+    store.totalDuration = data?.total_duration ??
+      tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
     store._lastLoadedSection = section;
   });
 }
@@ -59,6 +65,11 @@ export function getInitialSection() {
 
 /**
  * Load a section's tracks with cache preview and loading state.
+ *
+ * When `fetchFn` is omitted, uses `library.getSection({ section, ... })` —
+ * the unified backend command that returns tracks + authoritative stats in
+ * a single transaction.
+ *
  * @param {object} store - Library store instance
  * @param {string} section - Section identifier (e.g. 'liked', 'recent')
  * @param {Function} fetchFn - Async function returning { tracks, total?, … }
@@ -66,10 +77,11 @@ export function getInitialSection() {
  * @param {Function} [opts.transform] - Transform raw tracks (default: store._filterByLibrary)
  * @param {Function} [opts.onSuccess] - Post-success callback receiving (data)
  * @param {string} [opts.logTag] - Log tag override (default: 'library')
+ * @param {number} [opts.days] - Days lookback for recent/added sections
  * @returns {*} Return value from onSuccess, or undefined
  */
 export async function loadSection(store, section, fetchFn, opts = {}) {
-  const { transform, onSuccess, logTag = 'library' } = opts;
+  const { transform, onSuccess, logTag = 'library', days } = opts;
   const cached = store._sectionCache[section];
 
   // Show cached summary stats if available (previous tracks stay visible during fetch)
@@ -85,11 +97,42 @@ export async function loadSection(store, section, fetchFn, opts = {}) {
   store.loading = true;
   // DON'T clear tracks - keep showing previous data while loading
   try {
-    const data = await fetchFn();
+    // Prefer the unified backend command when no custom fetchFn is provided
+    const useUnified = !fetchFn;
+    let data;
+    if (useUnified) {
+      data = await library.getSection({
+        section,
+        days: days || null,
+        limit: 1000,
+      });
+    } else {
+      data = await fetchFn();
+    }
+
     const rawTracks = data.tracks || [];
-    const tracks = transform ? transform(rawTracks, data) : store._filterByLibrary(rawTracks);
-    applySectionData(store, section, tracks, { total: tracks.length });
-    store._updateCache(section, { tracks, total: tracks.length });
+    // When using the unified backend command, tracks are already authoritative
+    // — no need to filter against the "all" section (which may not be loaded).
+    const tracks = transform
+      ? transform(rawTracks, data)
+      : useUnified
+      ? rawTracks
+      : store._filterByLibrary(rawTracks);
+
+    if (useUnified) {
+      // Use authoritative stats from backend
+      applySectionData(store, section, tracks, data);
+      store._updateCache(section, {
+        total: data.total_tracks,
+        totalDuration: data.total_duration,
+      });
+      if (data.revision !== undefined) {
+        store._lastRevision = data.revision;
+      }
+    } else {
+      applySectionData(store, section, tracks, { total: tracks.length });
+      store._updateCache(section, { tracks, total: tracks.length });
+    }
 
     if (onSuccess) {
       return onSuccess(data);
@@ -104,25 +147,65 @@ export async function loadSection(store, section, fetchFn, opts = {}) {
 
 /**
  * Silently refresh a section's data in the background.
+ *
+ * When `fetchFn` is omitted, uses `library.getSection({ section, ... })` and
+ * skips the update if the returned revision matches the last-seen revision.
+ *
  * @param {object} store - Library store instance
  * @param {string} section - Section identifier
  * @param {Function} fetchFn - Async function returning { tracks, total?, … }
  * @param {Object} [opts]
  * @param {Function} [opts.transform] - Transform raw tracks (default: store._filterByLibrary)
  * @param {Function} [opts.onSuccess] - Post-success callback receiving (data)
+ * @param {number} [opts.days] - Days lookback for recent/added sections
  */
 export async function backgroundRefreshSection(store, section, fetchFn, opts = {}) {
   if (store._backgroundRefreshing) return;
   store._backgroundRefreshing = true;
-  const { transform, onSuccess } = opts;
+  const { transform, onSuccess, days } = opts;
 
   try {
-    const data = await fetchFn();
+    const useUnified = !fetchFn;
+    let data;
+    if (useUnified) {
+      data = await library.getSection({
+        section,
+        days: days || null,
+        limit: 1000,
+      });
+      // Skip update if revision hasn't changed
+      if (
+        data.revision !== undefined &&
+        store._lastRevision !== undefined &&
+        data.revision === store._lastRevision
+      ) {
+        return;
+      }
+    } else {
+      data = await fetchFn();
+    }
+
     if (store._lastLoadedSection === section) {
       const rawTracks = data.tracks || [];
-      const tracks = transform ? transform(rawTracks, data) : store._filterByLibrary(rawTracks);
-      applySectionData(store, section, tracks, { total: tracks.length });
-      store._updateCache(section, { tracks, total: tracks.length });
+      const tracks = transform
+        ? transform(rawTracks, data)
+        : useUnified
+        ? rawTracks
+        : store._filterByLibrary(rawTracks);
+
+      if (useUnified) {
+        applySectionData(store, section, tracks, data);
+        store._updateCache(section, {
+          total: data.total_tracks,
+          totalDuration: data.total_duration,
+        });
+        if (data.revision !== undefined) {
+          store._lastRevision = data.revision;
+        }
+      } else {
+        applySectionData(store, section, tracks, { total: tracks.length });
+        store._updateCache(section, { tracks, total: tracks.length });
+      }
       if (onSuccess) onSuccess(data);
     }
   } catch (e) {
@@ -138,7 +221,9 @@ export async function backgroundRefreshSection(store, section, fetchFn, opts = {
 
 /**
  * Load library tracks from backend using pagination.
- * Fetches count + first page only; remaining pages load on demand via scroll.
+ * Uses the unified `library_get_section` command to fetch count + first page
+ * in a single transaction, ensuring consistent counts and track data.
+ * Remaining pages load on demand via scroll.
  * @param {object} store - Library store instance
  * @param {Object} [options]
  * @param {boolean} [options.forceReload=false] - Force reload even if data exists
@@ -180,11 +265,20 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
     store._resetPages();
     store.totalTracks = 0;
     store.totalDuration = 0;
+
+    // Fetch first page using unified endpoint (count + tracks in one transaction)
     const filterParams = store._getFilterParams();
-    const [countData] = await Promise.all([
-      library.getCount(filterParams),
-      store._fetchPage(0),
-    ]);
+    const sectionData = await library.getSection({
+      section: 'all',
+      search: filterParams.search || null,
+      artist: filterParams.artist || null,
+      album: filterParams.album || null,
+      sort: filterParams.sort || null,
+      order: filterParams.order || null,
+      limit: store._pageSize,
+      offset: 0,
+      ignoreWords: filterParams.ignoreWords || null,
+    });
 
     const _t1 = performance.now();
 
@@ -196,16 +290,25 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
       return;
     }
 
+    // Store page 0 tracks from the unified response
+    if (sectionData.tracks && sectionData.tracks.length > 0) {
+      store._trackPages[0] = sectionData.tracks;
+    }
+
     window.Alpine.disableEffectScheduling(() => {
-      store.totalTracks = countData.total;
-      store.totalDuration = countData.total_duration;
+      store.totalTracks = sectionData.total_tracks;
+      store.totalDuration = sectionData.total_duration;
       store._lastLoadedSection = loadSection;
       store._dataVersion++;
     });
 
+    if (sectionData.revision !== undefined) {
+      store._lastRevision = sectionData.revision;
+    }
+
     store._updateCache(loadSection, {
-      total: countData.total,
-      totalDuration: countData.total_duration,
+      total: sectionData.total_tracks,
+      totalDuration: sectionData.total_duration,
     });
     const _t2 = performance.now();
 
@@ -214,12 +317,12 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
       process_ms: Math.round(_t2 - _t1),
       total_ms: Math.round(_t2 - _t0),
       page0_tracks: store._trackPages[0]?.length || 0,
-      total_tracks: countData.total,
+      total_tracks: sectionData.total_tracks,
     };
     console.log('[perf] library.load breakdown:', window._perfLibLoad);
     console.log('[library]', 'load_complete', {
       page0Count: store._trackPages[0]?.length || 0,
-      totalTracks: countData.total,
+      totalTracks: sectionData.total_tracks,
       section: loadSection,
     });
   } catch (error) {
@@ -234,6 +337,8 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
 
 /**
  * Silently refresh the main library data in background without spinner.
+ * Uses the unified `library_get_section` command. Skips the update if the
+ * returned revision matches the last-seen revision.
  * @param {object} store - Library store instance
  * @param {string} section - Current section to refresh
  */
@@ -245,25 +350,52 @@ export async function backgroundRefreshLibrary(store, section) {
     console.log('[library] background refresh starting for:', section);
 
     const filterParams = store._getFilterParams();
-    const countData = await library.getCount(filterParams);
+    const sectionData = await library.getSection({
+      section: 'all',
+      search: filterParams.search || null,
+      artist: filterParams.artist || null,
+      album: filterParams.album || null,
+      sort: filterParams.sort || null,
+      order: filterParams.order || null,
+      limit: store._pageSize,
+      offset: 0,
+      ignoreWords: filterParams.ignoreWords || null,
+    });
+
+    // Skip update if revision hasn't changed
+    if (
+      sectionData.revision !== undefined &&
+      store._lastRevision !== undefined &&
+      sectionData.revision === store._lastRevision
+    ) {
+      return;
+    }
 
     if (store.currentSection === section) {
+      // Reset and store page 0 from the unified response
       store._resetPages();
-      await store._fetchPage(0);
+      if (sectionData.tracks && sectionData.tracks.length > 0) {
+        store._trackPages[0] = sectionData.tracks;
+      }
 
       window.Alpine.disableEffectScheduling(() => {
-        store.totalTracks = countData.total;
-        store.totalDuration = countData.total_duration;
+        store.totalTracks = sectionData.total_tracks;
+        store.totalDuration = sectionData.total_duration;
         store._dataVersion++;
       });
+
+      if (sectionData.revision !== undefined) {
+        store._lastRevision = sectionData.revision;
+      }
+
       store._updateCache(section, {
-        total: countData.total,
-        totalDuration: countData.total_duration,
+        total: sectionData.total_tracks,
+        totalDuration: sectionData.total_duration,
       });
 
       console.log('[library] background refresh complete:', {
         section,
-        totalTracks: countData.total,
+        totalTracks: sectionData.total_tracks,
         page0Count: store._trackPages[0]?.length || 0,
       });
     }

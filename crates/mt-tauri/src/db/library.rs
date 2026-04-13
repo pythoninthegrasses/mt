@@ -413,6 +413,7 @@ pub(crate) fn add_track(
         ],
     )?;
 
+    crate::db::revision::bump_revision(conn)?;
     Ok(conn.last_insert_rowid())
 }
 
@@ -537,6 +538,9 @@ pub(crate) fn update_tracks_bulk(
         count += rows as i64;
     }
 
+    if count > 0 {
+        crate::db::revision::bump_revision(conn)?;
+    }
     Ok(count)
 }
 
@@ -573,6 +577,9 @@ pub(crate) fn delete_tracks_bulk(conn: &Connection, filepaths: &[String]) -> DbR
     let sql = format!("DELETE FROM library WHERE filepath IN ({})", placeholders);
     let deleted = conn.execute(&sql, params.as_slice())?;
 
+    if deleted > 0 {
+        crate::db::revision::bump_revision(conn)?;
+    }
     Ok(deleted as i64)
 }
 
@@ -581,6 +588,9 @@ pub(crate) fn delete_track(conn: &Connection, track_id: i64) -> DbResult<bool> {
     conn.execute("DELETE FROM favorites WHERE track_id = ?", [track_id])?;
     conn.execute("DELETE FROM playlist_items WHERE track_id = ?", [track_id])?;
     let deleted = conn.execute("DELETE FROM library WHERE id = ?", [track_id])?;
+    if deleted > 0 {
+        crate::db::revision::bump_revision(conn)?;
+    }
     Ok(deleted > 0)
 }
 
@@ -622,6 +632,9 @@ pub(crate) fn delete_tracks_by_ids(conn: &Connection, track_ids: &[i64]) -> DbRe
 
     let sql = format!("DELETE FROM library WHERE id IN ({})", placeholders);
     let deleted = conn.execute(&sql, params.as_slice())?;
+    if deleted > 0 {
+        crate::db::revision::bump_revision(conn)?;
+    }
     Ok(deleted)
 }
 
@@ -689,6 +702,7 @@ pub(crate) fn update_play_count(conn: &Connection, track_id: i64) -> DbResult<Op
 
     conn.execute("INSERT INTO play_history (track_id) VALUES (?)", [track_id])?;
 
+    crate::db::revision::bump_revision(conn)?;
     get_track_by_id(conn, track_id)
 }
 

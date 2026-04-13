@@ -14,7 +14,7 @@ import { queue } from '../api/queue.js';
  * @param {Function} [options.beforePlay] - Called before play starts (e.g. to push history)
  */
 export async function handleDoubleClickPlay(ctx, track, allTracks, index, logPrefix, options) {
-  if (index < 0 || index >= allTracks.length) {
+  if (index < 0 || index >= allTracks.length || track.missing) {
     await ctx.player.playTrack(track);
     return;
   }
