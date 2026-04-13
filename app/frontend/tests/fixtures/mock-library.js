@@ -650,6 +650,45 @@ export async function setupLibraryMocks(page, state) {
 
   // --- Queue API mocks (needed for handleDoubleClick background queue build) ---
 
+  // POST /api/queue/play-context - atomic queue replace + play
+  await page.route(/\/api\/queue\/play-context(\?.*)?$/, async (route, request) => {
+    if (request.method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    const body = request.postDataJSON();
+    const trackIds = body?.track_ids || [];
+    const startIndex = body?.start_index ?? 0;
+    const shuffle = body?.shuffle ?? false;
+    state.apiCalls.push({ method: 'POST', url: '/queue/play-context', body });
+
+    // Build queue items from library state tracks, preserving request order
+    const trackMap = new Map(state.tracks.map((t) => [t.id, t]));
+    let items = trackIds
+      .map((id) => trackMap.get(id))
+      .filter(Boolean);
+
+    // Rotate so the start track is first
+    if (startIndex > 0 && startIndex < items.length) {
+      items = [...items.slice(startIndex), ...items.slice(0, startIndex)];
+    }
+
+    const currentTrack = items[0] || null;
+    const totalDuration = items.reduce((sum, t) => sum + (t.duration || 0), 0);
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: items.map((t) => ({ track: t })),
+        current_index: 0,
+        track: currentTrack,
+        shuffle_enabled: shuffle,
+        duration_ms: totalDuration,
+      }),
+    });
+  });
+
   // POST /api/queue/clear
   await page.route(/\/api\/queue\/clear(\?.*)?$/, async (route, request) => {
     if (request.method() !== 'POST') {

@@ -175,7 +175,14 @@ export const queue = {
         throw new ApiError(500, error.toString());
       }
     }
-    throw new ApiError(500, 'playContext not available in browser mode');
+    return request('/queue/play-context', {
+      method: 'POST',
+      body: JSON.stringify({
+        track_ids: trackIds,
+        start_index: startIndex,
+        shuffle,
+      }),
+    });
   },
 
   save(state) {
