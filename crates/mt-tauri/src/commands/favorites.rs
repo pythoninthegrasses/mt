@@ -6,8 +6,10 @@
 use tauri::{AppHandle, State};
 use tracing::{debug, warn};
 
-use crate::db::{Database, FavoriteTrack, PaginatedResult, Track, favorites, library, settings};
-use crate::events::{EventEmitter, FavoritesUpdatedEvent};
+use crate::db::{
+    Database, FavoriteTrack, PaginatedResult, Track, favorites, library, revision, settings,
+};
+use crate::events::{EventEmitter, FavoritesUpdatedEvent, LibraryReconcileEvent};
 use crate::lastfm::LastFmClient;
 
 /// Response for favorites get operations with pagination
@@ -155,8 +157,16 @@ pub(crate) fn favorites_add(
         return Err("Track is already favorited".to_string());
     }
 
-    // Emit favorites updated event
+    // Emit favorites updated event (player UI) and reconcile event (section counts)
     let _ = app.emit_favorites_updated(FavoritesUpdatedEvent::added(track_id));
+    let stats = library::get_library_stats(&conn).map_err(|e| e.to_string())?;
+    let rev = revision::get_revision(&conn).map_err(|e| e.to_string())?;
+    let _ = app.emit_library_reconcile(LibraryReconcileEvent::favorite(
+        "add",
+        stats.total_tracks,
+        stats.total_duration as f64,
+        rev,
+    ));
 
     // Sync love to Last.fm
     if let (Some(artist), Some(title)) = (track.artist.clone(), track.title.clone()) {
@@ -188,8 +198,16 @@ pub(crate) fn favorites_remove(
         return Err(format!("Track with id {} not in favorites", track_id));
     }
 
-    // Emit favorites updated event
+    // Emit favorites updated event (player UI) and reconcile event (section counts)
     let _ = app.emit_favorites_updated(FavoritesUpdatedEvent::removed(track_id));
+    let stats = library::get_library_stats(&conn).map_err(|e| e.to_string())?;
+    let rev = revision::get_revision(&conn).map_err(|e| e.to_string())?;
+    let _ = app.emit_library_reconcile(LibraryReconcileEvent::favorite(
+        "remove",
+        stats.total_tracks,
+        stats.total_duration as f64,
+        rev,
+    ));
 
     // Sync unlove to Last.fm
     if let Some(track) = track

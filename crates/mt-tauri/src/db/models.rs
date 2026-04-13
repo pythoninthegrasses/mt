@@ -183,7 +183,7 @@ pub struct LastfmLovedStats {
 }
 
 /// Library statistics
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LibraryStats {
     pub total_tracks: i64,
     pub total_duration: i64,

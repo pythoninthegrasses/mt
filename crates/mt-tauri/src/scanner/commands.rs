@@ -11,8 +11,9 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::commands::match_new_tracks_against_loved;
+use crate::db::revision;
 use crate::db::{Database, library, removed};
-use crate::events::{EventEmitter, LibraryUpdatedEvent, ScanCompleteEvent, ScanProgressEvent};
+use crate::events::{EventEmitter, LibraryReconcileEvent, ScanCompleteEvent, ScanProgressEvent};
 use crate::scanner::artwork::{Artwork, get_artwork};
 use crate::scanner::fingerprint::{FileFingerprint, compute_content_hash};
 use crate::scanner::metadata::extract_metadata;
@@ -326,12 +327,17 @@ pub(crate) async fn scan_paths_to_library(
         duration_ms,
     });
 
-    // Emit library updated events (empty track_ids signals a bulk change - frontend should refresh)
-    if added_count > 0 || reconciled_count > 0 || recovered_count > 0 {
-        let _ = app.emit_library_updated(LibraryUpdatedEvent::added(vec![]));
-    }
-    if modified_count > 0 {
-        let _ = app.emit_library_updated(LibraryUpdatedEvent::modified(vec![]));
+    // Emit reconcile event with authoritative stats
+    if added_count > 0 || reconciled_count > 0 || recovered_count > 0 || modified_count > 0 {
+        let conn = db.conn().map_err(|e| e.to_string())?;
+        let stats = library::get_library_stats(&conn).map_err(|e| e.to_string())?;
+        let rev = revision::get_revision(&conn).map_err(|e| e.to_string())?;
+        let _ = app.emit_library_reconcile(LibraryReconcileEvent::scan_complete(
+            vec![],
+            stats.total_tracks,
+            stats.total_duration as f64,
+            rev,
+        ));
     }
 
     // Background backfill: compute content_hash for any tracks that are missing

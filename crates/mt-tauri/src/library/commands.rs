@@ -11,7 +11,7 @@ use crate::db::{
     Database, LibraryStats, SortOrder, Track, TrackMetadata, favorites, library, playlists,
     removed, revision,
 };
-use crate::events::{EventEmitter, LibraryUpdatedEvent};
+use crate::events::{EventEmitter, LibraryReconcileEvent, LibraryUpdatedEvent};
 use crate::scanner::artwork::Artwork;
 use crate::scanner::artwork_cache::ArtworkCache;
 use crate::scanner::fingerprint::{FileFingerprint, compute_content_hash};
@@ -480,6 +480,13 @@ pub(crate) fn library_get_artwork_url(
     }
 }
 
+/// Query authoritative stats + revision for reconcile events.
+fn get_reconcile_stats(conn: &rusqlite::Connection) -> Result<(i64, f64, i64), String> {
+    let stats = library::get_library_stats(conn).map_err(|e| e.to_string())?;
+    let rev = revision::get_revision(conn).map_err(|e| e.to_string())?;
+    Ok((stats.total_tracks, stats.total_duration as f64, rev))
+}
+
 /// Delete a track from the library and record the removal to prevent re-addition on scan
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
@@ -501,7 +508,14 @@ pub(crate) fn library_delete_track(
         .map_err(|e| e.to_string())?;
 
     if deleted {
-        let _ = app.emit_library_updated(LibraryUpdatedEvent::deleted(vec![track_id]));
+        let conn = db.conn().map_err(|e| e.to_string())?;
+        let (total_tracks, total_duration, rev) = get_reconcile_stats(&conn)?;
+        let _ = app.emit_library_reconcile(LibraryReconcileEvent::delete(
+            vec![track_id],
+            total_tracks,
+            total_duration,
+            rev,
+        ));
     }
 
     Ok(deleted)
@@ -520,7 +534,14 @@ pub(crate) fn library_purge_missing(
         .map_err(|e| e.to_string())?;
     if deleted > 0 {
         info!(count = deleted, "Purged missing tracks from database");
-        let _ = app.emit_library_updated(LibraryUpdatedEvent::deleted(vec![]));
+        let conn = db.conn().map_err(|e| e.to_string())?;
+        let (total_tracks, total_duration, rev) = get_reconcile_stats(&conn)?;
+        let _ = app.emit_library_reconcile(LibraryReconcileEvent::delete(
+            vec![],
+            total_tracks,
+            total_duration,
+            rev,
+        ));
     }
     crate::logging::log_slow_command("library_purge_missing", start);
     Ok(deleted)
@@ -552,7 +573,14 @@ pub(crate) fn library_delete_tracks(
     info!(count = deleted, "Batch deleted tracks");
     crate::logging::log_slow_command("library_delete_tracks", start);
     if deleted > 0 {
-        let _ = app.emit_library_updated(LibraryUpdatedEvent::deleted(track_ids));
+        let conn = db.conn().map_err(|e| e.to_string())?;
+        let (total_tracks, total_duration, rev) = get_reconcile_stats(&conn)?;
+        let _ = app.emit_library_reconcile(LibraryReconcileEvent::delete(
+            track_ids,
+            total_tracks,
+            total_duration,
+            rev,
+        ));
     }
     Ok(deleted)
 }
@@ -573,7 +601,7 @@ pub(crate) fn library_delete_all(app: AppHandle, db: State<'_, Database>) -> Res
     info!(count = deleted, "Deleted all tracks from library");
     crate::logging::log_slow_command("library_delete_all", start);
     if deleted > 0 {
-        let _ = app.emit_library_updated(LibraryUpdatedEvent::deleted(vec![]));
+        let _ = app.emit_library_reconcile(LibraryReconcileEvent::delete(vec![], 0, 0.0, 0));
     }
     Ok(deleted)
 }
@@ -723,9 +751,15 @@ pub(crate) fn library_locate_track(
     // Emit library updated events
     let _ = app.emit_library_updated(LibraryUpdatedEvent::modified(vec![track_id]));
 
-    // If we removed a duplicate, emit deleted event for it
+    // If we removed a duplicate, emit reconcile event for it
     if let Some(dup_id) = deleted_duplicate_id {
-        let _ = app.emit_library_updated(LibraryUpdatedEvent::deleted(vec![dup_id]));
+        let (total_tracks, total_duration, rev) = get_reconcile_stats(&conn)?;
+        let _ = app.emit_library_reconcile(LibraryReconcileEvent::delete(
+            vec![dup_id],
+            total_tracks,
+            total_duration,
+            rev,
+        ));
     }
 
     Ok(updated_track)
@@ -945,10 +979,6 @@ pub(crate) fn run_backfill_and_dedup(
         }
     }
 
-    if !deleted_ids.is_empty() {
-        let _ = app_handle.emit_library_updated(LibraryUpdatedEvent::deleted(deleted_ids.clone()));
-    }
-
     // Phase 3: Cross-directory dedup
     let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::cross_directory_dedup(0, 0));
 
@@ -1102,14 +1132,19 @@ pub(crate) fn run_backfill_and_dedup(
         }
     }
 
-    // Emit deleted events for cross-directory dedup
-    if cross_directory_suppressed > 0 {
-        let _ = app_handle.emit_library_updated(LibraryUpdatedEvent::deleted(
-            deleted_ids[duplicates_merged as usize..].to_vec(),
+    let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::complete(total));
+
+    // Emit a single reconcile event with all deleted IDs and authoritative stats
+    if !deleted_ids.is_empty() {
+        let stats = library::get_library_stats(conn).map_err(|e| e.to_string())?;
+        let rev = revision::get_revision(conn).map_err(|e| e.to_string())?;
+        let _ = app_handle.emit_library_reconcile(LibraryReconcileEvent::dedup(
+            deleted_ids.clone(),
+            stats.total_tracks,
+            stats.total_duration as f64,
+            rev,
         ));
     }
-
-    let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::complete(total));
 
     Ok(ReconcileScanResult {
         backfilled,

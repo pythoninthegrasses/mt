@@ -9,12 +9,12 @@
  * recent, playlists) load all tracks in a single fetch.
  */
 
-import { library as libraryApi } from '../api/library.js';
+import { library as libraryApi } from "../api/library.js";
 import {
   buildCacheEntry,
   createCacheSaver,
   loadCacheFromSettings,
-} from '../utils/library-cache.js';
+} from "../utils/library-cache.js";
 import {
   applySectionData,
   backgroundRefreshLibrary,
@@ -26,19 +26,21 @@ import {
   removeFromQueue,
   removeTracksLocallyOp,
   scanPaths,
-} from '../utils/library-operations.js';
+} from "../utils/library-operations.js";
 
-const { listen } = window.__TAURI__?.event ?? { listen: () => Promise.resolve(() => {}) };
+const { listen } = window.__TAURI__?.event ?? {
+  listen: () => Promise.resolve(() => {}),
+};
 
 // Re-export for use in library-operations.js (they call store._updateCache etc.)
 export { applySectionData };
 
 export function createLibraryStore(Alpine) {
-  Alpine.store('library', {
+  Alpine.store("library", {
     // Search and filter state
-    searchQuery: '',
-    sortBy: 'default',
-    sortOrder: 'asc',
+    searchQuery: "",
+    sortBy: "default",
+    sortOrder: "asc",
     currentSection: getInitialSection(),
 
     // Loading state
@@ -75,7 +77,9 @@ export function createLibraryStore(Alpine) {
 
     async init() {
       this._saveCache = createCacheSaver(window.settings);
-      const { cache, loaded: hasCachedData } = loadCacheFromSettings(window.settings);
+      const { cache, loaded: hasCachedData } = loadCacheFromSettings(
+        window.settings,
+      );
 
       if (hasCachedData) {
         this._sectionCache = cache;
@@ -84,7 +88,7 @@ export function createLibraryStore(Alpine) {
           this.totalTracks = cached.totalTracks;
           this.totalDuration = cached.totalDuration;
           this._lastLoadedSection = this.currentSection;
-          console.log('[library] showing cached summary on init:', {
+          console.log("[library] showing cached summary on init:", {
             section: this.currentSection,
             totalTracks: cached.totalTracks,
           });
@@ -96,16 +100,25 @@ export function createLibraryStore(Alpine) {
     },
 
     async _setupWatchedFolderListener() {
-      this._watchedFolderListener = await listen('watched-folder:results', (event) => {
-        const { added, updated, deleted } = event.payload || {};
-        console.log('[library] watched-folder:results', { added, updated, deleted });
+      this._watchedFolderListener = await listen(
+        "watched-folder:results",
+        (event) => {
+          const { added, updated, deleted } = event.payload || {};
+          console.log("[library] watched-folder:results", {
+            added,
+            updated,
+            deleted,
+          });
 
-        if (added > 0 || updated > 0 || deleted > 0) {
-          console.log('[library] Reloading library after watched folder scan');
-          this._clearCache();
-          this.load({ forceReload: true });
-        }
-      });
+          if (added > 0 || updated > 0 || deleted > 0) {
+            console.log(
+              "[library] Reloading library after watched folder scan",
+            );
+            this._clearCache();
+            this.load({ forceReload: true });
+          }
+        },
+      );
     },
 
     _updateCache(section, data) {
@@ -137,10 +150,10 @@ export function createLibraryStore(Alpine) {
     _clearCache(section = null) {
       if (section) {
         delete this._sectionCache[section];
-        console.log('[library] cache cleared for section:', section);
+        console.log("[library] cache cleared for section:", section);
       } else {
         this._sectionCache = {};
-        console.log('[library] cache cleared (all sections)');
+        console.log("[library] cache cleared (all sections)");
       }
       this._persistCache();
     },
@@ -175,19 +188,21 @@ export function createLibraryStore(Alpine) {
 
       try {
         const sortKeyMap = {
-          default: 'artist',
-          index: 'track_number',
-          dateAdded: 'added_date',
-          lastPlayed: 'last_played',
-          playCount: 'play_count',
-          year: 'date',
-          genre: 'genre',
-          trackTotal: 'track_total',
-          discNumber: 'disc_number',
+          default: "artist",
+          index: "track_number",
+          dateAdded: "added_date",
+          lastPlayed: "last_played",
+          playCount: "play_count",
+          year: "date",
+          genre: "genre",
+          trackTotal: "track_total",
+          discNumber: "disc_number",
         };
 
-        const uiStore = Alpine.store('ui');
-        const ignoreWords = uiStore.sortIgnoreWords ? uiStore.sortIgnoreWordsList : null;
+        const uiStore = Alpine.store("ui");
+        const ignoreWords = uiStore.sortIgnoreWords
+          ? uiStore.sortIgnoreWordsList
+          : null;
 
         const data = await libraryApi.getTracks({
           search: this.searchQuery.trim() || null,
@@ -211,13 +226,16 @@ export function createLibraryStore(Alpine) {
         // Trigger Alpine reactivity by incrementing version
         this._dataVersion++;
 
-        console.log('[library] page loaded:', {
+        console.log("[library] page loaded:", {
           pageIndex,
           trackCount: tracks.length,
           totalPages: Math.ceil(this.totalTracks / this._pageSize),
         });
       } catch (error) {
-        console.error('[library] page fetch failed:', { pageIndex, error: error.message });
+        console.error("[library] page fetch failed:", {
+          pageIndex,
+          error: error.message,
+        });
       } finally {
         if (this._loadGeneration === gen) {
           delete this._loadingPages[pageIndex];
@@ -308,22 +326,24 @@ export function createLibraryStore(Alpine) {
 
     _getSortParams() {
       const sortKeyMap = {
-        default: 'artist',
-        index: 'track_number',
-        dateAdded: 'added_date',
-        lastPlayed: 'last_played',
-        playCount: 'play_count',
-        year: 'date',
-        genre: 'genre',
-        trackTotal: 'track_total',
-        discNumber: 'disc_number',
+        default: "artist",
+        index: "track_number",
+        dateAdded: "added_date",
+        lastPlayed: "last_played",
+        playCount: "play_count",
+        year: "date",
+        genre: "genre",
+        trackTotal: "track_total",
+        discNumber: "disc_number",
       };
-      const uiStore = Alpine.store('ui');
+      const uiStore = Alpine.store("ui");
       return {
         search: this.searchQuery.trim() || null,
         sort: sortKeyMap[this.sortBy] || this.sortBy,
         order: this.sortOrder,
-        ignoreWords: uiStore.sortIgnoreWords ? uiStore.sortIgnoreWordsList : null,
+        ignoreWords: uiStore.sortIgnoreWords
+          ? uiStore.sortIgnoreWordsList
+          : null,
       };
     },
 
@@ -363,40 +383,41 @@ export function createLibraryStore(Alpine) {
     },
 
     loadFavorites() {
-      return this._loadSection('liked', null);
+      return this._loadSection("liked", null);
     },
 
     _backgroundRefreshFavorites() {
       // Preserve original matching: currentSection === 'liked' OR _lastLoadedSection === 'liked'
-      const section = (this.currentSection === 'liked' || this._lastLoadedSection === 'liked')
-        ? 'liked'
-        : null;
+      const section =
+        this.currentSection === "liked" || this._lastLoadedSection === "liked"
+          ? "liked"
+          : null;
       if (!section) return;
-      return this._backgroundRefreshSection('liked', null);
+      return this._backgroundRefreshSection("liked", null);
     },
 
     loadRecentlyPlayed(days = 14) {
-      return this._loadSection('recent', null, { days });
+      return this._loadSection("recent", null, { days });
     },
 
     _backgroundRefreshRecentlyPlayed(days = 14) {
-      return this._backgroundRefreshSection('recent', null, { days });
+      return this._backgroundRefreshSection("recent", null, { days });
     },
 
     loadRecentlyAdded(days = 14) {
-      return this._loadSection('added', null, { days });
+      return this._loadSection("added", null, { days });
     },
 
     _backgroundRefreshRecentlyAdded(days = 14) {
-      return this._backgroundRefreshSection('added', null, { days });
+      return this._backgroundRefreshSection("added", null, { days });
     },
 
     loadTop25() {
-      return this._loadSection('top25', null);
+      return this._loadSection("top25", null);
     },
 
     _backgroundRefreshTop25() {
-      return this._backgroundRefreshSection('top25', null);
+      return this._backgroundRefreshSection("top25", null);
     },
 
     loadPlaylist(playlistId) {
@@ -411,19 +432,19 @@ export function createLibraryStore(Alpine) {
         };
         this._persistCache();
 
-        console.log('[navigation]', 'load_playlist_complete', {
+        console.log("[navigation]", "load_playlist_complete", {
           playlistId,
           trackCount: this.filteredTracks.length,
         });
         return data;
       };
 
-      console.log('[navigation]', 'load_playlist', { playlistId });
+      console.log("[navigation]", "load_playlist", { playlistId });
 
       // The unified endpoint returns flat Track objects for playlists
       return this._loadSection(section, null, {
         onSuccess: cachePlaylist,
-        logTag: 'navigation',
+        logTag: "navigation",
       });
     },
 
@@ -448,17 +469,19 @@ export function createLibraryStore(Alpine) {
     // -----------------------------------------------------------------------
 
     setSection(section) {
-      console.log('[navigation]', 'switch_section', {
+      console.log("[navigation]", "switch_section", {
         previousSection: this.currentSection,
         newSection: section,
       });
 
       this.currentSection = section;
-      window.dispatchEvent(new CustomEvent('mt:section-change', { detail: { section } }));
+      window.dispatchEvent(
+        new CustomEvent("mt:section-change", { detail: { section } }),
+      );
     },
 
     refreshIfLikedSongs() {
-      if (this.currentSection === 'liked') {
+      if (this.currentSection === "liked") {
         this.loadFavorites();
       }
     },
@@ -482,13 +505,13 @@ export function createLibraryStore(Alpine) {
     },
 
     setSortBy(field) {
-      console.log('[library]', 'setSortBy', { field });
+      console.log("[library]", "setSortBy", { field });
 
       if (this.sortBy === field) {
-        this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+        this.sortOrder = this.sortOrder === "asc" ? "desc" : "asc";
       } else {
         this.sortBy = field;
-        this.sortOrder = 'asc';
+        this.sortOrder = "asc";
       }
 
       this.load({ forceReload: true });
@@ -518,12 +541,34 @@ export function createLibraryStore(Alpine) {
       return removeFromQueue(Alpine, idSet);
     },
 
+    // Filter track IDs from the current view without recomputing totals.
+    // Authoritative totals come from the backend reconcile event.
+    _removeFromView(idSet) {
+      if (this._sectionTracks) {
+        const newTracks = this._sectionTracks.filter((t) => !idSet.has(t.id));
+        window.Alpine.disableEffectScheduling(() => {
+          this._setSectionTracks(newTracks);
+          this._dataVersion++;
+        });
+      } else {
+        for (const [pageIdx, page] of Object.entries(this._trackPages)) {
+          this._trackPages[pageIdx] = page.filter((t) => !idSet.has(t.id));
+        }
+        this._dataVersion++;
+      }
+      this._clearCache();
+    },
+
     async remove(trackId) {
       try {
+        // Optimistic visual removal; reconcile event will provide authoritative totals
+        this._removeFromView(new Set([trackId]));
+        this._removeFromQueue(new Set([trackId]));
         await libraryApi.deleteTrack(trackId);
-        this.removeTracksLocally([trackId]);
       } catch (error) {
-        console.error('Failed to remove track:', error);
+        console.error("Failed to remove track:", error);
+        // Rollback: re-fetch from backend
+        this.fetchTracks();
         throw error;
       }
     },
@@ -546,7 +591,7 @@ export function createLibraryStore(Alpine) {
       try {
         return await libraryApi.getTrack(trackId);
       } catch (error) {
-        console.error('[library] getTrackAsync failed:', error);
+        console.error("[library] getTrackAsync failed:", error);
         return null;
       }
     },
@@ -570,7 +615,7 @@ export function createLibraryStore(Alpine) {
 
         return offset;
       } catch (error) {
-        console.error('[library] _jumpToPrefix failed:', error);
+        console.error("[library] _jumpToPrefix failed:", error);
         return null;
       }
     },
@@ -580,7 +625,7 @@ export function createLibraryStore(Alpine) {
     // -----------------------------------------------------------------------
 
     async addToQueue(track, playNow = false) {
-      await Alpine.store('queue').add(track, playNow);
+      await Alpine.store("queue").add(track, playNow);
     },
 
     async addAllToQueue(playNow = false) {
@@ -588,11 +633,11 @@ export function createLibraryStore(Alpine) {
       if (this._isPaginated() && !this._allPagesLoaded) {
         await this._loadAllPages();
       }
-      await Alpine.store('queue').add(this.filteredTracks, playNow);
+      await Alpine.store("queue").add(this.filteredTracks, playNow);
     },
 
     async playNow(track) {
-      const queue = Alpine.store('queue');
+      const queue = Alpine.store("queue");
       await queue.clear();
       await queue.add(track, true);
     },
@@ -633,7 +678,9 @@ export function createLibraryStore(Alpine) {
         if (updatedTrack) {
           // Update track in the appropriate storage
           if (this._sectionTracks) {
-            const index = this._sectionTracks.findIndex((t) => t.id === trackId);
+            const index = this._sectionTracks.findIndex(
+              (t) => t.id === trackId,
+            );
             if (index >= 0) {
               this._sectionTracks[index] = updatedTrack;
               this._dataVersion++;
@@ -650,7 +697,7 @@ export function createLibraryStore(Alpine) {
           }
         }
       } catch (error) {
-        console.error('[library] Failed to rescan track:', error);
+        console.error("[library] Failed to rescan track:", error);
       }
     },
 
@@ -665,7 +712,7 @@ export function createLibraryStore(Alpine) {
         this.scanProgress = Math.min(99, scanned);
       }
 
-      console.log('[library] scan progress:', {
+      console.log("[library] scan progress:", {
         jobId,
         status,
         scanned,

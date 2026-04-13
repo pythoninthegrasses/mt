@@ -17,10 +17,11 @@ use tauri::{AppHandle, Emitter, State};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
+use crate::db::revision;
 use crate::db::{
     Database, TrackMetadata, WatchedFolder as DbWatchedFolder, library, removed, watched,
 };
-use crate::events::{EventEmitter, LibraryUpdatedEvent, ScanCompleteEvent, ScanProgressEvent};
+use crate::events::{EventEmitter, LibraryReconcileEvent, ScanCompleteEvent, ScanProgressEvent};
 use crate::scanner::ExtractedMetadata;
 use crate::scanner::fingerprint::{FileFingerprint, compute_content_hash};
 use crate::scanner::scan::{ProgressCallback, scan_2phase};
@@ -684,11 +685,18 @@ impl WatcherManager {
             },
         );
 
-        // Emit a single library:updated event covering all changes.
-        // Spacedrive pattern: coalesce multiple change types into one event to avoid
-        // triggering multiple frontend reloads (each event causes a full data refresh).
+        // Emit a reconcile event with authoritative stats covering all changes.
         if added > 0 || updated > 0 || deleted > 0 {
-            let _ = app.emit_library_updated(LibraryUpdatedEvent::added(vec![]));
+            if let Ok(conn) = db.conn() {
+                let stats = crate::db::library::get_library_stats(&conn).unwrap_or_default();
+                let rev = revision::get_revision(&conn).unwrap_or(0);
+                let _ = app.emit_library_reconcile(LibraryReconcileEvent::scan_complete(
+                    vec![],
+                    stats.total_tracks,
+                    stats.total_duration as f64,
+                    rev,
+                ));
+            }
         }
 
         let _ = app.emit(
