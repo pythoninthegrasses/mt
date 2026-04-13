@@ -23,6 +23,7 @@ pub struct LibraryUpdatedEvent {
 impl LibraryUpdatedEvent {
     pub const EVENT_NAME: &'static str = "library:updated";
 
+    #[allow(dead_code)]
     pub(crate) fn added(track_ids: Vec<i64>) -> Self {
         Self {
             action: "added".to_string(),
@@ -37,6 +38,7 @@ impl LibraryUpdatedEvent {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn deleted(track_ids: Vec<i64>) -> Self {
         Self {
             action: "deleted".to_string(),
@@ -445,6 +447,102 @@ impl ReconcileProgressEvent {
 }
 
 // ============================================
+// Library Reconcile Events
+// ============================================
+
+/// Authoritative delta emitted after any library mutation.
+/// The frontend applies these instead of computing local state.
+#[derive(Clone, Debug, Serialize)]
+pub struct LibraryReconcileEvent {
+    /// What caused this reconcile: "delete", "scan_complete", "dedup", "favorite_add", "favorite_remove"
+    pub mutation: String,
+    /// Which frontend sections need refresh: ["all"], ["liked"], ["all", "liked"], etc.
+    pub affected_sections: Vec<String>,
+    /// Track IDs removed (empty for scan_complete)
+    pub removed_ids: Vec<i64>,
+    /// Track IDs added (empty for delete/dedup)
+    pub added_ids: Vec<i64>,
+    /// Authoritative total track count from DB after mutation
+    pub total_tracks: i64,
+    /// Authoritative total duration (seconds) from DB after mutation
+    pub total_duration: f64,
+    /// Monotonic revision from library_revision table
+    pub revision: i64,
+}
+
+impl LibraryReconcileEvent {
+    pub const EVENT_NAME: &'static str = "library:reconcile";
+
+    pub(crate) fn delete(
+        removed_ids: Vec<i64>,
+        total_tracks: i64,
+        total_duration: f64,
+        revision: i64,
+    ) -> Self {
+        Self {
+            mutation: "delete".to_string(),
+            affected_sections: vec!["all".to_string()],
+            removed_ids,
+            added_ids: vec![],
+            total_tracks,
+            total_duration,
+            revision,
+        }
+    }
+
+    pub(crate) fn scan_complete(
+        added_ids: Vec<i64>,
+        total_tracks: i64,
+        total_duration: f64,
+        revision: i64,
+    ) -> Self {
+        Self {
+            mutation: "scan_complete".to_string(),
+            affected_sections: vec!["all".to_string(), "added".to_string()],
+            removed_ids: vec![],
+            added_ids,
+            total_tracks,
+            total_duration,
+            revision,
+        }
+    }
+
+    pub(crate) fn dedup(
+        removed_ids: Vec<i64>,
+        total_tracks: i64,
+        total_duration: f64,
+        revision: i64,
+    ) -> Self {
+        Self {
+            mutation: "dedup".to_string(),
+            affected_sections: vec!["all".to_string()],
+            removed_ids,
+            added_ids: vec![],
+            total_tracks,
+            total_duration,
+            revision,
+        }
+    }
+
+    pub(crate) fn favorite(
+        action: &str,
+        total_tracks: i64,
+        total_duration: f64,
+        revision: i64,
+    ) -> Self {
+        Self {
+            mutation: format!("favorite_{}", action),
+            affected_sections: vec!["liked".to_string()],
+            removed_ids: vec![],
+            added_ids: vec![],
+            total_tracks,
+            total_duration,
+            revision,
+        }
+    }
+}
+
+// ============================================
 // Helper trait for emitting events
 // ============================================
 
@@ -460,6 +558,7 @@ pub trait EventEmitter {
     #[allow(dead_code)]
     fn emit_settings_updated(&self, event: SettingsUpdatedEvent) -> Result<(), String>;
     fn emit_reconcile_progress(&self, event: ReconcileProgressEvent) -> Result<(), String>;
+    fn emit_library_reconcile(&self, event: LibraryReconcileEvent) -> Result<(), String>;
 }
 
 impl EventEmitter for tauri::AppHandle {
@@ -514,6 +613,12 @@ impl EventEmitter for tauri::AppHandle {
     fn emit_reconcile_progress(&self, event: ReconcileProgressEvent) -> Result<(), String> {
         use tauri::Emitter;
         self.emit(ReconcileProgressEvent::EVENT_NAME, event)
+            .map_err(|e| e.to_string())
+    }
+
+    fn emit_library_reconcile(&self, event: LibraryReconcileEvent) -> Result<(), String> {
+        use tauri::Emitter;
+        self.emit(LibraryReconcileEvent::EVENT_NAME, event)
             .map_err(|e| e.to_string())
     }
 }
@@ -1074,5 +1179,73 @@ mod tests {
 
         let debug = format!("{:?}", FavoritesUpdatedEvent::added(1));
         assert!(debug.contains("FavoritesUpdatedEvent"));
+    }
+
+    // ==================== LibraryReconcileEvent Tests ====================
+
+    #[test]
+    fn test_library_reconcile_event_serialization() {
+        let event = LibraryReconcileEvent::delete(vec![1, 2, 3], 100, 5400.5, 42);
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"mutation\":\"delete\""));
+        assert!(json.contains("\"removed_ids\":[1,2,3]"));
+        assert!(json.contains("\"total_tracks\":100"));
+        assert!(json.contains("\"revision\":42"));
+        assert!(json.contains("\"affected_sections\":[\"all\"]"));
+    }
+
+    #[test]
+    fn test_library_reconcile_event_delete() {
+        let event = LibraryReconcileEvent::delete(vec![5, 10], 98, 5000.0, 7);
+        assert_eq!(event.mutation, "delete");
+        assert_eq!(event.removed_ids, vec![5, 10]);
+        assert!(event.added_ids.is_empty());
+        assert_eq!(event.total_tracks, 98);
+        assert_eq!(event.total_duration, 5000.0);
+        assert_eq!(event.revision, 7);
+        assert_eq!(event.affected_sections, vec!["all"]);
+    }
+
+    #[test]
+    fn test_library_reconcile_event_scan_complete() {
+        let event = LibraryReconcileEvent::scan_complete(vec![100, 101], 200, 10000.0, 15);
+        assert_eq!(event.mutation, "scan_complete");
+        assert!(event.removed_ids.is_empty());
+        assert_eq!(event.added_ids, vec![100, 101]);
+        assert_eq!(event.total_tracks, 200);
+        assert_eq!(event.affected_sections, vec!["all", "added"]);
+    }
+
+    #[test]
+    fn test_library_reconcile_event_dedup() {
+        let event = LibraryReconcileEvent::dedup(vec![3, 7], 48, 2400.0, 20);
+        assert_eq!(event.mutation, "dedup");
+        assert_eq!(event.removed_ids, vec![3, 7]);
+        assert!(event.added_ids.is_empty());
+        assert_eq!(event.total_tracks, 48);
+    }
+
+    #[test]
+    fn test_library_reconcile_event_favorite() {
+        let event = LibraryReconcileEvent::favorite("add", 50, 3000.0, 10);
+        assert_eq!(event.mutation, "favorite_add");
+        assert_eq!(event.affected_sections, vec!["liked"]);
+        assert!(event.removed_ids.is_empty());
+        assert!(event.added_ids.is_empty());
+    }
+
+    #[test]
+    fn test_library_reconcile_event_name() {
+        assert_eq!(LibraryReconcileEvent::EVENT_NAME, "library:reconcile");
+    }
+
+    #[test]
+    fn test_library_reconcile_event_clone() {
+        let event = LibraryReconcileEvent::delete(vec![1, 2], 50, 2500.0, 5);
+        let cloned = event.clone();
+        assert_eq!(event.mutation, cloned.mutation);
+        assert_eq!(event.removed_ids, cloned.removed_ids);
+        assert_eq!(event.total_tracks, cloned.total_tracks);
+        assert_eq!(event.revision, cloned.revision);
     }
 }

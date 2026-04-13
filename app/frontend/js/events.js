@@ -8,7 +8,11 @@
  * Event naming convention: `domain:action` (e.g., `library:updated`)
  */
 
-const { listen } = window.__TAURI__?.event ?? { listen: () => Promise.resolve(() => {}) };
+import { removeFromQueue } from "./utils/library-operations.js";
+
+const { listen } = window.__TAURI__?.event ?? {
+  listen: () => Promise.resolve(() => {}),
+};
 
 // Store unlisten functions for cleanup
 const listeners = [];
@@ -18,23 +22,24 @@ const listeners = [];
  */
 export const Events = {
   // Library events
-  LIBRARY_UPDATED: 'library:updated',
-  SCAN_PROGRESS: 'library:scan-progress',
-  SCAN_COMPLETE: 'library:scan-complete',
+  LIBRARY_UPDATED: "library:updated",
+  LIBRARY_RECONCILE: "library:reconcile",
+  SCAN_PROGRESS: "library:scan-progress",
+  SCAN_COMPLETE: "library:scan-complete",
 
   // Queue events
-  QUEUE_UPDATED: 'queue:updated',
-  QUEUE_STATE_CHANGED: 'queue:state-changed',
+  QUEUE_UPDATED: "queue:updated",
+  QUEUE_STATE_CHANGED: "queue:state-changed",
 
   // Favorites events
-  FAVORITES_UPDATED: 'favorites:updated',
+  FAVORITES_UPDATED: "favorites:updated",
 
   // Playlist events
-  PLAYLISTS_UPDATED: 'playlists:updated',
+  PLAYLISTS_UPDATED: "playlists:updated",
 
   // Settings events (Tauri Store)
-  SETTINGS_CHANGED: 'settings://changed',
-  SETTINGS_RESET: 'settings://reset',
+  SETTINGS_CHANGED: "settings://changed",
+  SETTINGS_RESET: "settings://reset",
 };
 
 /**
@@ -66,16 +71,15 @@ function createLibraryUpdatedHandler(Alpine) {
 
   return (payload) => {
     const { action, track_ids } = payload;
-    const library = Alpine.store('library');
+    const library = Alpine.store("library");
 
     console.log(
       `[events] Library ${action}:`,
-      track_ids.length ? `${track_ids.length} tracks` : 'bulk update',
+      track_ids.length ? `${track_ids.length} tracks` : "bulk update",
     );
 
-    if (action === 'deleted' && track_ids.length > 0) {
-      library.removeTracksLocally(track_ids);
-    } else if (action === 'added' || action === 'modified' || action === 'deleted') {
+    // Deletions are handled by library:reconcile event with authoritative stats
+    if (action === "added" || action === "modified") {
       debouncedFetchTracks(library);
     }
   };
@@ -83,7 +87,7 @@ function createLibraryUpdatedHandler(Alpine) {
 
 function handleScanProgress(Alpine, payload) {
   const { job_id, status, scanned, found, errors, current_path } = payload;
-  const library = Alpine.store('library');
+  const library = Alpine.store("library");
 
   if (library.setScanProgress) {
     library.setScanProgress({
@@ -99,7 +103,7 @@ function handleScanProgress(Alpine, payload) {
 
 function handleScanComplete(Alpine, payload) {
   const { added, skipped, errors, duration_ms } = payload;
-  const library = Alpine.store('library');
+  const library = Alpine.store("library");
 
   console.log(
     `[events] Scan complete: ${added} added, ${skipped} skipped, ${errors} errors (${duration_ms}ms)`,
@@ -108,20 +112,20 @@ function handleScanComplete(Alpine, payload) {
   if (library.clearScanProgress) {
     library.clearScanProgress();
   }
-  library.fetchTracks();
+  // Track refresh is handled by library:reconcile event with authoritative stats
 }
 
 function createQueueUpdatedHandler(Alpine) {
   let queueReloadDebounce = null;
 
   return (payload) => {
-    console.log('[events] queue:updated', payload);
+    console.log("[events] queue:updated", payload);
 
-    const queue = Alpine.store('queue');
+    const queue = Alpine.store("queue");
     if (queue?._initializing || queue?._updating) {
       console.log(
-        '[events] Skipping queue reload during',
-        queue._initializing ? 'initialization' : 'active update',
+        "[events] Skipping queue reload during",
+        queue._initializing ? "initialization" : "active update",
       );
       return;
     }
@@ -131,7 +135,7 @@ function createQueueUpdatedHandler(Alpine) {
     }
 
     queueReloadDebounce = setTimeout(() => {
-      const queue = Alpine.store('queue');
+      const queue = Alpine.store("queue");
       if (queue && queue.load && !queue._initializing && !queue._updating) {
         queue.load();
       }
@@ -140,25 +144,73 @@ function createQueueUpdatedHandler(Alpine) {
 }
 
 function handleQueueStateChanged(Alpine, payload) {
-  console.log('[events] queue:state-changed', payload);
+  console.log("[events] queue:state-changed", payload);
 
-  const queue = Alpine.store('queue');
+  const queue = Alpine.store("queue");
   if (queue && !queue._initializing && !queue._updating) {
     queue.currentIndex = payload.current_index;
     queue.shuffle = payload.shuffle_enabled;
     queue.loop = payload.loop_mode;
   } else if (queue?._initializing || queue?._updating) {
     console.log(
-      '[events] Skipping queue state update during',
-      queue._initializing ? 'initialization' : 'active update',
+      "[events] Skipping queue state update during",
+      queue._initializing ? "initialization" : "active update",
     );
+  }
+}
+
+function handleLibraryReconcile(Alpine, payload) {
+  const {
+    mutation,
+    affected_sections,
+    removed_ids,
+    total_tracks,
+    total_duration,
+    revision,
+  } = payload;
+  const library = Alpine.store("library");
+
+  console.log(
+    `[events] Library reconcile (${mutation}): total=${total_tracks}, removed=${removed_ids.length}`,
+  );
+
+  // Apply authoritative totals from backend
+  window.Alpine.disableEffectScheduling(() => {
+    library.totalTracks = total_tracks;
+    library.totalDuration = total_duration;
+  });
+  library._lastRevision = revision;
+
+  if (
+    (mutation === "delete" || mutation === "dedup") &&
+    removed_ids.length > 0
+  ) {
+    // Targeted removal: filter IDs from local view, queue cleanup
+    const idSet = new Set(removed_ids);
+    library._removeFromView(idSet);
+    removeFromQueue(Alpine, idSet);
+  } else if (
+    mutation === "scan_complete" ||
+    mutation === "delete" ||
+    mutation === "dedup"
+  ) {
+    // Bulk change: full refetch
+    library.fetchTracks();
+  }
+
+  // Refresh if currently viewing an affected section
+  if (
+    affected_sections.includes("liked") &&
+    library.currentSection === "liked"
+  ) {
+    library.fetchTracks();
   }
 }
 
 function handleFavoritesUpdated(Alpine, payload) {
   const { action, track_id } = payload;
-  const library = Alpine.store('library');
-  const player = Alpine.store('player');
+  const library = Alpine.store("library");
+  const player = Alpine.store("player");
 
   console.log(`[events] Favorites ${action}: track ${track_id}`);
 
@@ -167,13 +219,13 @@ function handleFavoritesUpdated(Alpine, payload) {
   }
 
   if (player.currentTrack?.id === track_id) {
-    player.isFavorite = action === 'added';
+    player.isFavorite = action === "added";
   }
 }
 
 function handlePlaylistsUpdated(Alpine, payload) {
   const { action, playlist_id } = payload;
-  const library = Alpine.store('library');
+  const library = Alpine.store("library");
 
   console.log(`[events] Playlists ${action}: playlist ${playlist_id}`);
 
@@ -195,23 +247,23 @@ function handleSettingsChanged(Alpine, payload) {
 
   console.log(`[events] Settings changed: ${key} =`, value);
 
-  const ui = Alpine.store('ui');
-  const player = Alpine.store('player');
+  const ui = Alpine.store("ui");
+  const player = Alpine.store("player");
 
   switch (key) {
-    case 'volume':
-      if (player && typeof value === 'number') {
+    case "volume":
+      if (player && typeof value === "number") {
         player.volume = value;
       }
       break;
-    case 'theme':
-      if (ui && typeof value === 'string') {
+    case "theme":
+      if (ui && typeof value === "string") {
         ui.theme = value;
         ui.applyTheme();
       }
       break;
-    case 'sidebar_width':
-      if (ui && typeof value === 'number') {
+    case "sidebar_width":
+      if (ui && typeof value === "number") {
         ui.sidebarWidth = value;
       }
       break;
@@ -227,21 +279,32 @@ function handleSettingsChanged(Alpine, payload) {
  * @param {object} Alpine - Alpine.js instance
  */
 export async function initEventListeners(Alpine) {
-  console.log('[events] Initializing Tauri event listeners...');
+  console.log("[events] Initializing Tauri event listeners...");
 
   await subscribe(Events.LIBRARY_UPDATED, createLibraryUpdatedHandler(Alpine));
+  await subscribe(Events.LIBRARY_RECONCILE, (p) =>
+    handleLibraryReconcile(Alpine, p),
+  );
   await subscribe(Events.SCAN_PROGRESS, (p) => handleScanProgress(Alpine, p));
   await subscribe(Events.SCAN_COMPLETE, (p) => handleScanComplete(Alpine, p));
   await subscribe(Events.QUEUE_UPDATED, createQueueUpdatedHandler(Alpine));
-  await subscribe(Events.QUEUE_STATE_CHANGED, (p) => handleQueueStateChanged(Alpine, p));
-  await subscribe(Events.FAVORITES_UPDATED, (p) => handleFavoritesUpdated(Alpine, p));
-  await subscribe(Events.PLAYLISTS_UPDATED, (p) => handlePlaylistsUpdated(Alpine, p));
-  await subscribe(Events.SETTINGS_CHANGED, (p) => handleSettingsChanged(Alpine, p));
+  await subscribe(Events.QUEUE_STATE_CHANGED, (p) =>
+    handleQueueStateChanged(Alpine, p),
+  );
+  await subscribe(Events.FAVORITES_UPDATED, (p) =>
+    handleFavoritesUpdated(Alpine, p),
+  );
+  await subscribe(Events.PLAYLISTS_UPDATED, (p) =>
+    handlePlaylistsUpdated(Alpine, p),
+  );
+  await subscribe(Events.SETTINGS_CHANGED, (p) =>
+    handleSettingsChanged(Alpine, p),
+  );
   await subscribe(Events.SETTINGS_RESET, () => {
-    console.log('[events] Settings reset to defaults');
+    console.log("[events] Settings reset to defaults");
   });
 
-  console.log('[events] Tauri event listeners initialized');
+  console.log("[events] Tauri event listeners initialized");
 }
 
 /**
@@ -249,7 +312,7 @@ export async function initEventListeners(Alpine) {
  * Call this when the app is closing
  */
 export function cleanupEventListeners() {
-  console.log('[events] Cleaning up event listeners...');
+  console.log("[events] Cleaning up event listeners...");
   listeners.forEach((unlisten) => unlisten());
   listeners.length = 0;
 }
