@@ -155,7 +155,7 @@ export function createQueueStore(Alpine) {
      * @param {Object} result - QueueNavigationResult from backend
      * @returns {string} The action taken: 'play', 'stop', or 'seek_zero'
      */
-    async _applyNavigationResult(result) {
+    _applyNavigationResult(result) {
       if (!result) return 'stop';
 
       this._applySnapshot(result.snapshot);
@@ -393,7 +393,7 @@ export function createQueueStore(Alpine) {
      * @param {number} index - Index to play
      * @param {boolean} fromNavigation - If true, this is from backend navigation (history already handled)
      */
-    async playIndex(index, fromNavigation = false) {
+    async playIndex(index, _fromNavigation = false) {
       if (index < 0 || index >= this.items.length) return;
 
       this.currentIndex = index;
@@ -420,7 +420,7 @@ export function createQueueStore(Alpine) {
       this._updating = true;
       try {
         const result = await queueApi.playNextTrack();
-        const action = await this._applyNavigationResult(result);
+        const action = this._applyNavigationResult(result);
 
         if (action === 'stop') {
           Alpine.store('player').isPlaying = false;
@@ -446,7 +446,7 @@ export function createQueueStore(Alpine) {
         const player = Alpine.store('player');
         const currentTimeMs = player.currentTime || 0;
         const result = await queueApi.playPreviousTrack(currentTimeMs);
-        const action = await this._applyNavigationResult(result);
+        const action = this._applyNavigationResult(result);
 
         if (action === 'seek_zero') {
           await player.seek(0);
@@ -468,7 +468,7 @@ export function createQueueStore(Alpine) {
       this._updating = true;
       try {
         const result = await queueApi.skipNext();
-        const action = await this._applyNavigationResult(result);
+        const action = this._applyNavigationResult(result);
 
         if (action === 'stop') {
           Alpine.store('player').isPlaying = false;
@@ -492,7 +492,7 @@ export function createQueueStore(Alpine) {
         const player = Alpine.store('player');
         const currentTimeMs = player.currentTime || 0;
         const result = await queueApi.skipPrevious(currentTimeMs);
-        const action = await this._applyNavigationResult(result);
+        const action = this._applyNavigationResult(result);
 
         if (action === 'seek_zero') {
           await player.seek(0);
