@@ -176,6 +176,32 @@ export function createPlayerStore(Alpine) {
       }
     },
 
+    /**
+     * Update player UI state after the backend has already started playback.
+     * Called by queue-builder when play-context handles both queue install
+     * and audio load-and-play in a single IPC round-trip.
+     * @param {Object} track - Track metadata from backend response
+     * @param {number} durationMs - Duration in ms from the audio engine
+     */
+    async updateTrackState(track, durationMs) {
+      // Increment request ID to invalidate any pending playTrack
+      ++this._playRequestId;
+
+      const trackDurationMs = track.duration ? Math.round(track.duration * 1000) : 0;
+      const finalDuration = (durationMs > 0 ? durationMs : trackDurationMs) || 0;
+
+      this.currentTrack = { ...track, duration: finalDuration };
+      this.duration = finalDuration;
+      this.currentTime = 0;
+      this.progress = 0;
+      this.isPlaying = true;
+
+      await this.checkFavoriteStatus();
+      await this.loadArtwork();
+      await this._updateNowPlayingMetadata();
+      await this._updateNowPlayingState();
+    },
+
     async pause() {
       console.log('[playback]', 'pause', {
         trackId: this.currentTrack?.id,

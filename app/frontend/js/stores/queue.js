@@ -38,9 +38,6 @@ export function createQueueStore(Alpine) {
     // Flag to prevent event listener from overriding during queue operations
     _updating: false,
 
-    // Promise tracking background queue build (set by queue-builder, awaited by playNextTracks)
-    _buildQueuePromise: null,
-
     // Track IDs added via "Play Next" - these are pinned after the current track during shuffle
     _playNextTrackIds: new Set(),
 
@@ -281,11 +278,6 @@ export function createQueueStore(Alpine) {
     async playNextTracks(tracks) {
       const tracksArray = Array.isArray(tracks) ? tracks : [tracks];
       if (tracksArray.length === 0) return;
-
-      // Wait for any background queue build to complete before inserting
-      if (this._buildQueuePromise) {
-        await this._buildQueuePromise;
-      }
 
       // Move semantics: remove existing copies from queue before re-inserting at play-next position.
       // This handles the case where the full library is in the queue and the user

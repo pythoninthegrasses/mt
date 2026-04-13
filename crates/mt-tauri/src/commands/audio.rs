@@ -66,6 +66,24 @@ impl AudioState {
     fn send_command(&self, cmd: AudioCommand) {
         let _ = self.sender.send(cmd);
     }
+
+    /// Load and start playback of a track.
+    ///
+    /// Resolves network-cached paths, then sends LoadAndPlay to the audio
+    /// thread and blocks until it responds.  Callable from other commands
+    /// without going through the Tauri invoke boundary.
+    pub(crate) fn load_and_play(
+        &self,
+        path: &str,
+        track_id: Option<i64>,
+        cache: &NetworkFileCache,
+        app: &AppHandle,
+    ) -> Result<TrackInfo, String> {
+        let resolved = resolve_cached_path_inner(path, cache, app);
+        let (tx, rx) = mpsc::channel();
+        self.send_command(AudioCommand::LoadAndPlay(resolved, track_id, tx));
+        rx.recv().map_err(|_| "Channel closed".to_string())?
+    }
 }
 
 fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
@@ -281,6 +299,12 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
 /// copy the file to the local cache and return the cached path.
 /// Otherwise return the original path unchanged.
 fn resolve_cached_path(path: &str, cache: &State<NetworkFileCache>, app: &AppHandle) -> String {
+    resolve_cached_path_inner(path, cache, app)
+}
+
+/// Inner implementation that accepts `&NetworkFileCache` directly,
+/// callable from other commands without a `State` wrapper.
+fn resolve_cached_path_inner(path: &str, cache: &NetworkFileCache, app: &AppHandle) -> String {
     let enabled = app
         .store("settings.json")
         .ok()

@@ -334,6 +334,38 @@ pub(crate) async fn scan_paths_to_library(
         let _ = app.emit_library_updated(LibraryUpdatedEvent::modified(vec![]));
     }
 
+    // Background backfill: compute content_hash for any tracks that are missing
+    // it, then run dedup. This bridges the gap between the fast initial scan
+    // (which defers hashing) and the manual reconcile scan.
+    let backfill_db = db.inner().clone();
+    let backfill_app = app.clone();
+    tokio::task::spawn_blocking(move || {
+        let conn = match backfill_db.conn() {
+            Ok(c) => c,
+            Err(e) => {
+                info!(error = %e, "Background backfill: failed to get DB connection");
+                return;
+            }
+        };
+        match crate::library::commands::run_backfill_and_dedup(&conn, &backfill_app) {
+            Ok(r) => {
+                if r.backfilled > 0 || r.duplicates_merged > 0 || r.cross_directory_suppressed > 0 {
+                    info!(
+                        backfilled = r.backfilled,
+                        duplicates_merged = r.duplicates_merged,
+                        cross_directory_suppressed = r.cross_directory_suppressed,
+                        reinstated = r.reinstated,
+                        errors = r.errors,
+                        "Background backfill complete"
+                    );
+                }
+            }
+            Err(e) => {
+                info!(error = %e, "Background backfill failed");
+            }
+        }
+    });
+
     Ok(ScanResultResponse::from(&scan_result))
 }
 

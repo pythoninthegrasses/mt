@@ -7,6 +7,8 @@ use rand::rng;
 use rand::seq::SliceRandom;
 use tauri::{AppHandle, State};
 
+use crate::cache::NetworkFileCache;
+use crate::commands::audio::AudioState;
 use crate::db::{Database, QueueItem, QueueState, Track, queue};
 use crate::events::{EventEmitter, QueueStateChangedEvent, QueueUpdatedEvent};
 
@@ -313,6 +315,63 @@ pub(crate) fn queue_set_loop(
     Ok(())
 }
 
+/// Response for atomic play-context operations
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct PlayContextResponse {
+    pub items: Vec<QueueItem>,
+    pub current_index: i64,
+    pub track: Track,
+    pub shuffle_enabled: bool,
+    /// Duration in milliseconds from the audio engine (more accurate than DB metadata)
+    pub duration_ms: u64,
+}
+
+/// Atomically replace the queue with a new play context and start playback.
+///
+/// Clears the queue, installs all tracks (rotated or shuffled), sets queue
+/// state, triggers audio playback on the start track, and emits queue events
+/// — all in a single IPC round-trip.
+#[tracing::instrument(skip(app, db, audio, cache))]
+#[tauri::command]
+pub(crate) fn queue_play_context(
+    app: AppHandle,
+    db: State<'_, Database>,
+    audio: State<'_, AudioState>,
+    cache: State<'_, NetworkFileCache>,
+    track_ids: Vec<i64>,
+    start_index: i64,
+    shuffle: bool,
+) -> Result<PlayContextResponse, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+
+    // Atomically install queue (clear + insert + state update)
+    let result =
+        queue::play_context(&conn, &track_ids, start_index, shuffle).map_err(|e| e.to_string())?;
+
+    let track = result.current_track.clone();
+
+    // Trigger audio playback on the start track
+    let track_info = audio.load_and_play(&track.filepath, Some(track.id), &cache, &app)?;
+
+    // Emit queue events (reuse existing event types)
+    let _ = app.emit_queue_updated(QueueUpdatedEvent::cleared());
+    let _ = app.emit_queue_state_changed(QueueStateChangedEvent::new(
+        0,
+        shuffle,
+        queue::get_queue_state(&conn)
+            .map(|s| s.loop_mode)
+            .unwrap_or_else(|_| "none".to_string()),
+    ));
+
+    Ok(PlayContextResponse {
+        items: result.items,
+        current_index: 0,
+        track,
+        shuffle_enabled: shuffle,
+        duration_ms: track_info.duration_ms,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -573,5 +632,100 @@ mod tests {
         // This test verifies the response structure can hold mismatched values
         // (validation should happen at the command level, not response level)
         assert_eq!(response.added, 3);
+    }
+
+    // ==================== PlayContextResponse Tests ====================
+
+    #[test]
+    fn test_play_context_response_serialization() {
+        let track = Track {
+            id: 1,
+            filepath: "/music/track1.mp3".to_string(),
+            title: Some("Track 1".to_string()),
+            artist: None,
+            album: None,
+            album_artist: None,
+            track_number: None,
+            track_total: None,
+            disc_number: None,
+            disc_total: None,
+            date: None,
+            genre: None,
+            duration: None,
+            file_size: 0,
+            play_count: 0,
+            last_played: None,
+            added_date: None,
+            missing: false,
+            last_seen_at: None,
+            file_mtime_ns: None,
+            file_ctime_ns: None,
+            file_inode: None,
+            content_hash: None,
+        };
+
+        let response = PlayContextResponse {
+            items: vec![],
+            current_index: 0,
+            track: track.clone(),
+            shuffle_enabled: true,
+            duration_ms: 180000,
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"current_index\":0"));
+        assert!(json.contains("\"shuffle_enabled\":true"));
+        assert!(json.contains("track1.mp3"));
+    }
+
+    #[test]
+    fn test_play_context_response_deserialization() {
+        let json = r#"{"items":[],"current_index":5,"track":{"id":1,"filepath":"/a.mp3","play_count":0,"missing":false,"file_size":0},"shuffle_enabled":false,"duration_ms":240000}"#;
+        let response: PlayContextResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.current_index, 5);
+        assert!(!response.shuffle_enabled);
+        assert_eq!(response.track.filepath, "/a.mp3");
+    }
+
+    #[test]
+    fn test_play_context_response_clone() {
+        let track = Track {
+            id: 1,
+            filepath: "/music/track1.mp3".to_string(),
+            title: Some("Track 1".to_string()),
+            artist: None,
+            album: None,
+            album_artist: None,
+            track_number: None,
+            track_total: None,
+            disc_number: None,
+            disc_total: None,
+            date: None,
+            genre: None,
+            duration: None,
+            file_size: 0,
+            play_count: 0,
+            last_played: None,
+            added_date: None,
+            missing: false,
+            last_seen_at: None,
+            file_mtime_ns: None,
+            file_ctime_ns: None,
+            file_inode: None,
+            content_hash: None,
+        };
+
+        let response = PlayContextResponse {
+            items: vec![],
+            current_index: 0,
+            track,
+            shuffle_enabled: false,
+            duration_ms: 0,
+        };
+
+        let cloned = response.clone();
+        assert_eq!(response.current_index, cloned.current_index);
+        assert_eq!(response.shuffle_enabled, cloned.shuffle_enabled);
+        assert_eq!(response.track.id, cloned.track.id);
     }
 }

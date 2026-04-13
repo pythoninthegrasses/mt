@@ -153,6 +153,31 @@ export const queue = {
     });
   },
 
+  /**
+   * Atomically replace the queue and start playback (single IPC round-trip).
+   * Clears the queue, installs all tracks (rotated or shuffled), triggers
+   * audio playback on the start track, and returns the new queue state.
+   * @param {number[]} trackIds - Track IDs in album/view order
+   * @param {number} startIndex - Index of the track to play first
+   * @param {boolean} shuffle - Whether to shuffle the queue
+   * @returns {Promise<{items: Array, current_index: number, track: Object, shuffle_enabled: boolean}>}
+   */
+  async playContext(trackIds, startIndex, shuffle) {
+    if (invoke) {
+      try {
+        return await invoke('queue_play_context', {
+          trackIds,
+          startIndex,
+          shuffle,
+        });
+      } catch (error) {
+        console.error('[api.queue.playContext] Tauri error:', error);
+        throw new ApiError(500, error.toString());
+      }
+    }
+    throw new ApiError(500, 'playContext not available in browser mode');
+  },
+
   save(state) {
     console.debug('Queue save (local only):', state);
   },

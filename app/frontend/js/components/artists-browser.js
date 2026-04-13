@@ -15,7 +15,6 @@ export function createArtistsBrowser(Alpine) {
     selectedArtist: null,
     artworkCache: {},
     contextMenu: null,
-    _buildQueueGeneration: 0,
 
     // Memoization cache
     _artistsVersion: -1,

@@ -565,13 +565,13 @@ describe('Queue Store - Property-Based Tests', () => {
     });
   });
 
-  describe('Build Queue + Play Next Invariants', () => {
+  describe('Play Next Invariants', () => {
     test.prop([
       trackListArbitrary,
       fc.array(trackArbitrary, { minLength: 1, maxLength: 5 }),
       fc.nat(),
     ])(
-      'playNextTracks inserts after currentIndex even when _buildQueuePromise is set',
+      'playNextTracks inserts after currentIndex',
       async (tracks, playNextTracks, rawIdx) => {
         fc.pre(tracks.length >= 2);
 
@@ -580,9 +580,6 @@ describe('Queue Store - Property-Based Tests', () => {
         const currentIdx = rawIdx % tracks.length;
         store.currentIndex = currentIdx;
         store._playNextOffset = 0;
-
-        // Set _buildQueuePromise to a resolved promise (simulating build just completed)
-        store._buildQueuePromise = Promise.resolve();
 
         const originalLength = store.items.length;
         const currentTrackId = store.items[currentIdx].id;
@@ -615,7 +612,7 @@ describe('Queue Store - Property-Based Tests', () => {
     );
 
     test.prop([trackListArbitrary, fc.array(trackArbitrary, { minLength: 1, maxLength: 5 })])(
-      'playNextTracks during build preserves all tracks',
+      'playNextTracks preserves all tracks',
       async (tracks, playNextTracks) => {
         fc.pre(tracks.length >= 1);
 
@@ -623,12 +620,6 @@ describe('Queue Store - Property-Based Tests', () => {
         store._originalOrder = [...tracks];
         store.currentIndex = 0;
         store._playNextOffset = 0;
-
-        // Simulate a deferred build promise
-        let resolvePromise;
-        store._buildQueuePromise = new Promise((resolve) => {
-          resolvePromise = resolve;
-        });
 
         const currentTrackId = tracks[0].id;
 
@@ -646,9 +637,7 @@ describe('Queue Store - Property-Based Tests', () => {
         }
         const expectedLength = tracks.length - removals + inserts;
 
-        const promise = store.playNextTracks(playNextTracks);
-        resolvePromise();
-        await promise;
+        await store.playNextTracks(playNextTracks);
 
         // Invariant: all play-next tracks present
         const resultIds = store.items.map((t) => t.id);
@@ -658,35 +647,6 @@ describe('Queue Store - Property-Based Tests', () => {
 
         // Invariant: total count matches simulated move-then-insert
         expect(store.items.length).toBe(expectedLength);
-      },
-    );
-
-    test.prop([trackListArbitrary])(
-      '_buildQueuePromise clears after resolution',
-      async (tracks) => {
-        fc.pre(tracks.length >= 1);
-
-        store.items = [...tracks];
-        store._originalOrder = [...tracks];
-        store.currentIndex = 0;
-        store._playNextOffset = 0;
-
-        // Set promise and resolve it
-        store._buildQueuePromise = Promise.resolve();
-
-        const newTrack = {
-          id: 99999,
-          title: 'New',
-          artist: 'A',
-          album: 'A',
-          duration: 1000,
-          filepath: '/new.mp3',
-        };
-        await store.playNextTracks([newTrack]);
-
-        // The store itself doesn't clear _buildQueuePromise - that's queue-builder's job
-        // But after resolution, playNextTracks should have completed successfully
-        expect(store.items.length).toBe(tracks.length + 1);
       },
     );
   });

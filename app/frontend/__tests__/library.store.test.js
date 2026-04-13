@@ -561,3 +561,97 @@ describe('Paginated Store - _isPaginated', () => {
     expect(store._isPaginated()).toBe(false);
   });
 });
+
+// -----------------------------------------------------------------------------
+// Tests: loadLibraryData — FOUC regression
+// -----------------------------------------------------------------------------
+
+describe('loadLibraryData - FOUC regression', () => {
+  let loadLibraryData;
+
+  beforeEach(async () => {
+    vi.resetModules();
+
+    // Mock the library API
+    vi.doMock('../js/api/library.js', () => ({
+      library: {
+        getCount: vi.fn().mockResolvedValue({ total: 50, total_duration: 3600 }),
+      },
+    }));
+
+    // Mock watched-folders (imported by library-operations but unused here)
+    vi.doMock('../js/utils/watched-folders.js', () => ({
+      promptToAddWatchedFolders: vi.fn(),
+    }));
+
+    // Provide window.Alpine.disableEffectScheduling
+    globalThis.window = globalThis.window || {};
+    globalThis.window.Alpine = {
+      disableEffectScheduling: (fn) => fn(),
+    };
+
+    const mod = await import('../js/utils/library-operations.js');
+    loadLibraryData = mod.loadLibraryData;
+  });
+
+  function createLoadStore() {
+    const store = createPaginatedStore(50);
+    // Simulate pre-existing data (as if "all" section was loaded before)
+    store.totalTracks = 1000;
+    store.totalDuration = 50000;
+    store._trackPages[0] = makeTracks(50);
+    store.currentSection = 'all';
+    store._lastLoadedSection = 'all';
+    store._sectionCache = {};
+    store._fetchPage = vi.fn().mockResolvedValue(undefined);
+    store._getFilterParams = () => ({});
+    store._updateCache = vi.fn();
+    return store;
+  }
+
+  it('zeroes totalTracks before async fetch to prevent empty placeholder rows', async () => {
+    const store = createLoadStore();
+    const statesDuringFetch = [];
+
+    // Capture state when _fetchPage is called (during the await)
+    store._fetchPage = vi.fn().mockImplementation(() => {
+      statesDuringFetch.push({
+        totalTracks: store.totalTracks,
+        loading: store.loading,
+        pagesEmpty: Object.keys(store._trackPages).length === 0,
+      });
+      return Promise.resolve();
+    });
+
+    await loadLibraryData(store);
+
+    // During fetch, totalTracks must be 0 so loading spinner shows
+    expect(statesDuringFetch).toHaveLength(1);
+    expect(statesDuringFetch[0].totalTracks).toBe(0);
+    expect(statesDuringFetch[0].loading).toBe(true);
+    expect(statesDuringFetch[0].pagesEmpty).toBe(true);
+
+    // After load completes, data is populated
+    expect(store.totalTracks).toBe(50);
+    expect(store.loading).toBe(false);
+  });
+
+  it('does not flash stale cached totalTracks when pages are empty', async () => {
+    const store = createLoadStore();
+    // Seed cache from a previous load
+    store._sectionCache = {
+      all: { totalTracks: 1000, totalDuration: 50000, timestamp: Date.now() },
+    };
+
+    const tracksSeenDuringFetch = [];
+    store._fetchPage = vi.fn().mockImplementation(() => {
+      tracksSeenDuringFetch.push(store.totalTracks);
+      return Promise.resolve();
+    });
+
+    await loadLibraryData(store);
+
+    // Even with cache, totalTracks should be 0 during fetch (not 1000)
+    expect(tracksSeenDuringFetch[0]).toBe(0);
+  });
+});

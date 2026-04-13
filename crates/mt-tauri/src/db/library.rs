@@ -1014,7 +1014,10 @@ pub(crate) fn get_tracks_needing_fingerprints(
     Ok(tracks)
 }
 
-/// Update a track's fingerprint (inode and content_hash)
+/// Update a track's fingerprint (inode and content_hash).
+///
+/// Only overwrites each column when a new value is provided. Passing `None`
+/// for either parameter preserves the existing value in the database.
 pub(crate) fn update_track_fingerprints(
     conn: &Connection,
     track_id: i64,
@@ -1022,7 +1025,10 @@ pub(crate) fn update_track_fingerprints(
     content_hash: Option<&str>,
 ) -> DbResult<bool> {
     let updated = conn.execute(
-        "UPDATE library SET file_inode = ?, content_hash = ? WHERE id = ?",
+        "UPDATE library
+         SET file_inode = COALESCE(?, file_inode),
+             content_hash = COALESCE(?, content_hash)
+         WHERE id = ?",
         params![inode.map(|v| v as i64), content_hash, track_id],
     )?;
     Ok(updated > 0)
@@ -2411,6 +2417,48 @@ mod tests {
         let track = get_track_by_id(&conn, id).unwrap().unwrap();
         assert_eq!(track.file_inode, Some(12345));
         assert_eq!(track.content_hash, Some("sha256:abc123".to_string()));
+    }
+
+    #[test]
+    fn test_update_track_fingerprints_preserves_existing_inode() {
+        let conn = setup_test_db();
+
+        let metadata = TrackMetadata {
+            title: Some("Test".to_string()),
+            file_inode: Some(12345),
+            content_hash: None,
+            ..Default::default()
+        };
+        let id = add_track(&conn, "/music/test.mp3", &metadata).unwrap();
+
+        // Update with content_hash only (inode = None should preserve existing)
+        let result = update_track_fingerprints(&conn, id, None, Some("sha256:abc123")).unwrap();
+        assert!(result);
+
+        let track = get_track_by_id(&conn, id).unwrap().unwrap();
+        assert_eq!(track.file_inode, Some(12345));
+        assert_eq!(track.content_hash, Some("sha256:abc123".to_string()));
+    }
+
+    #[test]
+    fn test_update_track_fingerprints_preserves_existing_hash() {
+        let conn = setup_test_db();
+
+        let metadata = TrackMetadata {
+            title: Some("Test".to_string()),
+            file_inode: None,
+            content_hash: Some("sha256:existing".to_string()),
+            ..Default::default()
+        };
+        let id = add_track(&conn, "/music/test.mp3", &metadata).unwrap();
+
+        // Update with inode only (content_hash = None should preserve existing)
+        let result = update_track_fingerprints(&conn, id, Some(99999), None).unwrap();
+        assert!(result);
+
+        let track = get_track_by_id(&conn, id).unwrap().unwrap();
+        assert_eq!(track.file_inode, Some(99999));
+        assert_eq!(track.content_hash, Some("sha256:existing".to_string()));
     }
 
     #[test]

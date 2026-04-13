@@ -4,7 +4,7 @@
 
 use rusqlite::{Connection, params};
 
-use crate::db::{DbResult, QueueItem, QueueState, Track, library::get_track_by_filepath};
+use crate::db::{DbError, DbResult, QueueItem, QueueState, Track, library::get_track_by_filepath};
 
 /// Get all items in the queue with track metadata
 pub(crate) fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
@@ -359,6 +359,156 @@ pub(crate) fn set_original_order_json(conn: &Connection, json: Option<String>) -
     Ok(())
 }
 
+/// Result of a play-context operation: the installed queue and the track to play.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) struct PlayContextResult {
+    pub items: Vec<QueueItem>,
+    pub current_track: Track,
+    pub shuffle_enabled: bool,
+    pub original_order_json: Option<String>,
+}
+
+/// Atomically replace the queue with a new play context.
+///
+/// Clears the queue, resolves track IDs to filepaths, orders them
+/// (rotated for sequential, Fisher-Yates shuffled for shuffle), inserts
+/// all tracks, and updates queue state — all in a single transaction.
+///
+/// Returns the installed queue items and the track at index 0 (to play).
+pub(crate) fn play_context(
+    conn: &Connection,
+    track_ids: &[i64],
+    start_index: i64,
+    shuffle: bool,
+) -> DbResult<PlayContextResult> {
+    use rand::rng;
+    use rand::seq::SliceRandom;
+
+    if track_ids.is_empty() {
+        return Err(DbError::NotFound("Empty track list".to_string()));
+    }
+
+    let len = track_ids.len() as i64;
+    if start_index < 0 || start_index >= len {
+        return Err(DbError::NotFound(format!(
+            "start_index {} out of bounds for {} tracks",
+            start_index, len
+        )));
+    }
+
+    let tx = conn.unchecked_transaction()?;
+
+    // Clear existing queue
+    tx.execute("DELETE FROM queue", [])?;
+
+    // Look up filepaths preserving input order
+    let placeholders = track_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT id, filepath FROM library WHERE id IN ({})",
+        placeholders
+    );
+    let mut stmt = tx.prepare(&sql)?;
+    let params_vec: Vec<&dyn rusqlite::ToSql> = track_ids
+        .iter()
+        .map(|id| id as &dyn rusqlite::ToSql)
+        .collect();
+    let track_map: std::collections::HashMap<i64, String> = stmt
+        .query_map(params_vec.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+    drop(stmt);
+
+    // Build ordered filepath list, skipping IDs not found in library
+    let resolved: Vec<(i64, String)> = track_ids
+        .iter()
+        .filter_map(|id| track_map.get(id).map(|fp| (*id, fp.clone())))
+        .collect();
+
+    if resolved.is_empty() {
+        tx.rollback().ok();
+        return Err(DbError::NotFound(
+            "No valid tracks found for given IDs".to_string(),
+        ));
+    }
+
+    // Adjust start_index if some tracks were filtered out
+    // Find the position of the original start track in the resolved list
+    let start_track_id = track_ids[start_index as usize];
+    let start_pos = resolved
+        .iter()
+        .position(|(id, _)| *id == start_track_id)
+        .ok_or_else(|| {
+            DbError::NotFound(format!(
+                "Start track {} not found in library",
+                start_track_id
+            ))
+        })?;
+
+    // Build the final ordered list
+    let mut ordered: Vec<(i64, String)>;
+    let original_order_json: Option<String>;
+
+    if shuffle {
+        // Save original order for unshuffle
+        let original_ids: Vec<i64> = resolved.iter().map(|(id, _)| *id).collect();
+        original_order_json = Some(serde_json::to_string(&original_ids).unwrap_or_default());
+
+        // Start track at index 0, shuffle the rest
+        let start_item = resolved[start_pos].clone();
+        let mut rest: Vec<(i64, String)> = resolved
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != start_pos)
+            .map(|(_, item)| item.clone())
+            .collect();
+        rest.shuffle(&mut rng());
+        ordered = Vec::with_capacity(resolved.len());
+        ordered.push(start_item);
+        ordered.extend(rest);
+    } else {
+        original_order_json = None;
+
+        // Rotate so start track is at index 0: [subsequent..., preceding...]
+        let mut rotated = Vec::with_capacity(resolved.len());
+        rotated.extend_from_slice(&resolved[start_pos..]);
+        rotated.extend_from_slice(&resolved[..start_pos]);
+        ordered = rotated;
+    }
+
+    // Insert all tracks into queue
+    for (_, filepath) in &ordered {
+        tx.execute("INSERT INTO queue (filepath) VALUES (?)", params![filepath])?;
+    }
+
+    // Update queue state
+    let current_state = get_queue_state(&tx)?;
+    let new_state = QueueState {
+        current_index: 0,
+        shuffle_enabled: shuffle,
+        loop_mode: current_state.loop_mode,
+        original_order_json: original_order_json.clone(),
+    };
+    set_queue_state(&tx, &new_state)?;
+
+    tx.commit()?;
+
+    // Read back the installed queue with full track metadata
+    let items = get_queue(conn)?;
+
+    // The track at index 0 is the one to play
+    let current_track = items
+        .first()
+        .map(|item| item.track.clone())
+        .ok_or_else(|| DbError::NotFound("Queue empty after insert".to_string()))?;
+
+    Ok(PlayContextResult {
+        items,
+        current_track,
+        shuffle_enabled: shuffle,
+        original_order_json,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -669,6 +819,206 @@ mod tests {
 
         let queue = get_queue(&conn).unwrap();
         assert!(queue.is_empty());
+    }
+
+    #[test]
+    fn test_play_context_sequential_rotation() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 5);
+
+        // Play from index 2 (track3) without shuffle
+        let result = play_context(&conn, &track_ids, 2, false).unwrap();
+
+        // Queue should be rotated: [track3, track4, track5, track1, track2]
+        assert_eq!(result.items.len(), 5);
+        assert_eq!(result.items[0].track.id, track_ids[2]);
+        assert_eq!(result.items[1].track.id, track_ids[3]);
+        assert_eq!(result.items[2].track.id, track_ids[4]);
+        assert_eq!(result.items[3].track.id, track_ids[0]);
+        assert_eq!(result.items[4].track.id, track_ids[1]);
+
+        // Current track is the one at index 0
+        assert_eq!(result.current_track.id, track_ids[2]);
+        assert!(!result.shuffle_enabled);
+        assert!(result.original_order_json.is_none());
+
+        // Queue state should reflect current_index=0, shuffle=false
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.current_index, 0);
+        assert!(!state.shuffle_enabled);
+    }
+
+    #[test]
+    fn test_play_context_sequential_first_track() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+
+        // Play from index 0 — no rotation needed
+        let result = play_context(&conn, &track_ids, 0, false).unwrap();
+
+        assert_eq!(result.items.len(), 3);
+        assert_eq!(result.items[0].track.id, track_ids[0]);
+        assert_eq!(result.items[1].track.id, track_ids[1]);
+        assert_eq!(result.items[2].track.id, track_ids[2]);
+    }
+
+    #[test]
+    fn test_play_context_sequential_last_track() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+
+        // Play from last index
+        let result = play_context(&conn, &track_ids, 2, false).unwrap();
+
+        assert_eq!(result.items.len(), 3);
+        assert_eq!(result.items[0].track.id, track_ids[2]);
+        assert_eq!(result.items[1].track.id, track_ids[0]);
+        assert_eq!(result.items[2].track.id, track_ids[1]);
+    }
+
+    #[test]
+    fn test_play_context_shuffle_current_at_index_zero() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 10);
+
+        let result = play_context(&conn, &track_ids, 3, true).unwrap();
+
+        // The clicked track (index 3) must be at position 0
+        assert_eq!(result.items.len(), 10);
+        assert_eq!(result.items[0].track.id, track_ids[3]);
+        assert!(result.shuffle_enabled);
+        assert!(result.original_order_json.is_some());
+
+        // All tracks must be present (no duplicates, no missing)
+        let mut ids: Vec<i64> = result.items.iter().map(|i| i.track.id).collect();
+        ids.sort();
+        let mut expected = track_ids.clone();
+        expected.sort();
+        assert_eq!(ids, expected);
+
+        // Queue state
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.current_index, 0);
+        assert!(state.shuffle_enabled);
+        assert!(state.original_order_json.is_some());
+    }
+
+    #[test]
+    fn test_play_context_single_track() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 1);
+
+        let result = play_context(&conn, &track_ids, 0, false).unwrap();
+
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.current_track.id, track_ids[0]);
+    }
+
+    #[test]
+    fn test_play_context_single_track_shuffle() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 1);
+
+        let result = play_context(&conn, &track_ids, 0, true).unwrap();
+
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0].track.id, track_ids[0]);
+        assert!(result.shuffle_enabled);
+    }
+
+    #[test]
+    fn test_play_context_empty_track_list() {
+        let conn = setup_test_db();
+
+        let result = play_context(&conn, &[], 0, false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_play_context_start_index_out_of_bounds() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+
+        let result = play_context(&conn, &track_ids, 5, false);
+        assert!(result.is_err());
+
+        let result = play_context(&conn, &track_ids, -1, false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_play_context_nonexistent_tracks_skipped() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+
+        // Mix real and fake IDs, start on a real one
+        let mixed = vec![track_ids[0], 9999, track_ids[1], 8888, track_ids[2]];
+        let result = play_context(&conn, &mixed, 0, false).unwrap();
+
+        // Only 3 real tracks should be in queue
+        assert_eq!(result.items.len(), 3);
+        assert_eq!(result.items[0].track.id, track_ids[0]);
+        assert_eq!(result.items[1].track.id, track_ids[1]);
+        assert_eq!(result.items[2].track.id, track_ids[2]);
+    }
+
+    #[test]
+    fn test_play_context_start_track_not_in_library() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 2);
+
+        // start_index points to a nonexistent track
+        let mixed = vec![9999, track_ids[0], track_ids[1]];
+        let result = play_context(&conn, &mixed, 0, false);
+
+        // Should error because the start track doesn't exist
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_play_context_clears_previous_queue() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 5);
+
+        // Add first 3 tracks to queue
+        add_to_queue(&conn, &track_ids[..3], None).unwrap();
+        assert_eq!(get_queue_length(&conn).unwrap(), 3);
+
+        // Play context with last 2 tracks — should clear the previous 3
+        let result = play_context(&conn, &track_ids[3..], 0, false).unwrap();
+        assert_eq!(result.items.len(), 2);
+        assert_eq!(get_queue_length(&conn).unwrap(), 2);
+    }
+
+    #[test]
+    fn test_play_context_preserves_loop_mode() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+
+        // Set loop mode before play_context
+        set_loop_mode(&conn, "all").unwrap();
+
+        let _result = play_context(&conn, &track_ids, 0, false).unwrap();
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.loop_mode, "all");
+    }
+
+    #[test]
+    fn test_play_context_concurrent_last_wins() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 6);
+
+        // First play context
+        play_context(&conn, &track_ids[..3], 0, false).unwrap();
+
+        // Second play context overwrites
+        let result = play_context(&conn, &track_ids[3..], 0, false).unwrap();
+
+        assert_eq!(result.items.len(), 3);
+        assert_eq!(result.items[0].track.id, track_ids[3]);
+        assert_eq!(result.items[1].track.id, track_ids[4]);
+        assert_eq!(result.items[2].track.id, track_ids[5]);
     }
 }
 
