@@ -68,6 +68,10 @@ pub struct QueueState {
     pub shuffle_enabled: bool,
     pub loop_mode: String,
     pub original_order_json: Option<String>,
+    pub play_next_offset: i64,
+    pub play_history_json: Option<String>,
+    pub play_next_track_ids_json: Option<String>,
+    pub repeat_one_pending: bool,
 }
 
 /// Playlist metadata

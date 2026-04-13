@@ -30,10 +30,7 @@ export async function handleDoubleClickPlay(ctx, track, allTracks, index, logPre
     // Apply response to queue store
     ctx.queue.items = result.items.map((item) => item.track || item);
     ctx.queue.currentIndex = result.current_index;
-    ctx.queue._originalOrder = [...ctx.queue.items];
-    ctx.queue._playHistory = [];
-    ctx.queue._playNextOffset = 0;
-    ctx.queue._playNextTrackIds = new Set();
+    ctx.queue.shuffle = result.shuffle_enabled ?? ctx.queue.shuffle;
 
     // Update player state from the track returned by backend
     ctx.player.updateTrackState(result.track, result.duration_ms);

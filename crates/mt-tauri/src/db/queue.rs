@@ -265,7 +265,8 @@ pub(crate) fn get_queue_length(conn: &Connection) -> DbResult<i64> {
 /// Get queue playback state
 pub(crate) fn get_queue_state(conn: &Connection) -> DbResult<QueueState> {
     let result = conn.query_row(
-        "SELECT current_index, shuffle_enabled, loop_mode, original_order_json
+        "SELECT current_index, shuffle_enabled, loop_mode, original_order_json,
+                play_next_offset, play_history_json, play_next_track_ids_json, repeat_one_pending
          FROM queue_state WHERE id = 1",
         [],
         |row| {
@@ -274,6 +275,10 @@ pub(crate) fn get_queue_state(conn: &Connection) -> DbResult<QueueState> {
                 shuffle_enabled: row.get::<_, i64>(1)? != 0,
                 loop_mode: row.get(2)?,
                 original_order_json: row.get(3)?,
+                play_next_offset: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
+                play_history_json: row.get(5)?,
+                play_next_track_ids_json: row.get(6)?,
+                repeat_one_pending: row.get::<_, Option<i64>>(7)?.unwrap_or(0) != 0,
             })
         },
     );
@@ -287,6 +292,10 @@ pub(crate) fn get_queue_state(conn: &Connection) -> DbResult<QueueState> {
                 shuffle_enabled: false,
                 loop_mode: "none".to_string(),
                 original_order_json: None,
+                play_next_offset: 0,
+                play_history_json: None,
+                play_next_track_ids_json: None,
+                repeat_one_pending: false,
             };
             set_queue_state(conn, &default_state)?;
             Ok(default_state)
@@ -298,13 +307,19 @@ pub(crate) fn get_queue_state(conn: &Connection) -> DbResult<QueueState> {
 /// Set queue playback state
 pub(crate) fn set_queue_state(conn: &Connection, state: &QueueState) -> DbResult<()> {
     conn.execute(
-        "INSERT OR REPLACE INTO queue_state (id, current_index, shuffle_enabled, loop_mode, original_order_json)
-         VALUES (1, ?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO queue_state (id, current_index, shuffle_enabled, loop_mode,
+         original_order_json, play_next_offset, play_history_json, play_next_track_ids_json,
+         repeat_one_pending)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
             state.current_index,
             if state.shuffle_enabled { 1 } else { 0 },
             &state.loop_mode,
-            &state.original_order_json
+            &state.original_order_json,
+            state.play_next_offset,
+            &state.play_history_json,
+            &state.play_next_track_ids_json,
+            if state.repeat_one_pending { 1 } else { 0 },
         ],
     )?;
     Ok(())
@@ -357,6 +372,644 @@ pub(crate) fn set_original_order_json(conn: &Connection, json: Option<String>) -
         params![json],
     )?;
     Ok(())
+}
+
+/// Update play_next_offset in queue state
+pub(crate) fn set_play_next_offset(conn: &Connection, offset: i64) -> DbResult<()> {
+    let _ = get_queue_state(conn)?;
+    conn.execute(
+        "UPDATE queue_state SET play_next_offset = ? WHERE id = 1",
+        params![offset],
+    )?;
+    Ok(())
+}
+
+/// Update play history JSON in queue state
+pub(crate) fn set_play_history_json(conn: &Connection, json: Option<String>) -> DbResult<()> {
+    let _ = get_queue_state(conn)?;
+    conn.execute(
+        "UPDATE queue_state SET play_history_json = ? WHERE id = 1",
+        params![json],
+    )?;
+    Ok(())
+}
+
+/// Update play-next track IDs JSON in queue state
+pub(crate) fn set_play_next_track_ids_json(
+    conn: &Connection,
+    json: Option<String>,
+) -> DbResult<()> {
+    let _ = get_queue_state(conn)?;
+    conn.execute(
+        "UPDATE queue_state SET play_next_track_ids_json = ? WHERE id = 1",
+        params![json],
+    )?;
+    Ok(())
+}
+
+/// Update repeat_one_pending flag in queue state
+pub(crate) fn set_repeat_one_pending(conn: &Connection, pending: bool) -> DbResult<()> {
+    let _ = get_queue_state(conn)?;
+    conn.execute(
+        "UPDATE queue_state SET repeat_one_pending = ? WHERE id = 1",
+        params![if pending { 1 } else { 0 }],
+    )?;
+    Ok(())
+}
+
+/// Add tracks as "play next" after the current track + any existing play-next tracks.
+///
+/// Move semantics: if a track already exists in the queue (and is not the current track),
+/// it is removed first. Tracks are inserted at `current_index + 1 + play_next_offset`.
+pub(crate) fn add_play_next(conn: &Connection, track_ids: &[i64]) -> DbResult<Vec<QueueItem>> {
+    if track_ids.is_empty() {
+        return get_queue(conn);
+    }
+
+    let state = get_queue_state(conn)?;
+    let items = get_queue(conn)?;
+
+    if items.is_empty() {
+        // Nothing playing — just add to end
+        add_to_queue(conn, track_ids, None)?;
+        return get_queue(conn);
+    }
+
+    // Resolve filepaths for the track IDs
+    let placeholders = track_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT id, filepath FROM library WHERE id IN ({})",
+        placeholders
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let params: Vec<&dyn rusqlite::ToSql> = track_ids
+        .iter()
+        .map(|id| id as &dyn rusqlite::ToSql)
+        .collect();
+    let track_map: std::collections::HashMap<i64, String> = stmt
+        .query_map(params.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+    drop(stmt);
+
+    let current_idx = state.current_index.max(0) as usize;
+    let current_track_id = items.get(current_idx).map(|i| i.track.id);
+
+    // Build new queue: remove tracks that are being moved (except current), then insert at position
+    let track_id_set: std::collections::HashSet<i64> = track_ids.iter().copied().collect();
+
+    // Tracks to insert
+    let new_fps: Vec<String> = track_ids
+        .iter()
+        .filter_map(|id| track_map.get(id).cloned())
+        .collect();
+
+    // Count how many tracks before current_idx will be removed (affects current_idx)
+    let removed_before_current: usize = items
+        .iter()
+        .enumerate()
+        .filter(|(i, item)| {
+            *i < current_idx
+                && track_id_set.contains(&item.track.id)
+                && Some(item.track.id) != current_track_id
+        })
+        .count();
+
+    let adjusted_current_idx = current_idx - removed_before_current;
+    let insert_pos = adjusted_current_idx + 1 + state.play_next_offset as usize;
+
+    // Build filepath list excluding tracks being moved (except current)
+    let mut kept: Vec<String> = Vec::new();
+    for (i, item) in items.iter().enumerate() {
+        if track_id_set.contains(&item.track.id)
+            && Some(item.track.id) != current_track_id
+            && i != current_idx
+        {
+            continue; // Skip — will be re-inserted at play-next position
+        }
+        kept.push(item.track.filepath.clone());
+    }
+
+    // Insert at position
+    let insert_at = insert_pos.min(kept.len());
+    for (j, fp) in new_fps.iter().enumerate() {
+        kept.insert(insert_at + j, fp.clone());
+    }
+    // Rebuild queue
+    let tx = conn.unchecked_transaction()?;
+    tx.execute("DELETE FROM queue", [])?;
+    for fp in &kept {
+        tx.execute("INSERT INTO queue (filepath) VALUES (?)", params![fp])?;
+    }
+
+    // Update state: increment play_next_offset, add to play_next_track_ids
+    let new_offset = state.play_next_offset + new_fps.len() as i64;
+    let mut play_next_ids: Vec<i64> = state
+        .play_next_track_ids_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or_default();
+    for id in track_ids {
+        if !play_next_ids.contains(id) {
+            play_next_ids.push(*id);
+        }
+    }
+    let play_next_json = serde_json::to_string(&play_next_ids).ok();
+
+    tx.execute(
+        "UPDATE queue_state SET play_next_offset = ?, play_next_track_ids_json = ?,
+         current_index = ? WHERE id = 1",
+        params![new_offset, play_next_json, adjusted_current_idx as i64],
+    )?;
+
+    tx.commit()?;
+    get_queue(conn)
+}
+
+/// Toggle shuffle on/off with full state management.
+///
+/// Enable: saves original order, separates current + play-next + regular tracks,
+/// Fisher-Yates shuffles regular tracks, rebuilds queue as [current, play-next..., shuffled...].
+/// Disable: restores original order from saved JSON, finds current track in restored order.
+pub(crate) fn toggle_shuffle(conn: &Connection, enabled: bool) -> DbResult<Vec<QueueItem>> {
+    use rand::rng;
+    use rand::seq::SliceRandom;
+
+    let state = get_queue_state(conn)?;
+    let items = get_queue(conn)?;
+
+    if items.is_empty() {
+        set_shuffle_enabled(conn, enabled)?;
+        return Ok(items);
+    }
+
+    let tx = conn.unchecked_transaction()?;
+
+    if enabled {
+        // Save current order for unshuffle
+        let original_ids: Vec<i64> = items.iter().map(|item| item.track.id).collect();
+        let original_order_json = serde_json::to_string(&original_ids).unwrap_or_default();
+
+        // Parse play-next track IDs
+        let play_next_ids: Vec<i64> = state
+            .play_next_track_ids_json
+            .as_deref()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or_default();
+
+        let current_idx = state.current_index.max(0) as usize;
+
+        // Separate: current track, play-next tracks, regular tracks
+        let mut current_fp: Option<String> = None;
+        let mut play_next_fps: Vec<String> = Vec::new();
+        let mut regular_fps: Vec<String> = Vec::new();
+
+        for (i, item) in items.iter().enumerate() {
+            if i == current_idx {
+                current_fp = Some(item.track.filepath.clone());
+            } else if play_next_ids.contains(&item.track.id) {
+                play_next_fps.push(item.track.filepath.clone());
+            } else {
+                regular_fps.push(item.track.filepath.clone());
+            }
+        }
+
+        // Fisher-Yates shuffle regular tracks
+        regular_fps.shuffle(&mut rng());
+
+        // Rebuild: [current, play-next..., shuffled...]
+        tx.execute("DELETE FROM queue", [])?;
+        if let Some(fp) = &current_fp {
+            tx.execute("INSERT INTO queue (filepath) VALUES (?)", params![fp])?;
+        }
+        for fp in &play_next_fps {
+            tx.execute("INSERT INTO queue (filepath) VALUES (?)", params![fp])?;
+        }
+        for fp in &regular_fps {
+            tx.execute("INSERT INTO queue (filepath) VALUES (?)", params![fp])?;
+        }
+
+        // Update state
+        tx.execute(
+            "UPDATE queue_state SET current_index = 0, shuffle_enabled = 1,
+             original_order_json = ? WHERE id = 1",
+            params![original_order_json],
+        )?;
+    } else {
+        // Restore original order
+        let original_ids: Vec<i64> = state
+            .original_order_json
+            .as_deref()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or_default();
+
+        if original_ids.is_empty() {
+            // No original order saved — just toggle the flag
+            tx.execute(
+                "UPDATE queue_state SET shuffle_enabled = 0, original_order_json = NULL WHERE id = 1",
+                [],
+            )?;
+        } else {
+            // Build filepath lookup from current queue
+            let fp_map: std::collections::HashMap<i64, String> = items
+                .iter()
+                .map(|item| (item.track.id, item.track.filepath.clone()))
+                .collect();
+
+            // Find current track ID before rebuilding
+            let current_track_id = if current_idx_valid(&state, &items) {
+                Some(items[state.current_index as usize].track.id)
+            } else {
+                None
+            };
+
+            // Rebuild queue in original order
+            tx.execute("DELETE FROM queue", [])?;
+            for id in &original_ids {
+                if let Some(fp) = fp_map.get(id) {
+                    tx.execute("INSERT INTO queue (filepath) VALUES (?)", params![fp])?;
+                }
+            }
+
+            // Find current track's new index in restored order
+            let new_index = current_track_id
+                .and_then(|tid| original_ids.iter().position(|id| *id == tid))
+                .map(|i| i as i64)
+                .unwrap_or(0);
+
+            tx.execute(
+                "UPDATE queue_state SET current_index = ?, shuffle_enabled = 0,
+                 original_order_json = NULL WHERE id = 1",
+                params![new_index],
+            )?;
+        }
+    }
+
+    tx.commit()?;
+    get_queue(conn)
+}
+
+/// Reshuffle the queue for loop restart (loop=all wrapping back to start).
+///
+/// Different from toggle_shuffle: the just-played track goes to the END
+/// (not index 0) to avoid immediate repetition. Does not touch original_order_json.
+pub(crate) fn reshuffle_for_loop_restart(conn: &Connection) -> DbResult<Vec<QueueItem>> {
+    use rand::rng;
+    use rand::seq::SliceRandom;
+
+    let state = get_queue_state(conn)?;
+    let items = get_queue(conn)?;
+
+    if items.len() <= 1 {
+        return Ok(items);
+    }
+
+    let current_idx = state.current_index.max(0) as usize;
+    let current_fp = items
+        .get(current_idx)
+        .map(|item| item.track.filepath.clone());
+
+    // Separate current track from the rest, shuffle the rest
+    let mut other_fps: Vec<String> = items
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != current_idx)
+        .map(|(_, item)| item.track.filepath.clone())
+        .collect();
+    other_fps.shuffle(&mut rng());
+
+    // Rebuild: [shuffled..., just-played at END]
+    let tx = conn.unchecked_transaction()?;
+    tx.execute("DELETE FROM queue", [])?;
+    for fp in &other_fps {
+        tx.execute("INSERT INTO queue (filepath) VALUES (?)", params![fp])?;
+    }
+    if let Some(fp) = &current_fp {
+        tx.execute("INSERT INTO queue (filepath) VALUES (?)", params![fp])?;
+    }
+
+    // Current index is 0 (first track in reshuffled order)
+    tx.execute("UPDATE queue_state SET current_index = 0 WHERE id = 1", [])?;
+
+    tx.commit()?;
+    get_queue(conn)
+}
+
+/// Check if current_index in state points to a valid queue item
+fn current_idx_valid(state: &QueueState, items: &[QueueItem]) -> bool {
+    state.current_index >= 0 && (state.current_index as usize) < items.len()
+}
+
+/// Result of a navigation operation (advance_to_next/previous)
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum NavigationAction {
+    /// Play the track at the given index
+    Play(usize),
+    /// Stop playback (end of queue, no loop)
+    Stop,
+    /// Restart current track from beginning (>3sec threshold)
+    SeekZero,
+}
+
+/// Advance to the next track in the queue.
+///
+/// Handles repeat-one two-phase logic, loop modes, history, and reshuffle on loop restart.
+/// Returns the action to take and the updated queue items (may change if reshuffled).
+pub(crate) fn advance_to_next(conn: &Connection) -> DbResult<(NavigationAction, Vec<QueueItem>)> {
+    let state = get_queue_state(conn)?;
+    let items = get_queue(conn)?;
+
+    if items.is_empty() {
+        return Ok((NavigationAction::Stop, items));
+    }
+
+    let current_idx = state.current_index.max(0) as usize;
+
+    // Phase 2 of repeat-one: flag was set on previous call, clear and advance normally
+    if state.repeat_one_pending {
+        set_repeat_one_pending(conn, false)?;
+        // Fall through to normal advance logic
+    }
+
+    // Phase 1 of repeat-one: set flag, change loop to "none", replay
+    if state.loop_mode == "one" {
+        set_repeat_one_pending(conn, true)?;
+        set_loop_mode(conn, "none")?;
+        return Ok((NavigationAction::Play(current_idx), items));
+    }
+
+    // Push current track to history
+    if current_idx < items.len() {
+        push_to_history(conn, &state, items[current_idx].track.id)?;
+    }
+
+    let next_idx = current_idx + 1;
+
+    if next_idx >= items.len() {
+        // End of queue
+        if state.loop_mode == "all" {
+            // Loop restart
+            let new_items = if state.shuffle_enabled {
+                reshuffle_for_loop_restart(conn)?
+            } else {
+                items
+            };
+            // Reset to index 0
+            set_current_index(conn, 0)?;
+            set_play_next_offset(conn, 0)?;
+            // Remove from play_next_track_ids if present
+            if !new_items.is_empty() {
+                remove_from_play_next_ids(conn, new_items[0].track.id)?;
+            }
+            return Ok((NavigationAction::Play(0), new_items));
+        } else {
+            return Ok((NavigationAction::Stop, items));
+        }
+    }
+
+    // Normal advance
+    set_current_index(conn, next_idx as i64)?;
+    set_play_next_offset(conn, 0)?;
+    remove_from_play_next_ids(conn, items[next_idx].track.id)?;
+
+    Ok((NavigationAction::Play(next_idx), items))
+}
+
+/// Advance to the previous track in the queue.
+///
+/// If current_time_ms > 3000, returns SeekZero to restart current track.
+/// Otherwise tries history, then falls back to decrementing index.
+pub(crate) fn advance_to_previous(
+    conn: &Connection,
+    current_time_ms: u64,
+) -> DbResult<(NavigationAction, Vec<QueueItem>)> {
+    let state = get_queue_state(conn)?;
+    let items = get_queue(conn)?;
+
+    if items.is_empty() {
+        return Ok((NavigationAction::Stop, items));
+    }
+
+    // >3 seconds into track: restart
+    if current_time_ms > 3000 {
+        return Ok((NavigationAction::SeekZero, items));
+    }
+
+    // Try history
+    let history: Vec<i64> = state
+        .play_history_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or_default();
+
+    if !history.is_empty() {
+        // Pop from history and find the track in the current queue
+        let mut remaining = history.clone();
+        while let Some(track_id) = remaining.pop() {
+            if let Some(idx) = items.iter().position(|item| item.track.id == track_id) {
+                // Save remaining history
+                let json = if remaining.is_empty() {
+                    None
+                } else {
+                    Some(serde_json::to_string(&remaining).unwrap_or_default())
+                };
+                set_play_history_json(conn, json)?;
+                set_current_index(conn, idx as i64)?;
+                return Ok((NavigationAction::Play(idx), items));
+            }
+            // Track no longer in queue, try next history entry
+        }
+        // All history entries exhausted
+        set_play_history_json(conn, None)?;
+    }
+
+    // Fallback: decrement index
+    let current_idx = state.current_index.max(0) as usize;
+    if current_idx > 0 {
+        let prev_idx = current_idx - 1;
+        set_current_index(conn, prev_idx as i64)?;
+        return Ok((NavigationAction::Play(prev_idx), items));
+    }
+
+    // At start of queue
+    if state.loop_mode == "all" && items.len() > 1 {
+        let last_idx = items.len() - 1;
+        set_current_index(conn, last_idx as i64)?;
+        return Ok((NavigationAction::Play(last_idx), items));
+    }
+
+    // Stay at beginning
+    Ok((NavigationAction::Play(0), items))
+}
+
+/// Skip next: override repeat-one by changing to loop=all, then advance.
+pub(crate) fn skip_to_next(conn: &Connection) -> DbResult<(NavigationAction, Vec<QueueItem>)> {
+    let state = get_queue_state(conn)?;
+    if state.loop_mode == "one" || state.repeat_one_pending {
+        set_loop_mode(conn, "all")?;
+        set_repeat_one_pending(conn, false)?;
+    }
+    advance_to_next(conn)
+}
+
+/// Skip previous: override repeat-one by changing to loop=all, then go previous.
+pub(crate) fn skip_to_previous(
+    conn: &Connection,
+    current_time_ms: u64,
+) -> DbResult<(NavigationAction, Vec<QueueItem>)> {
+    let state = get_queue_state(conn)?;
+    if state.loop_mode == "one" || state.repeat_one_pending {
+        set_loop_mode(conn, "all")?;
+        set_repeat_one_pending(conn, false)?;
+    }
+    advance_to_previous(conn, current_time_ms)
+}
+
+/// Push a track ID to the play history (FIFO, capped at 100)
+fn push_to_history(conn: &Connection, state: &QueueState, track_id: i64) -> DbResult<()> {
+    let mut history: Vec<i64> = state
+        .play_history_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or_default();
+
+    history.push(track_id);
+
+    // Cap at 100
+    if history.len() > 100 {
+        history.drain(..history.len() - 100);
+    }
+
+    let json = serde_json::to_string(&history).unwrap_or_default();
+    set_play_history_json(conn, Some(json))
+}
+
+/// Remove a track ID from the play_next_track_ids set
+fn remove_from_play_next_ids(conn: &Connection, track_id: i64) -> DbResult<()> {
+    let state = get_queue_state(conn)?;
+    let mut ids: Vec<i64> = state
+        .play_next_track_ids_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or_default();
+
+    if ids.is_empty() {
+        return Ok(());
+    }
+
+    ids.retain(|id| *id != track_id);
+    let json = if ids.is_empty() {
+        None
+    } else {
+        Some(serde_json::to_string(&ids).unwrap_or_default())
+    };
+    set_play_next_track_ids_json(conn, json)
+}
+
+/// Report from queue integrity check
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct IntegrityReport {
+    pub duplicate_track_ids: Vec<i64>,
+    pub index_was_out_of_bounds: bool,
+    pub orphaned_play_next_ids: Vec<i64>,
+    pub repaired: bool,
+}
+
+/// Check queue integrity and repair issues.
+///
+/// Detects: duplicate track IDs, out-of-bounds current_index, orphaned play_next_track_ids.
+/// Auto-repairs by deduplicating and clamping index.
+pub(crate) fn check_integrity(conn: &Connection) -> DbResult<IntegrityReport> {
+    let items = get_queue(conn)?;
+    let state = get_queue_state(conn)?;
+
+    let mut duplicates = Vec::new();
+    let mut index_oob = false;
+    let mut orphaned = Vec::new();
+    let mut needs_repair = false;
+
+    // Check for duplicate track IDs
+    let mut seen = std::collections::HashSet::new();
+    for item in &items {
+        if !seen.insert(item.track.id) {
+            duplicates.push(item.track.id);
+        }
+    }
+
+    // Check current_index bounds
+    if !items.is_empty() && (state.current_index < 0 || state.current_index as usize >= items.len())
+    {
+        index_oob = true;
+    }
+    if items.is_empty() && state.current_index != -1 {
+        index_oob = true;
+    }
+
+    // Check play_next_track_ids for orphans
+    let play_next_ids: Vec<i64> = state
+        .play_next_track_ids_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or_default();
+    let queue_track_ids: std::collections::HashSet<i64> =
+        items.iter().map(|i| i.track.id).collect();
+    for id in &play_next_ids {
+        if !queue_track_ids.contains(id) {
+            orphaned.push(*id);
+        }
+    }
+
+    // Repair if needed
+    if !duplicates.is_empty() {
+        needs_repair = true;
+        // Deduplicate: keep first occurrence of each track ID
+        let mut dedup_seen = std::collections::HashSet::new();
+        let keep_fps: Vec<String> = items
+            .iter()
+            .filter(|item| dedup_seen.insert(item.track.id))
+            .map(|item| item.track.filepath.clone())
+            .collect();
+
+        let tx = conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM queue", [])?;
+        for fp in &keep_fps {
+            tx.execute("INSERT INTO queue (filepath) VALUES (?)", params![fp])?;
+        }
+        tx.commit()?;
+    }
+
+    if index_oob {
+        needs_repair = true;
+        let new_items = get_queue(conn)?;
+        let clamped = if new_items.is_empty() {
+            -1
+        } else {
+            state.current_index.max(0).min(new_items.len() as i64 - 1)
+        };
+        set_current_index(conn, clamped)?;
+    }
+
+    if !orphaned.is_empty() {
+        needs_repair = true;
+        let cleaned: Vec<i64> = play_next_ids
+            .iter()
+            .filter(|id| queue_track_ids.contains(id))
+            .copied()
+            .collect();
+        let json = if cleaned.is_empty() {
+            None
+        } else {
+            Some(serde_json::to_string(&cleaned).unwrap_or_default())
+        };
+        set_play_next_track_ids_json(conn, json)?;
+    }
+
+    Ok(IntegrityReport {
+        duplicate_track_ids: duplicates,
+        index_was_out_of_bounds: index_oob,
+        orphaned_play_next_ids: orphaned,
+        repaired: needs_repair,
+    })
 }
 
 /// Result of a play-context operation: the installed queue and the track to play.
@@ -487,6 +1140,10 @@ pub(crate) fn play_context(
         shuffle_enabled: shuffle,
         loop_mode: current_state.loop_mode,
         original_order_json: original_order_json.clone(),
+        play_next_offset: 0,
+        play_history_json: None,
+        play_next_track_ids_json: None,
+        repeat_one_pending: false,
     };
     set_queue_state(&tx, &new_state)?;
 
@@ -669,6 +1326,10 @@ mod tests {
             shuffle_enabled: true,
             loop_mode: "all".to_string(),
             original_order_json: Some("[1,2,3]".to_string()),
+            play_next_offset: 0,
+            play_history_json: None,
+            play_next_track_ids_json: None,
+            repeat_one_pending: false,
         };
 
         set_queue_state(&conn, &state).unwrap();
@@ -1019,6 +1680,610 @@ mod tests {
         assert_eq!(result.items[0].track.id, track_ids[3]);
         assert_eq!(result.items[1].track.id, track_ids[4]);
         assert_eq!(result.items[2].track.id, track_ids[5]);
+    }
+
+    #[test]
+    fn test_queue_state_new_fields_defaults() {
+        let conn = setup_test_db();
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.play_next_offset, 0);
+        assert!(state.play_history_json.is_none());
+        assert!(state.play_next_track_ids_json.is_none());
+        assert!(!state.repeat_one_pending);
+    }
+
+    #[test]
+    fn test_set_play_next_offset() {
+        let conn = setup_test_db();
+
+        set_play_next_offset(&conn, 3).unwrap();
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.play_next_offset, 3);
+
+        set_play_next_offset(&conn, 0).unwrap();
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.play_next_offset, 0);
+    }
+
+    #[test]
+    fn test_set_play_history_json() {
+        let conn = setup_test_db();
+
+        set_play_history_json(&conn, Some("[1,2,3]".to_string())).unwrap();
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.play_history_json, Some("[1,2,3]".to_string()));
+
+        set_play_history_json(&conn, None).unwrap();
+        let state = get_queue_state(&conn).unwrap();
+        assert!(state.play_history_json.is_none());
+    }
+
+    #[test]
+    fn test_set_play_next_track_ids_json() {
+        let conn = setup_test_db();
+
+        set_play_next_track_ids_json(&conn, Some("[10,20]".to_string())).unwrap();
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.play_next_track_ids_json, Some("[10,20]".to_string()));
+
+        set_play_next_track_ids_json(&conn, None).unwrap();
+        let state = get_queue_state(&conn).unwrap();
+        assert!(state.play_next_track_ids_json.is_none());
+    }
+
+    #[test]
+    fn test_set_repeat_one_pending() {
+        let conn = setup_test_db();
+
+        set_repeat_one_pending(&conn, true).unwrap();
+        let state = get_queue_state(&conn).unwrap();
+        assert!(state.repeat_one_pending);
+
+        set_repeat_one_pending(&conn, false).unwrap();
+        let state = get_queue_state(&conn).unwrap();
+        assert!(!state.repeat_one_pending);
+    }
+
+    #[test]
+    fn test_set_queue_state_preserves_new_fields() {
+        let conn = setup_test_db();
+
+        let state = QueueState {
+            current_index: 2,
+            shuffle_enabled: true,
+            loop_mode: "one".to_string(),
+            original_order_json: None,
+            play_next_offset: 5,
+            play_history_json: Some("[7,8,9]".to_string()),
+            play_next_track_ids_json: Some("[11,12]".to_string()),
+            repeat_one_pending: true,
+        };
+        set_queue_state(&conn, &state).unwrap();
+
+        let retrieved = get_queue_state(&conn).unwrap();
+        assert_eq!(retrieved.current_index, 2);
+        assert!(retrieved.shuffle_enabled);
+        assert_eq!(retrieved.loop_mode, "one");
+        assert_eq!(retrieved.play_next_offset, 5);
+        assert_eq!(retrieved.play_history_json, Some("[7,8,9]".to_string()));
+        assert_eq!(
+            retrieved.play_next_track_ids_json,
+            Some("[11,12]".to_string())
+        );
+        assert!(retrieved.repeat_one_pending);
+    }
+
+    // ==================== Toggle Shuffle Tests ====================
+
+    #[test]
+    fn test_toggle_shuffle_pins_current_at_index_zero() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 5);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 2).unwrap();
+
+        let items = toggle_shuffle(&conn, true).unwrap();
+
+        // Current track (originally at index 2) should be at index 0
+        assert_eq!(items[0].track.id, track_ids[2]);
+        assert_eq!(items.len(), 5);
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.current_index, 0);
+        assert!(state.shuffle_enabled);
+        assert!(state.original_order_json.is_some());
+    }
+
+    #[test]
+    fn test_toggle_shuffle_pins_play_next_tracks() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 5);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+
+        // Mark tracks 3 and 4 as play-next
+        let play_next_ids = serde_json::to_string(&vec![track_ids[2], track_ids[3]]).unwrap();
+        set_play_next_track_ids_json(&conn, Some(play_next_ids)).unwrap();
+
+        let items = toggle_shuffle(&conn, true).unwrap();
+
+        // Current track at 0, play-next tracks at 1-2
+        assert_eq!(items[0].track.id, track_ids[0]);
+        assert_eq!(items[1].track.id, track_ids[2]);
+        assert_eq!(items[2].track.id, track_ids[3]);
+        assert_eq!(items.len(), 5);
+    }
+
+    #[test]
+    fn test_toggle_shuffle_unshuffle_restores_order() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 5);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 2).unwrap();
+
+        // Shuffle
+        toggle_shuffle(&conn, true).unwrap();
+
+        // Unshuffle
+        let items = toggle_shuffle(&conn, false).unwrap();
+
+        // Original order restored
+        for (i, item) in items.iter().enumerate() {
+            assert_eq!(item.track.id, track_ids[i]);
+        }
+
+        let state = get_queue_state(&conn).unwrap();
+        assert!(!state.shuffle_enabled);
+        assert!(state.original_order_json.is_none());
+        // Current track should be found at its original position
+        assert_eq!(state.current_index, 2);
+    }
+
+    #[test]
+    fn test_toggle_shuffle_preserves_all_tracks() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 10);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+
+        let items = toggle_shuffle(&conn, true).unwrap();
+
+        // Same count
+        assert_eq!(items.len(), 10);
+
+        // Same set of track IDs (permutation)
+        let mut shuffled_ids: Vec<i64> = items.iter().map(|i| i.track.id).collect();
+        shuffled_ids.sort();
+        let mut original_ids = track_ids.clone();
+        original_ids.sort();
+        assert_eq!(shuffled_ids, original_ids);
+    }
+
+    #[test]
+    fn test_toggle_shuffle_empty_queue() {
+        let conn = setup_test_db();
+
+        let items = toggle_shuffle(&conn, true).unwrap();
+        assert!(items.is_empty());
+
+        let state = get_queue_state(&conn).unwrap();
+        assert!(state.shuffle_enabled);
+    }
+
+    #[test]
+    fn test_reshuffle_for_loop_restart_puts_current_at_end() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 5);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 2).unwrap();
+
+        let items = reshuffle_for_loop_restart(&conn).unwrap();
+
+        // Just-played track (originally at index 2) should be at the END
+        assert_eq!(items.last().unwrap().track.id, track_ids[2]);
+        // Current index should be 0 (start of reshuffled queue)
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.current_index, 0);
+        // All tracks preserved
+        assert_eq!(items.len(), 5);
+    }
+
+    #[test]
+    fn test_reshuffle_for_loop_restart_single_track() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 1);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+
+        let items = reshuffle_for_loop_restart(&conn).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].track.id, track_ids[0]);
+    }
+
+    // ==================== Play-Next Tests ====================
+
+    #[test]
+    fn test_add_play_next_at_offset_zero() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 5);
+        add_to_queue(&conn, &track_ids[..3], None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+
+        // Add track 4 as play-next
+        let items = add_play_next(&conn, &[track_ids[3]]).unwrap();
+
+        // Should be: track1(current), track4(play-next), track2, track3
+        assert_eq!(items[0].track.id, track_ids[0]);
+        assert_eq!(items[1].track.id, track_ids[3]);
+        assert_eq!(items[2].track.id, track_ids[1]);
+        assert_eq!(items[3].track.id, track_ids[2]);
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.play_next_offset, 1);
+    }
+
+    #[test]
+    fn test_add_play_next_stacked() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 6);
+        add_to_queue(&conn, &track_ids[..3], None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+
+        // First play-next: track4
+        add_play_next(&conn, &[track_ids[3]]).unwrap();
+        // Second play-next: track5 — should go AFTER track4
+        let items = add_play_next(&conn, &[track_ids[4]]).unwrap();
+
+        // Should be: track1, track4, track5, track2, track3
+        assert_eq!(items[0].track.id, track_ids[0]);
+        assert_eq!(items[1].track.id, track_ids[3]);
+        assert_eq!(items[2].track.id, track_ids[4]);
+        assert_eq!(items[3].track.id, track_ids[1]);
+        assert_eq!(items[4].track.id, track_ids[2]);
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.play_next_offset, 2);
+    }
+
+    #[test]
+    fn test_add_play_next_move_semantics() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 4);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+
+        // Move track3 (at index 2) to play-next position
+        let items = add_play_next(&conn, &[track_ids[2]]).unwrap();
+
+        // Should be: track1(current), track3(moved), track2, track4
+        assert_eq!(items.len(), 4); // No duplicates
+        assert_eq!(items[0].track.id, track_ids[0]);
+        assert_eq!(items[1].track.id, track_ids[2]);
+        assert_eq!(items[2].track.id, track_ids[1]);
+        assert_eq!(items[3].track.id, track_ids[3]);
+    }
+
+    #[test]
+    fn test_add_play_next_current_track_not_moved() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+
+        // Try to play-next the currently playing track
+        let items = add_play_next(&conn, &[track_ids[0]]).unwrap();
+
+        // Current track should stay at index 0, and be duplicated as play-next
+        // (this matches frontend behavior — the track stays and also appears as play-next)
+        assert_eq!(items[0].track.id, track_ids[0]);
+        assert_eq!(items.len(), 4); // Original 3 + 1 inserted
+    }
+
+    #[test]
+    fn test_add_play_next_updates_track_ids_json() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 4);
+        add_to_queue(&conn, &track_ids[..2], None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+
+        add_play_next(&conn, &[track_ids[2]]).unwrap();
+        add_play_next(&conn, &[track_ids[3]]).unwrap();
+
+        let state = get_queue_state(&conn).unwrap();
+        let ids: Vec<i64> =
+            serde_json::from_str(state.play_next_track_ids_json.as_deref().unwrap()).unwrap();
+        assert!(ids.contains(&track_ids[2]));
+        assert!(ids.contains(&track_ids[3]));
+    }
+
+    // ==================== Navigation Tests ====================
+
+    #[test]
+    fn test_advance_to_next_normal() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+
+        let (action, _items) = advance_to_next(&conn).unwrap();
+        assert_eq!(action, NavigationAction::Play(1));
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.current_index, 1);
+    }
+
+    #[test]
+    fn test_advance_to_next_end_no_loop() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 2).unwrap();
+        set_loop_mode(&conn, "none").unwrap();
+
+        let (action, _) = advance_to_next(&conn).unwrap();
+        assert_eq!(action, NavigationAction::Stop);
+    }
+
+    #[test]
+    fn test_advance_to_next_end_loop_all() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 2).unwrap();
+        set_loop_mode(&conn, "all").unwrap();
+
+        let (action, _) = advance_to_next(&conn).unwrap();
+        assert_eq!(action, NavigationAction::Play(0));
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.current_index, 0);
+    }
+
+    #[test]
+    fn test_advance_to_next_repeat_one_two_phase() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 1).unwrap();
+        set_loop_mode(&conn, "one").unwrap();
+
+        // Phase 1: sets repeat_one_pending, changes loop to none, replays current
+        let (action, _) = advance_to_next(&conn).unwrap();
+        assert_eq!(action, NavigationAction::Play(1));
+        let state = get_queue_state(&conn).unwrap();
+        assert!(state.repeat_one_pending);
+        assert_eq!(state.loop_mode, "none");
+
+        // Phase 2: clears pending, advances normally (no second replay)
+        let (action, _) = advance_to_next(&conn).unwrap();
+        assert_eq!(action, NavigationAction::Play(2));
+        let state = get_queue_state(&conn).unwrap();
+        assert!(!state.repeat_one_pending);
+    }
+
+    #[test]
+    fn test_advance_to_next_pushes_history() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+
+        advance_to_next(&conn).unwrap();
+
+        let state = get_queue_state(&conn).unwrap();
+        let history: Vec<i64> =
+            serde_json::from_str(state.play_history_json.as_deref().unwrap()).unwrap();
+        assert_eq!(history, vec![track_ids[0]]);
+    }
+
+    #[test]
+    fn test_advance_to_next_resets_play_next_offset() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+        set_play_next_offset(&conn, 2).unwrap();
+
+        advance_to_next(&conn).unwrap();
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.play_next_offset, 0);
+    }
+
+    #[test]
+    fn test_advance_to_previous_seek_zero() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 1).unwrap();
+
+        let (action, _) = advance_to_previous(&conn, 5000).unwrap();
+        assert_eq!(action, NavigationAction::SeekZero);
+    }
+
+    #[test]
+    fn test_advance_to_previous_uses_history() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 5);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 3).unwrap();
+
+        // Set history: track at index 0 was played before
+        let history = serde_json::to_string(&vec![track_ids[0]]).unwrap();
+        set_play_history_json(&conn, Some(history)).unwrap();
+
+        let (action, _) = advance_to_previous(&conn, 0).unwrap();
+        assert_eq!(action, NavigationAction::Play(0));
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.current_index, 0);
+        // History should be empty after popping
+        assert!(state.play_history_json.is_none());
+    }
+
+    #[test]
+    fn test_advance_to_previous_fallback_decrement() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 2).unwrap();
+
+        let (action, _) = advance_to_previous(&conn, 0).unwrap();
+        assert_eq!(action, NavigationAction::Play(1));
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.current_index, 1);
+    }
+
+    #[test]
+    fn test_advance_to_previous_loop_all_wrap() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+        set_loop_mode(&conn, "all").unwrap();
+
+        let (action, _) = advance_to_previous(&conn, 0).unwrap();
+        assert_eq!(action, NavigationAction::Play(2));
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.current_index, 2);
+    }
+
+    #[test]
+    fn test_skip_next_overrides_repeat_one() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+        set_loop_mode(&conn, "one").unwrap();
+
+        // skip_next should change loop to "all" and advance (not replay)
+        let (action, _) = skip_to_next(&conn).unwrap();
+        assert_eq!(action, NavigationAction::Play(1));
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.loop_mode, "all");
+        assert!(!state.repeat_one_pending);
+    }
+
+    #[test]
+    fn test_skip_previous_overrides_repeat_one() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 1).unwrap();
+        set_loop_mode(&conn, "one").unwrap();
+
+        let (action, _) = skip_to_previous(&conn, 0).unwrap();
+        assert_eq!(action, NavigationAction::Play(0));
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.loop_mode, "all");
+    }
+
+    #[test]
+    fn test_advance_to_next_end_loop_all_shuffle_reshuffles() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 5);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 4).unwrap(); // Last track
+        set_loop_mode(&conn, "all").unwrap();
+        set_shuffle_enabled(&conn, true).unwrap();
+
+        let (action, items) = advance_to_next(&conn).unwrap();
+        assert_eq!(action, NavigationAction::Play(0));
+
+        // All 5 tracks preserved
+        assert_eq!(items.len(), 5);
+        // Just-played track (track_ids[4]) should be at the END
+        assert_eq!(items.last().unwrap().track.id, track_ids[4]);
+    }
+
+    #[test]
+    fn test_advance_to_next_empty_queue() {
+        let conn = setup_test_db();
+
+        let (action, _) = advance_to_next(&conn).unwrap();
+        assert_eq!(action, NavigationAction::Stop);
+    }
+
+    // ==================== Integrity Check Tests ====================
+
+    #[test]
+    fn test_check_integrity_clean_queue() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 1).unwrap();
+
+        let report = check_integrity(&conn).unwrap();
+        assert!(report.duplicate_track_ids.is_empty());
+        assert!(!report.index_was_out_of_bounds);
+        assert!(report.orphaned_play_next_ids.is_empty());
+        assert!(!report.repaired);
+    }
+
+    #[test]
+    fn test_check_integrity_out_of_bounds_index() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 10).unwrap();
+
+        let report = check_integrity(&conn).unwrap();
+        assert!(report.index_was_out_of_bounds);
+        assert!(report.repaired);
+
+        let state = get_queue_state(&conn).unwrap();
+        assert_eq!(state.current_index, 2); // Clamped to last valid index
+    }
+
+    #[test]
+    fn test_check_integrity_orphaned_play_next_ids() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 3);
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        set_current_index(&conn, 0).unwrap();
+
+        // Set play-next IDs including one that doesn't exist in queue
+        let ids = serde_json::to_string(&vec![track_ids[1], 9999]).unwrap();
+        set_play_next_track_ids_json(&conn, Some(ids)).unwrap();
+
+        let report = check_integrity(&conn).unwrap();
+        assert_eq!(report.orphaned_play_next_ids, vec![9999]);
+        assert!(report.repaired);
+
+        // Orphan should be removed
+        let state = get_queue_state(&conn).unwrap();
+        let cleaned: Vec<i64> =
+            serde_json::from_str(state.play_next_track_ids_json.as_deref().unwrap()).unwrap();
+        assert_eq!(cleaned, vec![track_ids[1]]);
+    }
+
+    #[test]
+    fn test_check_integrity_duplicate_tracks() {
+        let conn = setup_test_db();
+        let track_ids = add_test_tracks(&conn, 2);
+        // Manually insert duplicate
+        add_to_queue(&conn, &track_ids, None).unwrap();
+        conn.execute(
+            "INSERT INTO queue (filepath) VALUES (?)",
+            params![format!("/music/track1.mp3")],
+        )
+        .unwrap();
+        set_current_index(&conn, 0).unwrap();
+
+        let report = check_integrity(&conn).unwrap();
+        assert!(!report.duplicate_track_ids.is_empty());
+        assert!(report.repaired);
+
+        // After repair, no duplicates
+        let items = get_queue(&conn).unwrap();
+        let ids: Vec<i64> = items.iter().map(|i| i.track.id).collect();
+        let unique: std::collections::HashSet<i64> = ids.iter().copied().collect();
+        assert_eq!(ids.len(), unique.len());
     }
 }
 

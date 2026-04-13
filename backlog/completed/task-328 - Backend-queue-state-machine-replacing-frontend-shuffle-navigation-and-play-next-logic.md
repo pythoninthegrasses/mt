@@ -3,10 +3,10 @@ id: TASK-328
 title: >-
   Backend queue state machine replacing frontend shuffle, navigation, and
   play-next logic
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-13 03:19'
-updated_date: '2026-04-13 04:00'
+updated_date: '2026-04-13 17:18'
 labels:
   - backend
   - queue
@@ -163,14 +163,39 @@ pub struct QueueStateSnapshot {
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Queue store's shuffle toggle calls a single invoke('queue_set_shuffle', { enabled }) and receives the reordered queue snapshot from the backend
-- [ ] #2 Fisher-Yates shuffle and unshuffle (restore original order) logic is removed from app/frontend/js/stores/queue.js
-- [ ] #3 Loop mode changes call invoke('queue_set_loop', { mode }) and receive the updated queue state including whether queue will wrap
-- [ ] #4 playNext() and playPrevious() are backend commands that return the new current track and updated index — frontend no longer increments/decrements currentIndex locally
-- [ ] #5 Play-next pinning (insertions at _playNextOffset) is handled by a backend command that maintains the offset and returns the updated items array
-- [ ] #6 History tracking (_playHistory) moves to backend — playPrevious uses backend history instead of frontend array
-- [ ] #7 Queue integrity check (detectAndRepairInconsistencies) runs in Rust via queue_check_integrity command and emits results
-- [ ] #8 Frontend queue.js store is reduced to: event listeners for queue state snapshots, getters for computed UI properties, and invoke wrappers
-- [ ] #9 Rust tests cover: shuffle/unshuffle preserves all tracks; shuffle puts current track at index 0; loop-all wraps to index 0; loop-one replays same index; play-next inserts at correct offset; playPrevious follows history stack; integrity check detects and repairs duplicate entries
-- [ ] #10 Frontend Vitest tests verify queue store applies state snapshots from backend events correctly
+- [x] #1 Queue store's shuffle toggle calls a single invoke('queue_set_shuffle', { enabled }) and receives the reordered queue snapshot from the backend
+- [x] #2 Fisher-Yates shuffle and unshuffle (restore original order) logic is removed from app/frontend/js/stores/queue.js
+- [x] #3 Loop mode changes call invoke('queue_set_loop', { mode }) and receive the updated queue state including whether queue will wrap
+- [x] #4 playNext() and playPrevious() are backend commands that return the new current track and updated index — frontend no longer increments/decrements currentIndex locally
+- [x] #5 Play-next pinning (insertions at _playNextOffset) is handled by a backend command that maintains the offset and returns the updated items array
+- [x] #6 History tracking (_playHistory) moves to backend — playPrevious uses backend history instead of frontend array
+- [x] #7 Queue integrity check (detectAndRepairInconsistencies) runs in Rust via queue_check_integrity command and emits results
+- [x] #8 Frontend queue.js store is reduced to: event listeners for queue state snapshots, getters for computed UI properties, and invoke wrappers
+- [x] #9 Rust tests cover: shuffle/unshuffle preserves all tracks; shuffle puts current track at index 0; loop-all wraps to index 0; loop-one replays same index; play-next inserts at correct offset; playPrevious follows history stack; integrity check detects and repairs duplicate entries
+- [x] #10 Frontend Vitest tests verify queue store applies state snapshots from backend events correctly
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Migrated ~500 lines of queue state machine logic from frontend JavaScript to Rust backend, making the frontend a thin reactive layer.
+
+### Backend (Rust)
+- Extended `queue_state` table with 4 new columns: `play_next_offset`, `play_history_json`, `play_next_track_ids_json`, `repeat_one_pending`
+- `toggle_shuffle()`: Fisher-Yates with current-track-at-0 and play-next pinning; unshuffle restores original order
+- `add_play_next()`: move semantics, offset tracking, play_next_track_ids management
+- `advance_to_next()`/`advance_to_previous()`: repeat-one two-phase, loop modes, history push/pop, reshuffle on loop restart
+- `skip_to_next()`/`skip_to_previous()`: override repeat-one before delegating
+- `check_integrity()`: duplicate detection, index bounds, orphaned play-next IDs with auto-repair
+- 6 new Tauri commands registered: `queue_add_play_next`, `queue_play_next_track`, `queue_play_previous_track`, `queue_skip_next`, `queue_skip_previous`, `queue_check_integrity`
+- `queue_set_shuffle` enhanced to return `QueueStateSnapshot`
+- 773 Rust tests pass (69+ new)
+
+### Frontend (JavaScript)
+- Removed: `_shuffleItems`, `_reshuffleForLoopRestart`, `_originalOrder`, `_playHistory`, `_playNextTrackIds`, `_playNextOffset`, `_repeatOnePending`, `_syncQueueToBackend`, `_validateQueueIntegrity`, `_pushToHistory`, `_popFromHistory`
+- Added: `_applySnapshot()`, `_applyNavigationResult()` — apply backend state to local store
+- All state-changing methods are now thin wrappers: call backend command, apply returned snapshot
+- queue.js reduced from 892 to ~530 lines
+- Updated queue-builder.test.js and queue.props.test.js to test backend-delegated pattern
+- 444 frontend Vitest tests pass
+<!-- SECTION:FINAL_SUMMARY:END -->

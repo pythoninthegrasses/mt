@@ -225,7 +225,7 @@ export const queue = {
   /**
    * Set shuffle enabled in queue (uses Tauri command)
    * @param {boolean} enabled - Whether shuffle is enabled
-   * @returns {Promise<void>}
+   * @returns {Promise<QueueStateSnapshot>} State snapshot with reordered queue
    */
   async setShuffle(enabled) {
     if (invoke) {
@@ -254,5 +254,104 @@ export const queue = {
       }
     }
     console.debug('Queue setLoop (no-op in browser):', mode);
+  },
+
+  /**
+   * Add tracks as "play next" with backend-managed offset and move semantics
+   * @param {number[]} trackIds - Track IDs to play next
+   * @returns {Promise<QueueStateSnapshot>}
+   */
+  async addPlayNext(trackIds) {
+    if (invoke) {
+      try {
+        return await invoke('queue_add_play_next', { trackIds });
+      } catch (error) {
+        console.error('[api.queue.addPlayNext] Tauri error:', error);
+        throw new ApiError(500, error.toString());
+      }
+    }
+    throw new ApiError(500, 'addPlayNext not available in browser mode');
+  },
+
+  /**
+   * Play next track with full state machine (repeat-one, loop, history, audio)
+   * @returns {Promise<QueueNavigationResult>}
+   */
+  async playNextTrack() {
+    if (invoke) {
+      try {
+        return await invoke('queue_play_next_track');
+      } catch (error) {
+        console.error('[api.queue.playNextTrack] Tauri error:', error);
+        throw new ApiError(500, error.toString());
+      }
+    }
+    throw new ApiError(500, 'playNextTrack not available in browser mode');
+  },
+
+  /**
+   * Play previous track with full state machine (>3sec restart, history, loop wrap)
+   * @param {number} currentTimeMs - Current playback position in milliseconds
+   * @returns {Promise<QueueNavigationResult>}
+   */
+  async playPreviousTrack(currentTimeMs) {
+    if (invoke) {
+      try {
+        return await invoke('queue_play_previous_track', { currentTimeMs });
+      } catch (error) {
+        console.error('[api.queue.playPreviousTrack] Tauri error:', error);
+        throw new ApiError(500, error.toString());
+      }
+    }
+    throw new ApiError(500, 'playPreviousTrack not available in browser mode');
+  },
+
+  /**
+   * Skip to next track, overriding repeat-one mode
+   * @returns {Promise<QueueNavigationResult>}
+   */
+  async skipNext() {
+    if (invoke) {
+      try {
+        return await invoke('queue_skip_next');
+      } catch (error) {
+        console.error('[api.queue.skipNext] Tauri error:', error);
+        throw new ApiError(500, error.toString());
+      }
+    }
+    throw new ApiError(500, 'skipNext not available in browser mode');
+  },
+
+  /**
+   * Skip to previous track, overriding repeat-one mode
+   * @param {number} currentTimeMs - Current playback position in milliseconds
+   * @returns {Promise<QueueNavigationResult>}
+   */
+  async skipPrevious(currentTimeMs) {
+    if (invoke) {
+      try {
+        return await invoke('queue_skip_previous', { currentTimeMs });
+      } catch (error) {
+        console.error('[api.queue.skipPrevious] Tauri error:', error);
+        throw new ApiError(500, error.toString());
+      }
+    }
+    throw new ApiError(500, 'skipPrevious not available in browser mode');
+  },
+
+  /**
+   * Run queue integrity check and auto-repair
+   * @returns {Promise<IntegrityReport>}
+   */
+  async checkIntegrity() {
+    if (invoke) {
+      try {
+        return await invoke('queue_check_integrity');
+      } catch (error) {
+        console.error('[api.queue.checkIntegrity] Tauri error:', error);
+        throw new ApiError(500, error.toString());
+      }
+    }
+    throw new ApiError(500, 'checkIntegrity not available in browser mode');
   },
 };

@@ -31,8 +31,16 @@ vi.mock('../js/api/queue.js', () => ({
     setShuffle: vi.fn().mockResolvedValue({}),
     setLoop: vi.fn().mockResolvedValue({}),
     setCurrentIndex: vi.fn().mockResolvedValue({}),
+    addPlayNext: vi.fn().mockResolvedValue({}),
+    playNextTrack: vi.fn().mockResolvedValue({}),
+    playPreviousTrack: vi.fn().mockResolvedValue({}),
+    skipNext: vi.fn().mockResolvedValue({}),
+    skipPrevious: vi.fn().mockResolvedValue({}),
+    checkIntegrity: vi.fn().mockResolvedValue({}),
   },
 }));
+
+import { queue as queueApi } from '../js/api/queue.js';
 
 // Mock Tauri
 global.window = {
@@ -71,178 +79,73 @@ describe('Queue Store - Property-Based Tests', () => {
     store = Alpine.store('queue');
   });
 
-  describe('Shuffle Invariants', () => {
+  describe('Shuffle (Backend-Delegated)', () => {
     test.prop([trackListArbitrary])(
-      'shuffle preserves all tracks (current track stored separately)',
-      async (tracks) => {
-        // Need at least 2 tracks to shuffle
-        fc.pre(tracks.length >= 2);
-
-        // Setup
-        store.items = [...tracks];
-        store._originalOrder = [...tracks];
-        store.currentIndex = 0;
-
-        // Get original track IDs
-        const originalIds = new Set(tracks.map((t) => t.id));
-
-        // Shuffle
-        store._shuffleItems();
-
-        // Verify same tracks are preserved (all tracks still in queue)
-        const shuffledIds = new Set(store.items.map((t) => t.id));
-        expect(shuffledIds).toEqual(originalIds);
-
-        // Queue should have same length (current track stays at index 0)
-        expect(store.items.length).toBe(tracks.length);
-      },
-    );
-
-    test.prop([trackListArbitrary])(
-      'shuffle twice produces different order (probabilistic)',
-      async (tracks) => {
-        // Skip if too few tracks to shuffle meaningfully
-        fc.pre(tracks.length >= 3);
-
-        store.items = [...tracks];
-        store._originalOrder = [...tracks];
-        store.currentIndex = 0;
-
-        // First shuffle - current track at index 0
-        store._shuffleItems();
-        const firstShuffle = store.items.map((t) => t.id);
-
-        // Queue should have same length after shuffle
-        expect(store.items.length).toBe(tracks.length);
-
-        // Second shuffle (simulating re-shuffle at end of queue with loop)
-        store._shuffleItems();
-        const secondShuffle = store.items.map((t) => t.id);
-
-        // With 3+ tracks, probability of identical shuffle is low
-        // (we accept some false negatives for simplicity)
-        // Both shuffles should maintain all tracks
-        expect(store.items.length).toBe(tracks.length);
-      },
-    );
-
-    test.prop([trackListArbitrary])(
-      'shuffle keeps current track at index 0 (task-213)',
-      async (tracks) => {
-        fc.pre(tracks.length >= 2);
-
-        store.items = [...tracks];
-        store._originalOrder = [...tracks];
-        const currentIdx = Math.floor(tracks.length / 2);
-        store.currentIndex = currentIdx;
-        const currentTrack = tracks[currentIdx];
-
-        store._shuffleItems();
-
-        // Current track should be at index 0
-        expect(store.items[0].id).toBe(currentTrack.id);
-
-        // Queue should have same length (no tracks removed)
-        expect(store.items.length).toBe(tracks.length);
-
-        // currentIndex should be 0
-        expect(store.currentIndex).toBe(0);
-      },
-    );
-
-    it('shuffle with duplicate tracks handles current track correctly (task-213)', () => {
-      // Create queue with duplicate tracks: [A, B, A, C]
-      // Playing track at index 2 (second occurrence of A)
-      const trackA1 = { id: 1, title: 'Track A', artist: 'Artist', album: 'Album' };
-      const trackB = { id: 2, title: 'Track B', artist: 'Artist', album: 'Album' };
-      const trackA2 = { id: 1, title: 'Track A', artist: 'Artist', album: 'Album' }; // Same ID, different object
-      const trackC = { id: 3, title: 'Track C', artist: 'Artist', album: 'Album' };
-
-      store.items = [trackA1, trackB, trackA2, trackC];
-      store._originalOrder = [trackA1, trackB, trackA2, trackC];
-      store.currentIndex = 2; // Playing second occurrence of A (trackA2)
-
-      // Shuffle the queue
-      store._shuffleItems();
-
-      // Queue should have 4 items (current track stays at index 0)
-      expect(store.items.length).toBe(4);
-
-      // Current track (second A) should be at index 0
-      expect(store.items[0]).toBe(trackA2);
-      expect(store.currentIndex).toBe(0);
-
-      // Both occurrences of A should still be in the queue
-      // since we filter by index, not by ID
-      const trackACount = store.items.filter((t) => t.id === 1).length;
-      expect(trackACount).toBe(2);
-
-      // Verify queue has all 4 tracks (IDs 1, 2, 1, 3 sorted as 1, 1, 2, 3)
-      const trackIds = store.items.map((t) => t.id).sort();
-      expect(trackIds).toEqual([1, 1, 2, 3]);
-    });
-
-    test.prop([trackListArbitrary])(
-      'toggle shuffle twice returns to original order',
+      'toggleShuffle calls setShuffle with inverted state',
       async (tracks) => {
         fc.pre(tracks.length >= 1);
 
         store.items = [...tracks];
-        store._originalOrder = [...tracks];
-        store.currentIndex = tracks.length > 0 ? 0 : -1;
-        const originalOrder = tracks.map((t) => t.id);
-
-        // Shuffle on
+        store.currentIndex = 0;
         store.shuffle = false;
+
+        // Mock backend returning a snapshot
+        const snapshot = {
+          items: tracks.map((t) => ({ track: t })),
+          current_index: 0,
+          shuffle_enabled: true,
+          loop_mode: 'none',
+          play_next_offset: 0,
+        };
+        queueApi.setShuffle.mockResolvedValue(snapshot);
+
         await store.toggleShuffle();
 
-        // Shuffle off (should restore)
-        await store.toggleShuffle();
-
-        const restoredOrder = store.items.map((t) => t.id);
-        expect(restoredOrder).toEqual(originalOrder);
+        expect(queueApi.setShuffle).toHaveBeenCalledWith(true);
       },
     );
 
     test.prop([trackListArbitrary])(
-      '_reshuffleForLoopRestart does not put just-played track first (task-222)',
+      'toggleShuffle applies snapshot from backend',
       async (tracks) => {
-        // Need at least 2 tracks for reshuffle to be meaningful
         fc.pre(tracks.length >= 2);
 
         store.items = [...tracks];
-        store._originalOrder = [...tracks];
-        // Set current index to last track (simulating end of queue)
-        store.currentIndex = tracks.length - 1;
-        const justPlayedTrack = tracks[tracks.length - 1];
+        store.currentIndex = 0;
+        store.shuffle = false;
 
-        // Reshuffle for loop restart
-        store._reshuffleForLoopRestart();
+        // Simulate backend returning shuffled order
+        const shuffled = [...tracks].reverse();
+        const snapshot = {
+          items: shuffled.map((t) => ({ track: t })),
+          current_index: 0,
+          shuffle_enabled: true,
+          loop_mode: 'none',
+          play_next_offset: 0,
+        };
+        queueApi.setShuffle.mockResolvedValue(snapshot);
 
-        // Just-played track should NOT be at index 0
-        expect(store.items[0].id).not.toBe(justPlayedTrack.id);
+        await store.toggleShuffle();
 
-        // Just-played track should be at the END
-        expect(store.items[store.items.length - 1].id).toBe(justPlayedTrack.id);
-
-        // All tracks should still be preserved
-        expect(store.items.length).toBe(tracks.length);
-
-        // Original order should be updated to new shuffle
-        expect(store._originalOrder.length).toBe(tracks.length);
+        expect(store.shuffle).toBe(true);
+        expect(store.items.map((t) => t.id)).toEqual(shuffled.map((t) => t.id));
+        expect(store.currentIndex).toBe(0);
       },
     );
 
-    it('_reshuffleForLoopRestart with single track does nothing', () => {
-      const trackA = { id: 1, title: 'Track A', artist: 'Artist', album: 'Album' };
-      store.items = [trackA];
-      store.currentIndex = 0;
+    it('toggleShuffle handles API error gracefully', async () => {
+      store.items = [{ id: 1, title: 'A' }];
+      store.shuffle = false;
 
-      store._reshuffleForLoopRestart();
+      queueApi.setShuffle.mockRejectedValue(new Error('IPC failed'));
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      // Single track - nothing should change
-      expect(store.items.length).toBe(1);
-      expect(store.items[0].id).toBe(1);
+      await store.toggleShuffle();
+
+      // Shuffle state should not change on error
+      expect(store.shuffle).toBe(false);
+
+      consoleSpy.mockRestore();
     });
   });
 
@@ -565,88 +468,60 @@ describe('Queue Store - Property-Based Tests', () => {
     });
   });
 
-  describe('Play Next Invariants', () => {
+  describe('Play Next (Backend-Delegated)', () => {
     test.prop([
       trackListArbitrary,
       fc.array(trackArbitrary, { minLength: 1, maxLength: 5 }),
-      fc.nat(),
     ])(
-      'playNextTracks inserts after currentIndex',
-      async (tracks, playNextTracks, rawIdx) => {
-        fc.pre(tracks.length >= 2);
-
-        store.items = [...tracks];
-        store._originalOrder = [...tracks];
-        const currentIdx = rawIdx % tracks.length;
-        store.currentIndex = currentIdx;
-        store._playNextOffset = 0;
-
-        const originalLength = store.items.length;
-        const currentTrackId = store.items[currentIdx].id;
-
-        // Simulate the store's move-then-insert logic to compute expected length:
-        // For each input track, if it exists in the queue (and isn't current),
-        // it's removed first. The track is always added to tracksToInsert
-        // (including duplicates in input). Current track is skipped entirely.
-        const simQueue = new Set(tracks.map((t) => t.id));
-        let removals = 0;
-        let inserts = 0;
-        for (const t of playNextTracks) {
-          if (t.id === currentTrackId) continue;
-          if (simQueue.has(t.id)) {
-            simQueue.delete(t.id);
-            removals++;
-          }
-          inserts++;
-        }
-        const expectedLength = originalLength - removals + inserts;
-
-        await store.playNextTracks(playNextTracks);
-
-        // Invariant: current track is still in the queue
-        expect(store.items.find((t) => t.id === currentTrackId)).toBeTruthy();
-
-        // Invariant: total queue length matches simulated move-then-insert
-        expect(store.items.length).toBe(expectedLength);
-      },
-    );
-
-    test.prop([trackListArbitrary, fc.array(trackArbitrary, { minLength: 1, maxLength: 5 })])(
-      'playNextTracks preserves all tracks',
+      'playNextTracks calls addPlayNext with track IDs',
       async (tracks, playNextTracks) => {
         fc.pre(tracks.length >= 1);
 
         store.items = [...tracks];
-        store._originalOrder = [...tracks];
         store.currentIndex = 0;
-        store._playNextOffset = 0;
 
-        const currentTrackId = tracks[0].id;
-
-        // Simulate the store's move-then-insert logic
-        const simQueue = new Set(tracks.map((t) => t.id));
-        let removals = 0;
-        let inserts = 0;
-        for (const t of playNextTracks) {
-          if (t.id === currentTrackId) continue;
-          if (simQueue.has(t.id)) {
-            simQueue.delete(t.id);
-            removals++;
-          }
-          inserts++;
-        }
-        const expectedLength = tracks.length - removals + inserts;
+        // Mock backend returning a snapshot with all tracks
+        const allTracks = [...tracks, ...playNextTracks];
+        const snapshot = {
+          items: allTracks.map((t) => ({ track: t })),
+          current_index: 0,
+          shuffle_enabled: false,
+          loop_mode: 'none',
+          play_next_offset: playNextTracks.length,
+        };
+        queueApi.addPlayNext.mockResolvedValue(snapshot);
 
         await store.playNextTracks(playNextTracks);
 
-        // Invariant: all play-next tracks present
-        const resultIds = store.items.map((t) => t.id);
-        for (const t of playNextTracks) {
-          expect(resultIds).toContain(t.id);
-        }
+        expect(queueApi.addPlayNext).toHaveBeenCalledWith(
+          playNextTracks.map((t) => t.id),
+        );
+      },
+    );
 
-        // Invariant: total count matches simulated move-then-insert
-        expect(store.items.length).toBe(expectedLength);
+    test.prop([trackListArbitrary, fc.array(trackArbitrary, { minLength: 1, maxLength: 5 })])(
+      'playNextTracks applies snapshot from backend',
+      async (tracks, playNextTracks) => {
+        fc.pre(tracks.length >= 1);
+
+        store.items = [...tracks];
+        store.currentIndex = 0;
+
+        const resultTracks = [...tracks, ...playNextTracks];
+        const snapshot = {
+          items: resultTracks.map((t) => ({ track: t })),
+          current_index: 0,
+          shuffle_enabled: false,
+          loop_mode: 'none',
+          play_next_offset: playNextTracks.length,
+        };
+        queueApi.addPlayNext.mockResolvedValue(snapshot);
+
+        await store.playNextTracks(playNextTracks);
+
+        // Items should be set from snapshot
+        expect(store.items.length).toBe(resultTracks.length);
+        expect(store.currentIndex).toBe(0);
       },
     );
   });
@@ -660,9 +535,6 @@ describe('Queue Store - Property-Based Tests', () => {
       await expect(store.clear()).resolves.not.toThrow();
       await expect(store.remove(0)).resolves.not.toThrow();
       await expect(store.reorder(0, 1)).resolves.not.toThrow();
-
-      store._shuffleItems();
-      expect(store.items.length).toBe(0);
     });
 
     test.prop([fc.nat()])('operations with out-of-bounds indices are safe', async (idx) => {
@@ -677,10 +549,6 @@ describe('Queue Store - Property-Based Tests', () => {
     test.prop([trackArbitrary])('single track queue operations work correctly', async (track) => {
       store.items = [track];
       store.currentIndex = 0;
-
-      // Shuffle should not change anything
-      store._shuffleItems();
-      expect(store.items[0].id).toBe(track.id);
 
       // Remove should empty queue
       await store.remove(0);

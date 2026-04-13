@@ -460,6 +460,41 @@ pub(crate) fn run_migrations(conn: &Connection) -> DbResult<()> {
         info!("play_history track_id index created");
     }
 
+    // Migration: Add queue state machine columns for backend-owned queue logic
+    let qs_columns = get_table_columns(conn, "queue_state")?;
+    if !qs_columns.contains(&"play_next_offset".to_string()) {
+        info!("Adding play_next_offset column to queue_state table");
+        conn.execute(
+            "ALTER TABLE queue_state ADD COLUMN play_next_offset INTEGER DEFAULT 0",
+            [],
+        )?;
+        info!("play_next_offset column added");
+    }
+    if !qs_columns.contains(&"play_history_json".to_string()) {
+        info!("Adding play_history_json column to queue_state table");
+        conn.execute(
+            "ALTER TABLE queue_state ADD COLUMN play_history_json TEXT",
+            [],
+        )?;
+        info!("play_history_json column added");
+    }
+    if !qs_columns.contains(&"play_next_track_ids_json".to_string()) {
+        info!("Adding play_next_track_ids_json column to queue_state table");
+        conn.execute(
+            "ALTER TABLE queue_state ADD COLUMN play_next_track_ids_json TEXT",
+            [],
+        )?;
+        info!("play_next_track_ids_json column added");
+    }
+    if !qs_columns.contains(&"repeat_one_pending".to_string()) {
+        info!("Adding repeat_one_pending column to queue_state table");
+        conn.execute(
+            "ALTER TABLE queue_state ADD COLUMN repeat_one_pending INTEGER DEFAULT 0",
+            [],
+        )?;
+        info!("repeat_one_pending column added");
+    }
+
     // Migration: Add file_ctime_ns column for creation time (birthtime)
     let library_columns = get_table_columns(conn, "library")?;
     if !library_columns.contains(&"file_ctime_ns".to_string()) {
