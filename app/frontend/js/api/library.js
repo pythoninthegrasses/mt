@@ -140,7 +140,30 @@ export const library = {
         throw new ApiError(500, error.toString());
       }
     }
-    throw new ApiError(501, 'getSection requires Tauri backend');
+    // HTTP fallback: compose from existing /library + /library/count endpoints
+    const query = new URLSearchParams();
+    if (params.search) query.set('search', params.search);
+    if (params.artist) query.set('artist', params.artist);
+    if (params.album) query.set('album', params.album);
+    if (params.sort) query.set('sort_by', params.sort);
+    if (params.order) query.set('sort_order', params.order);
+    if (params.limit) query.set('limit', params.limit.toString());
+    if (params.offset) query.set('offset', params.offset.toString());
+    const qs = query.toString();
+    const [trackData, countData] = await Promise.all([
+      request(`/library${qs ? `?${qs}` : ''}`),
+      request(`/library/count${qs ? `?${qs}` : ''}`),
+    ]);
+    return {
+      section: params.section || 'all',
+      tracks: trackData.tracks || [],
+      total_tracks: countData.total ?? (trackData.tracks || []).length,
+      total_duration: countData.total_duration ?? 0,
+      page: params.offset != null ? Math.floor(params.offset / (params.limit || 50)) : null,
+      page_size: params.limit || null,
+      has_more: trackData.total > (params.offset || 0) + (trackData.tracks || []).length,
+      revision: 0,
+    };
   },
 
   /**
