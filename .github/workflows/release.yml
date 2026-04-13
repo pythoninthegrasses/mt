@@ -13,6 +13,11 @@ on:
           - macos
           - linux
           - windows
+      release-tag:
+        description: 'Attach assets to this release tag (e.g. v1.5.0). Defaults to latest release.'
+        required: false
+        default: 'latest'
+        type: string
       linux-runner:
         description: 'Linux runner label (custom image or vanilla fallback)'
         required: false
@@ -45,6 +50,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Resolve release tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+          elif [ "${{ inputs.release-tag }}" != "latest" ] && [ -n "${{ inputs.release-tag }}" ]; then
+            tag="${{ inputs.release-tag }}"
+          else
+            tag="$(gh release view --json tagName -q .tagName)"
+          fi
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+          echo "Resolved release tag: $tag"
 
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
@@ -102,11 +121,11 @@ jobs:
         run: task ci:notarize TARGET=aarch64-apple-darwin
 
       - name: Upload release assets
-        if: github.event_name == 'release'
+        if: env.RELEASE_TAG != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
+          gh release upload "$RELEASE_TAG" --clobber \
             target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
 
       - name: Cleanup CI keychain
@@ -126,6 +145,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Resolve release tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+          elif [ "${{ inputs.release-tag }}" != "latest" ] && [ -n "${{ inputs.release-tag }}" ]; then
+            tag="${{ inputs.release-tag }}"
+          else
+            tag="$(gh release view --json tagName -q .tagName)"
+          fi
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+          echo "Resolved release tag: $tag"
 
       - name: Setup Docker builder
         uses: useblacksmith/setup-docker-builder@v1
@@ -150,11 +183,11 @@ jobs:
           retention-days: 7
 
       - name: Upload release assets
-        if: github.event_name == 'release'
+        if: env.RELEASE_TAG != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
+          gh release upload "$RELEASE_TAG" --clobber \
             dist/*.deb
 
   build-windows:
@@ -167,6 +200,21 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Resolve release tag
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ("${{ github.event_name }}" -eq "release") {
+            $tag = "${{ github.event.release.tag_name }}"
+          } elseif ("${{ inputs.release-tag }}" -ne "latest" -and "${{ inputs.release-tag }}" -ne "") {
+            $tag = "${{ inputs.release-tag }}"
+          } else {
+            $tag = (gh release view --json tagName -q .tagName)
+          }
+          echo "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
+          Write-Host "Resolved release tag: $tag"
 
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
@@ -243,12 +291,12 @@ jobs:
           retention-days: 7
 
       - name: Upload release assets
-        if: github.event_name == 'release'
+        if: env.RELEASE_TAG != ''
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" (Get-Item target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe)
+          gh release upload "$env:RELEASE_TAG" --clobber (Get-Item target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe)
 
       - name: Cleanup certificate
         if: always()
@@ -261,7 +309,10 @@ jobs:
   update-readme:
     name: Update README download links
     needs: [build-macos, build-linux-amd64, build-windows]
-    if: github.event_name == 'release'
+    if: >
+      always() &&
+      !cancelled() &&
+      (needs.build-macos.result == 'success' || needs.build-linux-amd64.result == 'success' || needs.build-windows.result == 'success')
     runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
@@ -270,10 +321,24 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve release tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+          elif [ "${{ inputs.release-tag }}" != "latest" ] && [ -n "${{ inputs.release-tag }}" ]; then
+            tag="${{ inputs.release-tag }}"
+          else
+            tag="$(gh release view --json tagName -q .tagName)"
+          fi
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+          echo "Resolved release tag: $tag"
+
       - name: Update download table
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ env.RELEASE_TAG }}
         run: |
           python3 << 'EOF'
           import json, os, re, subprocess
@@ -321,5 +386,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
-          git diff --staged --quiet || git commit -m "chore: update download links for ${{ github.event.release.tag_name }} [skip ci]"
+          git diff --staged --quiet || git commit -m "chore: update download links for $RELEASE_TAG [skip ci]"
           git push origin main
