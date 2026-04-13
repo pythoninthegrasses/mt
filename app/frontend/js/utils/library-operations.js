@@ -155,16 +155,12 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
   const loadSection = store.currentSection;
   const cached = store._sectionCache[loadSection];
 
-  // Show cached summary stats if available (previous tracks stay visible during fetch)
   if (cached && !forceReload) {
-    console.log('[library]', 'load_with_cache_summary', {
+    console.log('[library]', 'load_with_cache', {
       section: loadSection,
       totalTracks: cached.totalTracks,
       cacheAge: Math.round((Date.now() - cached.timestamp) / 1000) + 's',
     });
-    store.totalTracks = cached.totalTracks;
-    store.totalDuration = cached.totalDuration;
-    store._lastLoadedSection = loadSection;
   }
 
   console.log('[library]', 'load', {
@@ -179,10 +175,11 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
   try {
     const _t0 = performance.now();
 
-    // Reset to paginated mode
+    // Reset pages and totalTracks together so the loading spinner shows
+    // instead of empty placeholder rows (FOUC)
     store._resetPages();
-
-    // Fetch count and first page in parallel
+    store.totalTracks = 0;
+    store.totalDuration = 0;
     const filterParams = store._getFilterParams();
     const [countData] = await Promise.all([
       library.getCount(filterParams),
@@ -251,7 +248,6 @@ export async function backgroundRefreshLibrary(store, section) {
     const countData = await library.getCount(filterParams);
 
     if (store.currentSection === section) {
-      // Reset and reload page 0
       store._resetPages();
       await store._fetchPage(0);
 
