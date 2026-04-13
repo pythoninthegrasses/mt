@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.5.0](https://github.com/pythoninthegrasses/mt/compare/v1.4.1...v1.5.0) (2026-04-13)
+
+
+### Features
+
+* **events:** backend mutation reconciliation replacing frontend optimistic updates ([#41](https://github.com/pythoninthegrasses/mt/issues/41)) ([980c9ba](https://github.com/pythoninthegrasses/mt/commit/980c9ba7cd6a9e7e3b5c0719f311cdc7bdf6a9bd))
+* **library:** unified library_get_section command ([#40](https://github.com/pythoninthegrasses/mt/issues/40)) ([d42139e](https://github.com/pythoninthegrasses/mt/commit/d42139e7d7fcaca67c4bca92df3257fd5c4b5237))
+* **queue:** atomic play-context command replacing frontend queue-build choreography ([c900d0c](https://github.com/pythoninthegrasses/mt/commit/c900d0c5b01277e2c9728fc2f96bf685a9a41d9a))
+* **queue:** backend queue state machine replacing frontend shuffle, navigation, and play-next logic ([#42](https://github.com/pythoninthegrasses/mt/issues/42)) ([fe613b5](https://github.com/pythoninthegrasses/mt/commit/fe613b5794387ed29d357201c7a6e830a2425805))
+
+
+### Bug Fixes
+
+* **ci:** unset CARGO_HOME for binstall so tools install to ~/.cargo/bin ([e19cf5e](https://github.com/pythoninthegrasses/mt/commit/e19cf5e8619387625a242564dd0979bb43ce788e))
+* **library:** auto-backfill content_hash after scan to enable cross-directory dedup ([c12940b](https://github.com/pythoninthegrasses/mt/commit/c12940be31292aa9c2106fc758423d60bdba001a))
+* **ui:** eliminate FOUC when navigating to Music view ([62d3879](https://github.com/pythoninthegrasses/mt/commit/62d3879f220df88843b04ce16c4ded372faf3226))
+
 ## [1.4.1](https://github.com/pythoninthegrasses/mt/compare/v1.4.0...v1.4.1) (2026-04-12)
 
 
