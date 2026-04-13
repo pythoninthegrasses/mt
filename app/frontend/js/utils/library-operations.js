@@ -111,7 +111,13 @@ export async function loadSection(store, section, fetchFn, opts = {}) {
     }
 
     const rawTracks = data.tracks || [];
-    const tracks = transform ? transform(rawTracks, data) : store._filterByLibrary(rawTracks);
+    // When using the unified backend command, tracks are already authoritative
+    // — no need to filter against the "all" section (which may not be loaded).
+    const tracks = transform
+      ? transform(rawTracks, data)
+      : useUnified
+      ? rawTracks
+      : store._filterByLibrary(rawTracks);
 
     if (useUnified) {
       // Use authoritative stats from backend
@@ -181,7 +187,11 @@ export async function backgroundRefreshSection(store, section, fetchFn, opts = {
 
     if (store._lastLoadedSection === section) {
       const rawTracks = data.tracks || [];
-      const tracks = transform ? transform(rawTracks, data) : store._filterByLibrary(rawTracks);
+      const tracks = transform
+        ? transform(rawTracks, data)
+        : useUnified
+        ? rawTracks
+        : store._filterByLibrary(rawTracks);
 
       if (useUnified) {
         applySectionData(store, section, tracks, data);
