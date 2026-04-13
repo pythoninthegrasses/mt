@@ -512,11 +512,14 @@ export function createQueueStore(Alpine) {
      */
     async toggleShuffle() {
       this._updating = true;
+      const prev = this.shuffle;
+      this.shuffle = !prev;
       try {
-        const snapshot = await queueApi.setShuffle(!this.shuffle);
+        const snapshot = await queueApi.setShuffle(this.shuffle);
         this._applySnapshot(snapshot);
       } catch (error) {
         console.error('[queue] toggleShuffle failed:', error);
+        this.shuffle = prev;
       } finally {
         setTimeout(() => {
           this._updating = false;
