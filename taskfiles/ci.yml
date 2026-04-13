@@ -93,7 +93,8 @@ tasks:
     cmds:
       - cargo binstall cargo-nextest --locked --no-confirm
     status:
-      - command -v cargo-nextest
+      - test -x "{{.CARGO_BIN}}/cargo-nextest"
+      - cargo nextest --version
 
   _install-tauri-cli:
     internal: true
@@ -102,7 +103,8 @@ tasks:
     cmds:
       - cargo binstall tauri-cli --locked --no-confirm
     status:
-      - command -v cargo-tauri
+      - test -x "{{.CARGO_BIN}}/cargo-tauri"
+      - cargo tauri --version
 
   setup-system-deps:
     desc: "Install Linux system dependencies for Tauri"
