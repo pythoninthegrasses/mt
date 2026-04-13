@@ -104,6 +104,46 @@ export const library = {
   },
 
   /**
+   * Get a complete view model for any library section in a single call.
+   * Returns tracks, authoritative stats, pagination metadata, and a revision
+   * number for cache invalidation — all from the same DB transaction.
+   * @param {object} params
+   * @param {string} params.section - 'all', 'liked', 'top25', 'recent', 'added', or 'playlist-{id}'
+   * @param {string} [params.search] - Search query (all section only)
+   * @param {string} [params.artist] - Artist filter (all section only)
+   * @param {string} [params.album] - Album filter (all section only)
+   * @param {string} [params.sort] - Sort field (all section only)
+   * @param {string} [params.order] - Sort order (all section only)
+   * @param {number} [params.limit] - Page size / result limit
+   * @param {number} [params.offset] - Page offset (all section only)
+   * @param {string} [params.ignoreWords] - Ignore words for sort (all section only)
+   * @param {number} [params.days] - Days lookback (recent/added sections)
+   * @returns {Promise<{section: string, tracks: Array, total_tracks: number, total_duration: number, page: number|null, page_size: number|null, has_more: boolean, revision: number}>}
+   */
+  async getSection(params = {}) {
+    if (invoke) {
+      try {
+        return await invoke('library_get_section', {
+          section: params.section,
+          search: params.search || null,
+          artist: params.artist || null,
+          album: params.album || null,
+          sortBy: params.sort || null,
+          sortOrder: params.order || null,
+          limit: params.limit || null,
+          offset: params.offset || null,
+          ignoreWords: params.ignoreWords || null,
+          days: params.days || null,
+        });
+      } catch (error) {
+        console.error('[api.library.getSection] Tauri error:', error);
+        throw new ApiError(500, error.toString());
+      }
+    }
+    throw new ApiError(501, 'getSection requires Tauri backend');
+  },
+
+  /**
    * Get a single track by ID (uses Tauri command)
    * @param {number} id - Track ID
    * @returns {Promise<object|null>} Track object or null

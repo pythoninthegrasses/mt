@@ -232,6 +232,9 @@ pub(crate) fn add_tracks_to_playlist(
         }
     }
 
+    if added > 0 {
+        crate::db::revision::bump_revision(conn)?;
+    }
     Ok(added)
 }
 
@@ -271,6 +274,7 @@ pub(crate) fn remove_track_from_playlist(
         )?;
     }
 
+    crate::db::revision::bump_revision(conn)?;
     Ok(true)
 }
 
@@ -310,6 +314,19 @@ pub(crate) fn reorder_playlist(
     }
 
     Ok(true)
+}
+
+/// Count and total duration of tracks in a playlist.
+pub(crate) fn get_playlist_stats(conn: &Connection, playlist_id: i64) -> DbResult<(i64, f64)> {
+    let (count, duration) = conn.query_row(
+        "SELECT COUNT(*), COALESCE(SUM(l.duration), 0)
+         FROM playlist_items pi
+         JOIN library l ON pi.track_id = l.id
+         WHERE pi.playlist_id = ?",
+        [playlist_id],
+        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?)),
+    )?;
+    Ok((count, duration))
 }
 
 /// Get the number of tracks in a playlist
@@ -669,6 +686,38 @@ mod tests {
 
         let count = get_playlist_track_count(&conn, playlist.id).unwrap();
         assert_eq!(count, 5);
+    }
+
+    #[test]
+    fn test_get_playlist_stats() {
+        let conn = setup_test_db();
+
+        let mut track_ids = Vec::new();
+        for i in 1..=3 {
+            let metadata = TrackMetadata {
+                title: Some(format!("Track {}", i)),
+                duration: Some(60.0 * i as f64),
+                ..Default::default()
+            };
+            let id = add_track(&conn, &format!("/music/track{}.mp3", i), &metadata).unwrap();
+            track_ids.push(id);
+        }
+
+        let playlist = create_playlist(&conn, "Stats Test").unwrap().unwrap();
+        add_tracks_to_playlist(&conn, playlist.id, &track_ids, None).unwrap();
+
+        let (count, duration) = get_playlist_stats(&conn, playlist.id).unwrap();
+        assert_eq!(count, 3);
+        assert_eq!(duration, 60.0 + 120.0 + 180.0);
+    }
+
+    #[test]
+    fn test_get_playlist_stats_empty() {
+        let conn = setup_test_db();
+        let playlist = create_playlist(&conn, "Empty Stats").unwrap().unwrap();
+        let (count, duration) = get_playlist_stats(&conn, playlist.id).unwrap();
+        assert_eq!(count, 0);
+        assert_eq!(duration, 0.0);
     }
 
     #[test]

@@ -160,6 +160,13 @@ pub const CREATE_TABLES: &[(&str, &str)] = &[
             FOREIGN KEY (track_id) REFERENCES library(id) ON DELETE CASCADE
         )",
     ),
+    (
+        "library_revision",
+        "CREATE TABLE IF NOT EXISTS library_revision (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            revision INTEGER NOT NULL DEFAULT 0
+        )",
+    ),
 ];
 
 /// Create all database tables
@@ -167,6 +174,11 @@ pub(crate) fn create_tables(conn: &Connection) -> DbResult<()> {
     for (_, sql) in CREATE_TABLES {
         conn.execute(sql, [])?;
     }
+    // Seed the singleton revision row
+    conn.execute(
+        "INSERT OR IGNORE INTO library_revision (id, revision) VALUES (1, 0)",
+        [],
+    )?;
     Ok(())
 }
 
@@ -474,6 +486,19 @@ pub(crate) fn run_migrations(conn: &Connection) -> DbResult<()> {
         info!("deduplicated_tracks table created");
     }
 
+    // Migration: Create library_revision table for cache invalidation
+    if !table_exists(conn, "library_revision")? {
+        info!("Creating library_revision table");
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS library_revision (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                revision INTEGER NOT NULL DEFAULT 0
+            );
+            INSERT OR IGNORE INTO library_revision (id, revision) VALUES (1, 0);",
+        )?;
+        info!("library_revision table created");
+    }
+
     // Migration: Add indexes on deduplicated_tracks
     if !index_exists(conn, "idx_dedup_kept_track")? {
         info!("Creating kept_track_id index on deduplicated_tracks");
@@ -545,7 +570,7 @@ mod tests {
             .filter_map(|r| r.ok())
             .collect();
 
-        assert_eq!(tables.len(), 13);
+        assert_eq!(tables.len(), 14);
         assert!(tables.contains(&"library".to_string()));
         assert!(tables.contains(&"queue".to_string()));
         assert!(tables.contains(&"queue_state".to_string()));
@@ -559,6 +584,7 @@ mod tests {
         assert!(tables.contains(&"lastfm_loved_tracks".to_string()));
         assert!(tables.contains(&"removed_tracks".to_string()));
         assert!(tables.contains(&"play_history".to_string()));
+        assert!(tables.contains(&"library_revision".to_string()));
     }
 
     #[test]

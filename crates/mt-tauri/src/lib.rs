@@ -41,9 +41,9 @@ use dialog::{open_add_music_dialog, open_file_dialog, open_folder_dialog};
 use library::commands::{
     library_check_status, library_delete_all, library_delete_track, library_delete_tracks,
     library_find_offset, library_get_all, library_get_artwork, library_get_artwork_url,
-    library_get_count, library_get_missing, library_get_stats, library_get_track,
-    library_locate_track, library_mark_missing, library_mark_present, library_purge_missing,
-    library_reconcile_scan, library_rescan_track, library_update_play_count,
+    library_get_count, library_get_missing, library_get_section, library_get_stats,
+    library_get_track, library_locate_track, library_mark_missing, library_mark_present,
+    library_purge_missing, library_reconcile_scan, library_rescan_track, library_update_play_count,
 };
 use media_keys::{MediaKeyManager, NowPlayingInfo};
 use metadata::{get_track_metadata, get_tracks_metadata_batch, save_track_metadata};
@@ -481,6 +481,7 @@ pub fn run() {
             get_track_artwork_url,
             library_get_all,
             library_get_count,
+            library_get_section,
             library_find_offset,
             library_get_stats,
             library_get_track,

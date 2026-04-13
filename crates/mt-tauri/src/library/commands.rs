@@ -7,7 +7,10 @@ use std::path::Path;
 use tauri::{AppHandle, State};
 use tracing::{debug, info};
 
-use crate::db::{Database, LibraryStats, SortOrder, Track, TrackMetadata, library, removed};
+use crate::db::{
+    Database, LibraryStats, SortOrder, Track, TrackMetadata, favorites, library, playlists,
+    removed, revision,
+};
 use crate::events::{EventEmitter, LibraryUpdatedEvent};
 use crate::scanner::artwork::Artwork;
 use crate::scanner::artwork_cache::ArtworkCache;
@@ -112,6 +115,272 @@ pub(crate) fn library_get_count(
         ..Default::default()
     };
     library::get_filtered_count(&conn, &query).map_err(|e| e.to_string())
+}
+
+/// Unified response for any library section view.
+#[derive(Clone, serde::Serialize)]
+pub struct LibrarySectionResponse {
+    pub section: String,
+    pub tracks: Vec<Track>,
+    pub total_tracks: i64,
+    pub total_duration: f64,
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+    pub has_more: bool,
+    pub revision: i64,
+}
+
+/// Get a complete view model for any library section in a single call.
+///
+/// Replaces the pattern of separate getCount + getTracks calls. Returns tracks,
+/// authoritative stats, and a revision number for cache invalidation — all from
+/// the same DB transaction so counts are consistent with the returned page.
+#[allow(clippy::too_many_arguments)]
+#[tracing::instrument(skip(db))]
+#[tauri::command]
+pub(crate) fn library_get_section(
+    db: State<'_, Database>,
+    section: String,
+    search: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+    sort_by: Option<String>,
+    sort_order: Option<String>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    ignore_words: Option<String>,
+    days: Option<i64>,
+) -> Result<LibrarySectionResponse, String> {
+    let start_time = std::time::Instant::now();
+
+    let response = db
+        .transaction(|conn| {
+            let rev = revision::get_revision(conn)?;
+
+            match section.as_str() {
+                "all" => get_section_all(
+                    conn,
+                    rev,
+                    search,
+                    artist,
+                    album,
+                    sort_by,
+                    sort_order,
+                    limit,
+                    offset,
+                    ignore_words,
+                ),
+                "liked" => get_section_liked(conn, rev, limit, offset),
+                "top25" => get_section_top25(conn, rev),
+                "recent" => get_section_recent(conn, rev, days, limit),
+                "added" => get_section_added(conn, rev, days, limit),
+                s if s.starts_with("playlist-") => {
+                    let id_str = &s["playlist-".len()..];
+                    let playlist_id: i64 = id_str.parse().map_err(|_| {
+                        crate::db::DbError::NotFound(format!("Invalid playlist id: {}", id_str))
+                    })?;
+                    get_section_playlist(conn, rev, playlist_id)
+                }
+                _ => Err(crate::db::DbError::NotFound(format!(
+                    "Unknown section: {}",
+                    section
+                ))),
+            }
+        })
+        .map_err(|e| e.to_string())?;
+
+    info!(
+        section = %response.section,
+        total_tracks = response.total_tracks,
+        track_count = response.tracks.len(),
+        duration_ms = start_time.elapsed().as_millis() as u64,
+        "library_get_section completed"
+    );
+
+    Ok(response)
+}
+
+/// "all" section: paginated library with search/sort/filter.
+#[allow(clippy::too_many_arguments)]
+fn get_section_all(
+    conn: &rusqlite::Connection,
+    rev: i64,
+    search: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+    sort_by: Option<String>,
+    sort_order: Option<String>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    ignore_words: Option<String>,
+) -> crate::db::DbResult<LibrarySectionResponse> {
+    let page_size = limit.unwrap_or(500);
+    let page_offset = offset.unwrap_or(0);
+
+    let query = library::LibraryQuery {
+        search: search.clone(),
+        artist: artist.clone(),
+        album: album.clone(),
+        genre: None,
+        year_from: None,
+        year_to: None,
+        sort_by: sort_by
+            .as_ref()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_default(),
+        sort_order: sort_order
+            .as_ref()
+            .map(|s| {
+                if s.to_lowercase() == "asc" {
+                    SortOrder::Asc
+                } else {
+                    SortOrder::Desc
+                }
+            })
+            .unwrap_or(SortOrder::Desc),
+        limit: page_size,
+        offset: page_offset,
+        ignore_words,
+    };
+
+    let count_query = library::LibraryQuery {
+        search,
+        artist,
+        album,
+        ..Default::default()
+    };
+
+    let count = library::get_filtered_count(conn, &count_query)?;
+    let result = library::get_all_tracks(conn, &query)?;
+    let has_more = (page_offset + page_size) < count.total;
+
+    Ok(LibrarySectionResponse {
+        section: "all".to_string(),
+        tracks: result.items,
+        total_tracks: count.total,
+        total_duration: count.total_duration as f64,
+        page: Some(page_offset / page_size),
+        page_size: Some(page_size),
+        has_more,
+        revision: rev,
+    })
+}
+
+/// "liked" section: favorited tracks.
+fn get_section_liked(
+    conn: &rusqlite::Connection,
+    rev: i64,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> crate::db::DbResult<LibrarySectionResponse> {
+    let lim = limit.unwrap_or(10000);
+    let off = offset.unwrap_or(0);
+    let result = favorites::get_favorites(conn, lim, off)?;
+    let (total, duration) = favorites::get_favorites_stats(conn)?;
+    let tracks: Vec<Track> = result.items.into_iter().map(|ft| ft.track).collect();
+
+    Ok(LibrarySectionResponse {
+        section: "liked".to_string(),
+        tracks,
+        total_tracks: total,
+        total_duration: duration,
+        page: None,
+        page_size: None,
+        has_more: false,
+        revision: rev,
+    })
+}
+
+/// "top25" section: most played tracks.
+fn get_section_top25(
+    conn: &rusqlite::Connection,
+    rev: i64,
+) -> crate::db::DbResult<LibrarySectionResponse> {
+    let tracks = favorites::get_top_25(conn)?;
+    let (total, duration) = favorites::get_top_25_stats(conn)?;
+
+    Ok(LibrarySectionResponse {
+        section: "top25".to_string(),
+        tracks,
+        total_tracks: total,
+        total_duration: duration,
+        page: None,
+        page_size: None,
+        has_more: false,
+        revision: rev,
+    })
+}
+
+/// "recent" section: recently played tracks.
+fn get_section_recent(
+    conn: &rusqlite::Connection,
+    rev: i64,
+    days: Option<i64>,
+    limit: Option<i64>,
+) -> crate::db::DbResult<LibrarySectionResponse> {
+    let d = days.unwrap_or(14).clamp(1, 365);
+    let lim = limit.unwrap_or(100).clamp(1, 1000);
+    let tracks = favorites::get_recently_played(conn, d, lim)?;
+    let (total, duration) = favorites::get_recently_played_stats(conn, d, lim)?;
+
+    Ok(LibrarySectionResponse {
+        section: "recent".to_string(),
+        tracks,
+        total_tracks: total,
+        total_duration: duration,
+        page: None,
+        page_size: None,
+        has_more: false,
+        revision: rev,
+    })
+}
+
+/// "added" section: recently added tracks.
+fn get_section_added(
+    conn: &rusqlite::Connection,
+    rev: i64,
+    days: Option<i64>,
+    limit: Option<i64>,
+) -> crate::db::DbResult<LibrarySectionResponse> {
+    let d = days.unwrap_or(14).clamp(1, 365);
+    let lim = limit.unwrap_or(100).clamp(1, 1000);
+    let tracks = favorites::get_recently_added(conn, d, lim)?;
+    let (total, duration) = favorites::get_recently_added_stats(conn, d, lim)?;
+
+    Ok(LibrarySectionResponse {
+        section: "added".to_string(),
+        tracks,
+        total_tracks: total,
+        total_duration: duration,
+        page: None,
+        page_size: None,
+        has_more: false,
+        revision: rev,
+    })
+}
+
+/// "playlist-{id}" section: tracks in a specific playlist.
+fn get_section_playlist(
+    conn: &rusqlite::Connection,
+    rev: i64,
+    playlist_id: i64,
+) -> crate::db::DbResult<LibrarySectionResponse> {
+    let playlist = playlists::get_playlist(conn, playlist_id)?.ok_or_else(|| {
+        crate::db::DbError::NotFound(format!("Playlist {} not found", playlist_id))
+    })?;
+    let (total, duration) = playlists::get_playlist_stats(conn, playlist_id)?;
+    let tracks: Vec<Track> = playlist.tracks.into_iter().map(|pt| pt.track).collect();
+
+    Ok(LibrarySectionResponse {
+        section: format!("playlist-{}", playlist_id),
+        tracks,
+        total_tracks: total,
+        total_duration: duration,
+        page: None,
+        page_size: None,
+        has_more: false,
+        revision: rev,
+    })
 }
 
 /// Find the 0-based offset of the first row matching a prefix in the current sort order
@@ -1179,5 +1448,315 @@ mod tests {
         let path_str = "/Users/test/音楽/曲.mp3";
         let path = Path::new(path_str);
         assert_eq!(path.to_str(), Some(path_str));
+    }
+
+    // =========================================================================
+    // library_get_section helper tests
+    // =========================================================================
+
+    mod section_tests {
+        use super::super::*;
+        use crate::db::{
+            TrackMetadata, favorites, library, playlists, revision,
+            schema::{create_tables, run_migrations},
+        };
+        use rusqlite::Connection;
+
+        fn setup_test_db() -> Connection {
+            let conn = Connection::open_in_memory().unwrap();
+            create_tables(&conn).unwrap();
+            run_migrations(&conn).unwrap();
+            conn
+        }
+
+        fn add_test_track(conn: &Connection, i: i32, duration: f64) -> i64 {
+            let metadata = TrackMetadata {
+                title: Some(format!("Track {}", i)),
+                artist: Some(format!("Artist {}", i)),
+                album: Some(format!("Album {}", i)),
+                duration: Some(duration),
+                ..Default::default()
+            };
+            library::add_track(conn, &format!("/music/track{}.mp3", i), &metadata).unwrap()
+        }
+
+        #[test]
+        fn test_section_all_empty() {
+            let conn = setup_test_db();
+            let rev = revision::get_revision(&conn).unwrap();
+            let resp = get_section_all(&conn, rev, None, None, None, None, None, None, None, None)
+                .unwrap();
+            assert_eq!(resp.section, "all");
+            assert_eq!(resp.total_tracks, 0);
+            assert_eq!(resp.total_duration, 0.0);
+            assert!(!resp.has_more);
+            assert!(resp.tracks.is_empty());
+            assert_eq!(resp.revision, 0);
+        }
+
+        #[test]
+        fn test_section_all_with_tracks() {
+            let conn = setup_test_db();
+            for i in 1..=5 {
+                add_test_track(&conn, i, 100.0 * i as f64);
+            }
+            let rev = revision::get_revision(&conn).unwrap();
+            let resp = get_section_all(&conn, rev, None, None, None, None, None, None, None, None)
+                .unwrap();
+            assert_eq!(resp.total_tracks, 5);
+            assert_eq!(resp.total_duration, 100.0 + 200.0 + 300.0 + 400.0 + 500.0);
+            assert_eq!(resp.tracks.len(), 5);
+            assert!(!resp.has_more);
+        }
+
+        #[test]
+        fn test_section_all_pagination() {
+            let conn = setup_test_db();
+            for i in 1..=10 {
+                add_test_track(&conn, i, 60.0);
+            }
+            let rev = revision::get_revision(&conn).unwrap();
+            let resp = get_section_all(
+                &conn,
+                rev,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(3),
+                Some(0),
+                None,
+            )
+            .unwrap();
+            assert_eq!(resp.tracks.len(), 3);
+            assert_eq!(resp.total_tracks, 10);
+            assert!(resp.has_more);
+            assert_eq!(resp.page, Some(0));
+            assert_eq!(resp.page_size, Some(3));
+        }
+
+        #[test]
+        fn test_section_all_beyond_last_page() {
+            let conn = setup_test_db();
+            for i in 1..=5 {
+                add_test_track(&conn, i, 60.0);
+            }
+            let rev = revision::get_revision(&conn).unwrap();
+            let resp = get_section_all(
+                &conn,
+                rev,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(10),
+                Some(100),
+                None,
+            )
+            .unwrap();
+            assert!(resp.tracks.is_empty());
+            assert_eq!(resp.total_tracks, 5);
+            assert!(!resp.has_more);
+        }
+
+        #[test]
+        fn test_section_all_search() {
+            let conn = setup_test_db();
+            add_test_track(&conn, 1, 60.0);
+            let metadata = TrackMetadata {
+                title: Some("Unique Song".to_string()),
+                artist: Some("Special Artist".to_string()),
+                duration: Some(120.0),
+                ..Default::default()
+            };
+            library::add_track(&conn, "/music/unique.mp3", &metadata).unwrap();
+
+            let rev = revision::get_revision(&conn).unwrap();
+            let resp = get_section_all(
+                &conn,
+                rev,
+                Some("Unique".to_string()),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+            assert_eq!(resp.total_tracks, 1);
+            assert_eq!(resp.tracks.len(), 1);
+            assert_eq!(resp.tracks[0].title, Some("Unique Song".to_string()));
+        }
+
+        #[test]
+        fn test_section_liked() {
+            let conn = setup_test_db();
+            let id1 = add_test_track(&conn, 1, 100.0);
+            let id2 = add_test_track(&conn, 2, 200.0);
+            add_test_track(&conn, 3, 300.0); // not favorited
+
+            favorites::add_favorite(&conn, id1).unwrap();
+            favorites::add_favorite(&conn, id2).unwrap();
+
+            let rev = revision::get_revision(&conn).unwrap();
+            let resp = get_section_liked(&conn, rev, None, None).unwrap();
+            assert_eq!(resp.section, "liked");
+            assert_eq!(resp.total_tracks, 2);
+            assert_eq!(resp.total_duration, 300.0);
+            assert_eq!(resp.tracks.len(), 2);
+            assert!(!resp.has_more);
+        }
+
+        #[test]
+        fn test_section_top25() {
+            let conn = setup_test_db();
+            let id1 = add_test_track(&conn, 1, 150.0);
+            let id2 = add_test_track(&conn, 2, 250.0);
+
+            for _ in 0..5 {
+                library::update_play_count(&conn, id1).unwrap();
+            }
+            for _ in 0..10 {
+                library::update_play_count(&conn, id2).unwrap();
+            }
+
+            let rev = revision::get_revision(&conn).unwrap();
+            let resp = get_section_top25(&conn, rev).unwrap();
+            assert_eq!(resp.section, "top25");
+            assert_eq!(resp.total_tracks, 2);
+            assert_eq!(resp.total_duration, 400.0);
+            // Most played first
+            assert_eq!(resp.tracks[0].play_count, 10);
+            assert_eq!(resp.tracks[1].play_count, 5);
+        }
+
+        #[test]
+        fn test_section_recent() {
+            let conn = setup_test_db();
+            let id = add_test_track(&conn, 1, 180.0);
+            library::update_play_count(&conn, id).unwrap();
+
+            let rev = revision::get_revision(&conn).unwrap();
+            let resp = get_section_recent(&conn, rev, Some(7), Some(100)).unwrap();
+            assert_eq!(resp.section, "recent");
+            assert_eq!(resp.total_tracks, 1);
+            assert_eq!(resp.total_duration, 180.0);
+        }
+
+        #[test]
+        fn test_section_added() {
+            let conn = setup_test_db();
+            add_test_track(&conn, 1, 200.0);
+            add_test_track(&conn, 2, 300.0);
+
+            let rev = revision::get_revision(&conn).unwrap();
+            let resp = get_section_added(&conn, rev, Some(7), Some(100)).unwrap();
+            assert_eq!(resp.section, "added");
+            assert_eq!(resp.total_tracks, 2);
+            assert_eq!(resp.total_duration, 500.0);
+        }
+
+        #[test]
+        fn test_section_playlist() {
+            let conn = setup_test_db();
+            let id1 = add_test_track(&conn, 1, 100.0);
+            let id2 = add_test_track(&conn, 2, 200.0);
+
+            let playlist = playlists::create_playlist(&conn, "Test Playlist")
+                .unwrap()
+                .unwrap();
+            playlists::add_tracks_to_playlist(&conn, playlist.id, &[id1, id2], None).unwrap();
+
+            let rev = revision::get_revision(&conn).unwrap();
+            let resp = get_section_playlist(&conn, rev, playlist.id).unwrap();
+            assert_eq!(resp.section, format!("playlist-{}", playlist.id));
+            assert_eq!(resp.total_tracks, 2);
+            assert_eq!(resp.total_duration, 300.0);
+            assert_eq!(resp.tracks.len(), 2);
+        }
+
+        #[test]
+        fn test_section_playlist_not_found() {
+            let conn = setup_test_db();
+            let rev = revision::get_revision(&conn).unwrap();
+            let result = get_section_playlist(&conn, rev, 999);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn test_section_unknown() {
+            let conn = setup_test_db();
+            // We can't directly test the match arm since it's inside the command,
+            // but the DB-level helpers cover each section type. This tests the
+            // response struct serialization for completeness.
+            let resp = LibrarySectionResponse {
+                section: "all".to_string(),
+                tracks: vec![],
+                total_tracks: 0,
+                total_duration: 0.0,
+                page: None,
+                page_size: None,
+                has_more: false,
+                revision: 0,
+            };
+            let json = serde_json::to_string(&resp).unwrap();
+            assert!(json.contains("\"section\":\"all\""));
+            assert!(json.contains("\"revision\":0"));
+            assert!(json.contains("\"has_more\":false"));
+        }
+
+        #[test]
+        fn test_revision_increments_on_add() {
+            let conn = setup_test_db();
+            let rev_before = revision::get_revision(&conn).unwrap();
+            assert_eq!(rev_before, 0);
+
+            // Bump revision (simulating what add_track will do after Phase 4)
+            revision::bump_revision(&conn).unwrap();
+
+            let rev_after = revision::get_revision(&conn).unwrap();
+            assert_eq!(rev_after, 1);
+        }
+
+        #[test]
+        fn test_section_all_sort() {
+            let conn = setup_test_db();
+            let metadata_a = TrackMetadata {
+                title: Some("Alpha".to_string()),
+                artist: Some("Zeta".to_string()),
+                duration: Some(60.0),
+                ..Default::default()
+            };
+            library::add_track(&conn, "/music/alpha.mp3", &metadata_a).unwrap();
+
+            let metadata_b = TrackMetadata {
+                title: Some("Beta".to_string()),
+                artist: Some("Alpha".to_string()),
+                duration: Some(120.0),
+                ..Default::default()
+            };
+            library::add_track(&conn, "/music/beta.mp3", &metadata_b).unwrap();
+
+            let rev = revision::get_revision(&conn).unwrap();
+            let resp = get_section_all(
+                &conn,
+                rev,
+                None,
+                None,
+                None,
+                Some("title".to_string()),
+                Some("asc".to_string()),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+            assert_eq!(resp.tracks[0].title, Some("Alpha".to_string()));
+            assert_eq!(resp.tracks[1].title, Some("Beta".to_string()));
+        }
     }
 }
