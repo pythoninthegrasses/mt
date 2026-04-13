@@ -4,6 +4,12 @@
  * The queue maintains tracks in PLAY ORDER - the order shown in the Now Playing
  * view is always the order tracks will be played. When shuffle is enabled,
  * the items array is physically reordered.
+ *
+ * State machine logic (shuffle, navigation, play-next, history, integrity)
+ * lives in the Rust backend. This store is a thin reactive layer that:
+ * 1. Calls backend commands for state transitions
+ * 2. Applies returned state snapshots
+ * 3. Exposes computed UI properties
  */
 
 import { queue as queueApi } from '../api/queue.js';
@@ -19,27 +25,14 @@ export function createQueueStore(Alpine) {
     loop: 'none', // 'none', 'all', 'one'
     stopAfterCurrent: false, // Stop playback when current track ends
 
-    // Repeat-one "play once more" state
-    _repeatOnePending: false,
-
     // Loading state
     loading: false,
-
-    // Original order preserved for unshuffle
-    _originalOrder: [],
-
-    // Play history for prev button navigation
-    _playHistory: [],
-    _maxHistorySize: 100,
 
     // Flag to prevent event listener from overriding during initialization
     _initializing: false,
 
     // Flag to prevent event listener from overriding during queue operations
     _updating: false,
-
-    // Track IDs added via "Play Next" - these are pinned after the current track during shuffle
-    _playNextTrackIds: new Set(),
 
     /**
      * Initialize queue from backend
@@ -66,10 +59,6 @@ export function createQueueStore(Alpine) {
       this.currentIndex = -1;
       this.shuffle = false;
       this.loop = 'none';
-      this._originalOrder = [...this.items];
-      this._repeatOnePending = false;
-      this._playHistory = [];
-      this._playNextTrackIds = new Set();
 
       // Persist the reset state to backend
       try {
@@ -88,9 +77,6 @@ export function createQueueStore(Alpine) {
         const rawItems = data.items || [];
         this.items = rawItems.map((item) => item.track || item);
         this.currentIndex = data.currentIndex ?? -1;
-        if (!this.shuffle) {
-          this._originalOrder = [...this.items];
-        }
       } catch (error) {
         console.error('Failed to load queue:', error);
       } finally {
@@ -132,9 +118,6 @@ export function createQueueStore(Alpine) {
         const data = await queueApi.get();
         const rawItems = data.items || [];
         this.items = rawItems.map((item) => item.track || item);
-        if (!this.shuffle) {
-          this._originalOrder = [...this.items];
-        }
 
         // Restore currentIndex by finding the currently playing track
         if (currentTrackId !== null) {
@@ -156,35 +139,32 @@ export function createQueueStore(Alpine) {
     },
 
     /**
-     * Save queue state to backend
+     * Apply a state snapshot from the backend
+     * @param {Object} snapshot - QueueStateSnapshot from backend
      */
-    async save() {
-      try {
-        await queueApi.save({
-          items: this.items,
-          currentIndex: this.currentIndex,
-          shuffle: this.shuffle,
-          loop: this.loop,
-        });
-      } catch (error) {
-        console.error('Failed to save queue:', error);
-      }
+    _applySnapshot(snapshot) {
+      if (!snapshot) return;
+      this.items = (snapshot.items || []).map((item) => item.track || item);
+      this.currentIndex = snapshot.current_index ?? this.currentIndex;
+      this.shuffle = snapshot.shuffle_enabled ?? this.shuffle;
+      this.loop = snapshot.loop_mode ?? this.loop;
     },
 
     /**
-     * Sync full queue state to backend (clear and rebuild)
-     * Used when queue order changes in ways that can't be expressed as incremental operations
+     * Apply a navigation result from the backend
+     * @param {Object} result - QueueNavigationResult from backend
+     * @returns {string} The action taken: 'play', 'stop', or 'seek_zero'
      */
-    async _syncQueueToBackend() {
-      try {
-        await queueApi.clear();
-        if (this.items.length > 0) {
-          const trackIds = this.items.map((t) => t.id);
-          await queueApi.add(trackIds);
-        }
-      } catch (error) {
-        console.error('[queue] Failed to sync to backend:', error);
+    _applyNavigationResult(result) {
+      if (!result) return 'stop';
+
+      this._applySnapshot(result.snapshot);
+
+      if (result.action === 'play' && result.track) {
+        Alpine.store('player').updateTrackState(result.track, result.duration_ms);
       }
+
+      return result.action;
     },
 
     /**
@@ -205,7 +185,6 @@ export function createQueueStore(Alpine) {
 
       // Update local state
       this.items.push(...tracksArray);
-      this._originalOrder.push(...tracksArray);
 
       // Persist to backend
       try {
@@ -272,54 +251,31 @@ export function createQueueStore(Alpine) {
     },
 
     /**
-     * Insert tracks to play next (after currently playing track)
+     * Insert tracks to play next (after currently playing track).
+     * Backend handles move semantics, offset tracking, and play-next ID management.
      * @param {Array|Object} tracks - Track(s) to insert
      */
     async playNextTracks(tracks) {
       const tracksArray = Array.isArray(tracks) ? tracks : [tracks];
       if (tracksArray.length === 0) return;
 
-      // Move semantics: remove existing copies from queue before re-inserting at play-next position.
-      // This handles the case where the full library is in the queue and the user
-      // wants to move an existing track to play next.
-      // Skip tracks that are currently playing (can't move the current track).
-      const currentTrackId = this.currentIndex >= 0 ? this.items[this.currentIndex]?.id : null;
-      const tracksToInsert = [];
-      for (const t of tracksArray) {
-        if (t.id === currentTrackId) continue; // skip currently playing track
-        const existingIdx = this.items.findIndex((item) => item.id === t.id);
-        if (existingIdx >= 0) {
-          this.items.splice(existingIdx, 1);
-          const origIdx = this._originalOrder.findIndex((item) => item.id === t.id);
-          if (origIdx >= 0) this._originalOrder.splice(origIdx, 1);
-          if (existingIdx < this.currentIndex) {
-            this.currentIndex--;
-          }
-        }
-        tracksToInsert.push(t);
-      }
-      if (tracksToInsert.length === 0) return;
-
-      // Append after any previously queued-next tracks (not before them)
-      if (!this._playNextOffset) this._playNextOffset = 0;
-      const insertIndex = (this.currentIndex >= 0 ? this.currentIndex + 1 : 0) +
-        this._playNextOffset;
-
       console.log('[queue]', 'play_next_tracks', {
-        count: tracksToInsert.length,
-        trackIds: tracksToInsert.map((t) => t.id),
-        insertIndex,
-        playNextOffset: this._playNextOffset,
+        count: tracksArray.length,
+        trackIds: tracksArray.map((t) => t.id),
       });
 
-      this._playNextOffset += tracksToInsert.length;
-
-      // Track these as pinned play-next tracks (preserved during shuffle)
-      for (const t of tracksToInsert) {
-        this._playNextTrackIds.add(t.id);
+      this._updating = true;
+      try {
+        const trackIds = tracksArray.map((t) => t.id);
+        const snapshot = await queueApi.addPlayNext(trackIds);
+        this._applySnapshot(snapshot);
+      } catch (error) {
+        console.error('[queue] Failed to add play-next:', error);
+      } finally {
+        setTimeout(() => {
+          this._updating = false;
+        }, 50);
       }
-
-      await this.insert(insertIndex, tracksToInsert);
     },
 
     /**
@@ -344,15 +300,6 @@ export function createQueueStore(Alpine) {
 
         // Update local state
         this.items.splice(index, 1);
-
-        // Also remove from _originalOrder so unshuffle stays consistent
-        if (removedTrack) {
-          const origIdx = this._originalOrder.findIndex((t) => t.id === removedTrack.id);
-          if (origIdx >= 0) {
-            this._originalOrder.splice(origIdx, 1);
-          }
-          this._playNextTrackIds.delete(removedTrack.id);
-        }
 
         // Adjust current index
         if (index < this.currentIndex) {
@@ -390,9 +337,6 @@ export function createQueueStore(Alpine) {
       // Update local state
       this.items = [];
       this.currentIndex = -1;
-      this._originalOrder = [];
-      this._playNextTrackIds = new Set();
-      // _playHistory intentionally preserved - persists across queue rebuilds
 
       Alpine.store('player')?.stop();
 
@@ -447,75 +391,42 @@ export function createQueueStore(Alpine) {
     /**
      * Play track at specific index
      * @param {number} index - Index to play
-     * @param {boolean} fromNavigation - If true, this is from playNext/playPrevious and history shouldn't be cleared
+     * @param {boolean} fromNavigation - If true, this is from backend navigation (history already handled)
      */
-    async playIndex(index, fromNavigation = false) {
+    async playIndex(index, _fromNavigation = false) {
       if (index < 0 || index >= this.items.length) return;
-
-      // Push current track to history on manual jumps (not from prev/next navigation)
-      if (!fromNavigation && this.currentIndex >= 0 && this.currentIndex !== index) {
-        this._pushToHistory(this.currentIndex);
-      }
-
-      // Reset play-next insertion offset when track changes
-      this._playNextOffset = 0;
 
       this.currentIndex = index;
       const track = this.items[index];
-
-      // If this was a play-next track, it's been consumed
-      this._playNextTrackIds.delete(track.id);
 
       await Alpine.store('player').playTrack(track);
       await queueApi.setCurrentIndex(this.currentIndex);
     },
 
+    /**
+     * Play next track. Backend handles repeat-one two-phase, loop modes,
+     * history push, reshuffle on loop restart, and audio playback.
+     */
     async playNext() {
       if (this.items.length === 0) return;
 
-      // Stop after current track if flag is set
+      // Stop after current track if flag is set (frontend-only concern)
       if (this.stopAfterCurrent) {
         this.stopAfterCurrent = false;
         Alpine.store('player').isPlaying = false;
         return;
       }
 
-      // Prevent QUEUE_STATE_CHANGED event from overwriting state during playNext
       this._updating = true;
       try {
-        if (this._repeatOnePending) {
-          // Second call after repeat-one replay — clear flag and advance normally
-          this._repeatOnePending = false;
-        } else if (this.loop === 'one') {
-          // First call with loop-one — replay track and untoggle icon immediately
-          this._repeatOnePending = true;
-          this.loop = 'none';
-          await queueApi.setLoop(this.loop);
-          await this.playIndex(this.currentIndex, true);
-          return;
+        const result = await queueApi.playNextTrack();
+        const action = this._applyNavigationResult(result);
+
+        if (action === 'stop') {
+          Alpine.store('player').isPlaying = false;
         }
-
-        // Push current track to history before advancing
-        if (this.currentIndex >= 0) {
-          this._pushToHistory(this.currentIndex);
-        }
-
-        let nextIndex = this.currentIndex + 1;
-
-        if (nextIndex >= this.items.length) {
-          if (this.loop === 'all') {
-            if (this.shuffle) {
-              // Use special reshuffle that puts just-played track at END (task-222)
-              this._reshuffleForLoopRestart();
-            }
-            nextIndex = 0;
-          } else {
-            Alpine.store('player').isPlaying = false;
-            return;
-          }
-        }
-
-        await this.playIndex(nextIndex, true);
+      } catch (error) {
+        console.error('[queue] playNext failed:', error);
       } finally {
         setTimeout(() => {
           this._updating = false;
@@ -523,54 +434,47 @@ export function createQueueStore(Alpine) {
       }
     },
 
+    /**
+     * Play previous track. Backend handles >3sec restart, history pop,
+     * fallback decrement, and loop wraparound.
+     */
     async playPrevious() {
       if (this.items.length === 0) return;
 
-      const player = Alpine.store('player');
+      this._updating = true;
+      try {
+        const player = Alpine.store('player');
+        const currentTimeMs = player.currentTime || 0;
+        const result = await queueApi.playPreviousTrack(currentTimeMs);
+        const action = this._applyNavigationResult(result);
 
-      // If > 3 seconds into track, restart current track instead
-      if (player.currentTime > 3000) {
-        await player.seek(0);
-        return;
-      }
-
-      // Try to use play history first (tracks matched by ID, survives queue rebuilds)
-      if (this._playHistory.length > 0) {
-        const historyIndex = this._popFromHistory();
-        if (historyIndex >= 0) {
-          await this.playIndex(historyIndex, true);
-          return;
+        if (action === 'seek_zero') {
+          await player.seek(0);
         }
+      } catch (error) {
+        console.error('[queue] playPrevious failed:', error);
+      } finally {
+        setTimeout(() => {
+          this._updating = false;
+        }, 50);
       }
-
-      // Fallback: navigate backward in queue array
-      let prevIndex = this.currentIndex - 1;
-
-      if (prevIndex < 0) {
-        if (this.loop === 'all') {
-          prevIndex = this.items.length - 1;
-        } else {
-          prevIndex = 0;
-        }
-      }
-
-      await this.playIndex(prevIndex, true);
     },
 
     /**
-     * Manual skip to next track (user-initiated)
-     * If in repeat-one mode, reverts to 'all' and skips
+     * Manual skip to next track (user-initiated).
+     * Backend overrides repeat-one mode before advancing.
      */
     async skipNext() {
-      if (this.loop === 'one') {
-        this.loop = 'all';
-        this._repeatOnePending = false;
-        // Loop state is session-only, no persistence needed
-      }
-      // Prevent QUEUE_STATE_CHANGED event from overwriting state during skip
       this._updating = true;
       try {
-        await this._doSkipNext();
+        const result = await queueApi.skipNext();
+        const action = this._applyNavigationResult(result);
+
+        if (action === 'stop') {
+          Alpine.store('player').isPlaying = false;
+        }
+      } catch (error) {
+        console.error('[queue] skipNext failed:', error);
       } finally {
         setTimeout(() => {
           this._updating = false;
@@ -579,19 +483,22 @@ export function createQueueStore(Alpine) {
     },
 
     /**
-     * Manual skip to previous track (user-initiated)
-     * If in repeat-one mode, reverts to 'all' and skips
+     * Manual skip to previous track (user-initiated).
+     * Backend overrides repeat-one mode before going back.
      */
     async skipPrevious() {
-      if (this.loop === 'one') {
-        this.loop = 'all';
-        this._repeatOnePending = false;
-        // Loop state is session-only, no persistence needed
-      }
-      // Prevent QUEUE_STATE_CHANGED event from overwriting state during skip
       this._updating = true;
       try {
-        await this.playPrevious();
+        const player = Alpine.store('player');
+        const currentTimeMs = player.currentTime || 0;
+        const result = await queueApi.skipPrevious(currentTimeMs);
+        const action = this._applyNavigationResult(result);
+
+        if (action === 'seek_zero') {
+          await player.seek(0);
+        }
+      } catch (error) {
+        console.error('[queue] skipPrevious failed:', error);
       } finally {
         setTimeout(() => {
           this._updating = false;
@@ -599,161 +506,25 @@ export function createQueueStore(Alpine) {
       }
     },
 
-    async _doSkipNext() {
-      if (this.items.length === 0) return;
-
-      // Push current track to history before advancing (preserves prev button navigation)
-      if (this.currentIndex >= 0) {
-        this._pushToHistory(this.currentIndex);
-      }
-
-      let nextIndex = this.currentIndex + 1;
-      if (nextIndex >= this.items.length) {
-        nextIndex = 0;
-      }
-
-      await this.playIndex(nextIndex, true); // fromNavigation=true preserves history
-    },
-
+    /**
+     * Toggle shuffle on/off. Backend handles Fisher-Yates, original order
+     * save/restore, play-next pinning, and current-track-at-index-0.
+     */
     async toggleShuffle() {
-      // CRITICAL: Prevent QUEUE_STATE_CHANGED event from overwriting state during operation
       this._updating = true;
-
+      const prev = this.shuffle;
+      this.shuffle = !prev;
       try {
-        this.shuffle = !this.shuffle;
-
-        if (this.shuffle) {
-          // Save original order before shuffling
-          this._originalOrder = [...this.items];
-          this._shuffleItems();
-          // Don't clear history - user can still go back to previously played tracks
-          // Don't call setCurrentIndex - same track is playing, just at index 0 now
-        } else {
-          // Restore original order
-          const currentTrack = this.items[this.currentIndex];
-          this.items = [...this._originalOrder];
-          this.currentIndex = this.items.findIndex((t) => t.id === currentTrack?.id);
-          if (this.currentIndex < 0) {
-            this.currentIndex = this.items.length > 0 ? 0 : -1;
-          }
-          // History preserved - track objects are matched by ID, survives reorder
-        }
-
-        // Persist shuffle state to backend
-        await queueApi.setShuffle(this.shuffle);
-
-        // Sync queue order to backend, then set currentIndex AFTER so clear() doesn't leave stale state
-        await this._syncQueueToBackend();
-        await queueApi.setCurrentIndex(this.currentIndex);
+        const snapshot = await queueApi.setShuffle(this.shuffle);
+        this._applySnapshot(snapshot);
+      } catch (error) {
+        console.error('[queue] toggleShuffle failed:', error);
+        this.shuffle = prev;
       } finally {
         setTimeout(() => {
           this._updating = false;
         }, 50);
       }
-    },
-
-    _shuffleItems() {
-      if (this.items.length < 2) return;
-
-      const currentTrack = this.currentIndex >= 0 ? this.items[this.currentIndex] : null;
-
-      // Separate play-next tracks (pinned) from regular tracks
-      const pinnedTracks = [];
-      const regularTracks = [];
-
-      for (let i = 0; i < this.items.length; i++) {
-        if (i === this.currentIndex) continue;
-        if (this._playNextTrackIds.has(this.items[i].id)) {
-          pinnedTracks.push(this.items[i]);
-        } else {
-          regularTracks.push(this.items[i]);
-        }
-      }
-
-      // Fisher-Yates shuffle only the regular tracks
-      for (let i = regularTracks.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [regularTracks[i], regularTracks[j]] = [regularTracks[j], regularTracks[i]];
-      }
-
-      if (currentTrack) {
-        // Current track at 0, pinned play-next tracks next, then shuffled rest (task-213)
-        this.items = [currentTrack, ...pinnedTracks, ...regularTracks];
-        this.currentIndex = 0;
-      } else {
-        this.items = [...pinnedTracks, ...regularTracks];
-      }
-
-      this._validateQueueIntegrity();
-    },
-
-    /**
-     * Reshuffle for loop restart - ensures just-played track is NOT at index 0 (task-222)
-     * Called when loop=all and reaching end of queue with shuffle enabled.
-     */
-    _reshuffleForLoopRestart() {
-      if (this.items.length < 2) return;
-
-      const justPlayedTrack = this.items[this.currentIndex];
-      const otherTracks = this.items.filter((_, i) => i !== this.currentIndex);
-
-      // Fisher-Yates shuffle of other tracks
-      for (let i = otherTracks.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [otherTracks[i], otherTracks[j]] = [otherTracks[j], otherTracks[i]];
-      }
-
-      // Put just-played track at END (plays last in next cycle)
-      this.items = [...otherTracks, justPlayedTrack];
-      this._originalOrder = [...this.items];
-
-      this._validateQueueIntegrity();
-    },
-
-    /**
-     * Validate queue integrity - check for duplicate track IDs
-     */
-    _validateQueueIntegrity() {
-      const ids = this.items.map((t) => t.id);
-      const uniqueIds = new Set(ids);
-      if (uniqueIds.size !== ids.length) {
-        console.error('[queue] Duplicate tracks detected!', {
-          total: ids.length,
-          unique: uniqueIds.size,
-        });
-        return false;
-      }
-      return true;
-    },
-
-    /**
-     * Push track at index to play history (stores track object, not index)
-     * @param {number} index - Index of track to push to history
-     */
-    _pushToHistory(index) {
-      const track = this.items[index];
-      if (!track) return;
-      this._playHistory.push(track);
-
-      // Limit history size to prevent memory issues
-      if (this._playHistory.length > this._maxHistorySize) {
-        this._playHistory.shift();
-      }
-    },
-
-    /**
-     * Pop track from history and find its current index in the queue.
-     * Tracks are matched by ID so history survives queue rebuilds.
-     * @returns {number} Current index of the historical track, or -1 if not found
-     */
-    _popFromHistory() {
-      while (this._playHistory.length > 0) {
-        const track = this._playHistory.pop();
-        const idx = this.items.findIndex((t) => t.id === track.id);
-        if (idx >= 0) return idx;
-        // Track no longer in queue - keep draining until we find one that is
-      }
-      return -1;
     },
 
     async shuffleQueue() {
@@ -764,12 +535,12 @@ export function createQueueStore(Alpine) {
         currentIndex: this.currentIndex,
       });
 
-      // Update local state
-      this._shuffleItems();
-      this._originalOrder = [...this.items];
-
-      // Sync shuffled order to backend
-      await this._syncQueueToBackend();
+      try {
+        await queueApi.shuffle(true);
+        await this.load();
+      } catch (error) {
+        console.error('[queue] shuffleQueue failed:', error);
+      }
     },
 
     async cycleLoop() {
@@ -783,7 +554,6 @@ export function createQueueStore(Alpine) {
       });
 
       this.loop = newMode;
-      this._repeatOnePending = false;
       await queueApi.setLoop(this.loop);
     },
 
@@ -799,8 +569,24 @@ export function createQueueStore(Alpine) {
         });
 
         this.loop = mode;
-        this._repeatOnePending = false;
         await queueApi.setLoop(this.loop);
+      }
+    },
+
+    /**
+     * Run integrity check via backend
+     */
+    async checkIntegrity() {
+      try {
+        const report = await queueApi.checkIntegrity();
+        if (report.repaired) {
+          console.log('[queue] Integrity check repaired issues:', report);
+          await this.load();
+        }
+        return report;
+      } catch (error) {
+        console.error('[queue] Integrity check failed:', error);
+        return null;
       }
     },
 

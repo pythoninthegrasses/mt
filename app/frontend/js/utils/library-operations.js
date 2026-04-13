@@ -535,9 +535,7 @@ export function removeFromQueue(Alpine, idSet) {
       }
     }
   }
-  if (queue._originalOrder) {
-    queue._originalOrder = queue._originalOrder.filter((t) => !idSet.has(t.id));
-  }
+  // Original order is now managed by the backend
 }
 
 /**
@@ -565,7 +563,6 @@ export function removeTracksLocallyOp(store, Alpine, trackIds) {
 
     const queue = Alpine.store('queue');
     queue.items = [];
-    queue._originalOrder = [];
     queue.currentIndex = -1;
     Alpine.store('player').stop();
     return;

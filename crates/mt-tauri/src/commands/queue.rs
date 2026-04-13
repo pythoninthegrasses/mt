@@ -41,6 +41,26 @@ pub struct QueueOperationResponse {
     pub queue_length: i64,
 }
 
+/// Full queue state snapshot returned by state-changing commands
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct QueueStateSnapshot {
+    pub items: Vec<QueueItem>,
+    pub current_index: i64,
+    pub shuffle_enabled: bool,
+    pub loop_mode: String,
+    pub play_next_offset: i64,
+}
+
+/// Result of a navigation command (play next/previous/skip)
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct QueueNavigationResult {
+    /// "play", "stop", or "seek_zero"
+    pub action: String,
+    pub track: Option<Track>,
+    pub duration_ms: Option<u64>,
+    pub snapshot: QueueStateSnapshot,
+}
+
 /// Get the current playback queue with track metadata
 #[tracing::instrument(skip(db))]
 #[tauri::command]
@@ -271,26 +291,36 @@ pub(crate) fn queue_set_current_index(
     Ok(())
 }
 
-/// Set shuffle enabled in queue playback state
+/// Toggle shuffle on/off with full state machine: saves/restores original order,
+/// pins current track at index 0 and play-next tracks after it when enabling.
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub(crate) fn queue_set_shuffle(
     app: AppHandle,
     db: State<'_, Database>,
     enabled: bool,
-) -> Result<(), String> {
+) -> Result<QueueStateSnapshot, String> {
     let conn = db.conn().map_err(|e| e.to_string())?;
-    queue::set_shuffle_enabled(&conn, enabled).map_err(|e| e.to_string())?;
+    let items = queue::toggle_shuffle(&conn, enabled).map_err(|e| e.to_string())?;
 
-    // Emit state changed event
     let state = queue::get_queue_state(&conn).map_err(|e| e.to_string())?;
+
+    // Emit events
+    let queue_length = items.len() as i64;
+    let _ = app.emit_queue_updated(QueueUpdatedEvent::shuffled(queue_length));
     let _ = app.emit_queue_state_changed(QueueStateChangedEvent::new(
         state.current_index,
         state.shuffle_enabled,
-        state.loop_mode,
+        state.loop_mode.clone(),
     ));
 
-    Ok(())
+    Ok(QueueStateSnapshot {
+        items,
+        current_index: state.current_index,
+        shuffle_enabled: state.shuffle_enabled,
+        loop_mode: state.loop_mode,
+        play_next_offset: state.play_next_offset,
+    })
 }
 
 /// Set loop mode in queue playback state
@@ -313,6 +343,248 @@ pub(crate) fn queue_set_loop(
     ));
 
     Ok(())
+}
+
+/// Add tracks as "play next" with move semantics and offset tracking
+#[tracing::instrument(skip(app, db))]
+#[tauri::command]
+pub(crate) fn queue_add_play_next(
+    app: AppHandle,
+    db: State<'_, Database>,
+    track_ids: Vec<i64>,
+) -> Result<QueueStateSnapshot, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    let items = queue::add_play_next(&conn, &track_ids).map_err(|e| e.to_string())?;
+
+    let state = queue::get_queue_state(&conn).map_err(|e| e.to_string())?;
+
+    let queue_length = items.len() as i64;
+    let _ = app.emit_queue_updated(QueueUpdatedEvent::added(
+        (state.current_index + 1..state.current_index + 1 + track_ids.len() as i64).collect(),
+        queue_length,
+    ));
+    let _ = app.emit_queue_state_changed(QueueStateChangedEvent::new(
+        state.current_index,
+        state.shuffle_enabled,
+        state.loop_mode.clone(),
+    ));
+
+    Ok(QueueStateSnapshot {
+        items,
+        current_index: state.current_index,
+        shuffle_enabled: state.shuffle_enabled,
+        loop_mode: state.loop_mode,
+        play_next_offset: state.play_next_offset,
+    })
+}
+
+/// Helper to build a QueueNavigationResult from a navigation action
+fn build_navigation_result(
+    action: &queue::NavigationAction,
+    items: &[QueueItem],
+    state: &QueueState,
+    duration_ms: Option<u64>,
+) -> QueueNavigationResult {
+    let (action_str, track) = match action {
+        queue::NavigationAction::Play(idx) => {
+            let track = items.get(*idx).map(|item| item.track.clone());
+            ("play".to_string(), track)
+        }
+        queue::NavigationAction::Stop => ("stop".to_string(), None),
+        queue::NavigationAction::SeekZero => {
+            let track = if state.current_index >= 0 {
+                items
+                    .get(state.current_index as usize)
+                    .map(|item| item.track.clone())
+            } else {
+                None
+            };
+            ("seek_zero".to_string(), track)
+        }
+    };
+
+    QueueNavigationResult {
+        action: action_str,
+        track,
+        duration_ms,
+        snapshot: QueueStateSnapshot {
+            items: items.to_vec(),
+            current_index: state.current_index,
+            shuffle_enabled: state.shuffle_enabled,
+            loop_mode: state.loop_mode.clone(),
+            play_next_offset: state.play_next_offset,
+        },
+    }
+}
+
+/// Play the next track in the queue with full state machine logic
+#[tracing::instrument(skip(app, db, audio, cache))]
+#[tauri::command]
+pub(crate) fn queue_play_next_track(
+    app: AppHandle,
+    db: State<'_, Database>,
+    audio: State<'_, AudioState>,
+    cache: State<'_, NetworkFileCache>,
+) -> Result<QueueNavigationResult, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    let (action, items) = queue::advance_to_next(&conn).map_err(|e| e.to_string())?;
+
+    let duration_ms = if let queue::NavigationAction::Play(idx) = &action {
+        if let Some(item) = items.get(*idx) {
+            let info =
+                audio.load_and_play(&item.track.filepath, Some(item.track.id), &cache, &app)?;
+            Some(info.duration_ms)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let state = queue::get_queue_state(&conn).map_err(|e| e.to_string())?;
+    let _ = app.emit_queue_state_changed(QueueStateChangedEvent::new(
+        state.current_index,
+        state.shuffle_enabled,
+        state.loop_mode.clone(),
+    ));
+
+    Ok(build_navigation_result(
+        &action,
+        &items,
+        &state,
+        duration_ms,
+    ))
+}
+
+/// Play the previous track in the queue
+#[tracing::instrument(skip(app, db, audio, cache))]
+#[tauri::command]
+pub(crate) fn queue_play_previous_track(
+    app: AppHandle,
+    db: State<'_, Database>,
+    audio: State<'_, AudioState>,
+    cache: State<'_, NetworkFileCache>,
+    current_time_ms: u64,
+) -> Result<QueueNavigationResult, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    let (action, items) =
+        queue::advance_to_previous(&conn, current_time_ms).map_err(|e| e.to_string())?;
+
+    let duration_ms = if let queue::NavigationAction::Play(idx) = &action {
+        if let Some(item) = items.get(*idx) {
+            let info =
+                audio.load_and_play(&item.track.filepath, Some(item.track.id), &cache, &app)?;
+            Some(info.duration_ms)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let state = queue::get_queue_state(&conn).map_err(|e| e.to_string())?;
+    let _ = app.emit_queue_state_changed(QueueStateChangedEvent::new(
+        state.current_index,
+        state.shuffle_enabled,
+        state.loop_mode.clone(),
+    ));
+
+    Ok(build_navigation_result(
+        &action,
+        &items,
+        &state,
+        duration_ms,
+    ))
+}
+
+/// Skip to next track, overriding repeat-one mode
+#[tracing::instrument(skip(app, db, audio, cache))]
+#[tauri::command]
+pub(crate) fn queue_skip_next(
+    app: AppHandle,
+    db: State<'_, Database>,
+    audio: State<'_, AudioState>,
+    cache: State<'_, NetworkFileCache>,
+) -> Result<QueueNavigationResult, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    let (action, items) = queue::skip_to_next(&conn).map_err(|e| e.to_string())?;
+
+    let duration_ms = if let queue::NavigationAction::Play(idx) = &action {
+        if let Some(item) = items.get(*idx) {
+            let info =
+                audio.load_and_play(&item.track.filepath, Some(item.track.id), &cache, &app)?;
+            Some(info.duration_ms)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let state = queue::get_queue_state(&conn).map_err(|e| e.to_string())?;
+    let _ = app.emit_queue_state_changed(QueueStateChangedEvent::new(
+        state.current_index,
+        state.shuffle_enabled,
+        state.loop_mode.clone(),
+    ));
+
+    Ok(build_navigation_result(
+        &action,
+        &items,
+        &state,
+        duration_ms,
+    ))
+}
+
+/// Skip to previous track, overriding repeat-one mode
+#[tracing::instrument(skip(app, db, audio, cache))]
+#[tauri::command]
+pub(crate) fn queue_skip_previous(
+    app: AppHandle,
+    db: State<'_, Database>,
+    audio: State<'_, AudioState>,
+    cache: State<'_, NetworkFileCache>,
+    current_time_ms: u64,
+) -> Result<QueueNavigationResult, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    let (action, items) =
+        queue::skip_to_previous(&conn, current_time_ms).map_err(|e| e.to_string())?;
+
+    let duration_ms = if let queue::NavigationAction::Play(idx) = &action {
+        if let Some(item) = items.get(*idx) {
+            let info =
+                audio.load_and_play(&item.track.filepath, Some(item.track.id), &cache, &app)?;
+            Some(info.duration_ms)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let state = queue::get_queue_state(&conn).map_err(|e| e.to_string())?;
+    let _ = app.emit_queue_state_changed(QueueStateChangedEvent::new(
+        state.current_index,
+        state.shuffle_enabled,
+        state.loop_mode.clone(),
+    ));
+
+    Ok(build_navigation_result(
+        &action,
+        &items,
+        &state,
+        duration_ms,
+    ))
+}
+
+/// Check queue integrity and repair issues
+#[tracing::instrument(skip(db))]
+#[tauri::command]
+pub(crate) fn queue_check_integrity(
+    db: State<'_, Database>,
+) -> Result<queue::IntegrityReport, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    queue::check_integrity(&conn).map_err(|e| e.to_string())
 }
 
 /// Response for atomic play-context operations

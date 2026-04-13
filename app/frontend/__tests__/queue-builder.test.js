@@ -46,11 +46,6 @@ function createMockCtx(queueOverrides = {}, playerOverrides = {}) {
       currentIndex: -1,
       shuffle: false,
       _updating: false,
-      _originalOrder: [],
-      _playHistory: [],
-      _playNextOffset: 0,
-      _playNextTrackIds: new Set(),
-      _pushToHistory: vi.fn(),
       ...queueOverrides,
     },
     player: {
@@ -131,37 +126,17 @@ describe('handleDoubleClickPlay', () => {
     expect(ctx.queue.currentIndex).toBe(1);
   });
 
-  it('resets queue state fields after play context', async () => {
+  it('applies shuffle_enabled from result', async () => {
     const tracks = makeTracks(['A', 'B']);
     const result = makePlayContextResult(tracks, 0);
+    result.shuffle_enabled = true;
     queueApi.playContext.mockResolvedValue(result);
 
-    const existingHistory = [{ id: 99, title: 'Old' }];
-    const ctx = createMockCtx({
-      _playHistory: existingHistory,
-      _playNextOffset: 5,
-      _playNextTrackIds: new Set([99]),
-    });
+    const ctx = createMockCtx({ shuffle: false });
 
     await handleDoubleClickPlay(ctx, tracks[0], tracks, 0, 'test');
 
-    expect(ctx.queue._playHistory).toEqual([]);
-    expect(ctx.queue._playNextOffset).toBe(0);
-    expect(ctx.queue._playNextTrackIds.size).toBe(0);
-  });
-
-  it('sets _originalOrder to match items', async () => {
-    const tracks = makeTracks(['A', 'B', 'C']);
-    const result = makePlayContextResult(tracks, 0);
-    queueApi.playContext.mockResolvedValue(result);
-
-    const ctx = createMockCtx();
-
-    await handleDoubleClickPlay(ctx, tracks[0], tracks, 0, 'test');
-
-    expect(ctx.queue._originalOrder).toEqual(tracks);
-    // Should be a copy, not the same reference
-    expect(ctx.queue._originalOrder).not.toBe(ctx.queue.items);
+    expect(ctx.queue.shuffle).toBe(true);
   });
 
   it('calls updateTrackState with track and duration_ms', async () => {

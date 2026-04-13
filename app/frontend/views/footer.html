@@ -151,6 +151,7 @@
       <button
         class="p-1 transition-colors"
         :class="isShuffleActive ? 'text-primary' : 'text-[#8E8E93] hover:text-foreground'"
+        :aria-pressed="isShuffleActive.toString()"
         @click="toggleShuffle()"
         title="Shuffle"
         data-testid="player-shuffle"

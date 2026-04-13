@@ -456,13 +456,6 @@ export function createLibraryBrowser(Alpine) {
         this.library.filteredTracks,
         index,
         'library-browser',
-        {
-          beforePlay: () => {
-            if (this.queue.currentIndex >= 0) {
-              this.queue._pushToHistory(this.queue.currentIndex);
-            }
-          },
-        },
       );
     },
 

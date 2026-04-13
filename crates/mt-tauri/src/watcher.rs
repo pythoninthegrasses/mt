@@ -686,17 +686,17 @@ impl WatcherManager {
         );
 
         // Emit a reconcile event with authoritative stats covering all changes.
-        if added > 0 || updated > 0 || deleted > 0 {
-            if let Ok(conn) = db.conn() {
-                let stats = crate::db::library::get_library_stats(&conn).unwrap_or_default();
-                let rev = revision::get_revision(&conn).unwrap_or(0);
-                let _ = app.emit_library_reconcile(LibraryReconcileEvent::scan_complete(
-                    vec![],
-                    stats.total_tracks,
-                    stats.total_duration as f64,
-                    rev,
-                ));
-            }
+        if (added > 0 || updated > 0 || deleted > 0)
+            && let Ok(conn) = db.conn()
+        {
+            let stats = crate::db::library::get_library_stats(&conn).unwrap_or_default();
+            let rev = revision::get_revision(&conn).unwrap_or(0);
+            let _ = app.emit_library_reconcile(LibraryReconcileEvent::scan_complete(
+                vec![],
+                stats.total_tracks,
+                stats.total_duration as f64,
+                rev,
+            ));
         }
 
         let _ = app.emit(
