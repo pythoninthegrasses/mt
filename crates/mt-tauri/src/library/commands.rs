@@ -543,338 +543,326 @@ pub struct ReconcileScanResult {
     pub errors: u32,
 }
 
-#[tracing::instrument(skip(app, db))]
-#[tauri::command]
-pub(crate) async fn library_reconcile_scan(
-    app: AppHandle,
-    db: State<'_, Database>,
+/// Run fingerprint backfill, within-directory dedup, and cross-directory dedup.
+///
+/// Shared between the manual reconcile scan command and the automatic
+/// post-scan backfill. Runs on the calling thread (expected to be called
+/// from `spawn_blocking`).
+pub(crate) fn run_backfill_and_dedup(
+    conn: &rusqlite::Connection,
+    app_handle: &AppHandle,
 ) -> Result<ReconcileScanResult, String> {
     use crate::events::ReconcileProgressEvent;
     use rayon::prelude::*;
     use std::sync::atomic::{AtomicU32, Ordering};
 
-    let db = db.inner().clone();
-    let app_handle = app.clone();
+    let tracks = library::get_tracks_needing_fingerprints(conn).map_err(|e| e.to_string())?;
+    let total = tracks.len() as u32;
 
-    tokio::task::spawn_blocking(move || {
-        let conn = db.conn().map_err(|e| e.to_string())?;
+    // Phase 1: compute fingerprints and hashes in parallel
+    let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::fingerprinting(0, total));
 
-        let tracks = library::get_tracks_needing_fingerprints(&conn).map_err(|e| e.to_string())?;
-        let total = tracks.len() as u32;
+    let processed = AtomicU32::new(0);
+    let fp_errors = AtomicU32::new(0);
+    let app_progress = app_handle.clone();
 
-        // Phase 1: compute fingerprints and hashes in parallel
-        let _ =
-            app_handle.emit_reconcile_progress(ReconcileProgressEvent::fingerprinting(0, total));
-
-        let processed = AtomicU32::new(0);
-        let fp_errors = AtomicU32::new(0);
-        let app_progress = app_handle.clone();
-
-        // Each result: (track_id, Option<fingerprint>, Option<content_hash>)
-        // Fingerprint errors and hash errors are counted atomically during parallel phase
-        let results: Vec<_> = tracks
-            .par_iter()
-            .map(|track| {
-                let path = std::path::Path::new(&track.filepath);
-                if !path.exists() {
-                    let count = processed.fetch_add(1, Ordering::Relaxed) + 1;
-                    if count.is_multiple_of(100) || count == total {
-                        let _ = app_progress.emit_reconcile_progress(
-                            ReconcileProgressEvent::fingerprinting(count, total),
-                        );
-                    }
-                    return (track.id, None, None);
-                }
-
-                let fingerprint = match FileFingerprint::from_path(path) {
-                    Ok(fp) => Some(fp),
-                    Err(_) => {
-                        fp_errors.fetch_add(1, Ordering::Relaxed);
-                        let count = processed.fetch_add(1, Ordering::Relaxed) + 1;
-                        if count.is_multiple_of(100) || count == total {
-                            let _ = app_progress.emit_reconcile_progress(
-                                ReconcileProgressEvent::fingerprinting(count, total),
-                            );
-                        }
-                        return (track.id, None, None);
-                    }
-                };
-
-                let content_hash = match compute_content_hash(path) {
-                    Ok(h) => Some(h),
-                    Err(_) => {
-                        fp_errors.fetch_add(1, Ordering::Relaxed);
-                        None
-                    }
-                };
-
+    let results: Vec<_> = tracks
+        .par_iter()
+        .map(|track| {
+            let path = std::path::Path::new(&track.filepath);
+            if !path.exists() {
                 let count = processed.fetch_add(1, Ordering::Relaxed) + 1;
                 if count.is_multiple_of(100) || count == total {
                     let _ = app_progress.emit_reconcile_progress(
                         ReconcileProgressEvent::fingerprinting(count, total),
                     );
                 }
+                return (track.id, None, None);
+            }
 
-                (track.id, fingerprint, content_hash)
-            })
-            .collect();
-
-        // Phase 1b: sequential DB writes for fingerprint backfill
-        let mut backfilled = 0u32;
-        let mut errors = fp_errors.load(Ordering::Relaxed);
-
-        for (track_id, fingerprint, content_hash) in &results {
-            let Some(fp) = fingerprint else {
-                continue;
+            let fingerprint = match FileFingerprint::from_path(path) {
+                Ok(fp) => Some(fp),
+                Err(_) => {
+                    fp_errors.fetch_add(1, Ordering::Relaxed);
+                    None
+                }
             };
 
-            match library::update_track_fingerprints(
-                &conn,
-                *track_id,
-                fp.inode,
-                content_hash.as_deref(),
-            ) {
-                Ok(true) => backfilled += 1,
+            let content_hash = match compute_content_hash(path) {
+                Ok(h) => Some(h),
+                Err(_) => {
+                    fp_errors.fetch_add(1, Ordering::Relaxed);
+                    None
+                }
+            };
+
+            let count = processed.fetch_add(1, Ordering::Relaxed) + 1;
+            if count.is_multiple_of(100) || count == total {
+                let _ = app_progress
+                    .emit_reconcile_progress(ReconcileProgressEvent::fingerprinting(count, total));
+            }
+
+            (track.id, fingerprint, content_hash)
+        })
+        .collect();
+
+    // Phase 1b: sequential DB writes for fingerprint backfill
+    let mut backfilled = 0u32;
+    let mut errors = fp_errors.load(Ordering::Relaxed);
+
+    for (track_id, fingerprint, content_hash) in &results {
+        // Write whatever we have — fingerprint, content_hash, or both
+        if fingerprint.is_none() && content_hash.is_none() {
+            continue;
+        }
+
+        let inode = fingerprint.and_then(|fp| fp.inode);
+        match library::update_track_fingerprints(conn, *track_id, inode, content_hash.as_deref()) {
+            Ok(true) => backfilled += 1,
+            Ok(false) => {}
+            Err(_) => errors += 1,
+        }
+    }
+
+    // Phase 2: deduplication
+    let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::deduplicating(0, 0));
+
+    let mut duplicates_merged = 0u32;
+    let mut deleted_ids = Vec::new();
+
+    let inode_dups = library::find_duplicates_by_inode(conn).map_err(|e| e.to_string())?;
+    let dup_total = inode_dups.len() as u32;
+    for (i, group) in inode_dups.iter().enumerate() {
+        if group.len() < 2 {
+            continue;
+        }
+        let keep = &group[0];
+        for dup in &group[1..] {
+            match library::merge_duplicate_tracks(conn, keep.id, dup.id) {
+                Ok(true) => {
+                    duplicates_merged += 1;
+                    deleted_ids.push(dup.id);
+                }
                 Ok(false) => {}
                 Err(_) => errors += 1,
             }
         }
-
-        // Phase 2: deduplication
-        let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::deduplicating(0, 0));
-
-        let mut duplicates_merged = 0u32;
-        let mut deleted_ids = Vec::new();
-
-        let inode_dups = library::find_duplicates_by_inode(&conn).map_err(|e| e.to_string())?;
-        let dup_total = inode_dups.len() as u32;
-        for (i, group) in inode_dups.iter().enumerate() {
-            if group.len() < 2 {
-                continue;
-            }
-            let keep = &group[0];
-            for dup in &group[1..] {
-                match library::merge_duplicate_tracks(&conn, keep.id, dup.id) {
-                    Ok(true) => {
-                        duplicates_merged += 1;
-                        deleted_ids.push(dup.id);
-                    }
-                    Ok(false) => {}
-                    Err(_) => errors += 1,
-                }
-            }
-            if (i as u32 + 1).is_multiple_of(100) {
-                let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::deduplicating(
-                    i as u32 + 1,
-                    dup_total,
-                ));
-            }
-        }
-
-        let hash_dups =
-            library::find_duplicates_by_content_hash(&conn).map_err(|e| e.to_string())?;
-        for group in hash_dups {
-            if group.len() < 2 {
-                continue;
-            }
-            let keep = &group[0];
-            for dup in &group[1..] {
-                if deleted_ids.contains(&dup.id) {
-                    continue;
-                }
-                match library::merge_duplicate_tracks(&conn, keep.id, dup.id) {
-                    Ok(true) => {
-                        duplicates_merged += 1;
-                        deleted_ids.push(dup.id);
-                    }
-                    Ok(false) => {}
-                    Err(_) => errors += 1,
-                }
-            }
-        }
-
-        if !deleted_ids.is_empty() {
-            let _ =
-                app_handle.emit_library_updated(LibraryUpdatedEvent::deleted(deleted_ids.clone()));
-        }
-
-        // Phase 3: Cross-directory dedup
-        let _ =
-            app_handle.emit_reconcile_progress(ReconcileProgressEvent::cross_directory_dedup(0, 0));
-
-        let mut cross_directory_suppressed = 0u32;
-        let mut reinstated = 0u32;
-
-        // Phase 3a: Reinstatement (always runs if there are suppression records)
-        let suppression_count = crate::db::dedup::count_suppressed(&conn).unwrap_or(0);
-        if suppression_count > 0 {
-            match crate::db::dedup::reinstate_missing_kept_tracks(&conn, |filepath| {
-                let path = std::path::Path::new(filepath);
-                if !path.exists() {
-                    return None;
-                }
-                let extracted = extract_metadata_or_default(filepath);
-                let content_hash = compute_content_hash(path).ok();
-                let metadata = TrackMetadata {
-                    title: extracted.title,
-                    artist: extracted.artist,
-                    album: extracted.album,
-                    album_artist: extracted.album_artist,
-                    track_number: extracted.track_number,
-                    track_total: extracted.track_total,
-                    disc_number: extracted.disc_number.map(|n| n.to_string()),
-                    disc_total: extracted.disc_total.map(|n| n.to_string()),
-                    date: extracted.date,
-                    genre: extracted.genre,
-                    duration: extracted.duration,
-                    file_size: Some(extracted.file_size),
-                    file_mtime_ns: extracted.file_mtime_ns,
-                    file_ctime_ns: extracted.file_ctime_ns,
-                    file_inode: extracted.file_inode,
-                    content_hash,
-                };
-                library::add_track(&conn, filepath, &metadata).ok()
-            }) {
-                Ok(r) => {
-                    reinstated = r.reinstated;
-                    errors += r.errors;
-                }
-                Err(e) => {
-                    info!(error = %e, "Reinstatement phase encountered error");
-                    errors += 1;
-                }
-            }
-        }
-
-        // Phase 3b: Cross-directory dedup
-        // Read setting from Tauri store
-        let dedup_enabled = {
-            use tauri_plugin_store::StoreExt;
-            app_handle
-                .store("settings.json")
-                .ok()
-                .and_then(|store| {
-                    store
-                        .get("library.deduplicateAcrossDirectories")
-                        .and_then(|v| v.as_bool())
-                })
-                .unwrap_or(true)
-        };
-
-        if dedup_enabled {
-            // Get watched folder paths
-            let watched_folders =
-                crate::db::watched::get_watched_folders(&conn).unwrap_or_default();
-            let folder_paths: Vec<String> =
-                watched_folders.iter().map(|f| f.path.clone()).collect();
-
-            if folder_paths.len() >= 2 {
-                match library::find_cross_directory_duplicates(&conn, &folder_paths) {
-                    Ok(groups) => {
-                        let group_total = groups.len() as u32;
-                        for (i, group) in groups.iter().enumerate() {
-                            if group.len() < 2 {
-                                continue;
-                            }
-                            let keep = &group[0];
-                            for dup in &group[1..] {
-                                if deleted_ids.contains(&dup.id) {
-                                    continue;
-                                }
-                                // Record suppression before merging
-                                let _ = crate::db::dedup::suppress_track(
-                                    &conn,
-                                    keep.id,
-                                    &dup.filepath,
-                                    dup.content_hash.as_deref(),
-                                    dup.file_ctime_ns,
-                                    dup.file_mtime_ns,
-                                );
-                                match library::merge_duplicate_tracks(&conn, keep.id, dup.id) {
-                                    Ok(true) => {
-                                        cross_directory_suppressed += 1;
-                                        deleted_ids.push(dup.id);
-                                    }
-                                    Ok(false) => {}
-                                    Err(_) => errors += 1,
-                                }
-                            }
-                            if (i as u32 + 1).is_multiple_of(100) || i as u32 + 1 == group_total {
-                                let _ = app_handle.emit_reconcile_progress(
-                                    ReconcileProgressEvent::cross_directory_dedup(
-                                        i as u32 + 1,
-                                        group_total,
-                                    ),
-                                );
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        info!(error = %e, "Cross-directory dedup query failed");
-                        errors += 1;
-                    }
-                }
-            }
-        } else if suppression_count > 0 {
-            // Setting disabled but suppressions exist: unsuppress all
-            match crate::db::dedup::clear_all_suppressions(&conn) {
-                Ok(infos) => {
-                    // Re-scan and re-add the previously suppressed filepaths
-                    for info in &infos {
-                        let path = std::path::Path::new(&info.suppressed_filepath);
-                        if !path.exists() {
-                            continue;
-                        }
-                        let extracted = extract_metadata_or_default(&info.suppressed_filepath);
-                        let content_hash = compute_content_hash(path).ok();
-                        let metadata = TrackMetadata {
-                            title: extracted.title,
-                            artist: extracted.artist,
-                            album: extracted.album,
-                            album_artist: extracted.album_artist,
-                            track_number: extracted.track_number,
-                            track_total: extracted.track_total,
-                            disc_number: extracted.disc_number.map(|n| n.to_string()),
-                            disc_total: extracted.disc_total.map(|n| n.to_string()),
-                            date: extracted.date,
-                            genre: extracted.genre,
-                            duration: extracted.duration,
-                            file_size: Some(extracted.file_size),
-                            file_mtime_ns: extracted.file_mtime_ns,
-                            file_ctime_ns: extracted.file_ctime_ns,
-                            file_inode: extracted.file_inode,
-                            content_hash,
-                        };
-                        let _ = library::add_track(&conn, &info.suppressed_filepath, &metadata);
-                    }
-                    info!(
-                        count = infos.len(),
-                        "Unsuppressed tracks (dedup setting disabled)"
-                    );
-                }
-                Err(e) => {
-                    info!(error = %e, "Failed to clear suppressions");
-                    errors += 1;
-                }
-            }
-        }
-
-        // Emit deleted events for cross-directory dedup
-        if cross_directory_suppressed > 0 {
-            let _ = app_handle.emit_library_updated(LibraryUpdatedEvent::deleted(
-                deleted_ids[duplicates_merged as usize..].to_vec(),
+        if (i as u32 + 1).is_multiple_of(100) {
+            let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::deduplicating(
+                i as u32 + 1,
+                dup_total,
             ));
         }
+    }
 
-        let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::complete(total));
+    let hash_dups = library::find_duplicates_by_content_hash(conn).map_err(|e| e.to_string())?;
+    for group in hash_dups {
+        if group.len() < 2 {
+            continue;
+        }
+        let keep = &group[0];
+        for dup in &group[1..] {
+            if deleted_ids.contains(&dup.id) {
+                continue;
+            }
+            match library::merge_duplicate_tracks(conn, keep.id, dup.id) {
+                Ok(true) => {
+                    duplicates_merged += 1;
+                    deleted_ids.push(dup.id);
+                }
+                Ok(false) => {}
+                Err(_) => errors += 1,
+            }
+        }
+    }
 
-        Ok(ReconcileScanResult {
-            backfilled,
-            duplicates_merged,
-            cross_directory_suppressed,
-            reinstated,
-            errors,
-        })
+    if !deleted_ids.is_empty() {
+        let _ = app_handle.emit_library_updated(LibraryUpdatedEvent::deleted(deleted_ids.clone()));
+    }
+
+    // Phase 3: Cross-directory dedup
+    let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::cross_directory_dedup(0, 0));
+
+    let mut cross_directory_suppressed = 0u32;
+    let mut reinstated = 0u32;
+
+    // Phase 3a: Reinstatement (always runs if there are suppression records)
+    let suppression_count = crate::db::dedup::count_suppressed(conn).unwrap_or(0);
+    if suppression_count > 0 {
+        match crate::db::dedup::reinstate_missing_kept_tracks(conn, |filepath| {
+            let path = std::path::Path::new(filepath);
+            if !path.exists() {
+                return None;
+            }
+            let extracted = extract_metadata_or_default(filepath);
+            let content_hash = compute_content_hash(path).ok();
+            let metadata = TrackMetadata {
+                title: extracted.title,
+                artist: extracted.artist,
+                album: extracted.album,
+                album_artist: extracted.album_artist,
+                track_number: extracted.track_number,
+                track_total: extracted.track_total,
+                disc_number: extracted.disc_number.map(|n| n.to_string()),
+                disc_total: extracted.disc_total.map(|n| n.to_string()),
+                date: extracted.date,
+                genre: extracted.genre,
+                duration: extracted.duration,
+                file_size: Some(extracted.file_size),
+                file_mtime_ns: extracted.file_mtime_ns,
+                file_ctime_ns: extracted.file_ctime_ns,
+                file_inode: extracted.file_inode,
+                content_hash,
+            };
+            library::add_track(conn, filepath, &metadata).ok()
+        }) {
+            Ok(r) => {
+                reinstated = r.reinstated;
+                errors += r.errors;
+            }
+            Err(e) => {
+                info!(error = %e, "Reinstatement phase encountered error");
+                errors += 1;
+            }
+        }
+    }
+
+    // Phase 3b: Cross-directory dedup
+    let dedup_enabled = {
+        use tauri_plugin_store::StoreExt;
+        app_handle
+            .store("settings.json")
+            .ok()
+            .and_then(|store| {
+                store
+                    .get("library.deduplicateAcrossDirectories")
+                    .and_then(|v| v.as_bool())
+            })
+            .unwrap_or(true)
+    };
+
+    if dedup_enabled {
+        let watched_folders = crate::db::watched::get_watched_folders(conn).unwrap_or_default();
+        let folder_paths: Vec<String> = watched_folders.iter().map(|f| f.path.clone()).collect();
+
+        if folder_paths.len() >= 2 {
+            match library::find_cross_directory_duplicates(conn, &folder_paths) {
+                Ok(groups) => {
+                    let group_total = groups.len() as u32;
+                    for (i, group) in groups.iter().enumerate() {
+                        if group.len() < 2 {
+                            continue;
+                        }
+                        let keep = &group[0];
+                        for dup in &group[1..] {
+                            if deleted_ids.contains(&dup.id) {
+                                continue;
+                            }
+                            let _ = crate::db::dedup::suppress_track(
+                                conn,
+                                keep.id,
+                                &dup.filepath,
+                                dup.content_hash.as_deref(),
+                                dup.file_ctime_ns,
+                                dup.file_mtime_ns,
+                            );
+                            match library::merge_duplicate_tracks(conn, keep.id, dup.id) {
+                                Ok(true) => {
+                                    cross_directory_suppressed += 1;
+                                    deleted_ids.push(dup.id);
+                                }
+                                Ok(false) => {}
+                                Err(_) => errors += 1,
+                            }
+                        }
+                        if (i as u32 + 1).is_multiple_of(100) || i as u32 + 1 == group_total {
+                            let _ = app_handle.emit_reconcile_progress(
+                                ReconcileProgressEvent::cross_directory_dedup(
+                                    i as u32 + 1,
+                                    group_total,
+                                ),
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    info!(error = %e, "Cross-directory dedup query failed");
+                    errors += 1;
+                }
+            }
+        }
+    } else if suppression_count > 0 {
+        match crate::db::dedup::clear_all_suppressions(conn) {
+            Ok(infos) => {
+                for info in &infos {
+                    let path = std::path::Path::new(&info.suppressed_filepath);
+                    if !path.exists() {
+                        continue;
+                    }
+                    let extracted = extract_metadata_or_default(&info.suppressed_filepath);
+                    let content_hash = compute_content_hash(path).ok();
+                    let metadata = TrackMetadata {
+                        title: extracted.title,
+                        artist: extracted.artist,
+                        album: extracted.album,
+                        album_artist: extracted.album_artist,
+                        track_number: extracted.track_number,
+                        track_total: extracted.track_total,
+                        disc_number: extracted.disc_number.map(|n| n.to_string()),
+                        disc_total: extracted.disc_total.map(|n| n.to_string()),
+                        date: extracted.date,
+                        genre: extracted.genre,
+                        duration: extracted.duration,
+                        file_size: Some(extracted.file_size),
+                        file_mtime_ns: extracted.file_mtime_ns,
+                        file_ctime_ns: extracted.file_ctime_ns,
+                        file_inode: extracted.file_inode,
+                        content_hash,
+                    };
+                    let _ = library::add_track(conn, &info.suppressed_filepath, &metadata);
+                }
+                info!(
+                    count = infos.len(),
+                    "Unsuppressed tracks (dedup setting disabled)"
+                );
+            }
+            Err(e) => {
+                info!(error = %e, "Failed to clear suppressions");
+                errors += 1;
+            }
+        }
+    }
+
+    // Emit deleted events for cross-directory dedup
+    if cross_directory_suppressed > 0 {
+        let _ = app_handle.emit_library_updated(LibraryUpdatedEvent::deleted(
+            deleted_ids[duplicates_merged as usize..].to_vec(),
+        ));
+    }
+
+    let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::complete(total));
+
+    Ok(ReconcileScanResult {
+        backfilled,
+        duplicates_merged,
+        cross_directory_suppressed,
+        reinstated,
+        errors,
+    })
+}
+
+#[tracing::instrument(skip(app, db))]
+#[tauri::command]
+pub(crate) async fn library_reconcile_scan(
+    app: AppHandle,
+    db: State<'_, Database>,
+) -> Result<ReconcileScanResult, String> {
+    let db = db.inner().clone();
+    let app_handle = app.clone();
+
+    tokio::task::spawn_blocking(move || {
+        let conn = db.conn().map_err(|e| e.to_string())?;
+        run_backfill_and_dedup(&conn, &app_handle)
     })
     .await
     .map_err(|e| format!("Reconcile scan task failed: {e}"))?
