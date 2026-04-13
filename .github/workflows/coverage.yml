@@ -1,0 +1,53 @@
+name: Coverage
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'Cargo.*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  rust-coverage:
+    name: Rust Coverage
+    runs-on: [macOS, ARM64]
+    timeout-minutes: 25
+    env:
+      CARGO_INCREMENTAL: 1
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Tauri build environment
+        uses: ./.github/actions/setup-tauri-build
+        with:
+          mode: check
+
+      - uses: cargo-bins/cargo-binstall@main
+
+      - name: Install cargo-tarpaulin
+        run: cargo binstall --no-confirm --force cargo-tarpaulin
+
+      - name: Run Rust tests with coverage
+        run: |
+          cargo tarpaulin --workspace --out Html --out Json --output-dir coverage \
+            --ignore-tests --skip-clean \
+            --exclude-files 'crates/mt-tauri/src/commands/*' 'crates/mt-tauri/src/lib.rs' 'crates/mt-tauri/src/main.rs' 'crates/mt-tauri/src/watcher.rs' 'crates/mt-tauri/src/dialog.rs' 'crates/mt-tauri/src/media_keys.rs' \
+            --fail-under 50
+
+      - name: Upload coverage report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust-coverage
+          path: coverage/
+          retention-days: 30
