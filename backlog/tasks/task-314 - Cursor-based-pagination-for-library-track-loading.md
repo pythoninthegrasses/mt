@@ -4,7 +4,7 @@ title: Cursor-based pagination for library track loading
 status: Done
 assignee: []
 created_date: '2026-04-12 06:55'
-updated_date: '2026-04-12 08:21'
+updated_date: '2026-04-13 17:48'
 labels:
   - performance
   - frontend
@@ -17,7 +17,7 @@ references:
   - app/frontend/js/components/library-browser.js
   - crates/mt-tauri/src/commands/library.rs
 priority: medium
-ordinal: 2000
+ordinal: 9000
 ---
 
 ## Description

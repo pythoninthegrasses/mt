@@ -4,7 +4,7 @@ title: Web Worker for library array operations
 status: Done
 assignee: []
 created_date: '2026-04-12 06:56'
-updated_date: '2026-04-12 08:25'
+updated_date: '2026-04-13 17:48'
 labels:
   - performance
   - frontend
@@ -14,7 +14,7 @@ references:
   - app/frontend/js/stores/library.js
   - app/frontend/js/utils/library-operations.js
 priority: low
-ordinal: 3000
+ordinal: 10000
 ---
 
 ## Description

@@ -4,7 +4,7 @@ title: Consolidate test suite and optimize CI pipeline (10min -> sub-7min)
 status: Done
 assignee: []
 created_date: '2026-04-12 09:10'
-updated_date: '2026-04-12 09:23'
+updated_date: '2026-04-13 17:48'
 labels:
   - ci
   - testing
@@ -18,7 +18,7 @@ references:
   - app/frontend/tests/
   - app/frontend/__tests__/
 priority: high
-ordinal: 26750
+ordinal: 12000
 ---
 
 ## Description

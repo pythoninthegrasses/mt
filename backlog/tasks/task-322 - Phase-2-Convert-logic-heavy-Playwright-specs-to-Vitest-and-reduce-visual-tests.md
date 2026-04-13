@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-04-12 09:10'
-updated_date: '2026-04-12 09:23'
+updated_date: '2026-04-13 17:48'
 labels:
   - ci
   - testing
@@ -21,7 +21,7 @@ references:
   - app/frontend/__tests__/playback-regression.test.js
   - app/frontend/__tests__/shortcuts.test.js
 priority: medium
-ordinal: 40125
+ordinal: 14000
 ---
 
 ## Description

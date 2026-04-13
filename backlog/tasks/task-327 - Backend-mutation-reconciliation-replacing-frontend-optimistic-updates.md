@@ -1,10 +1,10 @@
 ---
 id: TASK-327
 title: Backend mutation reconciliation replacing frontend optimistic updates
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-13 03:18'
-updated_date: '2026-04-13 04:00'
+updated_date: '2026-04-13 17:48'
 labels:
   - backend
   - library
@@ -24,7 +24,7 @@ references:
   - crates/mt-tauri/src/commands/queue.rs
   - crates/mt-tauri/src/events.rs
 priority: high
-ordinal: 3000
+ordinal: 8000
 ---
 
 ## Description
@@ -119,14 +119,23 @@ pub struct ReconcileDelta {
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Deleting tracks emits a library://reconcile event with removed_track_ids and authoritative new totals computed by the backend
-- [ ] #2 Frontend library store no longer splices tracks out of local arrays on delete — it applies the backend delta or re-fetches on revision change
-- [ ] #3 Scan completion emits library://reconcile — frontend no longer calls loadLibraryData() on scan_complete event
-- [ ] #4 Dedup completion emits library://reconcile with removed IDs — frontend applies delta instead of full reload
-- [ ] #5 Favorite toggle emits library://reconcile with affected_sections including 'liked' — liked section count updates without manual JS recount
+- [x] #1 Deleting tracks emits a library://reconcile event with removed_track_ids and authoritative new totals computed by the backend
+- [x] #2 Frontend library store no longer splices tracks out of local arrays on delete — it applies the backend delta or re-fetches on revision change
+- [x] #3 Scan completion emits library://reconcile — frontend no longer calls loadLibraryData() on scan_complete event
+- [x] #4 Dedup completion emits library://reconcile with removed IDs — frontend applies delta instead of full reload
+- [x] #5 Favorite toggle emits library://reconcile with affected_sections including 'liked' — liked section count updates without manual JS recount
 - [ ] #6 Queue store receives queue://reconcile when tracks are deleted and updates its items array from the backend snapshot
-- [ ] #7 Frontend has zero instances of local totalTracks or totalDuration assignment outside of reconcile event handlers
-- [ ] #8 All reconciliation events include the revision number from TASK-326's revision system
-- [ ] #9 Rust tests cover: delete N tracks -> reconcile event contains correct removed IDs and new totals; concurrent delete + scan -> both events emitted with correct revision ordering; favorite toggle -> affected_sections correct
-- [ ] #10 Frontend Vitest tests verify: reconcile delta correctly removes tracks from current view; reconcile snapshot replaces section data; revision mismatch triggers re-fetch
+- [x] #7 Frontend has zero instances of local totalTracks or totalDuration assignment outside of reconcile event handlers
+- [x] #8 All reconciliation events include the revision number from TASK-326's revision system
+- [x] #9 Rust tests cover: delete N tracks -> reconcile event contains correct removed IDs and new totals; concurrent delete + scan -> both events emitted with correct revision ordering; favorite toggle -> affected_sections correct
+- [x] #10 Frontend Vitest tests verify: reconcile delta correctly removes tracks from current view; reconcile snapshot replaces section data; revision mismatch triggers re-fetch
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented in 980c9ba (PR #41). Added `LibraryReconcileEvent` struct with factory methods for delete, scan_complete, dedup, and favorite mutations. All library mutation paths (delete, purge, dedup, scan, favorite, watcher) emit reconcile events with authoritative stats. Frontend `handleLibraryReconcile` handler applies backend-provided totals. `_handleDeleteComplete` and `_handleScanComplete` removed from library store. 7 Rust tests and 13 Vitest tests added.
+
+**AC not checked:**
+- **AC#6**: `queue://reconcile` event for queue cleanup on track deletion was not implemented. Queue cleanup happens inside `handleLibraryReconcile` in events.js rather than via a separate backend-emitted queue event.
+<!-- SECTION:FINAL_SUMMARY:END -->

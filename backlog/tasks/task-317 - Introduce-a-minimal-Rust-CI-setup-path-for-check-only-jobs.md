@@ -4,7 +4,7 @@ title: Introduce a minimal Rust CI setup path for check-only jobs
 status: Done
 assignee: []
 created_date: '2026-04-12 06:59'
-updated_date: '2026-04-12 07:11'
+updated_date: '2026-04-13 17:48'
 labels:
   - ci
   - github-actions
@@ -20,7 +20,7 @@ documentation:
   - taskfiles/ci.yml
   - docs/builds.md
 priority: high
-ordinal: 625
+ordinal: 2000
 ---
 
 ## Description

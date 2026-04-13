@@ -4,7 +4,7 @@ title: 'Phase 1: Remove redundant Playwright specs covered by Vitest'
 status: Done
 assignee: []
 created_date: '2026-04-12 09:10'
-updated_date: '2026-04-12 16:41'
+updated_date: '2026-04-13 17:48'
 labels:
   - ci
   - testing
@@ -21,7 +21,7 @@ references:
   - app/frontend/__tests__/ui.store.test.js
   - app/frontend/__tests__/library.store.test.js
 priority: high
-ordinal: 33437.5
+ordinal: 13000
 ---
 
 ## Description

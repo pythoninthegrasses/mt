@@ -4,7 +4,7 @@ title: Reduce repeated Windows CI bootstrap overhead
 status: Done
 assignee: []
 created_date: '2026-04-12 06:59'
-updated_date: '2026-04-12 07:17'
+updated_date: '2026-04-13 17:48'
 labels:
   - ci
   - github-actions
@@ -21,7 +21,7 @@ documentation:
   - .github/actions/setup-tauri-build/action.yml
   - docs/builds.md
 priority: medium
-ordinal: 750
+ordinal: 4000
 ---
 
 ## Description

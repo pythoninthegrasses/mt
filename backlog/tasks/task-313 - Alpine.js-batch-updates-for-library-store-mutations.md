@@ -4,7 +4,7 @@ title: Alpine.js batch updates for library store mutations
 status: Done
 assignee: []
 created_date: '2026-04-12 06:55'
-updated_date: '2026-04-12 07:28'
+updated_date: '2026-04-13 17:48'
 labels:
   - performance
   - frontend
@@ -15,7 +15,7 @@ references:
 documentation:
   - 'https://alpinejs.dev/globals/alpine-data'
 priority: high
-ordinal: 1000
+ordinal: 6000
 ---
 
 ## Description

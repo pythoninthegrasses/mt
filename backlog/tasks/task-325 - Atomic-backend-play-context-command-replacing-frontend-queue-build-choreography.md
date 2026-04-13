@@ -7,7 +7,7 @@ status: Done
 assignee:
   - claude
 created_date: '2026-04-13 03:14'
-updated_date: '2026-04-13 04:58'
+updated_date: '2026-04-13 17:48'
 labels:
   - backend
   - queue
@@ -16,7 +16,7 @@ labels:
 milestone: m-2
 dependencies: []
 priority: high
-ordinal: 1000
+ordinal: 6500
 ---
 
 ## Description

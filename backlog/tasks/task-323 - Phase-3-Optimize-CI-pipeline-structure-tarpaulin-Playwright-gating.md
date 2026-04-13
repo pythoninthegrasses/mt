@@ -4,7 +4,7 @@ title: 'Phase 3: Optimize CI pipeline structure (tarpaulin, Playwright gating)'
 status: Done
 assignee: []
 created_date: '2026-04-12 09:10'
-updated_date: '2026-04-12 09:23'
+updated_date: '2026-04-13 17:48'
 labels:
   - ci
   - performance
@@ -13,7 +13,7 @@ references:
   - .github/workflows/test.yml
   - .github/actions/setup-tauri-build/action.yml
 priority: medium
-ordinal: 46812.5
+ordinal: 15000
 ---
 
 ## Description

@@ -4,7 +4,7 @@ title: Stop installing unused CI tools in non-build jobs
 status: Done
 assignee: []
 created_date: '2026-04-12 06:59'
-updated_date: '2026-04-12 09:00'
+updated_date: '2026-04-13 17:48'
 labels:
   - ci
   - github-actions
@@ -19,7 +19,7 @@ documentation:
   - .github/actions/setup-tauri-build/action.yml
   - taskfiles/ci.yml
 priority: low
-ordinal: 5000
+ordinal: 11000
 ---
 
 ## Description
