@@ -33,9 +33,6 @@ export function createLibraryBrowser(Alpine) {
 
     ...virtualScrollMixin(),
 
-    // Queue build generation counter (cancels stale background builds)
-    _buildQueueGeneration: 0,
-
     ...columnSettingsMixin(),
 
     // Base column definitions

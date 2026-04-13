@@ -32,10 +32,11 @@ use commands::{
     network_cache_purge, network_cache_status, playlist_add_tracks, playlist_create,
     playlist_delete, playlist_generate_name, playlist_get, playlist_list, playlist_remove_track,
     playlist_reorder_tracks, playlist_update, playlists_reorder, queue_add, queue_add_files,
-    queue_clear, queue_get, queue_get_playback_state, queue_remove, queue_reorder,
-    queue_set_current_index, queue_set_loop, queue_set_shuffle, queue_shuffle, settings_get,
-    settings_get_all, settings_reset, settings_set, settings_update, stats_generate_chart_grid,
-    stats_get_genres, stats_get_overview, stats_get_plays_over_time, stats_get_top_artists,
+    queue_clear, queue_get, queue_get_playback_state, queue_play_context, queue_remove,
+    queue_reorder, queue_set_current_index, queue_set_loop, queue_set_shuffle, queue_shuffle,
+    settings_get, settings_get_all, settings_reset, settings_set, settings_update,
+    stats_generate_chart_grid, stats_get_genres, stats_get_overview, stats_get_plays_over_time,
+    stats_get_top_artists,
 };
 use dialog::{open_add_music_dialog, open_file_dialog, open_folder_dialog};
 use library::commands::{
@@ -509,6 +510,7 @@ pub fn run() {
             queue_set_current_index,
             queue_set_shuffle,
             queue_set_loop,
+            queue_play_context,
             playlist_list,
             playlist_create,
             playlist_get,

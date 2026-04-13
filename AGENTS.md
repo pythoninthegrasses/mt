@@ -156,7 +156,7 @@ hadolint docker/linux/Dockerfile                         # Lint Linux Dockerfile
 
 ```bash
 actionlint .github/workflows/test.yml                    # Lint single workflow
-actionlint                                               # Lint all workflows
+actionlint                                              # Lint all workflows
 ```
 
 ### When to Run
@@ -179,6 +179,7 @@ Each test layer has a clear responsibility. Do NOT write a Playwright E2E test f
 | Backend logic (audio, DB, concurrency) | Rust `#[test]` / proptest | Must run in Rust |
 
 **Rules:**
+
 - Playwright tests MUST involve real user interactions (clicks, keyboard, drag). If a test only calls `page.evaluate()` to manipulate Alpine stores, it belongs in Vitest.
 - Never duplicate store logic tests between Playwright and Vitest. Vitest is authoritative for store behavior.
 - Tag Playwright tests that need the Tauri runtime with `@tauri`. Default CI mode (`fast`) skips these.

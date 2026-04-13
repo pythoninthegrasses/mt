@@ -31,7 +31,6 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
     _originalOrder: [...initialItems],
     _repeatOnePending: false,
     _playNextOffset: 0,
-    _buildQueuePromise: null,
     _playHistory: [],
     _maxHistorySize: 100,
     _playNextTrackIds: new Set(),
@@ -131,11 +130,6 @@ function createTestQueueStore(initialItems = [], initialIndex = -1) {
     async playNextTracks(tracks) {
       const tracksArray = Array.isArray(tracks) ? tracks : [tracks];
       if (tracksArray.length === 0) return;
-
-      // Wait for any background queue build to complete before inserting
-      if (this._buildQueuePromise) {
-        await this._buildQueuePromise;
-      }
 
       // Move semantics: remove existing copies, skip current track
       const currentTrackId = this.currentIndex >= 0 ? this.items[this.currentIndex]?.id : null;
@@ -1037,101 +1031,6 @@ describe('Queue Store - Loop-One (Repeat Once)', () => {
     // Should not advance (returns without changing index)
     expect(store.currentIndex).toBe(2);
     expect(store.loop).toBe('none');
-  });
-});
-
-// -----------------------------------------------------------------------------
-// Deterministic Tests: playNextTracks during background queue build
-// -----------------------------------------------------------------------------
-
-describe('Queue Store - playNextTracks during background queue build', () => {
-  function makeTracks(names) {
-    return names.map((name, i) => ({
-      id: `build-track-${i}-${name}`,
-      title: name,
-      artist: 'Test',
-      album: 'Test',
-      duration: 180000,
-      filepath: `/music/${name}.mp3`,
-    }));
-  }
-
-  test('playNextTracks awaits _buildQueuePromise before inserting', async () => {
-    const tracks = makeTracks(['A', 'B', 'C', 'D', 'E']);
-    const store = createTestQueueStore(tracks);
-    store.playIndex(0); // Playing A
-
-    // Simulate a pending background queue build
-    let resolvePromise;
-    store._buildQueuePromise = new Promise((resolve) => {
-      resolvePromise = resolve;
-    });
-
-    const newTrack = {
-      id: 'play-next-1',
-      title: 'X',
-      artist: 'T',
-      album: 'T',
-      duration: 1000,
-      filepath: '/x.mp3',
-    };
-
-    // Start playNextTracks - it should await the promise
-    const playNextPromise = store.playNextTracks([newTrack]);
-
-    // Before resolving, X should NOT be in the queue yet
-    expect(store.items.find((t) => t.id === 'play-next-1')).toBeUndefined();
-
-    // Resolve the build promise
-    resolvePromise();
-    await playNextPromise;
-
-    // Now X should be inserted at index 1
-    expect(store.items[1].id).toBe('play-next-1');
-    expect(store.items.map((t) => t.title)).toEqual(['A', 'X', 'B', 'C', 'D', 'E']);
-  });
-
-  test('playNextTracks works normally when no build in progress', async () => {
-    const tracks = makeTracks(['A', 'B', 'C']);
-    const store = createTestQueueStore(tracks);
-    store.playIndex(0);
-
-    // _buildQueuePromise is null (no build in progress)
-    expect(store._buildQueuePromise).toBeNull();
-
-    const newTrack = {
-      id: 'play-next-1',
-      title: 'X',
-      artist: 'T',
-      album: 'T',
-      duration: 1000,
-      filepath: '/x.mp3',
-    };
-
-    await store.playNextTracks([newTrack]);
-
-    expect(store.items[1].id).toBe('play-next-1');
-    expect(store.items.map((t) => t.title)).toEqual(['A', 'X', 'B', 'C']);
-    expect(store.currentIndex).toBe(0);
-  });
-
-  test('successive playNextTracks calls after build completion', async () => {
-    const tracks = makeTracks(['A', 'B', 'C']);
-    const store = createTestQueueStore(tracks);
-    store.playIndex(0);
-
-    // Simulate a build promise that resolves immediately
-    store._buildQueuePromise = Promise.resolve();
-
-    const x = { id: 'x', title: 'X', artist: 'T', album: 'T', duration: 1000, filepath: '/x.mp3' };
-    const y = { id: 'y', title: 'Y', artist: 'T', album: 'T', duration: 1000, filepath: '/y.mp3' };
-
-    await store.playNextTracks([x]);
-    await store.playNextTracks([y]);
-
-    // Expected order: [A (playing), X, Y, B, C]
-    expect(store.items.map((t) => t.title)).toEqual(['A', 'X', 'Y', 'B', 'C']);
-    expect(store.currentIndex).toBe(0);
   });
 });
 

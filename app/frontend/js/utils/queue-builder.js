@@ -1,11 +1,11 @@
 import { queue } from '../api/queue.js';
 
 /**
- * Handle double-click play with background queue building.
- * Starts playback immediately on the clicked track, then builds the full
- * queue in the background for seamless continuation.
+ * Handle double-click play with atomic backend queue building.
+ * Sends a single IPC command that clears the queue, installs all tracks
+ * (rotated or shuffled), triggers audio playback, and returns the new state.
  *
- * @param {Object} ctx - Component context (must have queue, player, _buildQueueGeneration)
+ * @param {Object} ctx - Component context (must have queue and player stores)
  * @param {Object} track - Track to play immediately
  * @param {Array} allTracks - Full track list for queue
  * @param {number} index - Index of clicked track in allTracks
@@ -14,89 +14,34 @@ import { queue } from '../api/queue.js';
  * @param {Function} [options.beforePlay] - Called before play starts (e.g. to push history)
  */
 export async function handleDoubleClickPlay(ctx, track, allTracks, index, logPrefix, options) {
+  if (index < 0 || index >= allTracks.length) {
+    await ctx.player.playTrack(track);
+    return;
+  }
+
   ctx.queue._updating = true;
-  ctx._buildQueueGeneration++;
-  const generation = ctx._buildQueueGeneration;
-  let backgroundBuildStarted = false;
 
   try {
-    if (ctx.queue.shuffle) {
-      await _handleShufflePlay(ctx, track, allTracks, index);
-    } else if (index >= 0 && index < allTracks.length) {
-      backgroundBuildStarted = true;
-      if (options?.beforePlay) options.beforePlay();
-      await _handleSequentialPlay(ctx, track, allTracks, index, generation, logPrefix);
-    } else {
-      await ctx.player.playTrack(track);
-    }
+    if (options?.beforePlay) options.beforePlay();
+
+    const trackIds = allTracks.map((t) => t.id);
+    const result = await queue.playContext(trackIds, index, ctx.queue.shuffle);
+
+    // Apply response to queue store
+    ctx.queue.items = result.items.map((item) => item.track || item);
+    ctx.queue.currentIndex = result.current_index;
+    ctx.queue._originalOrder = [...ctx.queue.items];
+    ctx.queue._playHistory = [];
+    ctx.queue._playNextOffset = 0;
+    ctx.queue._playNextTrackIds = new Set();
+
+    // Update player state from the track returned by backend
+    ctx.player.updateTrackState(result.track, result.duration_ms);
+  } catch (err) {
+    console.error(`[${logPrefix}] Failed to play context:`, err);
   } finally {
-    if (!backgroundBuildStarted) {
-      setTimeout(() => {
-        ctx.queue._updating = false;
-      }, 200);
-    }
+    setTimeout(() => {
+      ctx.queue._updating = false;
+    }, 200);
   }
-}
-
-async function _handleShufflePlay(ctx, track, allTracks, index) {
-  await ctx.queue.clear();
-  await ctx.queue.add(allTracks, false);
-  if (index >= 0 && index < ctx.queue.items.length) {
-    ctx.queue.currentIndex = index;
-    ctx.queue._shuffleItems();
-    await ctx.queue._syncQueueToBackend();
-    await ctx.queue.playIndex(0);
-  } else {
-    await ctx.player.playTrack(track);
-  }
-}
-
-async function _handleSequentialPlay(ctx, track, allTracks, index, generation, logPrefix) {
-  // Start playback immediately with just the clicked track
-  ctx.queue.items.splice(0, ctx.queue.items.length, track);
-  ctx.queue._originalOrder.splice(0, ctx.queue._originalOrder.length, track);
-  ctx.queue.currentIndex = 0;
-  ctx.queue._playHistory = [];
-  ctx.queue._playNextOffset = 0;
-  await ctx.player.playTrack(track);
-
-  // Build full queue in background
-  const buildQueue = async () => {
-    try {
-      await queue.clear();
-      if (ctx._buildQueueGeneration !== generation) return;
-
-      const subsequent = allTracks.slice(index);
-      const preceding = allTracks.slice(0, index);
-      const fullQueue = [...subsequent, ...preceding];
-
-      if (ctx._buildQueueGeneration !== generation) return;
-
-      ctx.queue.items.splice(0, ctx.queue.items.length, ...fullQueue);
-      ctx.queue._originalOrder.splice(0, ctx.queue._originalOrder.length, ...fullQueue);
-      ctx.queue.currentIndex = 0;
-
-      await queue.add(fullQueue.map((t) => t.id));
-      if (ctx._buildQueueGeneration !== generation) return;
-
-      await queue.setCurrentIndex(0);
-    } catch (err) {
-      if (ctx._buildQueueGeneration === generation) {
-        console.error(`[${logPrefix}] Failed to build queue:`, err);
-      }
-    } finally {
-      if (ctx._buildQueueGeneration === generation) {
-        setTimeout(() => {
-          ctx.queue._updating = false;
-        }, 200);
-      }
-    }
-  };
-  const promise = buildQueue();
-  ctx.queue._buildQueuePromise = promise;
-  promise.finally(() => {
-    if (ctx.queue._buildQueuePromise === promise) {
-      ctx.queue._buildQueuePromise = null;
-    }
-  });
 }

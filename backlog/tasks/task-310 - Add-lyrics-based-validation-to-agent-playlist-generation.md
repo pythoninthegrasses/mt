@@ -4,7 +4,7 @@ title: Add lyrics-based validation to agent playlist generation
 status: To Do
 assignee: []
 created_date: '2026-04-04 08:54'
-updated_date: '2026-04-12 06:59'
+updated_date: '2026-04-13 04:00'
 labels:
   - agent
   - quality
@@ -14,7 +14,7 @@ references:
   - src-tauri/src/agent.rs
   - docs/agent.md
 priority: medium
-ordinal: 54500
+ordinal: 51500
 ---
 
 ## Description
