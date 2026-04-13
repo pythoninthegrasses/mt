@@ -204,9 +204,19 @@ export function createSettingsView(Alpine) {
       return this.lastfm.isResettingLoved ? 'Resetting...' : 'Reset Cache';
     },
 
+    _audioDevicesLoaded: false,
+
     async init() {
       await this.loadAppInfo();
-      await this.loadAudioDevices();
+      // Audio device enumeration is deferred until the settings view
+      // becomes visible — calling into CoreAudio too early at launch
+      // can trigger a SIGSEGV in HALDeviceList::GetData() on macOS.
+      this.$watch('$store.ui.view', (view) => {
+        if (view === 'settings' && !this._audioDevicesLoaded) {
+          this._audioDevicesLoaded = true;
+          this.loadAudioDevices();
+        }
+      });
       await this.loadWatchedFolders();
       await this.loadLastfmSettings();
       await this.loadNetworkCacheStatus();

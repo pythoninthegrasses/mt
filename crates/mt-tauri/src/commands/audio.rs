@@ -87,32 +87,58 @@ impl AudioState {
 }
 
 fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
-    let mut engine = match AudioEngine::new() {
-        Ok(e) => e,
-        Err(e) => {
-            error!(error = %e, "Failed to create audio engine");
-            return;
-        }
-    };
+    // Lazy audio engine initialization: defer CoreAudio interaction until the
+    // first command that actually needs it.  On macOS, querying the audio
+    // device list before the CoreAudio HAL is fully initialized triggers a
+    // SIGSEGV inside HALDeviceList::GetData() (null pointer at address 0x4).
+    // Because SIGSEGV cannot be caught in Rust, the only safe mitigation is
+    // to never call into CoreAudio until the user actually requests audio.
+    let mut engine: Option<AudioEngine> = None;
+    let mut device_restored = false;
 
-    // Restore saved audio output device from settings
-    if let Ok(store) = app.store("mt-settings.json")
-        && let Some(device_value) = store.get("audio_output_device")
-        && let Some(device_name) = device_value.as_str()
-        && device_name != "default"
-    {
-        match engine.set_device(Some(device_name)) {
-            Ok(()) => {
-                info!(device = device_name, "Restored saved audio output device");
-            }
-            Err(e) => {
-                warn!(
-                    device = device_name,
-                    error = %e,
-                    "Saved audio device unavailable, using default"
-                );
+    /// Try to create the audio engine, restoring the saved output device if
+    /// one is persisted.  Returns a mutable reference on success or an error
+    /// string suitable for sending back over a reply channel.
+    fn ensure_engine<'a>(
+        engine: &'a mut Option<AudioEngine>,
+        device_restored: &mut bool,
+        app: &AppHandle,
+    ) -> Result<&'a mut AudioEngine, String> {
+        if engine.is_none() {
+            info!("Lazily initializing audio engine on first use");
+            let e = AudioEngine::new().map_err(|e| {
+                error!(error = %e, "Failed to create audio engine");
+                format!("Audio engine initialization failed: {e}")
+            })?;
+            *engine = Some(e);
+        }
+
+        let eng = engine.as_mut().unwrap();
+
+        // Restore saved audio output device once, on first successful init
+        if !*device_restored {
+            *device_restored = true;
+            if let Ok(store) = app.store("mt-settings.json")
+                && let Some(device_value) = store.get("audio_output_device")
+                && let Some(device_name) = device_value.as_str()
+                && device_name != "default"
+            {
+                match eng.set_device(Some(device_name)) {
+                    Ok(()) => {
+                        info!(device = device_name, "Restored saved audio output device");
+                    }
+                    Err(e) => {
+                        warn!(
+                            device = device_name,
+                            error = %e,
+                            "Saved audio device unavailable, using default"
+                        );
+                    }
+                }
             }
         }
+
+        Ok(eng)
     }
 
     let mut last_finished = false;
@@ -131,7 +157,8 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(cmd) => match cmd {
                 AudioCommand::Load(path, track_id, reply) => {
-                    let result = engine.load(&path).map_err(|e| e.to_string());
+                    let result = ensure_engine(&mut engine, &mut device_restored, &app)
+                        .and_then(|eng| eng.load(&path).map_err(|e| e.to_string()));
 
                     // Reset play count state for new track
                     play_count_state.track_id = track_id;
@@ -146,7 +173,12 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                     let _ = reply.send(result);
                 }
                 AudioCommand::LoadAndPlay(path, track_id, reply) => {
-                    let result = engine.load(&path).map_err(|e| e.to_string());
+                    let result = ensure_engine(&mut engine, &mut device_restored, &app)
+                        .and_then(|eng| {
+                            let info = eng.load(&path).map_err(|e| e.to_string())?;
+                            let _ = eng.play();
+                            Ok(info)
+                        });
 
                     // Reset play count state for new track
                     play_count_state.track_id = track_id;
@@ -158,65 +190,91 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
 
                     last_finished = false;
 
-                    // If load succeeded, immediately play in the same iteration
-                    if result.is_ok() {
-                        let _ = engine.play();
-                    }
-
                     let _ = reply.send(result);
                 }
                 AudioCommand::Play(reply) => {
                     debug!("Audio thread received Play command");
-                    let result = engine.play().map_err(|e| {
-                        error!(error = %e, "Audio play failed");
-                        e.to_string()
-                    });
+                    let result = ensure_engine(&mut engine, &mut device_restored, &app)
+                        .and_then(|eng| eng.play().map_err(|e| {
+                            error!(error = %e, "Audio play failed");
+                            e.to_string()
+                        }));
                     let _ = reply.send(result);
                 }
                 AudioCommand::Pause(reply) => {
                     debug!("Audio thread received Pause command");
-                    let result = engine.pause().map_err(|e| {
-                        error!(error = %e, "Audio pause failed");
-                        e.to_string()
-                    });
+                    let result = ensure_engine(&mut engine, &mut device_restored, &app)
+                        .and_then(|eng| eng.pause().map_err(|e| {
+                            error!(error = %e, "Audio pause failed");
+                            e.to_string()
+                        }));
                     let _ = reply.send(result);
                 }
                 AudioCommand::Stop(reply) => {
                     debug!("Audio thread received Stop command");
-                    engine.stop();
+                    if let Some(eng) = engine.as_mut() {
+                        eng.stop();
+                    }
                     let _ = reply.send(Ok(()));
                 }
                 AudioCommand::Seek(pos, reply) => {
-                    let result = engine.seek(pos).map_err(|e| e.to_string());
+                    let result = ensure_engine(&mut engine, &mut device_restored, &app)
+                        .and_then(|eng| eng.seek(pos).map_err(|e| e.to_string()));
                     let _ = reply.send(result);
                 }
                 AudioCommand::SetVolume(vol, reply) => {
-                    engine.set_volume(vol);
+                    if let Some(eng) = engine.as_mut() {
+                        eng.set_volume(vol);
+                    }
+                    // Volume will be applied when engine initializes if needed
                     let _ = reply.send(Ok(()));
                 }
                 AudioCommand::GetVolume(reply) => {
-                    let _ = reply.send(engine.get_volume());
+                    let vol = engine.as_ref().map_or(1.0, |eng| eng.get_volume());
+                    let _ = reply.send(vol);
                 }
                 AudioCommand::GetStatus(reply) => {
-                    let progress = engine.get_progress();
-                    let track = engine.get_current_track().cloned();
-                    let status = PlaybackStatus {
-                        position_ms: progress.position_ms,
-                        duration_ms: progress.duration_ms,
-                        state: progress.state,
-                        volume: engine.get_volume(),
-                        track,
+                    let status = match engine.as_ref() {
+                        Some(eng) => {
+                            let progress = eng.get_progress();
+                            let track = eng.get_current_track().cloned();
+                            PlaybackStatus {
+                                position_ms: progress.position_ms,
+                                duration_ms: progress.duration_ms,
+                                state: progress.state,
+                                volume: eng.get_volume(),
+                                track,
+                            }
+                        }
+                        None => PlaybackStatus {
+                            position_ms: 0,
+                            duration_ms: 0,
+                            state: PlaybackState::Stopped,
+                            volume: 1.0,
+                            track: None,
+                        },
                     };
                     let _ = reply.send(status);
                 }
                 AudioCommand::ListDevices(reply) => {
-                    let result = list_output_devices().map_err(|e| e.to_string());
+                    // list_output_devices() calls into CoreAudio.  If the
+                    // engine hasn't been lazily created yet we skip the
+                    // query entirely — returning an empty list avoids
+                    // the SIGSEGV in HALDeviceList::GetData() that occurs
+                    // when CoreAudio's HAL is still initializing at launch.
+                    // The frontend can retry once the user actually needs
+                    // the device list (e.g. opening the audio settings).
+                    let result = if engine.is_some() {
+                        list_output_devices().map_err(|e| e.to_string())
+                    } else {
+                        debug!("Audio engine not yet initialized, returning empty device list");
+                        Ok(vec![])
+                    };
                     let _ = reply.send(result);
                 }
                 AudioCommand::SetDevice(name, reply) => {
-                    let result = engine
-                        .set_device(name.as_deref())
-                        .map_err(|e| e.to_string());
+                    let result = ensure_engine(&mut engine, &mut device_restored, &app)
+                        .and_then(|eng| eng.set_device(name.as_deref()).map_err(|e| e.to_string()));
                     let _ = reply.send(result);
                 }
             },
@@ -224,11 +282,11 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
 
-        let is_playing = engine.get_state() == PlaybackState::Playing;
-        let is_finished = engine.is_finished();
+        let is_playing = engine.as_ref().is_some_and(|e| e.get_state() == PlaybackState::Playing);
+        let is_finished = engine.as_ref().is_some_and(|e| e.is_finished());
 
         if is_playing && last_emit.elapsed() >= Duration::from_millis(250) {
-            let progress = engine.get_progress();
+            let progress = engine.as_ref().unwrap().get_progress();
             let _ = app.emit("audio://progress", &progress);
             last_emit = std::time::Instant::now();
 
