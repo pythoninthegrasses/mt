@@ -450,6 +450,12 @@ export function createLibraryBrowser(Alpine) {
     },
 
     async handleDoubleClick(track, index) {
+      // For paginated sections, load all pages so the full library is
+      // enqueued as context (not just the pages the user has scrolled through).
+      if (this.library._isPaginated() && !this.library._allPagesLoaded) {
+        await this.library._loadAllPages();
+      }
+
       await handleDoubleClickPlay(
         this,
         track,

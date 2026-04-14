@@ -44,6 +44,59 @@ enum AudioCommand {
     SetDevice(rodio::cpal::Device, Sender<Result<(), String>>),
 }
 
+/// Detects when playback has stalled near the end of a track.
+///
+/// Some decoders (e.g. symphonia with corrupted MP3 frames) may stop producing
+/// samples before the sink fully drains, so `Sink::empty()` never returns true.
+/// This detector watches for the position not advancing while near the track end
+/// and treats it as finished after a threshold of consecutive stalled polls.
+#[derive(Debug)]
+struct StallDetector {
+    position_ms: u64,
+    count: u32,
+}
+
+impl StallDetector {
+    /// Poll cycles without position change before declaring stalled (~1s at 100ms).
+    const THRESHOLD: u32 = 10;
+    /// How close to the end the position must be (in ms) to trigger stall detection.
+    const END_PROXIMITY_MS: u64 = 5000;
+
+    fn new() -> Self {
+        Self {
+            position_ms: 0,
+            count: 0,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.position_ms = 0;
+        self.count = 0;
+    }
+
+    /// Check whether the given progress indicates a stall near end-of-track.
+    /// Returns true if the position has been stalled long enough to treat as finished.
+    fn check(&mut self, position_ms: u64, duration_ms: u64) -> bool {
+        if duration_ms == 0 || position_ms == 0 {
+            self.count = 0;
+            return false;
+        }
+
+        if position_ms + Self::END_PROXIMITY_MS < duration_ms {
+            self.count = 0;
+            return false;
+        }
+
+        if position_ms == self.position_ms {
+            self.count += 1;
+            self.count >= Self::THRESHOLD
+        } else {
+            self.position_ms = position_ms;
+            self.count = 0;
+            false
+        }
+    }
+}
 
 struct PlayCountState {
     track_id: Option<i64>,
@@ -175,6 +228,7 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
 
     let mut last_finished = false;
     let mut last_emit = std::time::Instant::now();
+    let mut stall = StallDetector::new();
     let mut play_count_state = PlayCountState {
         track_id: None,
         threshold_reached: false,
@@ -200,6 +254,7 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                     scrobble_state.track_id = track_id;
                     scrobble_state.threshold_reached = false;
 
+                    stall.reset();
                     last_finished = false;
 
                     let _ = reply.send(result);
@@ -220,6 +275,7 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                     scrobble_state.track_id = track_id;
                     scrobble_state.threshold_reached = false;
 
+                    stall.reset();
                     last_finished = false;
 
                     let _ = reply.send(result);
@@ -305,7 +361,27 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
         let is_playing = engine
             .as_ref()
             .is_some_and(|e| e.get_state() == PlaybackState::Playing);
-        let is_finished = engine.as_ref().is_some_and(|e| e.is_finished());
+        let mut is_finished = engine.as_ref().is_some_and(|e| e.is_finished());
+
+        // Stall detection: if position hasn't advanced and we're near the
+        // end of the track, the decoder may be stuck (e.g. symphonia MP3
+        // decode error preventing sink from draining). Treat as finished.
+        if !is_finished
+            && engine
+                .as_ref()
+                .is_some_and(|e| e.get_state() == PlaybackState::Playing)
+            && let Some(ref eng) = engine
+        {
+            let progress = eng.get_progress();
+            if stall.check(progress.position_ms, progress.duration_ms) {
+                debug!(
+                    position_ms = progress.position_ms,
+                    duration_ms = progress.duration_ms,
+                    "Position stalled near end of track, treating as finished"
+                );
+                is_finished = true;
+            }
+        }
 
         if is_playing && last_emit.elapsed() >= Duration::from_millis(250) {
             let progress = engine.as_ref().unwrap().get_progress();
@@ -369,6 +445,7 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
         }
 
         if is_finished && !last_finished {
+            debug!("Track finished, emitting audio://track-ended");
             let _ = app.emit("audio://track-ended", ());
         }
         last_finished = is_finished;
@@ -1050,5 +1127,127 @@ mod tests {
         };
         let cloned = response.clone();
         assert_eq!(response.devices, cloned.devices);
+    }
+
+    // ==================== StallDetector Tests (task-332) ====================
+
+    #[test]
+    fn test_stall_detector_no_stall_when_position_advances() {
+        let mut d = StallDetector::new();
+        // Position advancing near end — should not trigger
+        for pos in 295_000..296_000 {
+            assert!(!d.check(pos, 300_000));
+        }
+    }
+
+    #[test]
+    fn test_stall_detector_triggers_after_threshold() {
+        let mut d = StallDetector::new();
+        let pos = 298_000; // within END_PROXIMITY_MS of 300_000
+        let dur = 300_000;
+
+        // First call records the position
+        assert!(!d.check(pos, dur));
+        // Subsequent calls with same position increment counter
+        for _ in 1..StallDetector::THRESHOLD {
+            assert!(!d.check(pos, dur));
+        }
+        // At threshold, triggers
+        assert!(d.check(pos, dur));
+    }
+
+    #[test]
+    fn test_stall_detector_resets_on_position_change() {
+        let mut d = StallDetector::new();
+        let dur = 300_000;
+
+        // Build up 9 stall counts at position 298_000
+        for _ in 0..StallDetector::THRESHOLD - 1 {
+            d.check(298_000, dur);
+        }
+        // Position advances — counter resets
+        assert!(!d.check(298_001, dur));
+        // Need full threshold again
+        for _ in 1..StallDetector::THRESHOLD {
+            assert!(!d.check(298_001, dur));
+        }
+        assert!(d.check(298_001, dur));
+    }
+
+    #[test]
+    fn test_stall_detector_ignores_position_far_from_end() {
+        let mut d = StallDetector::new();
+        let dur = 300_000;
+        // Position is not within END_PROXIMITY_MS of end
+        let pos = 100_000;
+
+        for _ in 0..StallDetector::THRESHOLD + 5 {
+            assert!(!d.check(pos, dur));
+        }
+    }
+
+    #[test]
+    fn test_stall_detector_ignores_zero_duration() {
+        let mut d = StallDetector::new();
+        for _ in 0..StallDetector::THRESHOLD + 5 {
+            assert!(!d.check(50_000, 0));
+        }
+    }
+
+    #[test]
+    fn test_stall_detector_ignores_zero_position() {
+        let mut d = StallDetector::new();
+        for _ in 0..StallDetector::THRESHOLD + 5 {
+            assert!(!d.check(0, 300_000));
+        }
+    }
+
+    #[test]
+    fn test_stall_detector_reset_clears_state() {
+        let mut d = StallDetector::new();
+        let dur = 300_000;
+
+        // Build up stall count
+        for _ in 0..StallDetector::THRESHOLD - 1 {
+            d.check(298_000, dur);
+        }
+        // Reset
+        d.reset();
+        // First call after reset records the position (position_ms was 0)
+        assert!(!d.check(298_000, dur));
+        // Then need THRESHOLD - 1 more same-position calls before it triggers
+        for _ in 1..StallDetector::THRESHOLD {
+            assert!(!d.check(298_000, dur));
+        }
+        // At THRESHOLD, triggers
+        assert!(d.check(298_000, dur));
+    }
+
+    #[test]
+    fn test_stall_detector_end_proximity_boundary() {
+        let mut d = StallDetector::new();
+        let dur = 300_000;
+
+        // Exactly at the boundary: pos + END_PROXIMITY_MS == dur
+        let boundary_pos = dur - StallDetector::END_PROXIMITY_MS;
+        // First call records position
+        d.check(boundary_pos, dur);
+        for _ in 1..StallDetector::THRESHOLD {
+            assert!(!d.check(boundary_pos, dur));
+        }
+        // Should trigger at boundary
+        assert!(d.check(boundary_pos, dur));
+    }
+
+    #[test]
+    fn test_stall_detector_just_outside_proximity() {
+        let mut d = StallDetector::new();
+        let dur = 300_000;
+
+        // One ms before the proximity window
+        let pos = dur - StallDetector::END_PROXIMITY_MS - 1;
+        for _ in 0..StallDetector::THRESHOLD + 5 {
+            assert!(!d.check(pos, dur));
+        }
     }
 }

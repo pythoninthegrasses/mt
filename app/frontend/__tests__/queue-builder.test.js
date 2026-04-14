@@ -254,6 +254,58 @@ describe('handleDoubleClickPlay', () => {
   });
 });
 
+describe('handleDoubleClickPlay - paginated library regression (task-332)', () => {
+  // Regression: double-clicking a track in a paginated library only queued
+  // tracks from loaded pages. When the user scrolled to page 5 but pages 1-4
+  // weren't loaded, filteredTracks was a sparse subset and the globalIndex
+  // was out of bounds, causing fallback to single-track playback.
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('falls back to single-track when allTracks has gaps from partial page loading', async () => {
+    // Simulate: 20 total tracks across 4 pages of 5, only page 0 and page 2 loaded
+    const page0 = makeTracks(['A', 'B', 'C', 'D', 'E']);
+    const page2 = makeTracks(['K', 'L', 'M', 'N', 'O']);
+    // filteredTracks only has 10 items from the 2 loaded pages
+    const partialTracks = [...page0, ...page2];
+
+    const ctx = createMockCtx();
+    // Track at globalIndex 10 (page 2, offset 0) - but partialTracks only has 10 items
+    // so index 10 is out of bounds
+    await handleDoubleClickPlay(ctx, page2[0], partialTracks, 10, 'test');
+
+    // Bug: falls back to single-track playback instead of queuing full library
+    expect(ctx.player.playTrack).toHaveBeenCalledWith(page2[0]);
+    expect(queueApi.playContext).not.toHaveBeenCalled();
+  });
+
+  it('queues full library when all pages are loaded before calling', async () => {
+    // After fix: _loadAllPages() is called first, so allTracks has all 20 items
+    const allTracks = makeTracks([
+      'A', 'B', 'C', 'D', 'E',     // page 0
+      'F', 'G', 'H', 'I', 'J',     // page 1
+      'K', 'L', 'M', 'N', 'O',     // page 2
+      'P', 'Q', 'R', 'S', 'T',     // page 3
+    ]);
+
+    const result = makePlayContextResult(allTracks, 10);
+    queueApi.playContext.mockResolvedValue(result);
+
+    const ctx = createMockCtx();
+    // globalIndex 10 is now valid (track K at page 2, offset 0)
+    await handleDoubleClickPlay(ctx, allTracks[10], allTracks, 10, 'test');
+
+    expect(queueApi.playContext).toHaveBeenCalledWith(
+      allTracks.map((t) => t.id),
+      10,
+      false,
+    );
+    expect(ctx.player.playTrack).not.toHaveBeenCalled();
+  });
+});
+
 describe('player.updateTrackState', () => {
   // Test the updateTrackState method logic in isolation
   // (simulating what the real player store does)
