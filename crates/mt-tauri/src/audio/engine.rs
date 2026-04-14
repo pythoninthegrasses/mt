@@ -54,6 +54,25 @@ impl AudioEngine {
         })
     }
 
+    /// Create engine from a pre-resolved device.
+    ///
+    /// Unlike `new()`, this does NOT call `default_output_device()` or
+    /// `output_devices()`. The caller is responsible for resolving the device
+    /// off the audio thread (e.g. via `device_isolation::resolve_device`).
+    pub fn from_device(device: rodio::cpal::Device) -> Result<Self, AudioError> {
+        let stream = OutputStreamBuilder::from_device(device)
+            .map_err(|e| AudioError::Stream(e.to_string()))?
+            .open_stream()
+            .map_err(|e| AudioError::Stream(e.to_string()))?;
+        Ok(Self {
+            stream: Some(stream),
+            player_handle: None,
+            state: PlaybackState::Stopped,
+            volume: 1.0,
+            current_track: None,
+        })
+    }
+
     pub fn load(&mut self, path: &str) -> Result<TrackInfo, AudioError> {
         self.stop();
 
@@ -260,51 +279,14 @@ impl AudioEngine {
         }
     }
 
-    /// Switch audio output to a named device, or default if `name` is None.
+    /// Switch audio output to a pre-resolved device.
     ///
-    /// Preserves current playback position and state. If the named device is
-    /// not found, falls back to the system default and returns an error.
-    pub fn set_device(&mut self, name: Option<&str>) -> Result<(), AudioError> {
-        // Resolve the target device before tearing anything down. For named
-        // devices we need to enumerate first; for default we grab the host's
-        // default. Validation happens here so we can bail early without
-        // disrupting playback.
-        let device = match name {
-            Some(device_name) => {
-                let host = rodio::cpal::default_host();
-                let devices = host.output_devices().map_err(|e| {
-                    AudioError::Device(format!("Failed to enumerate devices: {}", e))
-                })?;
-
-                let found = devices
-                    .into_iter()
-                    .find(|d| d.name().ok().as_deref() == Some(device_name));
-
-                match found {
-                    Some(d) => {
-                        info!(device = device_name, "Switching audio output device");
-                        d
-                    }
-                    None => {
-                        warn!(
-                            device = device_name,
-                            "Device not found, falling back to default"
-                        );
-                        return Err(AudioError::Device(format!(
-                            "Device not found: {}",
-                            device_name
-                        )));
-                    }
-                }
-            }
-            None => {
-                let host = rodio::cpal::default_host();
-                host.default_output_device().ok_or_else(|| {
-                    AudioError::Device("No default output device found".to_string())
-                })?
-            }
-        };
-
+    /// Preserves current playback position and state. The caller is responsible
+    /// for resolving the `cpal::Device` off the audio thread (e.g. via
+    /// `device_isolation::resolve_device`). This method only creates the stream
+    /// from the already-resolved device — it does NOT call `output_devices()`
+    /// or `default_output_device()`.
+    pub fn set_device_resolved(&mut self, device: rodio::cpal::Device) -> Result<(), AudioError> {
         // Capture current playback state before switching
         let was_playing = self.state == PlaybackState::Playing;
         let position_ms = self
@@ -324,10 +306,6 @@ impl AudioEngine {
         // from "Mac Studio Speakers" to "Default" which resolves to the same
         // hardware) causes the new stream to produce silence.
         self.stream = None;
-
-        if name.is_none() {
-            info!("Switching to default audio output device");
-        }
 
         let new_stream = OutputStreamBuilder::from_device(device)
             .map_err(|e| AudioError::Device(e.to_string()))?
@@ -371,6 +349,54 @@ impl AudioEngine {
         }
 
         Ok(())
+    }
+
+    /// Switch audio output to a named device, or default if `name` is None.
+    ///
+    /// Resolves the device AND creates the stream inline. This calls
+    /// `output_devices()` / `default_output_device()` on the current thread,
+    /// so it must NOT be called from the audio playback thread. Prefer
+    /// `set_device_resolved()` with a pre-resolved device from
+    /// `device_isolation::resolve_device()`.
+    pub fn set_device(&mut self, name: Option<&str>) -> Result<(), AudioError> {
+        let device = match name {
+            Some(device_name) => {
+                let host = rodio::cpal::default_host();
+                let devices = host.output_devices().map_err(|e| {
+                    AudioError::Device(format!("Failed to enumerate devices: {}", e))
+                })?;
+
+                let found = devices
+                    .into_iter()
+                    .find(|d| d.name().ok().as_deref() == Some(device_name));
+
+                match found {
+                    Some(d) => {
+                        info!(device = device_name, "Switching audio output device");
+                        d
+                    }
+                    None => {
+                        warn!(
+                            device = device_name,
+                            "Device not found, falling back to default"
+                        );
+                        return Err(AudioError::Device(format!(
+                            "Device not found: {}",
+                            device_name
+                        )));
+                    }
+                }
+            }
+            None => {
+                info!("Switching to default audio output device");
+                let host = rodio::cpal::default_host();
+                host.default_output_device().ok_or_else(|| {
+                    AudioError::Device("No default output device found".to_string())
+                })?
+            }
+        };
+
+        self.set_device_resolved(device)
     }
 }
 

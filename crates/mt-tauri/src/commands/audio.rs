@@ -1,4 +1,5 @@
-use crate::audio::{AudioEngine, PlaybackState, TrackInfo, list_output_devices};
+use crate::audio::device_isolation;
+use crate::audio::{AudioEngine, PlaybackState, TrackInfo};
 use crate::cache::NetworkFileCache;
 use crate::cache::mount_detect::is_network_mount;
 use serde::{Deserialize, Serialize};
@@ -8,6 +9,12 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
 use tracing::{debug, error, info, warn};
+
+/// Timeout for CoreAudio device resolution on disposable threads.
+const DEVICE_RESOLVE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Timeout for subprocess device enumeration.
+const DEVICE_ENUMERATE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlaybackStatus {
@@ -24,7 +31,7 @@ pub struct DeviceListResponse {
 }
 
 enum AudioCommand {
-    Load(String, Option<i64>, Sender<Result<TrackInfo, String>>), // Add track_id
+    Load(String, Option<i64>, Sender<Result<TrackInfo, String>>),
     LoadAndPlay(String, Option<i64>, Sender<Result<TrackInfo, String>>),
     Play(Sender<Result<(), String>>),
     Pause(Sender<Result<(), String>>),
@@ -33,9 +40,10 @@ enum AudioCommand {
     SetVolume(f32, Sender<Result<(), String>>),
     GetVolume(Sender<f32>),
     GetStatus(Sender<PlaybackStatus>),
-    ListDevices(Sender<Result<Vec<String>, String>>),
-    SetDevice(Option<String>, Sender<Result<(), String>>),
+    /// Device already resolved off the audio thread via device_isolation::resolve_device.
+    SetDevice(rodio::cpal::Device, Sender<Result<(), String>>),
 }
+
 
 struct PlayCountState {
     track_id: Option<i64>,
@@ -99,6 +107,10 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
     /// Try to create the audio engine, restoring the saved output device if
     /// one is persisted.  Returns a mutable reference on success or an error
     /// string suitable for sending back over a reply channel.
+    ///
+    /// All CoreAudio device enumeration (`output_devices()`,
+    /// `default_output_device()`) is performed on disposable threads via
+    /// `device_isolation::resolve_device`, never on the audio thread itself.
     fn ensure_engine<'a>(
         engine: &'a mut Option<AudioEngine>,
         device_restored: &mut bool,
@@ -106,7 +118,16 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
     ) -> Result<&'a mut AudioEngine, String> {
         if engine.is_none() {
             info!("Lazily initializing audio engine on first use");
-            let e = AudioEngine::new().map_err(|e| {
+
+            // Resolve the default output device on a disposable thread,
+            // then create the engine on the audio thread from the resolved
+            // device. This keeps device enumeration off the audio thread.
+            let device =
+                device_isolation::resolve_device(None, DEVICE_RESOLVE_TIMEOUT).map_err(|e| {
+                    error!(error = %e, "Failed to resolve default audio device");
+                    format!("Audio engine initialization failed: {e}")
+                })?;
+            let e = AudioEngine::from_device(device).map_err(|e| {
                 error!(error = %e, "Failed to create audio engine");
                 format!("Audio engine initialization failed: {e}")
             })?;
@@ -115,7 +136,9 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
 
         let eng = engine.as_mut().unwrap();
 
-        // Restore saved audio output device once, on first successful init
+        // Restore saved audio output device once, on first successful init.
+        // Device resolution happens on a disposable thread — never on the
+        // audio thread.
         if !*device_restored {
             *device_restored = true;
             if let Ok(store) = app.store("mt-settings.json")
@@ -123,10 +146,19 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                 && let Some(device_name) = device_value.as_str()
                 && device_name != "default"
             {
-                match eng.set_device(Some(device_name)) {
-                    Ok(()) => {
-                        info!(device = device_name, "Restored saved audio output device");
-                    }
+                match device_isolation::resolve_device(Some(device_name), DEVICE_RESOLVE_TIMEOUT) {
+                    Ok(device) => match eng.set_device_resolved(device) {
+                        Ok(()) => {
+                            info!(device = device_name, "Restored saved audio output device");
+                        }
+                        Err(e) => {
+                            warn!(
+                                device = device_name,
+                                error = %e,
+                                "Failed to apply saved audio device, using default"
+                            );
+                        }
+                    },
                     Err(e) => {
                         warn!(
                             device = device_name,
@@ -173,8 +205,8 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                     let _ = reply.send(result);
                 }
                 AudioCommand::LoadAndPlay(path, track_id, reply) => {
-                    let result = ensure_engine(&mut engine, &mut device_restored, &app)
-                        .and_then(|eng| {
+                    let result =
+                        ensure_engine(&mut engine, &mut device_restored, &app).and_then(|eng| {
                             let info = eng.load(&path).map_err(|e| e.to_string())?;
                             let _ = eng.play();
                             Ok(info)
@@ -194,20 +226,24 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                 }
                 AudioCommand::Play(reply) => {
                     debug!("Audio thread received Play command");
-                    let result = ensure_engine(&mut engine, &mut device_restored, &app)
-                        .and_then(|eng| eng.play().map_err(|e| {
-                            error!(error = %e, "Audio play failed");
-                            e.to_string()
-                        }));
+                    let result =
+                        ensure_engine(&mut engine, &mut device_restored, &app).and_then(|eng| {
+                            eng.play().map_err(|e| {
+                                error!(error = %e, "Audio play failed");
+                                e.to_string()
+                            })
+                        });
                     let _ = reply.send(result);
                 }
                 AudioCommand::Pause(reply) => {
                     debug!("Audio thread received Pause command");
-                    let result = ensure_engine(&mut engine, &mut device_restored, &app)
-                        .and_then(|eng| eng.pause().map_err(|e| {
-                            error!(error = %e, "Audio pause failed");
-                            e.to_string()
-                        }));
+                    let result =
+                        ensure_engine(&mut engine, &mut device_restored, &app).and_then(|eng| {
+                            eng.pause().map_err(|e| {
+                                error!(error = %e, "Audio pause failed");
+                                e.to_string()
+                            })
+                        });
                     let _ = reply.send(result);
                 }
                 AudioCommand::Stop(reply) => {
@@ -256,25 +292,9 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                     };
                     let _ = reply.send(status);
                 }
-                AudioCommand::ListDevices(reply) => {
-                    // list_output_devices() calls into CoreAudio.  If the
-                    // engine hasn't been lazily created yet we skip the
-                    // query entirely — returning an empty list avoids
-                    // the SIGSEGV in HALDeviceList::GetData() that occurs
-                    // when CoreAudio's HAL is still initializing at launch.
-                    // The frontend can retry once the user actually needs
-                    // the device list (e.g. opening the audio settings).
-                    let result = if engine.is_some() {
-                        list_output_devices().map_err(|e| e.to_string())
-                    } else {
-                        debug!("Audio engine not yet initialized, returning empty device list");
-                        Ok(vec![])
-                    };
-                    let _ = reply.send(result);
-                }
-                AudioCommand::SetDevice(name, reply) => {
+                AudioCommand::SetDevice(device, reply) => {
                     let result = ensure_engine(&mut engine, &mut device_restored, &app)
-                        .and_then(|eng| eng.set_device(name.as_deref()).map_err(|e| e.to_string()));
+                        .and_then(|eng| eng.set_device_resolved(device).map_err(|e| e.to_string()));
                     let _ = reply.send(result);
                 }
             },
@@ -282,7 +302,9 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
 
-        let is_playing = engine.as_ref().is_some_and(|e| e.get_state() == PlaybackState::Playing);
+        let is_playing = engine
+            .as_ref()
+            .is_some_and(|e| e.get_state() == PlaybackState::Playing);
         let is_finished = engine.as_ref().is_some_and(|e| e.is_finished());
 
         if is_playing && last_emit.elapsed() >= Duration::from_millis(250) {
@@ -532,15 +554,24 @@ pub(crate) fn network_cache_purge(cache: State<NetworkFileCache>) -> Result<(), 
         .map_err(|e| format!("Failed to purge cache: {}", e))
 }
 
-#[tracing::instrument(skip(state))]
+/// List audio output devices via crash-isolated subprocess.
+///
+/// Device enumeration runs in a subprocess so that a CoreAudio HAL crash
+/// (SIGSEGV in `HALDeviceList::GetData()`) kills only the subprocess, not
+/// the main mt process. Does NOT route through the audio thread.
+#[tracing::instrument]
 #[tauri::command]
-pub(crate) fn audio_list_devices(state: State<AudioState>) -> Result<DeviceListResponse, String> {
-    let (tx, rx) = mpsc::channel();
-    state.send_command(AudioCommand::ListDevices(tx));
-    let devices = rx.recv().map_err(|_| "Channel closed".to_string())??;
+pub(crate) fn audio_list_devices() -> Result<DeviceListResponse, String> {
+    let devices =
+        device_isolation::safe_list_output_devices(DEVICE_ENUMERATE_TIMEOUT).map_err(|e| {
+            error!(error = %e, "Failed to enumerate audio devices");
+            e.to_string()
+        })?;
     Ok(DeviceListResponse { devices })
 }
 
+/// Switch audio output device. Device resolution happens on a disposable
+/// thread (not the audio thread) via `device_isolation::resolve_device`.
 #[tracing::instrument(skip(state, app))]
 #[tauri::command]
 pub(crate) fn audio_set_device(
@@ -548,8 +579,22 @@ pub(crate) fn audio_set_device(
     state: State<AudioState>,
     app: AppHandle,
 ) -> Result<(), String> {
+    // Resolve the cpal::Device off the audio thread (disposable thread).
+    let device = device_isolation::resolve_device(device_name.as_deref(), DEVICE_RESOLVE_TIMEOUT)
+        .map_err(|e| {
+        error!(error = %e, "Failed to resolve audio device");
+        e.to_string()
+    })?;
+
+    if let Some(ref name) = device_name {
+        info!(device = %name, "Switching audio output device");
+    } else {
+        info!("Switching to default audio output device");
+    }
+
+    // Send pre-resolved device to the audio thread for stream creation.
     let (tx, rx) = mpsc::channel();
-    state.send_command(AudioCommand::SetDevice(device_name.clone(), tx));
+    state.send_command(AudioCommand::SetDevice(device, tx));
     rx.recv().map_err(|_| "Channel closed".to_string())??;
 
     // Persist selection to settings store
@@ -946,52 +991,20 @@ mod tests {
     // ==================== Device Command Tests ====================
 
     #[test]
-    fn test_audio_command_list_devices_variant() {
-        let (tx, rx) = mpsc::channel::<Result<Vec<String>, String>>();
-        let cmd = AudioCommand::ListDevices(tx);
+    fn test_audio_command_set_device_with_resolved_device() {
+        use rodio::cpal::traits::HostTrait;
 
-        match cmd {
-            AudioCommand::ListDevices(sender) => {
-                let _ = sender.send(Ok(vec![
-                    "Built-in Output".to_string(),
-                    "External DAC".to_string(),
-                ]));
-            }
-            _ => panic!("Wrong command variant"),
-        }
+        let host = rodio::cpal::default_host();
+        let device = match host.default_output_device() {
+            Some(d) => d,
+            None => return, // No audio hardware on CI
+        };
 
-        let result = rx.recv().unwrap();
-        assert!(result.is_ok());
-        let devices = result.unwrap();
-        assert_eq!(devices.len(), 2);
-        assert_eq!(devices[0], "Built-in Output");
-        assert_eq!(devices[1], "External DAC");
-    }
-
-    #[test]
-    fn test_audio_command_set_device_with_name() {
         let (tx, rx) = mpsc::channel::<Result<(), String>>();
-        let cmd = AudioCommand::SetDevice(Some("External DAC".to_string()), tx);
+        let cmd = AudioCommand::SetDevice(device, tx);
 
         match cmd {
-            AudioCommand::SetDevice(name, sender) => {
-                assert_eq!(name, Some("External DAC".to_string()));
-                let _ = sender.send(Ok(()));
-            }
-            _ => panic!("Wrong command variant"),
-        }
-
-        assert!(rx.recv().unwrap().is_ok());
-    }
-
-    #[test]
-    fn test_audio_command_set_device_default() {
-        let (tx, rx) = mpsc::channel::<Result<(), String>>();
-        let cmd = AudioCommand::SetDevice(None, tx);
-
-        match cmd {
-            AudioCommand::SetDevice(name, sender) => {
-                assert!(name.is_none());
+            AudioCommand::SetDevice(_device, sender) => {
                 let _ = sender.send(Ok(()));
             }
             _ => panic!("Wrong command variant"),

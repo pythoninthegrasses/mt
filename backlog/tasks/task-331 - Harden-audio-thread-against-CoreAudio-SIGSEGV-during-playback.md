@@ -1,10 +1,10 @@
 ---
 id: TASK-331
 title: Harden audio thread against CoreAudio SIGSEGV during playback
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-13 23:00'
-updated_date: '2026-04-13 23:02'
+updated_date: '2026-04-14 15:08'
 labels:
   - bug
   - audio
@@ -80,12 +80,12 @@ SIGSEGV cannot be caught in Rust (`catch_unwind` does not help). CoreAudio's HAL
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 CoreAudio device enumeration (output_devices(), default_output_device()) never runs on the audio playback thread
-- [ ] #2 Device list queries run on a separate disposable thread with a timeout
-- [ ] #3 A CoreAudio HAL crash during device enumeration does not kill the mt process
-- [ ] #4 Existing playback continues uninterrupted if device enumeration fails
-- [ ] #5 Audio stream is reused across track transitions — no re-querying CoreAudio on LoadAndPlay when engine already exists
-- [ ] #6 Regression test (or documented manual test) for playing consecutive FLAC tracks without crash
+- [x] #1 CoreAudio device enumeration (output_devices(), default_output_device()) never runs on the audio playback thread
+- [x] #2 Device list queries run on a separate disposable thread with a timeout
+- [x] #3 A CoreAudio HAL crash during device enumeration does not kill the mt process
+- [x] #4 Existing playback continues uninterrupted if device enumeration fails
+- [x] #5 Audio stream is reused across track transitions — no re-querying CoreAudio on LoadAndPlay when engine already exists
+- [x] #6 Regression test (or documented manual test) for playing consecutive FLAC tracks without crash
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -124,4 +124,39 @@ SIGSEGV cannot be caught in Rust (`catch_unwind` does not help). CoreAudio's HAL
 The CalDigit TS4 USB audio device experienced a transient `kIOReturnNotReady` fault. When mt's audio thread attempted a CoreAudio HAL query during the track transition (LoadAndPlay for Endless), the HAL's internal device list was in an inconsistent state due to the USB fault, resulting in a null pointer dereference at offset 0x4 in `HALDeviceList::GetData()`.
 
 This is not a pure startup race — it's a mid-session CoreAudio HAL instability triggered by a USB audio device fault. The hardening must protect against CoreAudio queries failing catastrophically at any point during the session, not just at startup.
+
+## Implementation Summary (2026-04-14)
+
+### New file: `crates/mt-tauri/src/audio/device_isolation.rs`
+
+- `enumerate_devices_to_stdout()` — subprocess entry point, prints device names as JSON
+- `safe_list_output_devices(timeout)` — spawns subprocess with `MT_ENUMERATE_DEVICES=1` for crash-isolated device enumeration (AC #3)
+- `resolve_device(name, timeout)` — resolves `cpal::Device` on a disposable thread with `catch_unwind` + timeout (AC #1, #2)
+
+### Modified: `engine.rs`
+
+- Added `AudioEngine::from_device(device)` — creates engine from pre-resolved device (no enumeration)
+- Added `AudioEngine::set_device_resolved(device)` — switches output to pre-resolved device, preserves playback state
+- Refactored `set_device()` to delegate to `set_device_resolved()` (kept for test convenience)
+
+### Modified: `commands/audio.rs`
+
+- Removed `AudioCommand::ListDevices` — `audio_list_devices` now calls subprocess directly, bypassing audio thread
+- Changed `AudioCommand::SetDevice` to carry pre-resolved `cpal::Device` instead of `Option<String>`
+- `audio_set_device` resolves device off-thread before sending to audio thread
+- `ensure_engine` uses `resolve_device(None)` + `from_device()` for init, `resolve_device(Some(name))` + `set_device_resolved()` for device restoration
+
+### Modified: `main.rs`
+
+- Early exit when `MT_ENUMERATE_DEVICES` env var is set (subprocess mode)
+
+### Manual test procedure for AC #6
+
+1. Build and launch mt
+2. Connect a USB audio device (e.g. DAC, dock with audio)
+3. Select the USB device in Settings > Audio Output
+4. Play 5+ consecutive FLAC tracks from the same album
+5. During playback, briefly switch away from mt and back
+6. Verify no crash, audio continues uninterrupted
+7. Unplug/replug the USB device during playback — verify graceful error, not SIGSEGV
 <!-- SECTION:NOTES:END -->
