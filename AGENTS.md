@@ -226,6 +226,13 @@ This project uses Backlog.md MCP for all task and project management.
 
 **IMPORTANT**: Use `task_edit(status: "Done")` to mark tasks as done. Do NOT use `task_complete` unless the user explicitly asks to archive/clean up — it removes the task from the kanban.
 
+### Multiline Field Gotcha
+
+The `finalSummary`, `description`, `implementationNotes`, and `planSet` MCP parameters are single-line JSON strings. Literal `\n` sequences are NOT interpreted as newlines — they render as the two characters `\` `n` in the markdown file. To write multiline content:
+
+- Use `task_edit` with the field for short single-paragraph content
+- For multiline content, edit the task markdown file directly with the file editing tool (the file path is shown in `task_view` output)
+
 The overview resource contains additional detail on decision frameworks, search-first workflow, and guides for task creation, execution, and completion.
 
 </CRITICAL_INSTRUCTION>
