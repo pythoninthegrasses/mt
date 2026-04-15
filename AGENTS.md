@@ -226,6 +226,10 @@ This project uses Backlog.md MCP for all task and project management.
 
 **IMPORTANT**: Use `task_edit(status: "Done")` to mark tasks as done. Do NOT use `task_complete` unless the user explicitly asks to archive/clean up — it removes the task from the kanban.
 
+### Cross-Branch Task Scanning (disabled)
+
+`check_active_branches` and `remote_operations` are both **disabled** in `backlog/config.yml`. With worktrees, these features scan other branches and pull in tasks that were already completed/archived on `main` but still exist in `backlog/tasks/` on older branches — bloating the kanban with ghost tasks. Do not re-enable without accounting for worktree branch divergence.
+
 ### Multiline Field Gotcha
 
 The `finalSummary`, `description`, `implementationNotes`, and `planSet` MCP parameters are single-line JSON strings. Literal `\n` sequences are NOT interpreted as newlines — they render as the two characters `\` `n` in the markdown file. To write multiline content:
