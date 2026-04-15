@@ -1,10 +1,10 @@
 ---
 id: TASK-330
 title: Fix library stats bar to use backend totals instead of loaded-page counts
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-13 17:55'
-updated_date: '2026-04-13 17:57'
+updated_date: '2026-04-15 02:45'
 labels:
   - bug
   - frontend
@@ -70,10 +70,37 @@ The backend already provides authoritative totals:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Stats bar shows correct total track count immediately on first page load (matching `total_tracks` from backend)
-- [ ] #2 Stats bar shows correct total duration immediately on first page load (matching `total_duration` from backend)
-- [ ] #3 Stats bar shows correct total file size immediately on first page load (matching `total_size` from backend)
-- [ ] #4 Stats do not change as user scrolls and additional pages load
-- [ ] #5 Stats update correctly when switching between library sections (all, liked, recently added, etc.)
-- [ ] #6 Vitest tests cover the updated libraryStats getter with mocked store totals
+- [x] #1 Stats bar shows correct total track count immediately on first page load (matching `total_tracks` from backend)
+- [x] #2 Stats bar shows correct total duration immediately on first page load (matching `total_duration` from backend)
+- [x] #3 Stats bar shows correct total file size immediately on first page load (matching `total_size` from backend)
+- [x] #4 Stats do not change as user scrolls and additional pages load
+- [x] #5 Stats update correctly when switching between library sections (all, liked, recently added, etc.)
+- [x] #6 Vitest tests cover the updated libraryStats getter with mocked store totals
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Summary
+
+Fixed library stats bar to use backend totals (`totalTracks`, `totalDuration`, `totalFileSize`) instead of computing from loaded tracks array.
+
+### Backend (Rust)
+- Added `total_size: i64` to `LibraryCount` and `LibrarySectionResponse` structs
+- Updated `get_filtered_count()` SQL to include `SUM(file_size)`
+- Updated all 5 stats functions (`get_favorites_stats`, `get_top_25_stats`, `get_recently_played_stats`, `get_recently_added_stats`, `get_playlist_stats`) to return `(i64, f64, i64)` (count, duration, size)
+- Updated all 6 section handler functions in `commands.rs` to wire `total_size` through
+- Updated all 7 Rust tests for new 3-tuple return types
+
+### Frontend
+- Created `app/frontend/js/utils/library-stats.js` with `computeLibraryStats()` pure function
+- Replaced `libraryStats` getter in `player-controls.js` to use `computeLibraryStats(totalTracks, totalDuration, totalFileSize)` instead of iterating tracks
+- Added `totalFileSize` to library store, all cache operations, all section data paths, and all reset blocks in `library-operations.js`
+- Removed dead `formatDurationLong` method and unused `formatBytes` import from player-controls
+
+### Tests
+- Created 7 new tests in `library-stats.test.js` (including property-based tests with fast-check)
+- Added `totalFileSize` assertions to existing `library-section.test.js` tests
+- All 478 Vitest tests pass
+- Rust compiles clean (cargo check, clippy, fmt)
+<!-- SECTION:FINAL_SUMMARY:END -->

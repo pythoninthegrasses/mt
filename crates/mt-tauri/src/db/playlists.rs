@@ -316,17 +316,23 @@ pub(crate) fn reorder_playlist(
     Ok(true)
 }
 
-/// Count and total duration of tracks in a playlist.
-pub(crate) fn get_playlist_stats(conn: &Connection, playlist_id: i64) -> DbResult<(i64, f64)> {
-    let (count, duration) = conn.query_row(
-        "SELECT COUNT(*), COALESCE(SUM(l.duration), 0)
+/// Count, total duration, and total file size of tracks in a playlist.
+pub(crate) fn get_playlist_stats(conn: &Connection, playlist_id: i64) -> DbResult<(i64, f64, i64)> {
+    let (count, duration, size) = conn.query_row(
+        "SELECT COUNT(*), COALESCE(SUM(l.duration), 0), COALESCE(SUM(l.file_size), 0)
          FROM playlist_items pi
          JOIN library l ON pi.track_id = l.id
          WHERE pi.playlist_id = ?",
         [playlist_id],
-        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?)),
+        |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, f64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        },
     )?;
-    Ok((count, duration))
+    Ok((count, duration, size))
 }
 
 /// Get the number of tracks in a playlist
@@ -706,7 +712,7 @@ mod tests {
         let playlist = create_playlist(&conn, "Stats Test").unwrap().unwrap();
         add_tracks_to_playlist(&conn, playlist.id, &track_ids, None).unwrap();
 
-        let (count, duration) = get_playlist_stats(&conn, playlist.id).unwrap();
+        let (count, duration, _size) = get_playlist_stats(&conn, playlist.id).unwrap();
         assert_eq!(count, 3);
         assert_eq!(duration, 60.0 + 120.0 + 180.0);
     }
@@ -715,9 +721,10 @@ mod tests {
     fn test_get_playlist_stats_empty() {
         let conn = setup_test_db();
         let playlist = create_playlist(&conn, "Empty Stats").unwrap().unwrap();
-        let (count, duration) = get_playlist_stats(&conn, playlist.id).unwrap();
+        let (count, duration, size) = get_playlist_stats(&conn, playlist.id).unwrap();
         assert_eq!(count, 0);
         assert_eq!(duration, 0.0);
+        assert_eq!(size, 0);
     }
 
     #[test]

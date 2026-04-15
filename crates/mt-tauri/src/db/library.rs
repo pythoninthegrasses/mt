@@ -164,7 +164,7 @@ pub(crate) fn get_all_tracks(
     })
 }
 
-/// Get filtered count and total duration without loading track data.
+/// Get filtered count, total duration, and total size without loading track data.
 pub(crate) fn get_filtered_count(
     conn: &Connection,
     query: &LibraryQuery,
@@ -173,17 +173,23 @@ pub(crate) fn get_filtered_count(
     let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
 
     let sql = format!(
-        "SELECT COUNT(*), COALESCE(SUM(duration), 0) FROM library {}",
+        "SELECT COUNT(*), COALESCE(SUM(duration), 0), COALESCE(SUM(file_size), 0) FROM library {}",
         where_clause
     );
 
-    let (total, total_duration) = conn.query_row(&sql, params_refs.as_slice(), |row| {
-        Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)? as i64))
-    })?;
+    let (total, total_duration, total_size) =
+        conn.query_row(&sql, params_refs.as_slice(), |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, f64>(1)? as i64,
+                row.get::<_, i64>(2)?,
+            ))
+        })?;
 
     Ok(LibraryCount {
         total,
         total_duration,
+        total_size,
     })
 }
 

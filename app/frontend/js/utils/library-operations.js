@@ -29,6 +29,8 @@ export function applySectionData(store, section, tracks, data) {
     store.totalTracks = data?.total_tracks ?? data?.total ?? tracks.length;
     store.totalDuration = data?.total_duration ??
       tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+    store.totalFileSize = data?.total_size ??
+      tracks.reduce((sum, t) => sum + (t.file_size || 0), 0);
     store._lastLoadedSection = section;
   });
 }
@@ -91,6 +93,7 @@ export async function loadSection(store, section, fetchFn, opts = {}) {
     });
     store.totalTracks = cached.totalTracks;
     store.totalDuration = cached.totalDuration;
+    store.totalFileSize = cached.totalFileSize ?? 0;
     store._lastLoadedSection = section;
   }
 
@@ -125,6 +128,7 @@ export async function loadSection(store, section, fetchFn, opts = {}) {
       store._updateCache(section, {
         total: data.total_tracks,
         totalDuration: data.total_duration,
+        total_size: data.total_size,
       });
       if (data.revision !== undefined) {
         store._lastRevision = data.revision;
@@ -198,6 +202,7 @@ export async function backgroundRefreshSection(store, section, fetchFn, opts = {
         store._updateCache(section, {
           total: data.total_tracks,
           totalDuration: data.total_duration,
+          total_size: data.total_size,
         });
         if (data.revision !== undefined) {
           store._lastRevision = data.revision;
@@ -265,6 +270,7 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
     store._resetPages();
     store.totalTracks = 0;
     store.totalDuration = 0;
+    store.totalFileSize = 0;
 
     // Fetch first page using unified endpoint (count + tracks in one transaction)
     const filterParams = store._getFilterParams();
@@ -298,6 +304,7 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
     window.Alpine.disableEffectScheduling(() => {
       store.totalTracks = sectionData.total_tracks;
       store.totalDuration = sectionData.total_duration;
+      store.totalFileSize = sectionData.total_size ?? 0;
       store._lastLoadedSection = loadSection;
       store._dataVersion++;
     });
@@ -309,6 +316,7 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
     store._updateCache(loadSection, {
       total: sectionData.total_tracks,
       totalDuration: sectionData.total_duration,
+      total_size: sectionData.total_size,
     });
     const _t2 = performance.now();
 
@@ -330,6 +338,7 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
     store._resetPages();
     store.totalTracks = 0;
     store.totalDuration = 0;
+    store.totalFileSize = 0;
   } finally {
     store.loading = false;
   }
@@ -381,6 +390,7 @@ export async function backgroundRefreshLibrary(store, section) {
       window.Alpine.disableEffectScheduling(() => {
         store.totalTracks = sectionData.total_tracks;
         store.totalDuration = sectionData.total_duration;
+        store.totalFileSize = sectionData.total_size ?? 0;
         store._dataVersion++;
       });
 
@@ -391,6 +401,7 @@ export async function backgroundRefreshLibrary(store, section) {
       store._updateCache(section, {
         total: sectionData.total_tracks,
         totalDuration: sectionData.total_duration,
+        total_size: sectionData.total_size,
       });
 
       console.log('[library] background refresh complete:', {
@@ -557,6 +568,7 @@ export function removeTracksLocallyOp(store, Alpine, trackIds) {
       store._setSectionTracks([]);
       store.totalTracks = 0;
       store.totalDuration = 0;
+      store.totalFileSize = 0;
       store._dataVersion++;
     });
     store._clearCache();
@@ -576,11 +588,13 @@ export function removeTracksLocallyOp(store, Alpine, trackIds) {
     const newTracks = store._sectionTracks.filter((t) => !idSet.has(t.id));
     removedCount = store._sectionTracks.length - newTracks.length;
     const newDuration = newTracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+    const newFileSize = newTracks.reduce((sum, t) => sum + (t.file_size || 0), 0);
 
     window.Alpine.disableEffectScheduling(() => {
       store._setSectionTracks(newTracks);
       store.totalTracks = newTracks.length;
       store.totalDuration = newDuration;
+      store.totalFileSize = newFileSize;
       store._dataVersion++;
     });
   } else {
@@ -593,14 +607,17 @@ export function removeTracksLocallyOp(store, Alpine, trackIds) {
 
     window.Alpine.disableEffectScheduling(() => {
       store.totalTracks = Math.max(0, store.totalTracks - removedCount);
-      // Recompute duration from loaded pages
+      // Recompute duration and file size from loaded pages
       let duration = 0;
+      let fileSize = 0;
       for (const page of Object.values(store._trackPages)) {
         for (const t of page) {
           duration += t.duration || 0;
+          fileSize += t.file_size || 0;
         }
       }
       store.totalDuration = duration;
+      store.totalFileSize = fileSize;
       store._dataVersion++;
     });
   }

@@ -5,7 +5,7 @@
  * volume control, and now playing info.
  */
 
-import { formatBytes } from '../utils/formatting.js';
+import { computeLibraryStats } from '../utils/library-stats.js';
 
 /**
  * Create the player controls Alpine component
@@ -312,23 +312,11 @@ export function createPlayerControls(Alpine) {
     },
 
     get libraryStats() {
-      const tracks = this.library.tracks;
-      const count = tracks.length;
-      const totalBytes = tracks.reduce((sum, t) => sum + (t.file_size || 0), 0);
-      const sizeStr = formatBytes(totalBytes);
-      const totalSeconds = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-      const durationStr = this.formatDurationLong(totalSeconds);
-      return `${count} files  ${sizeStr}  ${durationStr}`;
-    },
-
-    formatDurationLong(seconds) {
-      if (!seconds || isNaN(seconds)) return '0m';
-      const days = Math.floor(seconds / 86400);
-      const hours = Math.floor((seconds % 86400) / 3600);
-      const mins = Math.floor((seconds % 3600) / 60);
-      if (days > 0) return `${days}d ${hours}h ${mins}m`;
-      if (hours > 0) return `${hours}h ${mins}m`;
-      return `${mins}m`;
+      return computeLibraryStats(
+        this.library.totalTracks,
+        this.library.totalDuration,
+        this.library.totalFileSize,
+      );
     },
   }));
 }

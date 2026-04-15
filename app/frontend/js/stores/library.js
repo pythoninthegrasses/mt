@@ -53,6 +53,7 @@ export function createLibraryStore(Alpine) {
     // Statistics (from count endpoint for "all" section, or computed for other sections)
     totalTracks: 0,
     totalDuration: 0,
+    totalFileSize: 0,
 
     // Sparse page map for paginated loading (used by "all" section)
     _trackPages: {},

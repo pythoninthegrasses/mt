@@ -25,6 +25,8 @@ export function buildCacheEntry(data) {
     totalTracks: data.total_tracks ?? data.total ?? tracks.length,
     totalDuration: data.total_duration ??
       tracks.reduce((sum, t) => sum + (t.duration || 0), 0),
+    totalFileSize: data.total_size ??
+      tracks.reduce((sum, t) => sum + (t.file_size || 0), 0),
     timestamp: Date.now(),
   };
 }

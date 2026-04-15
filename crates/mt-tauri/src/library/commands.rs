@@ -124,6 +124,7 @@ pub struct LibrarySectionResponse {
     pub tracks: Vec<Track>,
     pub total_tracks: i64,
     pub total_duration: f64,
+    pub total_size: i64,
     pub page: Option<i64>,
     pub page_size: Option<i64>,
     pub has_more: bool,
@@ -259,6 +260,7 @@ fn get_section_all(
         tracks: result.items,
         total_tracks: count.total,
         total_duration: count.total_duration as f64,
+        total_size: count.total_size,
         page: Some(page_offset / page_size),
         page_size: Some(page_size),
         has_more,
@@ -276,7 +278,7 @@ fn get_section_liked(
     let lim = limit.unwrap_or(10000);
     let off = offset.unwrap_or(0);
     let result = favorites::get_favorites(conn, lim, off)?;
-    let (total, duration) = favorites::get_favorites_stats(conn)?;
+    let (total, duration, size) = favorites::get_favorites_stats(conn)?;
     let tracks: Vec<Track> = result.items.into_iter().map(|ft| ft.track).collect();
 
     Ok(LibrarySectionResponse {
@@ -284,6 +286,7 @@ fn get_section_liked(
         tracks,
         total_tracks: total,
         total_duration: duration,
+        total_size: size,
         page: None,
         page_size: None,
         has_more: false,
@@ -297,13 +300,14 @@ fn get_section_top25(
     rev: i64,
 ) -> crate::db::DbResult<LibrarySectionResponse> {
     let tracks = favorites::get_top_25(conn)?;
-    let (total, duration) = favorites::get_top_25_stats(conn)?;
+    let (total, duration, size) = favorites::get_top_25_stats(conn)?;
 
     Ok(LibrarySectionResponse {
         section: "top25".to_string(),
         tracks,
         total_tracks: total,
         total_duration: duration,
+        total_size: size,
         page: None,
         page_size: None,
         has_more: false,
@@ -321,13 +325,14 @@ fn get_section_recent(
     let d = days.unwrap_or(14).clamp(1, 365);
     let lim = limit.unwrap_or(100).clamp(1, 1000);
     let tracks = favorites::get_recently_played(conn, d, lim)?;
-    let (total, duration) = favorites::get_recently_played_stats(conn, d, lim)?;
+    let (total, duration, size) = favorites::get_recently_played_stats(conn, d, lim)?;
 
     Ok(LibrarySectionResponse {
         section: "recent".to_string(),
         tracks,
         total_tracks: total,
         total_duration: duration,
+        total_size: size,
         page: None,
         page_size: None,
         has_more: false,
@@ -345,13 +350,14 @@ fn get_section_added(
     let d = days.unwrap_or(14).clamp(1, 365);
     let lim = limit.unwrap_or(100).clamp(1, 1000);
     let tracks = favorites::get_recently_added(conn, d, lim)?;
-    let (total, duration) = favorites::get_recently_added_stats(conn, d, lim)?;
+    let (total, duration, size) = favorites::get_recently_added_stats(conn, d, lim)?;
 
     Ok(LibrarySectionResponse {
         section: "added".to_string(),
         tracks,
         total_tracks: total,
         total_duration: duration,
+        total_size: size,
         page: None,
         page_size: None,
         has_more: false,
@@ -368,7 +374,7 @@ fn get_section_playlist(
     let playlist = playlists::get_playlist(conn, playlist_id)?.ok_or_else(|| {
         crate::db::DbError::NotFound(format!("Playlist {} not found", playlist_id))
     })?;
-    let (total, duration) = playlists::get_playlist_stats(conn, playlist_id)?;
+    let (total, duration, size) = playlists::get_playlist_stats(conn, playlist_id)?;
     let tracks: Vec<Track> = playlist.tracks.into_iter().map(|pt| pt.track).collect();
 
     Ok(LibrarySectionResponse {
@@ -376,6 +382,7 @@ fn get_section_playlist(
         tracks,
         total_tracks: total,
         total_duration: duration,
+        total_size: size,
         page: None,
         page_size: None,
         has_more: false,

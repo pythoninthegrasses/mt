@@ -217,63 +217,87 @@ pub(crate) fn get_recently_added(conn: &Connection, days: i64, limit: i64) -> Db
     Ok(tracks)
 }
 
-/// Count and total duration of favorited tracks.
-pub(crate) fn get_favorites_stats(conn: &Connection) -> DbResult<(i64, f64)> {
-    let (count, duration) = conn.query_row(
-        "SELECT COUNT(*), COALESCE(SUM(l.duration), 0)
+/// Count, total duration, and total file size of favorited tracks.
+pub(crate) fn get_favorites_stats(conn: &Connection) -> DbResult<(i64, f64, i64)> {
+    let (count, duration, size) = conn.query_row(
+        "SELECT COUNT(*), COALESCE(SUM(l.duration), 0), COALESCE(SUM(l.file_size), 0)
          FROM favorites f JOIN library l ON f.track_id = l.id",
         [],
-        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?)),
+        |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, f64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        },
     )?;
-    Ok((count, duration))
+    Ok((count, duration, size))
 }
 
-/// Count and total duration of top 25 most played tracks.
-pub(crate) fn get_top_25_stats(conn: &Connection) -> DbResult<(i64, f64)> {
-    let (count, duration) = conn.query_row(
-        "SELECT COUNT(*), COALESCE(SUM(duration), 0)
-         FROM (SELECT duration FROM library WHERE play_count > 0
+/// Count, total duration, and total file size of top 25 most played tracks.
+pub(crate) fn get_top_25_stats(conn: &Connection) -> DbResult<(i64, f64, i64)> {
+    let (count, duration, size) = conn.query_row(
+        "SELECT COUNT(*), COALESCE(SUM(duration), 0), COALESCE(SUM(file_size), 0)
+         FROM (SELECT duration, file_size FROM library WHERE play_count > 0
                ORDER BY play_count DESC, last_played DESC LIMIT 25)",
         [],
-        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?)),
+        |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, f64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        },
     )?;
-    Ok((count, duration))
+    Ok((count, duration, size))
 }
 
-/// Count and total duration of recently played tracks.
+/// Count, total duration, and total file size of recently played tracks.
 pub(crate) fn get_recently_played_stats(
     conn: &Connection,
     days: i64,
     limit: i64,
-) -> DbResult<(i64, f64)> {
+) -> DbResult<(i64, f64, i64)> {
     let modifier = format!("-{} days", days);
-    let (count, duration) = conn.query_row(
-        "SELECT COUNT(*), COALESCE(SUM(duration), 0)
-         FROM (SELECT duration FROM library
+    let (count, duration, size) = conn.query_row(
+        "SELECT COUNT(*), COALESCE(SUM(duration), 0), COALESCE(SUM(file_size), 0)
+         FROM (SELECT duration, file_size FROM library
                WHERE last_played IS NOT NULL AND last_played >= datetime('now', ?)
                ORDER BY last_played DESC LIMIT ?)",
         params![modifier, limit],
-        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?)),
+        |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, f64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        },
     )?;
-    Ok((count, duration))
+    Ok((count, duration, size))
 }
 
-/// Count and total duration of recently added tracks.
+/// Count, total duration, and total file size of recently added tracks.
 pub(crate) fn get_recently_added_stats(
     conn: &Connection,
     days: i64,
     limit: i64,
-) -> DbResult<(i64, f64)> {
+) -> DbResult<(i64, f64, i64)> {
     let modifier = format!("-{} days", days);
-    let (count, duration) = conn.query_row(
-        "SELECT COUNT(*), COALESCE(SUM(duration), 0)
-         FROM (SELECT duration FROM library
+    let (count, duration, size) = conn.query_row(
+        "SELECT COUNT(*), COALESCE(SUM(duration), 0), COALESCE(SUM(file_size), 0)
+         FROM (SELECT duration, file_size FROM library
                WHERE added_date IS NOT NULL AND added_date >= datetime('now', ?)
                ORDER BY added_date DESC LIMIT ?)",
         params![modifier, limit],
-        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?)),
+        |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, f64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        },
     )?;
-    Ok((count, duration))
+    Ok((count, duration, size))
 }
 
 /// Check if a track is favorited
@@ -630,9 +654,10 @@ mod tests {
     #[test]
     fn test_get_favorites_stats_empty() {
         let conn = setup_test_db();
-        let (count, duration) = get_favorites_stats(&conn).unwrap();
+        let (count, duration, size) = get_favorites_stats(&conn).unwrap();
         assert_eq!(count, 0);
         assert_eq!(duration, 0.0);
+        assert_eq!(size, 0);
     }
 
     #[test]
@@ -647,7 +672,7 @@ mod tests {
             let id = add_track(&conn, &format!("/music/track{}.mp3", i), &metadata).unwrap();
             add_favorite(&conn, id).unwrap();
         }
-        let (count, duration) = get_favorites_stats(&conn).unwrap();
+        let (count, duration, _size) = get_favorites_stats(&conn).unwrap();
         assert_eq!(count, 3);
         assert_eq!(duration, 121.0 + 122.0 + 123.0);
     }
@@ -664,7 +689,7 @@ mod tests {
             let id = add_track(&conn, &format!("/music/track{}.mp3", i), &metadata).unwrap();
             update_play_count(&conn, id).unwrap();
         }
-        let (count, duration) = get_top_25_stats(&conn).unwrap();
+        let (count, duration, _size) = get_top_25_stats(&conn).unwrap();
         assert_eq!(count, 3);
         assert_eq!(duration, 100.0 + 200.0 + 300.0);
     }
@@ -680,7 +705,7 @@ mod tests {
         let id = add_track(&conn, "/music/played.mp3", &metadata).unwrap();
         update_play_count(&conn, id).unwrap();
 
-        let (count, duration) = get_recently_played_stats(&conn, 7, 100).unwrap();
+        let (count, duration, _size) = get_recently_played_stats(&conn, 7, 100).unwrap();
         assert_eq!(count, 1);
         assert_eq!(duration, 200.0);
     }
@@ -695,7 +720,7 @@ mod tests {
         };
         add_track(&conn, "/music/new.mp3", &metadata).unwrap();
 
-        let (count, duration) = get_recently_added_stats(&conn, 7, 100).unwrap();
+        let (count, duration, _size) = get_recently_added_stats(&conn, 7, 100).unwrap();
         assert_eq!(count, 1);
         assert_eq!(duration, 150.0);
     }

@@ -30,6 +30,7 @@ describe('applySectionData', () => {
     return {
       totalTracks: 0,
       totalDuration: 0,
+      totalFileSize: 0,
       _lastLoadedSection: null,
       _sectionTracks: null,
       _setSectionTracks(tracks) {
@@ -38,21 +39,23 @@ describe('applySectionData', () => {
     };
   }
 
-  it('uses total_tracks and total_duration from backend response', () => {
+  it('uses total_tracks, total_duration, and total_size from backend response', () => {
     const store = createMockStore();
     const tracks = [
-      { id: 1, duration: 100 },
-      { id: 2, duration: 200 },
+      { id: 1, duration: 100, file_size: 5000 },
+      { id: 2, duration: 200, file_size: 8000 },
     ];
     const data = {
       total_tracks: 42,
       total_duration: 12345.5,
+      total_size: 9876543,
     };
 
     applySectionData(store, 'all', tracks, data);
 
     expect(store.totalTracks).toBe(42);
     expect(store.totalDuration).toBe(12345.5);
+    expect(store.totalFileSize).toBe(9876543);
     expect(store._lastLoadedSection).toBe('all');
     expect(store._sectionTracks).toEqual(tracks);
   });
@@ -88,6 +91,18 @@ describe('applySectionData', () => {
     expect(store.totalDuration).toBe(300);
   });
 
+  it('falls back to computing totalFileSize from tracks when total_size absent', () => {
+    const store = createMockStore();
+    const tracks = [
+      { id: 1, file_size: 5000 },
+      { id: 2, file_size: 8000 },
+    ];
+
+    applySectionData(store, 'added', tracks, {});
+
+    expect(store.totalFileSize).toBe(13000);
+  });
+
   it('prefers total_duration of 0 over JS-computed fallback', () => {
     const store = createMockStore();
     const tracks = [{ id: 1, duration: 100 }];
@@ -105,17 +120,19 @@ describe('applySectionData', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildCacheEntry', () => {
-  it('uses total_tracks and total_duration from backend response', () => {
+  it('uses total_tracks, total_duration, and total_size from backend response', () => {
     const data = {
-      tracks: [{ duration: 100 }],
+      tracks: [{ duration: 100, file_size: 5000 }],
       total_tracks: 500,
       total_duration: 99999.0,
+      total_size: 9876543,
     };
 
     const entry = buildCacheEntry(data);
 
     expect(entry.totalTracks).toBe(500);
     expect(entry.totalDuration).toBe(99999.0);
+    expect(entry.totalFileSize).toBe(9876543);
     expect(entry.timestamp).toBeGreaterThan(0);
   });
 
@@ -155,11 +172,13 @@ describe('buildCacheEntry', () => {
       tracks: [],
       total_tracks: 0,
       total_duration: 0,
+      total_size: 0,
     };
 
     const entry = buildCacheEntry(data);
 
     expect(entry.totalTracks).toBe(0);
     expect(entry.totalDuration).toBe(0);
+    expect(entry.totalFileSize).toBe(0);
   });
 });
