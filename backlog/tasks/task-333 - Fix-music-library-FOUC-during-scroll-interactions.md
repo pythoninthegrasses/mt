@@ -4,7 +4,7 @@ title: Fix music library FOUC during scroll interactions
 status: Done
 assignee: []
 created_date: '2026-04-15 03:21'
-updated_date: '2026-04-15 03:55'
+updated_date: '2026-04-15 04:23'
 labels:
   - frontend
   - library
@@ -84,5 +84,16 @@ Changed the `visibleTracks` getter to skip indices where `getTrackAtIndex()` ret
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-## Fix: Music library FOUC during scroll interactions\n\nTwo root causes identified and fixed:\n\n**FOUC #1 (init cache):** `init()` set `totalTracks` from persisted cache (e.g., 13043) while `_trackPages` was empty. Alpine rendered the virtual scroll container with placeholder rows before `loadLibraryData` reset `totalTracks = 0`. Fix: only set `totalDuration` from cache; keep `totalTracks = 0` until real data arrives.\n\n**FOUC #2 (unloaded pages):** After `loadLibraryData` completed with only page 0, non-zero scroll positions caused `visibleTracks` to produce placeholder rows for pages not yet fetched. Fix: skip null tracks in `visibleTracks` instead of emitting `_placeholder` rows. Pages are still prefetched via `_ensurePage`, and `_dataVersion++` triggers re-render when data arrives.\n\n### Changes\n- `app/frontend/js/stores/library.js` — Remove `totalTracks` cache assignment in `init()`\n- `app/frontend/js/components/library-browser.js` — Skip null tracks in `visibleTracks` getter\n- `app/frontend/__tests__/library.store.test.js` — 2 new test suites with 2 tests
+## Fix: Music library FOUC during scroll interactions
+
+Two root causes identified and fixed:
+
+**FOUC #1 (init cache):** `init()` set `totalTracks` from persisted cache (e.g., 13043) while `_trackPages` was empty. Alpine rendered the virtual scroll container with placeholder rows before `loadLibraryData` reset `totalTracks = 0`. Fix: only set `totalDuration` from cache; keep `totalTracks = 0` until real data arrives.
+
+**FOUC #2 (unloaded pages):** After `loadLibraryData` completed with only page 0, non-zero scroll positions caused `visibleTracks` to produce placeholder rows for pages not yet fetched. Fix: skip null tracks in `visibleTracks` instead of emitting `_placeholder` rows. Pages are still prefetched via `_ensurePage`, and `_dataVersion++` triggers re-render when data arrives.
+
+### Changes
+- `app/frontend/js/stores/library.js` -- Remove `totalTracks` cache assignment in `init()`
+- `app/frontend/js/components/library-browser.js` -- Skip null tracks in `visibleTracks` getter
+- `app/frontend/__tests__/library.store.test.js` -- 2 new test suites with 2 tests
 <!-- SECTION:FINAL_SUMMARY:END -->
