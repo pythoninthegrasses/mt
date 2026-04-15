@@ -677,4 +677,223 @@ describe('loadLibraryData - FOUC regression', () => {
     // Even with cache, totalTracks should be 0 during fetch (not 1000)
     expect(tracksSeenDuringFetch[0]).toBe(0);
   });
+
+  it('page 0 data is available when totalTracks becomes non-zero (no placeholder flash)', async () => {
+    const store = createLoadStore();
+    // Start from a clean state (simulating first app load)
+    store.totalTracks = 0;
+    store._trackPages = {};
+
+    // Instrument disableEffectScheduling to capture state at the moment
+    // totalTracks transitions from 0 to non-zero. In production, Alpine
+    // re-evaluates dependent getters (like visibleTracks) when the batch
+    // flushes. If _trackPages[0] isn't set yet, getTrackAtIndex returns
+    // null and placeholder rows flash (the FOUC).
+    let page0AtTransition = undefined;
+    globalThis.window.Alpine.disableEffectScheduling = (fn) => {
+      const origTotalTracks = store.totalTracks;
+      fn();
+      // If totalTracks just transitioned from 0 to non-zero, check page 0
+      if (origTotalTracks === 0 && store.totalTracks > 0) {
+        page0AtTransition = store._trackPages[0];
+      }
+    };
+
+    await loadLibraryData(store);
+
+    // Page 0 must be populated at the exact moment totalTracks becomes > 0
+    expect(page0AtTransition).toBeDefined();
+    expect(page0AtTransition.length).toBeGreaterThan(0);
+    // First track should be a real track, not a placeholder
+    expect(page0AtTransition[0]).toHaveProperty('id');
+  });
+});
+
+// Tests: FOUC #1 — init() must not expose totalTracks from cache before pages exist
+// Tests: FOUC #2 — visibleTracks must not produce placeholder rows for unloaded pages
+// -----------------------------------------------------------------------------
+
+describe('FOUC #1 - init() cache must not cause placeholder rows', () => {
+  let createLibraryStore;
+  let mockGetSection;
+  let registeredStore;
+
+  beforeEach(async () => {
+    vi.resetModules();
+
+    mockGetSection = vi.fn().mockResolvedValue({
+      section: 'all',
+      tracks: makeTracks(50),
+      total_tracks: 13043,
+      total_duration: 500000,
+      has_more: true,
+      revision: 1,
+    });
+
+    vi.doMock('../js/api/library.js', () => ({
+      library: { getSection: mockGetSection },
+    }));
+
+    vi.doMock('../js/utils/watched-folders.js', () => ({
+      promptToAddWatchedFolders: vi.fn(),
+    }));
+
+    registeredStore = null;
+    globalThis.window = globalThis.window || {};
+    globalThis.window.Alpine = {
+      disableEffectScheduling: (fn) => fn(),
+      store: (_name, definition) => {
+        if (definition) registeredStore = definition;
+        return registeredStore;
+      },
+    };
+    globalThis.window.settings = {
+      initialized: true,
+      get: (key, defaultVal) => {
+        if (key === 'sidebar:activeSection') return 'all';
+        if (key === 'library:sectionCache') {
+          return {
+            all: {
+              totalTracks: 13043,
+              totalDuration: 500000,
+              timestamp: Date.now(),
+            },
+          };
+        }
+        return defaultVal;
+      },
+      set: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const mod = await import('../js/stores/library.js');
+    createLibraryStore = mod.createLibraryStore;
+  });
+
+  it('totalTracks stays 0 while loading even when cache has data', async () => {
+    createLibraryStore(globalThis.window.Alpine);
+    const store = registeredStore;
+
+    // The FOUC happens because init() does:
+    //   1. this.totalTracks = cached.totalTracks  (13043)
+    //   2. await this.load()  -> loadLibraryData() -> totalTracks = 0
+    // Between steps 1 and 2, Alpine renders and sees totalTracks > 0
+    // with empty _trackPages, producing placeholder rows.
+    //
+    // We verify by checking that init() never sets totalTracks to a
+    // non-zero value while _trackPages is empty.
+    const statesObserved = [];
+    // No need to save original descriptor — we restore as a plain data property below
+
+    // Intercept totalTracks assignments to detect the FOUC window
+    let _totalTracks = store.totalTracks;
+    Object.defineProperty(store, 'totalTracks', {
+      get() {
+        return _totalTracks;
+      },
+      set(val) {
+        _totalTracks = val;
+        if (val > 0 && Object.keys(store._trackPages).length === 0) {
+          statesObserved.push({
+            totalTracks: val,
+            pagesEmpty: true,
+            // This is the FOUC: totalTracks > 0 but no page data
+          });
+        }
+      },
+      configurable: true,
+    });
+
+    await store.init();
+
+    // Restore as a plain data property with the current intercepted value
+    delete store.totalTracks;
+    store.totalTracks = _totalTracks;
+
+    // The fix: totalTracks should NEVER be > 0 while _trackPages is empty.
+    // Any such state would cause visibleTracks to produce placeholder rows.
+    expect(statesObserved).toHaveLength(0);
+
+    // After init completes, real data is loaded
+    expect(store.totalTracks).toBe(13043);
+  });
+});
+
+describe('FOUC #2 - visibleTracks must not produce placeholders for unloaded pages', () => {
+  let browserFactory;
+
+  beforeEach(async () => {
+    vi.resetModules();
+
+    // Mock all dependencies that library-browser.js imports
+    vi.doMock('../js/utils/formatting.js', () => ({
+      formatDurationDash: vi.fn(),
+      formatRelativeTime: vi.fn(),
+    }));
+    vi.doMock('../js/utils/dom.js', () => ({
+      isTypingInInput: vi.fn(),
+    }));
+    vi.doMock('../js/mixins/type-to-jump.js', () => ({
+      typeToJumpMixin: () => ({}),
+    }));
+    vi.doMock('../js/mixins/column-geometry.js', () => ({
+      columnGeometryMixin: () => ({}),
+    }));
+    vi.doMock('../js/mixins/column-reorder.js', () => ({
+      columnReorderMixin: () => ({}),
+    }));
+    vi.doMock('../js/mixins/column-settings.js', () => ({
+      columnSettingsMixin: () => ({}),
+    }));
+    vi.doMock('../js/mixins/playlist-drag.js', () => ({
+      playlistDragMixin: () => ({}),
+    }));
+    vi.doMock('../js/mixins/context-menu-actions.js', () => ({
+      contextMenuActionsMixin: () => ({}),
+    }));
+    vi.doMock('../js/mixins/virtual-scroll.js', () => ({
+      virtualScrollMixin: () => ({}),
+    }));
+    vi.doMock('../js/utils/queue-builder.js', () => ({
+      handleDoubleClickPlay: vi.fn(),
+    }));
+
+    // Capture the factory function passed to Alpine.data
+    const mockAlpine = {
+      data: (name, factory) => {
+        if (name === 'libraryBrowser') {
+          browserFactory = factory;
+        }
+      },
+    };
+
+    const mod = await import('../js/components/library-browser.js');
+    mod.createLibraryBrowser(mockAlpine);
+  });
+
+  it('skips indices where page data is not yet loaded instead of showing placeholders', () => {
+    // Simulate: loadLibraryData completed, page 0 has 50 tracks,
+    // but scroll position points to page 2 (indices 100-149)
+    const store = createPaginatedStore(50);
+    store.totalTracks = 13043;
+    store._trackPages = { 0: makeTracks(50) };
+    store._dataVersion = 1;
+    store._ensurePage = vi.fn();
+
+    // Create the browser component with a mock library store
+    const browser = browserFactory();
+    browser.$store = { library: store };
+    browser._rowHeight = 36;
+    browser._containerHeight = 800;
+    browser._bufferRows = 5;
+    browser._scrollTop = 100 * 36; // Scrolled to ~track 100 (page 2)
+
+    const tracks = browser.visibleTracks;
+    const placeholders = tracks.filter((r) => r.track._placeholder);
+
+    // No placeholders should be shown for unloaded pages
+    expect(placeholders).toHaveLength(0);
+
+    // _ensurePage should still be called to trigger async fetch
+    expect(store._ensurePage).toHaveBeenCalled();
+  });
 });

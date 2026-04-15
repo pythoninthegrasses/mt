@@ -355,9 +355,10 @@ export function createLibraryBrowser(Alpine) {
         const track = lib.getTrackAtIndex(i);
         if (track) {
           result.push({ track, globalIndex: i });
-        } else {
-          result.push({ track: { _placeholder: true }, globalIndex: i });
         }
+        // Skip indices where page data hasn't loaded yet — _ensurePage above
+        // will fetch the missing pages, and _dataVersion++ will trigger a
+        // re-render with real data. Showing placeholder rows here causes FOUC.
       }
       return result;
     },

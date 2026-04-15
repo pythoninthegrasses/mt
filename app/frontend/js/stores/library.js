@@ -86,7 +86,10 @@ export function createLibraryStore(Alpine) {
         this._sectionCache = cache;
         const cached = this._sectionCache[this.currentSection];
         if (cached) {
-          this.totalTracks = cached.totalTracks;
+          // Only cache totalDuration for display — do NOT set totalTracks here.
+          // Setting totalTracks while _trackPages is empty causes Alpine to
+          // render placeholder rows (FOUC) before loadLibraryData populates
+          // page 0 and sets totalTracks atomically via disableEffectScheduling.
           this.totalDuration = cached.totalDuration;
           this._lastLoadedSection = this.currentSection;
           console.log('[library] showing cached summary on init:', {
