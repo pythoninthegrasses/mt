@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-04-13 03:20'
-updated_date: '2026-04-13 04:00'
+updated_date: '2026-04-15 04:46'
 labels:
   - backend
   - player
@@ -22,7 +22,7 @@ references:
   - crates/mt-tauri/src/commands/lastfm.rs
   - crates/mt-tauri/src/events.rs
 priority: medium
-ordinal: 5000
+ordinal: 4500
 ---
 
 ## Description
