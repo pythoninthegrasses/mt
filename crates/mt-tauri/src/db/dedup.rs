@@ -143,6 +143,48 @@ pub(crate) fn count_suppressed(conn: &Connection) -> DbResult<i64> {
     Ok(count)
 }
 
+type TrackVec = Vec<(String, crate::db::TrackMetadata)>;
+
+/// Get all suppressed filepaths from deduplicated_tracks.
+pub(crate) fn get_suppressed_filepaths(
+    conn: &Connection,
+) -> DbResult<std::collections::HashSet<String>> {
+    let mut stmt = conn.prepare("SELECT suppressed_filepath FROM deduplicated_tracks")?;
+    let paths: std::collections::HashSet<String> = stmt
+        .query_map([], |row| row.get(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(paths)
+}
+
+/// Filter a list of `(filepath, TrackMetadata)` pairs, removing any whose
+/// filepath is currently suppressed by cross-directory dedup. Returns the
+/// filtered vec and the number of tracks that were skipped.
+///
+/// On DB errors, the original `tracks` vec is returned alongside the error so
+/// the caller can fall back to unfiltered insertion.
+pub(crate) fn filter_suppressed_tracks(
+    conn: &Connection,
+    tracks: TrackVec,
+) -> Result<(TrackVec, usize), (crate::db::DbError, TrackVec)> {
+    let suppressed = match get_suppressed_filepaths(conn) {
+        Ok(v) => v,
+        Err(e) => return Err((e, tracks)),
+    };
+
+    if suppressed.is_empty() {
+        return Ok((tracks, 0));
+    }
+
+    let before = tracks.len();
+    let filtered: Vec<_> = tracks
+        .into_iter()
+        .filter(|(filepath, _)| !suppressed.contains(filepath))
+        .collect();
+    let skipped = before - filtered.len();
+    Ok((filtered, skipped))
+}
+
 /// Result of running reinstatement
 #[derive(Debug, Default)]
 pub(crate) struct ReinstatementResult {
@@ -450,5 +492,67 @@ mod tests {
         // /music/c/song.mp3 suppression should now point to the new track
         // The reinstated filepath suppression should be removed
         assert_eq!(count_suppressed(&conn).unwrap(), 1);
+    }
+
+    // =========================================================================
+    // filter_suppressed_tracks tests
+    // =========================================================================
+
+    #[test]
+    fn test_filter_suppressed_tracks_removes_suppressed() {
+        let conn = setup_test_db();
+        let kept_id = add_test_track(&conn, "/music/a/song.mp3");
+
+        suppress_track(
+            &conn,
+            kept_id,
+            "/music/b/song.mp3",
+            Some("sha256:abc123"),
+            None,
+            None,
+        )
+        .unwrap();
+
+        let tracks = vec![
+            ("/music/b/song.mp3".to_string(), TrackMetadata::default()),
+            ("/music/c/other.mp3".to_string(), TrackMetadata::default()),
+        ];
+
+        let (filtered, skipped) = filter_suppressed_tracks(&conn, tracks).unwrap();
+        assert_eq!(skipped, 1);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].0, "/music/c/other.mp3");
+    }
+
+    #[test]
+    fn test_filter_suppressed_tracks_no_suppressions() {
+        let conn = setup_test_db();
+
+        let tracks = vec![
+            ("/music/a/song.mp3".to_string(), TrackMetadata::default()),
+            ("/music/b/song.mp3".to_string(), TrackMetadata::default()),
+        ];
+
+        let (filtered, skipped) = filter_suppressed_tracks(&conn, tracks).unwrap();
+        assert_eq!(skipped, 0);
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn test_filter_suppressed_tracks_all_suppressed() {
+        let conn = setup_test_db();
+        let kept_id = add_test_track(&conn, "/music/a/song.mp3");
+
+        suppress_track(&conn, kept_id, "/music/b/song.mp3", None, None, None).unwrap();
+        suppress_track(&conn, kept_id, "/music/c/song.mp3", None, None, None).unwrap();
+
+        let tracks = vec![
+            ("/music/b/song.mp3".to_string(), TrackMetadata::default()),
+            ("/music/c/song.mp3".to_string(), TrackMetadata::default()),
+        ];
+
+        let (filtered, skipped) = filter_suppressed_tracks(&conn, tracks).unwrap();
+        assert_eq!(skipped, 2);
+        assert!(filtered.is_empty());
     }
 }

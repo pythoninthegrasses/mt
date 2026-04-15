@@ -23,6 +23,8 @@ pub(crate) mod watched;
 mod benchmarks;
 #[cfg(test)]
 mod compat_test;
+#[cfg(test)]
+mod dedup_scope_test;
 
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;

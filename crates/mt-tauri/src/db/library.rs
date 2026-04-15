@@ -1156,6 +1156,47 @@ pub(crate) fn find_duplicates_by_content_hash(
     Ok(result)
 }
 
+/// Filter duplicate groups to only include groups where all tracks are within
+/// the same watched directory.
+///
+/// Cross-directory groups (tracks spanning 2+ watched directories) are excluded
+/// so they can be handled by Phase 3 cross-directory dedup, which writes
+/// suppression rows to `deduplicated_tracks`.
+///
+/// If `watched_folder_paths` is empty or has only one entry, all groups pass
+/// through (there can be no cross-directory groups).
+pub(crate) fn filter_within_directory_groups(
+    groups: Vec<Vec<DuplicateCandidate>>,
+    watched_folder_paths: &[String],
+) -> Vec<Vec<DuplicateCandidate>> {
+    // With 0 or 1 watched folders, cross-directory groups are impossible
+    if watched_folder_paths.len() < 2 {
+        return groups;
+    }
+
+    groups
+        .into_iter()
+        .filter(|group| {
+            let mut dirs_seen = std::collections::HashSet::new();
+            for candidate in group {
+                for folder in watched_folder_paths {
+                    let prefix = if folder.ends_with('/') {
+                        folder.clone()
+                    } else {
+                        format!("{}/", folder)
+                    };
+                    if candidate.filepath.starts_with(&prefix) {
+                        dirs_seen.insert(folder.as_str());
+                        break;
+                    }
+                }
+            }
+            // Keep only groups where all tracks are in the same directory
+            dirs_seen.len() <= 1
+        })
+        .collect()
+}
+
 /// Find duplicate tracks that span multiple watched directories (cross-directory dedup).
 ///
 /// Only returns groups where the same content_hash exists in 2+ different watched

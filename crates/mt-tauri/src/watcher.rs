@@ -19,7 +19,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::db::revision;
 use crate::db::{
-    Database, TrackMetadata, WatchedFolder as DbWatchedFolder, library, removed, watched,
+    Database, TrackMetadata, WatchedFolder as DbWatchedFolder, dedup, library, removed, watched,
 };
 use crate::events::{EventEmitter, LibraryReconcileEvent, ScanCompleteEvent, ScanProgressEvent};
 use crate::scanner::ExtractedMetadata;
@@ -643,6 +643,30 @@ impl WatcherManager {
             },
             Err(e) => {
                 error!(folder_id, error = %e, "Failed to get DB connection for removed tracks filter, proceeding unfiltered");
+                truly_new
+            }
+        };
+
+        // Filter out tracks that are suppressed by cross-directory dedup.
+        // Without this, suppressed duplicates reappear after every restart.
+        let truly_new = match db.conn() {
+            Ok(conn) => match dedup::filter_suppressed_tracks(&conn, truly_new) {
+                Ok((filtered, skipped)) => {
+                    if skipped > 0 {
+                        info!(
+                            folder_id,
+                            skipped, "Skipped suppressed duplicate tracks during watcher scan"
+                        );
+                    }
+                    filtered
+                }
+                Err((e, unfiltered)) => {
+                    error!(folder_id, error = %e, "Failed to filter suppressed tracks, proceeding unfiltered");
+                    unfiltered
+                }
+            },
+            Err(e) => {
+                error!(folder_id, error = %e, "Failed to get DB connection for suppressed tracks filter, proceeding unfiltered");
                 truly_new
             }
         };

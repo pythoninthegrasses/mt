@@ -934,7 +934,12 @@ pub(crate) fn run_backfill_and_dedup(
         }
     }
 
-    // Phase 2: deduplication
+    // Fetch watched folder paths early — needed by Phase 2 (to scope hash dedup
+    // to within-directory only) and Phase 3 (cross-directory dedup).
+    let watched_folders = crate::db::watched::get_watched_folders(conn).unwrap_or_default();
+    let folder_paths: Vec<String> = watched_folders.iter().map(|f| f.path.clone()).collect();
+
+    // Phase 2: deduplication (within-directory only)
     let _ = app_handle.emit_reconcile_progress(ReconcileProgressEvent::deduplicating(0, 0));
 
     let mut duplicates_merged = 0u32;
@@ -965,7 +970,10 @@ pub(crate) fn run_backfill_and_dedup(
         }
     }
 
+    // Hash dedup: filter to within-directory groups only so cross-directory
+    // duplicates are handled by Phase 3 (which writes suppression rows).
     let hash_dups = library::find_duplicates_by_content_hash(conn).map_err(|e| e.to_string())?;
+    let hash_dups = library::filter_within_directory_groups(hash_dups, &folder_paths);
     for group in hash_dups {
         if group.len() < 2 {
             continue;
@@ -1048,9 +1056,6 @@ pub(crate) fn run_backfill_and_dedup(
     };
 
     if dedup_enabled {
-        let watched_folders = crate::db::watched::get_watched_folders(conn).unwrap_or_default();
-        let folder_paths: Vec<String> = watched_folders.iter().map(|f| f.path.clone()).collect();
-
         if folder_paths.len() >= 2 {
             match library::find_cross_directory_duplicates(conn, &folder_paths) {
                 Ok(groups) => {
@@ -1728,6 +1733,7 @@ mod tests {
                 tracks: vec![],
                 total_tracks: 0,
                 total_duration: 0.0,
+                total_size: 0,
                 page: None,
                 page_size: None,
                 has_more: false,

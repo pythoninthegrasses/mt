@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::commands::match_new_tracks_against_loved;
 use crate::db::revision;
-use crate::db::{Database, library, removed};
+use crate::db::{Database, dedup, library, removed};
 use crate::events::{EventEmitter, LibraryReconcileEvent, ScanCompleteEvent, ScanProgressEvent};
 use crate::scanner::artwork::{Artwork, get_artwork};
 use crate::scanner::fingerprint::{FileFingerprint, compute_content_hash};
@@ -266,6 +266,17 @@ pub(crate) async fn scan_paths_to_library(
             .map_err(|(e, _tracks)| e.to_string())?;
         if skipped > 0 {
             info!(skipped, "Skipped previously removed tracks during scan");
+        }
+        filtered
+    };
+
+    // Filter out tracks suppressed by cross-directory deduplication.
+    let truly_new = {
+        let conn = db.conn().map_err(|e| e.to_string())?;
+        let (filtered, skipped) = dedup::filter_suppressed_tracks(&conn, truly_new)
+            .map_err(|(e, _tracks)| e.to_string())?;
+        if skipped > 0 {
+            info!(skipped, "Skipped dedup-suppressed tracks during scan");
         }
         filtered
     };
