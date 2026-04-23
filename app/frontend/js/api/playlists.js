@@ -1,10 +1,10 @@
 /**
- * Playlists API
+ * PlaylistsAPI
  *
  * Playlist CRUD, track management, and reordering operations.
  */
 
-import { ApiError, invoke, request } from './shared.js';
+import { request, tauriInvoke } from './shared.js';
 
 export const playlists = {
   /**
@@ -12,15 +12,8 @@ export const playlists = {
    * @returns {Promise<Array>} Array of playlists
    */
   async getAll() {
-    if (invoke) {
-      try {
-        const response = await invoke('playlist_list');
-        return response.playlists || [];
-      } catch (error) {
-        console.error('[api.playlists.getAll] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('playlist_list');
+    if (result !== null) return result.playlists || [];
     const response = await request('/playlists');
     return Array.isArray(response) ? response : (response.playlists || []);
   },
@@ -31,14 +24,8 @@ export const playlists = {
    * @returns {Promise<{name: string}>}
    */
   async generateName(base = 'New playlist') {
-    if (invoke) {
-      try {
-        return await invoke('playlist_generate_name', { base });
-      } catch (error) {
-        console.error('[api.playlists.generateName] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('playlist_generate_name', { base });
+    if (result !== null) return result;
     const query = new URLSearchParams({ base });
     return request(`/playlists/generate-name?${query}`);
   },
@@ -49,15 +36,8 @@ export const playlists = {
    * @returns {Promise<{playlist: object|null}>}
    */
   async create(name) {
-    if (invoke) {
-      try {
-        const response = await invoke('playlist_create', { name });
-        return response.playlist;
-      } catch (error) {
-        console.error('[api.playlists.create] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('playlist_create', { name });
+    if (result !== null) return result.playlist;
     return request('/playlists', {
       method: 'POST',
       body: JSON.stringify({ name }),
@@ -70,14 +50,8 @@ export const playlists = {
    * @returns {Promise<object|null>}
    */
   async get(playlistId) {
-    if (invoke) {
-      try {
-        return await invoke('playlist_get', { playlistId });
-      } catch (error) {
-        console.error('[api.playlists.get] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('playlist_get', { playlistId });
+    if (result !== null) return result;
     return request(`/playlists/${playlistId}`);
   },
 
@@ -88,14 +62,8 @@ export const playlists = {
    * @returns {Promise<{playlist: object|null}>}
    */
   async rename(playlistId, name) {
-    if (invoke) {
-      try {
-        return await invoke('playlist_update', { playlistId, name });
-      } catch (error) {
-        console.error('[api.playlists.rename] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('playlist_update', { playlistId, name });
+    if (result !== null) return result;
     return request(`/playlists/${playlistId}`, {
       method: 'PUT',
       body: JSON.stringify({ name }),
@@ -108,14 +76,8 @@ export const playlists = {
    * @returns {Promise<{success: boolean}>}
    */
   async delete(playlistId) {
-    if (invoke) {
-      try {
-        return await invoke('playlist_delete', { playlistId });
-      } catch (error) {
-        console.error('[api.playlists.delete] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('playlist_delete', { playlistId });
+    if (result !== null) return result;
     return request(`/playlists/${playlistId}`, {
       method: 'DELETE',
     });
@@ -129,18 +91,12 @@ export const playlists = {
    * @returns {Promise<{added: number, track_count: number}>}
    */
   async addTracks(playlistId, trackIds, position) {
-    if (invoke) {
-      try {
-        return await invoke('playlist_add_tracks', {
-          playlistId,
-          trackIds,
-          position: position ?? null,
-        });
-      } catch (error) {
-        console.error('[api.playlists.addTracks] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('playlist_add_tracks', {
+      playlistId,
+      trackIds,
+      position: position ?? null,
+    });
+    if (result !== null) return result;
     return request(`/playlists/${playlistId}/tracks`, {
       method: 'POST',
       body: JSON.stringify({ track_ids: trackIds }),
@@ -154,14 +110,8 @@ export const playlists = {
    * @returns {Promise<{success: boolean}>}
    */
   async removeTrack(playlistId, position) {
-    if (invoke) {
-      try {
-        return await invoke('playlist_remove_track', { playlistId, position });
-      } catch (error) {
-        console.error('[api.playlists.removeTrack] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('playlist_remove_track', { playlistId, position });
+    if (result !== null) return result;
     return request(`/playlists/${playlistId}/tracks/${position}`, {
       method: 'DELETE',
     });
@@ -175,18 +125,12 @@ export const playlists = {
    * @returns {Promise<{success: boolean}>}
    */
   async reorder(playlistId, fromPosition, toPosition) {
-    if (invoke) {
-      try {
-        return await invoke('playlist_reorder_tracks', {
-          playlistId,
-          fromPosition,
-          toPosition,
-        });
-      } catch (error) {
-        console.error('[api.playlists.reorder] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('playlist_reorder_tracks', {
+      playlistId,
+      fromPosition,
+      toPosition,
+    });
+    if (result !== null) return result;
     return request(`/playlists/${playlistId}/tracks/reorder`, {
       method: 'POST',
       body: JSON.stringify({ from_position: fromPosition, to_position: toPosition }),
@@ -200,14 +144,8 @@ export const playlists = {
    * @returns {Promise<{success: boolean}>}
    */
   async reorderPlaylists(fromPosition, toPosition) {
-    if (invoke) {
-      try {
-        return await invoke('playlists_reorder', { fromPosition, toPosition });
-      } catch (error) {
-        console.error('[api.playlists.reorderPlaylists] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('playlists_reorder', { fromPosition, toPosition });
+    if (result !== null) return result;
     return request('/playlists/reorder', {
       method: 'POST',
       body: JSON.stringify({ from_position: fromPosition, to_position: toPosition }),

@@ -26,6 +26,19 @@ use serde::{Deserialize, Serialize};
 use super::types::{AgentContext, AgentError, TrackSummary};
 use crate::db::{favorites, library, library::LibraryQuery, models::StatsDateRange, stats};
 
+/// Helper to construct a `ToolDefinition` from static metadata.
+fn tool_def(
+    name: &'static str,
+    description: &'static str,
+    parameters: serde_json::Value,
+) -> ToolDefinition {
+    ToolDefinition {
+        name: name.into(),
+        description: description.into(),
+        parameters,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // ToolOutput — wrapper for tool results with actionable hints on empty results
 // ---------------------------------------------------------------------------
@@ -89,19 +102,17 @@ impl Tool for GetRecentlyPlayed {
     type Output = ToolOutput<TrackSummary>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
-        ToolDefinition {
-            name: Self::NAME.into(),
-            description:
-                "Get tracks the user played recently. Use to understand current listening habits."
-                    .into(),
-            parameters: serde_json::json!({
+        tool_def(
+            Self::NAME,
+            "Get tracks the user played recently. Use to understand current listening habits.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "days": { "type": "integer", "description": "Number of days to look back (default: 7)" },
                     "limit": { "type": "integer", "description": "Max tracks to return (default: 20)" }
                 }
             }),
-        }
+        )
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
@@ -170,12 +181,10 @@ impl Tool for GetTopArtists {
     type Output = ToolOutput<ArtistSummary>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
-        ToolDefinition {
-            name: Self::NAME.into(),
-            description:
-                "Get the user's most-played artists. Use to understand long-term preferences."
-                    .into(),
-            parameters: serde_json::json!({
+        tool_def(
+            Self::NAME,
+            "Get the user's most-played artists. Use to understand long-term preferences.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "range": {
@@ -186,7 +195,7 @@ impl Tool for GetTopArtists {
                     "limit": { "type": "integer", "description": "Max artists to return (default: 10)" }
                 }
             }),
-        }
+        )
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
@@ -266,10 +275,10 @@ impl Tool for SearchLibrary {
     type Output = ToolOutput<TrackSummary>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
-        ToolDefinition {
-            name: Self::NAME.into(),
-            description: "Search the user's music library by keyword, artist, album, genre, or year range. Returns matching tracks with year metadata.".into(),
-            parameters: serde_json::json!({
+        tool_def(
+            Self::NAME,
+            "Search the user's music library by keyword, artist, album, genre, or year range. Returns matching tracks with year metadata.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "query": { "type": "string", "description": "Free-text search across title, artist, album" },
@@ -282,7 +291,7 @@ impl Tool for SearchLibrary {
                     "limit": { "type": "integer", "description": "Max tracks to return (default: 20)" }
                 }
             }),
-        }
+        )
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
@@ -345,12 +354,10 @@ impl Tool for GetSimilarTracks {
     type Output = ToolOutput<TrackSummary>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
-        ToolDefinition {
-            name: Self::NAME.into(),
-            description:
-                "Find tracks similar to a given track. Returns only tracks in the user's library."
-                    .into(),
-            parameters: serde_json::json!({
+        tool_def(
+            Self::NAME,
+            "Find tracks similar to a given track. Returns only tracks in the user's library.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "artist": { "type": "string", "description": "Artist of the seed track" },
@@ -359,7 +366,7 @@ impl Tool for GetSimilarTracks {
                 },
                 "required": ["artist", "track"]
             }),
-        }
+        )
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
@@ -455,10 +462,10 @@ impl Tool for GetSimilarArtists {
     type Output = ToolOutput<SimilarArtistMatch>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
-        ToolDefinition {
-            name: Self::NAME.into(),
-            description: "Find artists similar to a given artist. Returns only artists in the user's library with sample tracks.".into(),
-            parameters: serde_json::json!({
+        tool_def(
+            Self::NAME,
+            "Find artists similar to a given artist. Returns only artists in the user's library with sample tracks.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "artist": { "type": "string", "description": "Artist to find similar artists for" },
@@ -466,7 +473,7 @@ impl Tool for GetSimilarArtists {
                 },
                 "required": ["artist"]
             }),
-        }
+        )
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
@@ -572,11 +579,10 @@ impl Tool for GetTrackTags {
     type Output = ToolOutput<TagSummary>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
-        ToolDefinition {
-            name: Self::NAME.into(),
-            description: "Get mood and genre tags for a track. Use to understand a track's vibe."
-                .into(),
-            parameters: serde_json::json!({
+        tool_def(
+            Self::NAME,
+            "Get mood and genre tags for a track. Use to understand a track's vibe.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "artist": { "type": "string", "description": "Artist of the track" },
@@ -584,7 +590,7 @@ impl Tool for GetTrackTags {
                 },
                 "required": ["artist", "track"]
             }),
-        }
+        )
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
@@ -654,10 +660,10 @@ impl Tool for GetTopArtistsByTag {
     type Output = ToolOutput<SimilarArtistMatch>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
-        ToolDefinition {
-            name: Self::NAME.into(),
-            description: "Find top artists in a genre/tag. Returns only artists in the user's library with sample tracks.".into(),
-            parameters: serde_json::json!({
+        tool_def(
+            Self::NAME,
+            "Find top artists in a genre/tag. Returns only artists in the user's library with sample tracks.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "tag": { "type": "string", "description": "Genre or tag (e.g. shoegaze, jazz, indie rock)" },
@@ -665,7 +671,7 @@ impl Tool for GetTopArtistsByTag {
                 },
                 "required": ["tag"]
             }),
-        }
+        )
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {
@@ -771,12 +777,10 @@ impl Tool for GetTopTracksByCountry {
     type Output = ToolOutput<TrackSummary>;
 
     async fn definition(&self, _prompt: String) -> ToolDefinition {
-        ToolDefinition {
-            name: Self::NAME.into(),
-            description:
-                "Find trending tracks in a country. Returns only tracks in the user's library."
-                    .into(),
-            parameters: serde_json::json!({
+        tool_def(
+            Self::NAME,
+            "Find trending tracks in a country. Returns only tracks in the user's library.",
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "country": { "type": "string", "description": "Country name (e.g. Japan, Brazil, Germany)" },
@@ -784,7 +788,7 @@ impl Tool for GetTopTracksByCountry {
                 },
                 "required": ["country"]
             }),
-        }
+        )
     }
 
     async fn call(&self, args: Self::Args) -> Result<Self::Output, Self::Error> {

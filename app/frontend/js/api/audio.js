@@ -4,7 +4,7 @@
  * Audio output device enumeration and selection via Tauri commands.
  */
 
-import { ApiError, invoke } from './shared.js';
+import { tauriInvoke } from './shared.js';
 
 export const audio = {
   /**
@@ -12,15 +12,8 @@ export const audio = {
    * @returns {Promise<{devices: string[]}>}
    */
   async listDevices() {
-    if (invoke) {
-      try {
-        return await invoke('audio_list_devices');
-      } catch (error) {
-        console.error('[api.audio.listDevices] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    // No HTTP fallback — audio device selection requires Tauri runtime
+    const result = await tauriInvoke('audio_list_devices');
+    if (result !== null) return result;
     return { devices: [] };
   },
 
@@ -29,14 +22,7 @@ export const audio = {
    * @param {string|null} deviceName - Device name, or null for system default
    * @returns {Promise<void>}
    */
-  async setDevice(deviceName) {
-    if (invoke) {
-      try {
-        return await invoke('audio_set_device', { deviceName });
-      } catch (error) {
-        console.error('[api.audio.setDevice] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+  setDevice(deviceName) {
+    return tauriInvoke('audio_set_device', { deviceName });
   },
 };

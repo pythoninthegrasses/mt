@@ -140,7 +140,7 @@ impl AudioState {
         cache: &NetworkFileCache,
         app: &AppHandle,
     ) -> Result<TrackInfo, String> {
-        let resolved = resolve_cached_path_inner(path, cache, app);
+        let resolved = resolve_cached_path(path, cache, app);
         let (tx, rx) = mpsc::channel();
         self.send_command(AudioCommand::LoadAndPlay(resolved, track_id, tx));
         rx.recv().map_err(|_| "Channel closed".to_string())?
@@ -455,13 +455,7 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
 /// If network caching is enabled and the path is on a network mount,
 /// copy the file to the local cache and return the cached path.
 /// Otherwise return the original path unchanged.
-fn resolve_cached_path(path: &str, cache: &State<NetworkFileCache>, app: &AppHandle) -> String {
-    resolve_cached_path_inner(path, cache, app)
-}
-
-/// Inner implementation that accepts `&NetworkFileCache` directly,
-/// callable from other commands without a `State` wrapper.
-fn resolve_cached_path_inner(path: &str, cache: &NetworkFileCache, app: &AppHandle) -> String {
+fn resolve_cached_path(path: &str, cache: &NetworkFileCache, app: &AppHandle) -> String {
     let enabled = app
         .store("settings.json")
         .ok()

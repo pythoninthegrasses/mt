@@ -98,7 +98,7 @@ describe('lyrics API', () => {
 
       await lyrics.clearCache();
 
-      expect(mockInvoke).toHaveBeenCalledWith('lyrics_clear_cache');
+      expect(mockInvoke).toHaveBeenCalledWith('lyrics_clear_cache', {});
     });
   });
 });

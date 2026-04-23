@@ -4,6 +4,7 @@ use rodio::cpal::traits::{DeviceTrait, HostTrait};
 use std::panic::AssertUnwindSafe;
 use std::sync::mpsc;
 use std::time::Duration;
+#[cfg(not(test))]
 use tracing::{debug, warn};
 
 /// Print device names as JSON to stdout and exit.

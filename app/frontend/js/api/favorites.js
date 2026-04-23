@@ -4,7 +4,7 @@
  * Liked songs, top played, recently played/added operations.
  */
 
-import { ApiError, invoke, request } from './shared.js';
+import { ApiError, request, tauriInvoke } from './shared.js';
 
 export const favorites = {
   /**
@@ -15,17 +15,11 @@ export const favorites = {
    * @returns {Promise<{tracks: Array, total: number, limit: number, offset: number}>}
    */
   async get(params = {}) {
-    if (invoke) {
-      try {
-        return await invoke('favorites_get', {
-          limit: params.limit ?? null,
-          offset: params.offset ?? null,
-        });
-      } catch (error) {
-        console.error('[api.favorites.get] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('favorites_get', {
+      limit: params.limit ?? null,
+      offset: params.offset ?? null,
+    });
+    if (result !== null) return result;
     // Fallback to HTTP
     const query = new URLSearchParams();
     if (params.limit) query.set('limit', params.limit.toString());
@@ -40,14 +34,8 @@ export const favorites = {
    * @returns {Promise<{is_favorite: boolean, favorited_date: string|null}>}
    */
   async check(trackId) {
-    if (invoke) {
-      try {
-        return await invoke('favorites_check', { trackId });
-      } catch (error) {
-        console.error('[api.favorites.check] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('favorites_check', { trackId });
+    if (result !== null) return result;
     return request(`/favorites/${encodeURIComponent(trackId)}`);
   },
 
@@ -57,20 +45,17 @@ export const favorites = {
    * @returns {Promise<{success: boolean, favorited_date: string}>}
    */
   async add(trackId) {
-    if (invoke) {
-      try {
-        return await invoke('favorites_add', { trackId });
-      } catch (error) {
-        console.error('[api.favorites.add] Tauri error:', error);
-        // Check for specific error messages
-        if (error.toString().includes('already favorited')) {
-          throw new ApiError(409, 'Track is already favorited');
-        }
-        if (error.toString().includes('not found')) {
-          throw new ApiError(404, error.toString());
-        }
-        throw new ApiError(500, error.toString());
+    try {
+      const result = await tauriInvoke('favorites_add', { trackId });
+      if (result !== null) return result;
+    } catch (error) {
+      if (error.message.includes('already favorited')) {
+        throw new ApiError(409, 'Track is already favorited');
       }
+      if (error.message.includes('not found')) {
+        throw new ApiError(404, error.message);
+      }
+      throw error;
     }
     return request(`/favorites/${encodeURIComponent(trackId)}`, {
       method: 'POST',
@@ -83,16 +68,14 @@ export const favorites = {
    * @returns {Promise<void>}
    */
   async remove(trackId) {
-    if (invoke) {
-      try {
-        return await invoke('favorites_remove', { trackId });
-      } catch (error) {
-        console.error('[api.favorites.remove] Tauri error:', error);
-        if (error.toString().includes('not in favorites')) {
-          throw new ApiError(404, error.toString());
-        }
-        throw new ApiError(500, error.toString());
+    try {
+      const result = await tauriInvoke('favorites_remove', { trackId });
+      if (result !== null) return result;
+    } catch (error) {
+      if (error.message.includes('not in favorites')) {
+        throw new ApiError(404, error.message);
       }
+      throw error;
     }
     return request(`/favorites/${encodeURIComponent(trackId)}`, {
       method: 'DELETE',
@@ -104,14 +87,8 @@ export const favorites = {
    * @returns {Promise<{tracks: Array}>}
    */
   async getTop25() {
-    if (invoke) {
-      try {
-        return await invoke('favorites_get_top25');
-      } catch (error) {
-        console.error('[api.favorites.getTop25] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('favorites_get_top25');
+    if (result !== null) return result;
     return request('/favorites/top25');
   },
 
@@ -123,17 +100,11 @@ export const favorites = {
    * @returns {Promise<{tracks: Array, days: number}>}
    */
   async getRecentlyPlayed(params = {}) {
-    if (invoke) {
-      try {
-        return await invoke('favorites_get_recently_played', {
-          days: params.days ?? null,
-          limit: params.limit ?? null,
-        });
-      } catch (error) {
-        console.error('[api.favorites.getRecentlyPlayed] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('favorites_get_recently_played', {
+      days: params.days ?? null,
+      limit: params.limit ?? null,
+    });
+    if (result !== null) return result;
     // Fallback to HTTP
     const query = new URLSearchParams();
     if (params.days) query.set('days', params.days.toString());
@@ -150,17 +121,11 @@ export const favorites = {
    * @returns {Promise<{tracks: Array, days: number}>}
    */
   async getRecentlyAdded(params = {}) {
-    if (invoke) {
-      try {
-        return await invoke('favorites_get_recently_added', {
-          days: params.days ?? null,
-          limit: params.limit ?? null,
-        });
-      } catch (error) {
-        console.error('[api.favorites.getRecentlyAdded] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('favorites_get_recently_added', {
+      days: params.days ?? null,
+      limit: params.limit ?? null,
+    });
+    if (result !== null) return result;
     // Fallback to HTTP
     const query = new URLSearchParams();
     if (params.days) query.set('days', params.days.toString());
