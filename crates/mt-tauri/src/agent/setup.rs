@@ -62,6 +62,8 @@ pub async fn pull_model(app: &tauri::AppHandle, model: String) -> Result<PullMod
 
     let mut last_status = String::new();
     let mut buffer = String::new();
+    let mut last_log = std::time::Instant::now();
+    const LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
 
     while let Some(chunk) = response
         .chunk()
@@ -77,12 +79,15 @@ pub async fn pull_model(app: &tauri::AppHandle, model: String) -> Result<PullMod
 
             if let Some(progress) = parse_pull_progress_line(&line) {
                 last_status.clone_from(&progress.status);
-                debug!(
-                    status = %progress.status,
-                    completed = ?progress.completed,
-                    total = ?progress.total,
-                    "Pull progress"
-                );
+                if last_log.elapsed() >= LOG_INTERVAL {
+                    last_log = std::time::Instant::now();
+                    if let (Some(completed), Some(total)) = (progress.completed, progress.total) {
+                        let pct = (completed as f64 / total as f64 * 100.0) as u32;
+                        info!("{}% - {}", pct, progress.status);
+                    } else {
+                        info!("{}", progress.status);
+                    }
+                }
                 let _ = app.emit("agent://pull-progress", &progress);
             }
         }
