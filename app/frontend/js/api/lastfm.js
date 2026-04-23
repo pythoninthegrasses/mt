@@ -4,7 +4,7 @@
  * Scrobbling, authentication, loved tracks, and now-playing operations.
  */
 
-import { ApiError, invoke, request } from './shared.js';
+import { request, tauriInvoke } from './shared.js';
 
 export const lastfm = {
   /**
@@ -12,14 +12,8 @@ export const lastfm = {
    * @returns {Promise<{enabled: boolean, username: string|null, authenticated: boolean, configured: boolean, scrobble_threshold: number}>}
    */
   async getSettings() {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_get_settings');
-      } catch (error) {
-        console.error('[api.lastfm.getSettings] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_get_settings');
+    if (result !== null) return result;
     return request('/lastfm/settings');
   },
 
@@ -31,14 +25,8 @@ export const lastfm = {
    * @returns {Promise<{updated: string[]}>}
    */
   async updateSettings(settings) {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_update_settings', { settingsUpdate: settings });
-      } catch (error) {
-        console.error('[api.lastfm.updateSettings] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_update_settings', { settingsUpdate: settings });
+    if (result !== null) return result;
     return request('/lastfm/settings', {
       method: 'PUT',
       body: JSON.stringify(settings),
@@ -50,14 +38,8 @@ export const lastfm = {
    * @returns {Promise<{auth_url: string, token: string}>}
    */
   async getAuthUrl() {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_get_auth_url');
-      } catch (error) {
-        console.error('[api.lastfm.getAuthUrl] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_get_auth_url');
+    if (result !== null) return result;
     return request('/lastfm/auth-url');
   },
 
@@ -67,14 +49,8 @@ export const lastfm = {
    * @returns {Promise<{status: string, username: string, message: string}>}
    */
   async completeAuth(token) {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_auth_callback', { token });
-      } catch (error) {
-        console.error('[api.lastfm.completeAuth] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_auth_callback', { token });
+    if (result !== null) return result;
     const query = new URLSearchParams({ token });
     return request(`/lastfm/auth-callback?${query}`);
   },
@@ -91,14 +67,8 @@ export const lastfm = {
    * @returns {Promise<{status: string, message?: string}>}
    */
   async scrobble(scrobbleData) {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_scrobble', { request: scrobbleData });
-      } catch (error) {
-        console.error('[api.lastfm.scrobble] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_scrobble', { request: scrobbleData });
+    if (result !== null) return result;
     return request('/lastfm/scrobble', {
       method: 'POST',
       body: JSON.stringify(scrobbleData),
@@ -115,14 +85,8 @@ export const lastfm = {
    * @returns {Promise<{status: string, message?: string}>}
    */
   async updateNowPlaying(nowPlayingData) {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_now_playing', { request: nowPlayingData });
-      } catch (error) {
-        console.error('[api.lastfm.updateNowPlaying] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_now_playing', { request: nowPlayingData });
+    if (result !== null) return result;
     return request('/lastfm/now-playing', {
       method: 'POST',
       body: JSON.stringify(nowPlayingData),
@@ -134,14 +98,8 @@ export const lastfm = {
    * @returns {Promise<{status: string, total_loved_tracks: number, imported_count: number, message: string}>}
    */
   async importLovedTracks() {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_import_loved_tracks');
-      } catch (error) {
-        console.error('[api.lastfm.importLovedTracks] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_import_loved_tracks');
+    if (result !== null) return result;
     return request('/lastfm/import-loved-tracks', {
       method: 'POST',
     });
@@ -152,14 +110,8 @@ export const lastfm = {
    * @returns {Promise<{status: string, message: string}>}
    */
   async disconnect() {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_disconnect');
-      } catch (error) {
-        console.error('[api.lastfm.disconnect] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_disconnect');
+    if (result !== null) return result;
     return request('/lastfm/disconnect', {
       method: 'DELETE',
     });
@@ -170,14 +122,8 @@ export const lastfm = {
    * @returns {Promise<{queued_scrobbles: number}>}
    */
   async getQueueStatus() {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_queue_status');
-      } catch (error) {
-        console.error('[api.lastfm.getQueueStatus] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_queue_status');
+    if (result !== null) return result;
     return request('/lastfm/queue/status');
   },
 
@@ -186,14 +132,8 @@ export const lastfm = {
    * @returns {Promise<{status: string, remaining_queued: number}>}
    */
   async retryQueuedScrobbles() {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_queue_retry');
-      } catch (error) {
-        console.error('[api.lastfm.retryQueuedScrobbles] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_queue_retry');
+    if (result !== null) return result;
     return request('/lastfm/queue/retry', {
       method: 'POST',
     });
@@ -204,14 +144,8 @@ export const lastfm = {
    * @returns {Promise<{status: string, fetched: number, new_tracks: number, total_cached: number}>}
    */
   async cacheLovedTracks() {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_cache_loved_tracks');
-      } catch (error) {
-        console.error('[api.lastfm.cacheLovedTracks] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_cache_loved_tracks');
+    if (result !== null) return result;
     return request('/lastfm/cache-loved-tracks', {
       method: 'POST',
     });
@@ -222,14 +156,8 @@ export const lastfm = {
    * @returns {Promise<{status: string, matched: number, already_matched: number, not_found: number, new_favorites: number}>}
    */
   async matchLovedTracks() {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_match_loved_tracks');
-      } catch (error) {
-        console.error('[api.lastfm.matchLovedTracks] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_match_loved_tracks');
+    if (result !== null) return result;
     return request('/lastfm/match-loved-tracks', {
       method: 'POST',
     });
@@ -240,14 +168,8 @@ export const lastfm = {
    * @returns {Promise<{total_cached: number, matched: number, unmatched: number, most_recent_loved: number|null}>}
    */
   async getLovedStats() {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_loved_stats');
-      } catch (error) {
-        console.error('[api.lastfm.getLovedStats] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_loved_stats');
+    if (result !== null) return result;
     return request('/lastfm/loved-stats');
   },
 
@@ -256,14 +178,8 @@ export const lastfm = {
    * @returns {Promise<{status: string, cleared: number, message: string}>}
    */
   async resetLovedCache() {
-    if (invoke) {
-      try {
-        return await invoke('lastfm_reset_loved_cache');
-      } catch (error) {
-        console.error('[api.lastfm.resetLovedCache] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lastfm_reset_loved_cache');
+    if (result !== null) return result;
     return request('/lastfm/reset-loved-cache', { method: 'POST' });
   },
 };

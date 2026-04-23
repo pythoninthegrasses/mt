@@ -2,10 +2,10 @@
  * Agent API
  *
  * Conversational playlist generation via local LLM (Ollama + Rig).
- * All commands return graceful fallbacks when the agent feature is disabled.
+ * All operations return graceful fallbacks when not running in Tauri.
  */
 
-import { ApiError, invoke } from './shared.js';
+import { tauriInvoke } from './shared.js';
 
 export const agent = {
   /**
@@ -14,15 +14,9 @@ export const agent = {
    * @returns {Promise<{status: string, playlist_id?: number, playlist_name?: string, track_count?: number, message: string}>}
    */
   async generatePlaylist(prompt) {
-    if (invoke) {
-      try {
-        return await invoke('agent_generate_playlist', { prompt });
-      } catch (error) {
-        console.error('[api.agent.generatePlaylist] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(501, 'Agent requires Tauri runtime');
+    const result = await tauriInvoke('agent_generate_playlist', { prompt });
+    if (result !== null) return result;
+    throw new Error('Agent requires Tauri runtime');
   },
 
   /**
@@ -30,14 +24,8 @@ export const agent = {
    * @returns {Promise<{available: boolean, model: string, message: string}>}
    */
   async checkStatus() {
-    if (invoke) {
-      try {
-        return await invoke('agent_check_status');
-      } catch (error) {
-        console.error('[api.agent.checkStatus] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('agent_check_status');
+    if (result !== null) return result;
     return { available: false, model: '', message: 'Agent requires Tauri runtime' };
   },
 
@@ -46,14 +34,8 @@ export const agent = {
    * @returns {Promise<{connected: boolean, models: string[]}>}
    */
   async checkOllama() {
-    if (invoke) {
-      try {
-        return await invoke('agent_check_ollama');
-      } catch (error) {
-        console.error('[api.agent.checkOllama] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('agent_check_ollama');
+    if (result !== null) return result;
     return { connected: false, models: [] };
   },
 
@@ -63,15 +45,9 @@ export const agent = {
    * @returns {Promise<{success: boolean, model: string, message: string}>}
    */
   async pullModel(model) {
-    if (invoke) {
-      try {
-        return await invoke('agent_pull_model', { model });
-      } catch (error) {
-        console.error('[api.agent.pullModel] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(501, 'Agent requires Tauri runtime');
+    const result = await tauriInvoke('agent_pull_model', { model });
+    if (result !== null) return result;
+    throw new Error('Agent requires Tauri runtime');
   },
 
   /**
@@ -79,14 +55,8 @@ export const agent = {
    * @returns {Promise<{completed: boolean, model?: string}>}
    */
   async getOnboardingState() {
-    if (invoke) {
-      try {
-        return await invoke('agent_get_onboarding_state');
-      } catch (error) {
-        console.error('[api.agent.getOnboardingState] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('agent_get_onboarding_state');
+    if (result !== null) return result;
     return { completed: false, model: null };
   },
 
@@ -95,14 +65,7 @@ export const agent = {
    * @param {string|null} model - Model name used
    * @returns {Promise<void>}
    */
-  async setOnboardingComplete(model = null) {
-    if (invoke) {
-      try {
-        return await invoke('agent_set_onboarding_complete', { model });
-      } catch (error) {
-        console.error('[api.agent.setOnboardingComplete] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+  setOnboardingComplete(model = null) {
+    return tauriInvoke('agent_set_onboarding_complete', { model });
   },
 };

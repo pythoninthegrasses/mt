@@ -4,7 +4,7 @@
  * LRCLIB lyrics lookup with SQLite caching via Tauri commands.
  */
 
-import { ApiError, invoke } from './shared.js';
+import { tauriInvoke } from './shared.js';
 
 export const lyrics = {
   /**
@@ -17,19 +17,13 @@ export const lyrics = {
    * @returns {Promise<{plain_lyrics: string|null, synced_lyrics: string|null, instrumental: boolean}|null>}
    */
   async get(params) {
-    if (invoke) {
-      try {
-        return await invoke('lyrics_get', {
-          artist: params.artist,
-          title: params.title,
-          album: params.album ?? null,
-          duration: params.duration ?? null,
-        });
-      } catch (error) {
-        console.error('[api.lyrics.get] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('lyrics_get', {
+      artist: params.artist,
+      title: params.title,
+      album: params.album ?? null,
+      duration: params.duration ?? null,
+    });
+    if (result !== null) return result;
     return null;
   },
 
@@ -37,14 +31,7 @@ export const lyrics = {
    * Clear all cached lyrics
    * @returns {Promise<void>}
    */
-  async clearCache() {
-    if (invoke) {
-      try {
-        return await invoke('lyrics_clear_cache');
-      } catch (error) {
-        console.error('[api.lyrics.clearCache] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+  clearCache() {
+    return tauriInvoke('lyrics_clear_cache');
   },
 };

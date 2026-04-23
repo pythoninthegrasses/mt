@@ -4,7 +4,7 @@
  * Listening statistics and chart grid generation.
  */
 
-import { ApiError, invoke } from './shared.js';
+import { tauriInvoke } from './shared.js';
 
 export const stats = {
   /**
@@ -13,15 +13,9 @@ export const stats = {
    * @returns {Promise<{total_plays: number, total_tracks_played: number, total_artists_played: number, total_listening_time: number}>}
    */
   async getOverview(range = 'AllTime') {
-    if (invoke) {
-      try {
-        return await invoke('stats_get_overview', { range });
-      } catch (error) {
-        console.error('[api.stats.getOverview] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(0, 'Stats require Tauri runtime');
+    const result = await tauriInvoke('stats_get_overview', { range });
+    if (result !== null) return result;
+    throw new Error('Stats require Tauri runtime');
   },
 
   /**
@@ -31,15 +25,9 @@ export const stats = {
    * @returns {Promise<Array<{artist: string, play_count: number, track_id: number|null}>>}
    */
   async getTopArtists(range = 'AllTime', limit = 25) {
-    if (invoke) {
-      try {
-        return await invoke('stats_get_top_artists', { range, limit });
-      } catch (error) {
-        console.error('[api.stats.getTopArtists] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(0, 'Stats require Tauri runtime');
+    const result = await tauriInvoke('stats_get_top_artists', { range, limit });
+    if (result !== null) return result;
+    throw new Error('Stats require Tauri runtime');
   },
 
   /**
@@ -49,15 +37,9 @@ export const stats = {
    * @returns {Promise<Array<{genre: string, play_count: number, track_count: number}>>}
    */
   async getGenres(range = 'AllTime', limit = 20) {
-    if (invoke) {
-      try {
-        return await invoke('stats_get_genres', { range, limit });
-      } catch (error) {
-        console.error('[api.stats.getGenres] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(0, 'Stats require Tauri runtime');
+    const result = await tauriInvoke('stats_get_genres', { range, limit });
+    if (result !== null) return result;
+    throw new Error('Stats require Tauri runtime');
   },
 
   /**
@@ -66,15 +48,9 @@ export const stats = {
    * @returns {Promise<Array<{label: string, count: number}>>}
    */
   async getPlaysOverTime(range = 'AllTime') {
-    if (invoke) {
-      try {
-        return await invoke('stats_get_plays_over_time', { range });
-      } catch (error) {
-        console.error('[api.stats.getPlaysOverTime] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(0, 'Stats require Tauri runtime');
+    const result = await tauriInvoke('stats_get_plays_over_time', { range });
+    if (result !== null) return result;
+    throw new Error('Stats require Tauri runtime');
   },
 
   /**
@@ -89,14 +65,8 @@ export const stats = {
    * @returns {Promise<string>} Data URL (data:image/png;base64,...)
    */
   async generateChartGrid(request) {
-    if (invoke) {
-      try {
-        return await invoke('stats_generate_chart_grid', { request });
-      } catch (error) {
-        console.error('[api.stats.generateChartGrid] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(0, 'Stats require Tauri runtime');
+    const result = await tauriInvoke('stats_generate_chart_grid', { request });
+    if (result !== null) return result;
+    throw new Error('Stats require Tauri runtime');
   },
 };

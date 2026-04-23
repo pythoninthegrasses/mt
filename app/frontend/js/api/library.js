@@ -4,7 +4,7 @@
  * Track management, scanning, artwork, and missing track operations.
  */
 
-import { ApiError, invoke, request } from './shared.js';
+import { ApiError, request, tauriInvoke } from './shared.js';
 
 export const library = {
   /**
@@ -16,18 +16,12 @@ export const library = {
    * @returns {Promise<{total: number, total_duration: number}>}
    */
   async getCount(params = {}) {
-    if (invoke) {
-      try {
-        return await invoke('library_get_count', {
-          search: params.search || null,
-          artist: params.artist || null,
-          album: params.album || null,
-        });
-      } catch (error) {
-        console.error('[api.library.getCount] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_get_count', {
+      search: params.search || null,
+      artist: params.artist || null,
+      album: params.album || null,
+    });
+    if (result !== null) return result;
     const query = new URLSearchParams();
     if (params.search) query.set('search', params.search);
     const queryString = query.toString();
@@ -45,22 +39,16 @@ export const library = {
    * @returns {Promise<number|null>} 0-based offset or null
    */
   async findOffset(params = {}) {
-    if (invoke) {
-      try {
-        return await invoke('library_find_offset', {
-          search: params.search || null,
-          artist: params.artist || null,
-          album: params.album || null,
-          sortBy: params.sort || null,
-          sortOrder: params.order || null,
-          ignoreWords: params.ignoreWords || null,
-          prefix: params.prefix,
-        });
-      } catch (error) {
-        console.error('[api.library.findOffset] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_find_offset', {
+      search: params.search || null,
+      artist: params.artist || null,
+      album: params.album || null,
+      sortBy: params.sort || null,
+      sortOrder: params.order || null,
+      ignoreWords: params.ignoreWords || null,
+      prefix: params.prefix,
+    });
+    if (result !== null) return result;
     return null;
   },
 
@@ -75,23 +63,17 @@ export const library = {
    * @returns {Promise<{tracks: Array, total: number, limit: number, offset: number}>}
    */
   async getTracks(params = {}) {
-    if (invoke) {
-      try {
-        return await invoke('library_get_all', {
-          search: params.search || null,
-          artist: params.artist || null,
-          album: params.album || null,
-          sortBy: params.sort || null,
-          sortOrder: params.order || null,
-          limit: params.limit || null,
-          offset: params.offset || null,
-          ignoreWords: params.ignoreWords || null,
-        });
-      } catch (error) {
-        console.error('[api.library.getTracks] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_get_all', {
+      search: params.search || null,
+      artist: params.artist || null,
+      album: params.album || null,
+      sortBy: params.sort || null,
+      sortOrder: params.order || null,
+      limit: params.limit || null,
+      offset: params.offset || null,
+      ignoreWords: params.ignoreWords || null,
+    });
+    if (result !== null) return result;
     // Fallback to HTTP
     const query = new URLSearchParams();
     if (params.search) query.set('search', params.search);
@@ -121,25 +103,19 @@ export const library = {
    * @returns {Promise<{section: string, tracks: Array, total_tracks: number, total_duration: number, page: number|null, page_size: number|null, has_more: boolean, revision: number}>}
    */
   async getSection(params = {}) {
-    if (invoke) {
-      try {
-        return await invoke('library_get_section', {
-          section: params.section,
-          search: params.search || null,
-          artist: params.artist || null,
-          album: params.album || null,
-          sortBy: params.sort || null,
-          sortOrder: params.order || null,
-          limit: params.limit || null,
-          offset: params.offset || null,
-          ignoreWords: params.ignoreWords || null,
-          days: params.days || null,
-        });
-      } catch (error) {
-        console.error('[api.library.getSection] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_get_section', {
+      section: params.section,
+      search: params.search || null,
+      artist: params.artist || null,
+      album: params.album || null,
+      sortBy: params.sort || null,
+      sortOrder: params.order || null,
+      limit: params.limit || null,
+      offset: params.offset || null,
+      ignoreWords: params.ignoreWords || null,
+      days: params.days || null,
+    });
+    if (result !== null) return result;
     // HTTP fallback: dispatch to the appropriate REST endpoint per section
     const section = params.section || 'all';
 
@@ -193,14 +169,8 @@ export const library = {
    * @returns {Promise<object|null>} Track object or null
    */
   async getTrack(id) {
-    if (invoke) {
-      try {
-        return await invoke('library_get_track', { trackId: id });
-      } catch (error) {
-        console.error('[api.library.getTrack] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_get_track', { trackId: id });
+    if (result !== null) return result;
     return request(`/library/${encodeURIComponent(id)}`);
   },
 
@@ -211,20 +181,15 @@ export const library = {
    * @returns {Promise<{added_count: number, modified_count: number, unchanged_count: number, deleted_count: number, error_count: number}>}
    */
   async scan(paths, recursive = true) {
-    if (invoke) {
-      try {
-        const result = await invoke('scan_paths_to_library', { paths, recursive });
-        // Map response to expected format
-        return {
-          added: result.added_count || 0,
-          skipped: result.unchanged_count || 0,
-          errors: result.error_count || 0,
-          tracks: [], // The new API doesn't return tracks
-        };
-      } catch (error) {
-        console.error('[api.library.scan] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
+    const result = await tauriInvoke('scan_paths_to_library', { paths, recursive });
+    if (result !== null) {
+      // Map response to expected format
+      return {
+        added: result.added_count || 0,
+        skipped: result.unchanged_count || 0,
+        errors: result.error_count || 0,
+        tracks: [], // The new API doesn't return tracks
+      };
     }
     return request('/library/scan', {
       method: 'POST',
@@ -237,14 +202,8 @@ export const library = {
    * @returns {Promise<{total_tracks: number, total_duration: number, total_size: number, total_artists: number, total_albums: number}>}
    */
   async getStats() {
-    if (invoke) {
-      try {
-        return await invoke('library_get_stats');
-      } catch (error) {
-        console.error('[api.library.getStats] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_get_stats');
+    if (result !== null) return result;
     return request('/library/stats');
   },
 
@@ -254,14 +213,8 @@ export const library = {
    * @returns {Promise<boolean>} True if deleted
    */
   async deleteTrack(id) {
-    if (invoke) {
-      try {
-        return await invoke('library_delete_track', { trackId: id });
-      } catch (error) {
-        console.error('[api.library.deleteTrack] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_delete_track', { trackId: id });
+    if (result !== null) return result;
     return request(`/library/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
@@ -273,14 +226,8 @@ export const library = {
    * @returns {Promise<object>} Updated track object
    */
   async updatePlayCount(id) {
-    if (invoke) {
-      try {
-        return await invoke('library_update_play_count', { trackId: id });
-      } catch (error) {
-        console.error('[api.library.updatePlayCount] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_update_play_count', { trackId: id });
+    if (result !== null) return result;
     return request(`/library/${encodeURIComponent(id)}/play-count`, {
       method: 'PUT',
     });
@@ -292,14 +239,8 @@ export const library = {
    * @returns {Promise<object>} Updated track object
    */
   async rescanTrack(id) {
-    if (invoke) {
-      try {
-        return await invoke('library_rescan_track', { trackId: id });
-      } catch (error) {
-        console.error('[api.library.rescanTrack] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_rescan_track', { trackId: id });
+    if (result !== null) return result;
     return request(`/library/${encodeURIComponent(id)}/rescan`, {
       method: 'PUT',
     });
@@ -311,17 +252,14 @@ export const library = {
    * @returns {Promise<{data: string, mime_type: string, source: string}|null>}
    */
   async getArtwork(id) {
-    if (invoke) {
-      try {
-        return await invoke('library_get_artwork', { trackId: id });
-      } catch (error) {
-        // Not found is returned as null, not an error
-        if (error.toString().includes('not found')) {
-          return null;
-        }
-        console.error('[api.library.getArtwork] Tauri error:', error);
-        throw new ApiError(500, error.toString());
+    try {
+      const result = await tauriInvoke('library_get_artwork', { trackId: id });
+      if (result !== null) return result;
+    } catch (error) {
+      if (error.message.includes('not found')) {
+        return null;
       }
+      throw error;
     }
     try {
       return await request(`/library/${encodeURIComponent(id)}/artwork`);
@@ -339,9 +277,9 @@ export const library = {
    * @returns {Promise<string|null>} Data URL or null
    */
   async getArtworkUrl(id) {
-    if (invoke) {
+    if (window.__TAURI__?.core?.invoke) {
       try {
-        return await invoke('library_get_artwork_url', { trackId: id });
+        return await window.__TAURI__.core.invoke('library_get_artwork_url', { trackId: id });
       } catch (error) {
         if (error.toString().includes('not found')) {
           return null;
@@ -363,14 +301,8 @@ export const library = {
    * @returns {Promise<{tracks: Array, total: number}>}
    */
   async getMissing() {
-    if (invoke) {
-      try {
-        return await invoke('library_get_missing');
-      } catch (error) {
-        console.error('[api.library.getMissing] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_get_missing');
+    if (result !== null) return result;
     return request('/library/missing');
   },
 
@@ -381,14 +313,8 @@ export const library = {
    * @returns {Promise<object>} Updated track object
    */
   async locate(id, newPath) {
-    if (invoke) {
-      try {
-        return await invoke('library_locate_track', { trackId: id, newPath });
-      } catch (error) {
-        console.error('[api.library.locate] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_locate_track', { trackId: id, newPath });
+    if (result !== null) return result;
     return request(`/library/${encodeURIComponent(id)}/locate`, {
       method: 'POST',
       body: JSON.stringify({ new_path: newPath }),
@@ -401,14 +327,8 @@ export const library = {
    * @returns {Promise<object>} Updated track object with current missing status
    */
   async checkStatus(id) {
-    if (invoke) {
-      try {
-        return await invoke('library_check_status', { trackId: id });
-      } catch (error) {
-        console.error('[api.library.checkStatus] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_check_status', { trackId: id });
+    if (result !== null) return result;
     return request(`/library/${encodeURIComponent(id)}/check-status`, {
       method: 'POST',
     });
@@ -420,14 +340,8 @@ export const library = {
    * @returns {Promise<object>} Updated track object
    */
   async markMissing(id) {
-    if (invoke) {
-      try {
-        return await invoke('library_mark_missing', { trackId: id });
-      } catch (error) {
-        console.error('[api.library.markMissing] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_mark_missing', { trackId: id });
+    if (result !== null) return result;
     return request(`/library/${encodeURIComponent(id)}/mark-missing`, {
       method: 'POST',
     });
@@ -439,14 +353,8 @@ export const library = {
    * @returns {Promise<object>} Updated track object
    */
   async markPresent(id) {
-    if (invoke) {
-      try {
-        return await invoke('library_mark_present', { trackId: id });
-      } catch (error) {
-        console.error('[api.library.markPresent] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('library_mark_present', { trackId: id });
+    if (result !== null) return result;
     return request(`/library/${encodeURIComponent(id)}/mark-present`, {
       method: 'POST',
     });

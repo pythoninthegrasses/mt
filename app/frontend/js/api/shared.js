@@ -57,3 +57,19 @@ export async function request(endpoint, options = {}) {
     throw new ApiError(0, `Network error: ${error.message}`);
   }
 }
+
+/**
+ * Invoke a Tauri command with error handling
+ * @param {string} cmd - Tauri command name
+ * @param {object} params - Command parameters
+ * @returns {Promise<any>} Command result
+ */
+export async function tauriInvoke(cmd, params = {}) {
+  if (!invoke) return null;
+  try {
+    return await invoke(cmd, params);
+  } catch (error) {
+    console.error(`[api.tauriInvoke] Tauri error (${cmd}):`, error);
+    throw new ApiError(500, error.toString());
+  }
+}

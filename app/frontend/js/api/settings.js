@@ -4,7 +4,7 @@
  * Application settings: get, set, update, and reset via Tauri Store.
  */
 
-import { ApiError, invoke, request } from './shared.js';
+import { request, tauriInvoke } from './shared.js';
 
 export const settings = {
   /**
@@ -12,15 +12,8 @@ export const settings = {
    * @returns {Promise<{settings: object}>}
    */
   async getAll() {
-    if (invoke) {
-      try {
-        return await invoke('settings_get_all');
-      } catch (error) {
-        console.error('[api.settings.getAll] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    // Fallback to HTTP (for backwards compatibility)
+    const result = await tauriInvoke('settings_get_all');
+    if (result !== null) return result;
     return request('/settings');
   },
 
@@ -30,14 +23,8 @@ export const settings = {
    * @returns {Promise<{key: string, value: any}>}
    */
   async get(key) {
-    if (invoke) {
-      try {
-        return await invoke('settings_get', { key });
-      } catch (error) {
-        console.error('[api.settings.get] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('settings_get', { key });
+    if (result !== null) return result;
     return request(`/settings/${encodeURIComponent(key)}`);
   },
 
@@ -48,14 +35,8 @@ export const settings = {
    * @returns {Promise<{key: string, value: any}>}
    */
   async set(key, value) {
-    if (invoke) {
-      try {
-        return await invoke('settings_set', { key, value });
-      } catch (error) {
-        console.error('[api.settings.set] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('settings_set', { key, value });
+    if (result !== null) return result;
     return request(`/settings/${encodeURIComponent(key)}`, {
       method: 'PUT',
       body: JSON.stringify({ value }),
@@ -74,14 +55,8 @@ export const settings = {
    * @returns {Promise<{updated: string[]}>}
    */
   async update(settings) {
-    if (invoke) {
-      try {
-        return await invoke('settings_update', { settings });
-      } catch (error) {
-        console.error('[api.settings.update] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('settings_update', { settings });
+    if (result !== null) return result;
     return request('/settings', {
       method: 'PUT',
       body: JSON.stringify(settings),
@@ -93,14 +68,8 @@ export const settings = {
    * @returns {Promise<{settings: object}>}
    */
   async reset() {
-    if (invoke) {
-      try {
-        return await invoke('settings_reset');
-      } catch (error) {
-        console.error('[api.settings.reset] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('settings_reset');
+    if (result !== null) return result;
     return request('/settings/reset', {
       method: 'POST',
     });

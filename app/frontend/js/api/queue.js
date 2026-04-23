@@ -4,7 +4,7 @@
  * Playback queue management: add, remove, reorder, shuffle, and state.
  */
 
-import { ApiError, invoke, request } from './shared.js';
+import { request, tauriInvoke } from './shared.js';
 
 export const queue = {
   /**
@@ -12,14 +12,8 @@ export const queue = {
    * @returns {Promise<{items: Array, count: number}>} Queue response
    */
   async get() {
-    if (invoke) {
-      try {
-        return await invoke('queue_get');
-      } catch (error) {
-        console.error('[api.queue.get] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('queue_get');
+    if (result !== null) return result;
     return request('/queue');
   },
 
@@ -31,17 +25,11 @@ export const queue = {
    */
   async add(trackIds, position) {
     const ids = Array.isArray(trackIds) ? trackIds : [trackIds];
-    if (invoke) {
-      try {
-        return await invoke('queue_add', {
-          trackIds: ids,
-          position: position ?? null,
-        });
-      } catch (error) {
-        console.error('[api.queue.add] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('queue_add', {
+      trackIds: ids,
+      position: position ?? null,
+    });
+    if (result !== null) return result;
     return request('/queue/add', {
       method: 'POST',
       body: JSON.stringify({ track_ids: ids, position }),
@@ -55,17 +43,11 @@ export const queue = {
    * @returns {Promise<{added: number, queue_length: number, tracks: Array}>}
    */
   async addFiles(filepaths, position) {
-    if (invoke) {
-      try {
-        return await invoke('queue_add_files', {
-          filepaths,
-          position: position ?? null,
-        });
-      } catch (error) {
-        console.error('[api.queue.addFiles] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('queue_add_files', {
+      filepaths,
+      position: position ?? null,
+    });
+    if (result !== null) return result;
     return request('/queue/add-files', {
       method: 'POST',
       body: JSON.stringify({ filepaths, position }),
@@ -78,14 +60,8 @@ export const queue = {
    * @returns {Promise<void>}
    */
   async remove(position) {
-    if (invoke) {
-      try {
-        return await invoke('queue_remove', { position });
-      } catch (error) {
-        console.error('[api.queue.remove] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('queue_remove', { position });
+    if (result !== null) return result;
     return request(`/queue/${position}`, {
       method: 'DELETE',
     });
@@ -96,14 +72,8 @@ export const queue = {
    * @returns {Promise<void>}
    */
   async clear() {
-    if (invoke) {
-      try {
-        return await invoke('queue_clear');
-      } catch (error) {
-        console.error('[api.queue.clear] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('queue_clear');
+    if (result !== null) return result;
     return request('/queue/clear', {
       method: 'POST',
     });
@@ -116,17 +86,12 @@ export const queue = {
    * @returns {Promise<{success: boolean, queue_length: number}>}
    */
   async move(from, to) {
-    if (invoke) {
-      try {
-        return await invoke('queue_reorder', {
-          fromPosition: from,
-          toPosition: to,
-        });
-      } catch (error) {
-        console.error('[api.queue.move] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('queue_reorder', {
+      fromPosition: from,
+      toPosition: to,
+    });
+    if (result !== null) return result;
+
     return request('/queue/reorder', {
       method: 'POST',
       body: JSON.stringify({ from_position: from, to_position: to }),
@@ -139,14 +104,8 @@ export const queue = {
    * @returns {Promise<{success: boolean, queue_length: number}>}
    */
   async shuffle(keepCurrent = true) {
-    if (invoke) {
-      try {
-        return await invoke('queue_shuffle', { keepCurrent });
-      } catch (error) {
-        console.error('[api.queue.shuffle] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('queue_shuffle', { keepCurrent });
+    if (result !== null) return result;
     return request('/queue/shuffle', {
       method: 'POST',
       body: JSON.stringify({ keep_current: keepCurrent }),
@@ -163,18 +122,12 @@ export const queue = {
    * @returns {Promise<{items: Array, current_index: number, track: Object, shuffle_enabled: boolean}>}
    */
   async playContext(trackIds, startIndex, shuffle) {
-    if (invoke) {
-      try {
-        return await invoke('queue_play_context', {
-          trackIds,
-          startIndex,
-          shuffle,
-        });
-      } catch (error) {
-        console.error('[api.queue.playContext] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('queue_play_context', {
+      trackIds,
+      startIndex,
+      shuffle,
+    });
+    if (result !== null) return result;
     return request('/queue/play-context', {
       method: 'POST',
       body: JSON.stringify({
@@ -194,15 +147,9 @@ export const queue = {
    * @returns {Promise<{current_index: number, shuffle_enabled: boolean, loop_mode: string, original_order_json: string|null}>}
    */
   async getPlaybackState() {
-    if (invoke) {
-      try {
-        return await invoke('queue_get_playback_state');
-      } catch (error) {
-        console.error('[api.queue.getPlaybackState] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(500, 'Queue playback state not available in browser mode');
+    const result = await tauriInvoke('queue_get_playback_state');
+    if (result !== null) return result;
+    throw new Error('Queue playback state not available in browser mode');
   },
 
   /**
@@ -211,14 +158,8 @@ export const queue = {
    * @returns {Promise<void>}
    */
   async setCurrentIndex(index) {
-    if (invoke) {
-      try {
-        return await invoke('queue_set_current_index', { index });
-      } catch (error) {
-        console.error('[api.queue.setCurrentIndex] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('queue_set_current_index', { index });
+    if (result !== null) return result;
     console.debug('Queue setCurrentIndex (no-op in browser):', index);
   },
 
@@ -228,14 +169,8 @@ export const queue = {
    * @returns {Promise<QueueStateSnapshot>} State snapshot with reordered queue
    */
   async setShuffle(enabled) {
-    if (invoke) {
-      try {
-        return await invoke('queue_set_shuffle', { enabled });
-      } catch (error) {
-        console.error('[api.queue.setShuffle] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('queue_set_shuffle', { enabled });
+    if (result !== null) return result;
     console.debug('Queue setShuffle (no-op in browser):', enabled);
   },
 
@@ -245,14 +180,8 @@ export const queue = {
    * @returns {Promise<void>}
    */
   async setLoop(mode) {
-    if (invoke) {
-      try {
-        return await invoke('queue_set_loop', { mode });
-      } catch (error) {
-        console.error('[api.queue.setLoop] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
+    const result = await tauriInvoke('queue_set_loop', { mode });
+    if (result !== null) return result;
     console.debug('Queue setLoop (no-op in browser):', mode);
   },
 
@@ -262,15 +191,9 @@ export const queue = {
    * @returns {Promise<QueueStateSnapshot>}
    */
   async addPlayNext(trackIds) {
-    if (invoke) {
-      try {
-        return await invoke('queue_add_play_next', { trackIds });
-      } catch (error) {
-        console.error('[api.queue.addPlayNext] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(500, 'addPlayNext not available in browser mode');
+    const result = await tauriInvoke('queue_add_play_next', { trackIds });
+    if (result !== null) return result;
+    throw new Error('addPlayNext not available in browser mode');
   },
 
   /**
@@ -278,15 +201,9 @@ export const queue = {
    * @returns {Promise<QueueNavigationResult>}
    */
   async playNextTrack() {
-    if (invoke) {
-      try {
-        return await invoke('queue_play_next_track');
-      } catch (error) {
-        console.error('[api.queue.playNextTrack] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(500, 'playNextTrack not available in browser mode');
+    const result = await tauriInvoke('queue_play_next_track');
+    if (result !== null) return result;
+    throw new Error('playNextTrack not available in browser mode');
   },
 
   /**
@@ -295,15 +212,9 @@ export const queue = {
    * @returns {Promise<QueueNavigationResult>}
    */
   async playPreviousTrack(currentTimeMs) {
-    if (invoke) {
-      try {
-        return await invoke('queue_play_previous_track', { currentTimeMs });
-      } catch (error) {
-        console.error('[api.queue.playPreviousTrack] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(500, 'playPreviousTrack not available in browser mode');
+    const result = await tauriInvoke('queue_play_previous_track', { currentTimeMs });
+    if (result !== null) return result;
+    throw new Error('playPreviousTrack not available in browser mode');
   },
 
   /**
@@ -311,15 +222,9 @@ export const queue = {
    * @returns {Promise<QueueNavigationResult>}
    */
   async skipNext() {
-    if (invoke) {
-      try {
-        return await invoke('queue_skip_next');
-      } catch (error) {
-        console.error('[api.queue.skipNext] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(500, 'skipNext not available in browser mode');
+    const result = await tauriInvoke('queue_skip_next');
+    if (result !== null) return result;
+    throw new Error('skipNext not available in browser mode');
   },
 
   /**
@@ -328,15 +233,9 @@ export const queue = {
    * @returns {Promise<QueueNavigationResult>}
    */
   async skipPrevious(currentTimeMs) {
-    if (invoke) {
-      try {
-        return await invoke('queue_skip_previous', { currentTimeMs });
-      } catch (error) {
-        console.error('[api.queue.skipPrevious] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(500, 'skipPrevious not available in browser mode');
+    const result = await tauriInvoke('queue_skip_previous', { currentTimeMs });
+    if (result !== null) return result;
+    throw new Error('skipPrevious not available in browser mode');
   },
 
   /**
@@ -344,14 +243,8 @@ export const queue = {
    * @returns {Promise<IntegrityReport>}
    */
   async checkIntegrity() {
-    if (invoke) {
-      try {
-        return await invoke('queue_check_integrity');
-      } catch (error) {
-        console.error('[api.queue.checkIntegrity] Tauri error:', error);
-        throw new ApiError(500, error.toString());
-      }
-    }
-    throw new ApiError(500, 'checkIntegrity not available in browser mode');
+    const result = await tauriInvoke('queue_check_integrity');
+    if (result !== null) return result;
+    throw new Error('checkIntegrity not available in browser mode');
   },
 };
