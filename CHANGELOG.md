@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.5.1](https://github.com/pythoninthegrasses/mt/compare/v1.5.0...v1.5.1) (2026-04-23)
+
+
+### Bug Fixes
+
+* **audio:** defer all CoreAudio calls until first user-initiated action ([a835edd](https://github.com/pythoninthegrasses/mt/commit/a835eddfcddfdaf309d90410b5071bc597c1b10e))
+* **audio:** isolate CoreAudio device enumeration from audio thread ([5b19e8e](https://github.com/pythoninthegrasses/mt/commit/5b19e8e65b20d4cd1ada7575d5218db643abce20))
+* **backlog:** disable cross-branch task scanning to prevent ghost tasks ([22ba320](https://github.com/pythoninthegrasses/mt/commit/22ba320a23c2bd686d11a9a1c30ec97403347cae))
+* **ci:** force cargo binstall reinstall when binary is missing but metadata is stale ([f36f613](https://github.com/pythoninthegrasses/mt/commit/f36f6138e35a99445e7c807da07260d377f527c8))
+* **ci:** harden cargo tool status checks on self-hosted runners ([e67dbf3](https://github.com/pythoninthegrasses/mt/commit/e67dbf3c0a202123173793713725d4d04b6fe214))
+* **ci:** resolve release tag dynamically in workflow_dispatch runs ([35c682e](https://github.com/pythoninthegrasses/mt/commit/35c682e80804f538aaa61d8624cc9c9b53fa0278))
+* **dedup:** persist cross-directory dedup across app restarts ([9dbdd13](https://github.com/pythoninthegrasses/mt/commit/9dbdd13731d8ae2eea80116e3c7cf1099808e6d7))
+* **library:** eliminate FOUC during scroll in music library view ([f8f2e1c](https://github.com/pythoninthegrasses/mt/commit/f8f2e1cdee822170fda4d0125202b757aaaf3229))
+* **library:** use backend totals for stats bar instead of loaded-page counts ([f2d3633](https://github.com/pythoninthegrasses/mt/commit/f2d3633d7b6433a8b91f23a278c1e428969d9431))
+* **queue:** load all library pages on double-click, detect playback stalls near track end ([409b170](https://github.com/pythoninthegrasses/mt/commit/409b1703c2f34d56816742607e821ee179a8ebfa))
+
 ## [1.5.0](https://github.com/pythoninthegrasses/mt/compare/v1.4.1...v1.5.0) (2026-04-13)
 
 
