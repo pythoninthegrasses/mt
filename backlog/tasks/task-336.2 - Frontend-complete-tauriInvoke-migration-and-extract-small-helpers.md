@@ -1,9 +1,10 @@
 ---
 id: TASK-336.2
 title: 'Frontend: complete tauriInvoke migration and extract small helpers'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-04-29 04:20'
+updated_date: '2026-04-29 06:15'
 labels:
   - refactor
   - frontend
@@ -13,6 +14,7 @@ references:
   - 'https://github.com/pythoninthegrass/mt/commit/4ba8be8'
 parent_task_id: TASK-336
 priority: medium
+ordinal: 7500
 ---
 
 ## Description
@@ -50,11 +52,11 @@ Closes the leak left by PR #44's `tauriInvoke` extraction: the helper exists in 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 No remaining direct calls to window.__TAURI__.core.invoke outside app/frontend/js/api/
-- [ ] #2 tauriConfirm helper exists in api/shared.js and is used by all 5 previous inline confirm-dialog sites
-- [ ] #3 formatDurationShorthand exists in utils/formatting.js and is imported by stats-view.js; the local copy is removed
-- [ ] #4 deno lint and deno fmt --check pass
-- [ ] #5 cd app/frontend && npx vitest run passes
+- [x] #1 No remaining direct calls to window.__TAURI__.core.invoke outside app/frontend/js/api/
+- [x] #2 tauriConfirm helper exists in api/shared.js and is used by all 5 previous inline confirm-dialog sites
+- [x] #3 formatDurationShorthand exists in utils/formatting.js and is imported by stats-view.js; the local copy is removed
+- [x] #4 deno lint and deno fmt --check pass
+- [x] #5 cd app/frontend && npx vitest run passes
 - [ ] #6 cd app/frontend && npx playwright test --grep '@tauri' passes (or is skipped consistently with main)
 - [ ] #7 Manual smoke: open app, change settings, edit a track's metadata, view stats page, confirm a destructive action via context menu — no regressions
 <!-- AC:END -->

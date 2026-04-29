@@ -57,6 +57,22 @@ export function formatDurationDash(seconds) {
 }
 
 /**
+ * Format seconds as a shorthand duration string (e.g., "3d 2h", "45m", "0m")
+ * @param {number} seconds - Duration in seconds
+ * @returns {string} Shorthand duration string
+ */
+export function formatDurationShorthand(seconds) {
+  if (!seconds || seconds <= 0) return '0m';
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+/**
  * Format a timestamp as a relative time string (e.g., "5m ago", "3d ago")
  * @param {string|number|Date} timestamp - Timestamp to format
  * @returns {string} Relative time string or '--' for falsy values

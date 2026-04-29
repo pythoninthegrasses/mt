@@ -1,5 +1,6 @@
 import { favorites } from '../api/favorites.js';
 import { playlists } from '../api/playlists.js';
+import { tauriConfirm, tauriInvoke } from '../api/shared.js';
 
 /**
  * Context menu and playback actions mixin for library browser.
@@ -453,10 +454,10 @@ export function contextMenuActionsMixin() {
 
       this.contextMenu = null;
 
-      const confirmed = (await window.__TAURI__?.dialog?.confirm(confirmMsg, {
+      const confirmed = await tauriConfirm(confirmMsg, {
         title: 'Remove from Library',
         kind: 'warning',
-      })) ?? window.confirm(confirmMsg);
+      });
 
       if (confirmed) {
         const trackIds = tracks.map((t) => t.id);
@@ -472,23 +473,21 @@ export function contextMenuActionsMixin() {
           'success',
         );
 
-        const { invoke } = window.__TAURI__.core;
-
         try {
           if (isDeletingAll) {
             // Remove watched folders first so watcher can't re-add tracks
-            const folders = await invoke('watched_folders_list');
+            const folders = await tauriInvoke('watched_folders_list');
             await Promise.allSettled(
-              (folders || []).map((f) => invoke('watched_folders_remove', { id: f.id })),
+              (folders || []).map((f) => tauriInvoke('watched_folders_remove', { id: f.id })),
             );
             // Single SQL wipe of library, favorites, playlist_items
-            await invoke('library_delete_all');
+            await tauriInvoke('library_delete_all');
             console.log(
               '[library-browser] Deleted all tracks and removed watched folders',
             );
           } else {
             // Batch delete by IDs in a single IPC call
-            await invoke('library_delete_tracks', { trackIds });
+            await tauriInvoke('library_delete_tracks', { trackIds });
             console.log(
               '[library-browser] Batch deleted',
               trackIds.length,

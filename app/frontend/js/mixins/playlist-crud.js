@@ -7,6 +7,7 @@
  * loadPlaylist(), loadSection().
  */
 import { playlists } from '../api/playlists.js';
+import { tauriConfirm } from '../api/shared.js';
 
 export function playlistCrudMixin() {
   return {
@@ -205,15 +206,10 @@ export function playlistCrudMixin() {
         ? `Delete playlist "${names[0]}"?`
         : `Delete selected playlists?\n\n${names.join('\n')}`;
 
-      let confirmed = false;
-      if (window.__TAURI__?.dialog?.confirm) {
-        confirmed = await window.__TAURI__.dialog.confirm(message, {
-          title: selectedPlaylists.length === 1 ? 'Delete Playlist' : 'Delete Playlists',
-          kind: 'warning',
-        });
-      } else {
-        confirmed = confirm(message);
-      }
+      const confirmed = await tauriConfirm(message, {
+        title: selectedPlaylists.length === 1 ? 'Delete Playlist' : 'Delete Playlists',
+        kind: 'warning',
+      });
 
       if (!confirmed) return;
 

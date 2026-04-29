@@ -37,7 +37,13 @@ vi.mock('../js/api/lyrics.js', () => ({
   },
 }));
 
+vi.mock('../js/api/shared.js', () => ({
+  tauriInvoke: vi.fn(),
+  tauriConfirm: vi.fn(),
+}));
+
 import { favorites } from '../js/api/favorites.js';
+import { tauriInvoke } from '../js/api/shared.js';
 
 function createAlpineMock() {
   const stores = {};
@@ -407,8 +413,7 @@ describe('Now Playing Context Menu', () => {
 
   describe('Show in Finder action', () => {
     it('calls Tauri invoke with the track filepath', async () => {
-      const mockInvoke = vi.fn().mockResolvedValue(undefined);
-      globalThis.window.__TAURI__ = { core: { invoke: mockInvoke } };
+      vi.mocked(tauriInvoke).mockResolvedValueOnce(undefined);
 
       const track = createMockTrack(2);
       component.handleContextMenu(createMockEvent(), track, 1);
@@ -418,11 +423,9 @@ describe('Now Playing Context Menu', () => {
       );
       await showInFinder.action();
 
-      expect(mockInvoke).toHaveBeenCalledWith('show_in_folder', {
+      expect(tauriInvoke).toHaveBeenCalledWith('show_in_folder', {
         path: '/music/track2.mp3',
       });
-
-      delete globalThis.window.__TAURI__;
     });
   });
 });

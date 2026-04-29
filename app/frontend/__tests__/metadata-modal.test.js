@@ -8,6 +8,11 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { tauriInvoke } from '../js/api/shared.js';
+
+vi.mock('../js/api/shared.js', () => ({
+  tauriInvoke: vi.fn(),
+}));
 
 // Build a minimal component context that mirrors the Alpine data shape
 function createModalContext(overrides = {}) {
@@ -52,13 +57,9 @@ function createModalContext(overrides = {}) {
 }
 
 describe('metadata-modal batch loading', () => {
-  let mockInvoke;
-
   beforeEach(() => {
-    mockInvoke = vi.fn();
-    global.window = {
-      __TAURI__: { core: { invoke: mockInvoke } },
-    };
+    vi.mocked(tauriInvoke).mockReset();
+    global.window = { __TAURI__: {} };
   });
 
   it('loadBatchMetadata makes a single batch IPC call', async () => {
@@ -68,7 +69,7 @@ describe('metadata-modal batch loading', () => {
       { id: 3, path: '/music/c.mp3', duration: 220 },
     ];
 
-    mockInvoke.mockResolvedValueOnce([
+    vi.mocked(tauriInvoke).mockResolvedValueOnce([
       { title: 'Song A', artist: 'Artist 1', album: 'Album', album_artist: null, track_number: 1, track_total: 10, disc_number: 1, disc_total: 1, year: 2020, genre: 'Rock' },
       { title: 'Song B', artist: 'Artist 1', album: 'Album', album_artist: null, track_number: 2, track_total: 10, disc_number: 1, disc_total: 1, year: 2020, genre: 'Rock' },
       { title: 'Song C', artist: 'Artist 1', album: 'Album', album_artist: null, track_number: 3, track_total: 10, disc_number: 1, disc_total: 1, year: 2020, genre: 'Rock' },
@@ -92,8 +93,8 @@ describe('metadata-modal batch loading', () => {
 
     await component.loadBatchMetadata();
 
-    expect(mockInvoke).toHaveBeenCalledTimes(1);
-    expect(mockInvoke).toHaveBeenCalledWith('get_tracks_metadata_batch', {
+    expect(tauriInvoke).toHaveBeenCalledTimes(1);
+    expect(tauriInvoke).toHaveBeenCalledWith('get_tracks_metadata_batch', {
       paths: ['/music/a.mp3', '/music/b.mp3', '/music/c.mp3'],
     });
 
@@ -114,7 +115,7 @@ describe('metadata-modal batch loading', () => {
       { id: 2, path: '/music/b.mp3', duration: 100 },
     ];
 
-    mockInvoke.mockResolvedValueOnce([
+    vi.mocked(tauriInvoke).mockResolvedValueOnce([
       { title: 'Same', artist: 'Different A', album: 'Same Album', album_artist: null, track_number: 1, track_total: 2, disc_number: null, disc_total: null, year: 2024, genre: 'Pop' },
       { title: 'Same', artist: 'Different B', album: 'Same Album', album_artist: null, track_number: 2, track_total: 2, disc_number: null, disc_total: null, year: 2024, genre: 'Pop' },
     ]);
@@ -139,15 +140,12 @@ describe('metadata-modal batch loading', () => {
 });
 
 describe('metadata-modal parallel save', () => {
-  let mockInvoke;
   let mockRescan;
 
   beforeEach(() => {
-    mockInvoke = vi.fn().mockResolvedValue({});
+    vi.mocked(tauriInvoke).mockReset().mockResolvedValue({});
     mockRescan = vi.fn().mockResolvedValue(undefined);
-    global.window = {
-      __TAURI__: { core: { invoke: mockInvoke } },
-    };
+    global.window = { __TAURI__: {} };
   });
 
   it('saveCurrentEdits calls all saves in parallel via Promise.all', async () => {
@@ -178,13 +176,13 @@ describe('metadata-modal parallel save', () => {
 
     expect(result).toBe(true);
     // All 3 save calls should have been made
-    expect(mockInvoke).toHaveBeenCalledTimes(3);
+    expect(tauriInvoke).toHaveBeenCalledTimes(3);
     // All 3 rescan calls should have been made
     expect(mockRescan).toHaveBeenCalledTimes(3);
 
     // Verify save was called with correct update structures
     for (const track of tracks) {
-      expect(mockInvoke).toHaveBeenCalledWith('save_track_metadata', {
+      expect(tauriInvoke).toHaveBeenCalledWith('save_track_metadata', {
         update: { path: track.path, title: 'New Title' },
       });
     }
@@ -214,7 +212,7 @@ describe('metadata-modal parallel save', () => {
     const result = await component.saveCurrentEdits({ close: true, silent: true });
 
     expect(result).toBe(true);
-    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(tauriInvoke).not.toHaveBeenCalled();
     expect(mockRescan).not.toHaveBeenCalled();
   });
 });

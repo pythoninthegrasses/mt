@@ -4,6 +4,7 @@
  * Helper functions for prompting users to add parent directories
  * to watched folders when importing music via drag-and-drop or file picker.
  */
+import { tauriInvoke } from '../api/shared.js';
 
 /**
  * Extract unique parent directories from file/folder paths
@@ -92,8 +93,7 @@ export async function getNewWatchedFolderCandidates(candidatePaths) {
   }
 
   try {
-    const { invoke } = window.__TAURI__.core;
-    const watchedFolders = await invoke('watched_folders_list');
+    const watchedFolders = await tauriInvoke('watched_folders_list');
 
     // Extract paths from watched folders
     const watchedPaths = new Set(
@@ -115,12 +115,11 @@ export async function getNewWatchedFolderCandidates(candidatePaths) {
  * @returns {Promise<{added: number, failed: number, errors: Array}>}
  */
 async function addWatchedFoldersBatch(dirs) {
-  const { invoke } = window.__TAURI__.core;
   const results = { added: 0, failed: 0, errors: [] };
 
   for (const path of dirs) {
     try {
-      await invoke('watched_folders_add', {
+      await tauriInvoke('watched_folders_add', {
         request: {
           path,
           mode: 'continuous',

@@ -7,6 +7,7 @@
  */
 
 import { library } from '../api/library.js';
+import { tauriInvoke } from '../api/shared.js';
 import { promptToAddWatchedFolders } from '../utils/watched-folders.js';
 
 // ---------------------------------------------------------------------------
@@ -485,8 +486,7 @@ export async function openAddMusicDialogOp(store, Alpine) {
       throw new Error('Tauri not available');
     }
 
-    const { invoke } = window.__TAURI__.core;
-    const paths = await invoke('open_add_music_dialog');
+    const paths = await tauriInvoke('open_add_music_dialog');
 
     console.log('[library] dialog returned paths:', paths);
 

@@ -8,6 +8,8 @@
 
 import { stats } from '../api/stats.js';
 import { library } from '../api/library.js';
+import { tauriInvoke } from '../api/shared.js';
+import { formatDurationShorthand } from '../utils/formatting.js';
 
 const DATE_RANGE_OPTIONS = [
   { value: 'Last7Days', label: 'Last 7 days' },
@@ -167,16 +169,7 @@ export function createStatsView(Alpine) {
       return `${parseInt(parts[2], 10)} ${MONTH_NAMES[monthIdx]}`;
     },
 
-    formatDuration(seconds) {
-      if (!seconds || seconds <= 0) return '0m';
-      const days = Math.floor(seconds / 86400);
-      const hours = Math.floor((seconds % 86400) / 3600);
-      const minutes = Math.floor((seconds % 3600) / 60);
-
-      if (days > 0) return `${days}d ${hours}h`;
-      if (hours > 0) return `${hours}h ${minutes}m`;
-      return `${minutes}m`;
-    },
+    formatDuration: formatDurationShorthand,
 
     async generateChartGrid() {
       this.chartGrid.generating = true;
@@ -203,7 +196,6 @@ export function createStatsView(Alpine) {
 
       try {
         const { save } = window.__TAURI__.dialog;
-        const { invoke } = window.__TAURI__.core;
         const path = await save({
           defaultPath: `chart_${this.chartGrid.rows}x${this.chartGrid.columns}.png`,
           filters: [{ name: 'PNG Images', extensions: ['png'] }],
@@ -212,7 +204,7 @@ export function createStatsView(Alpine) {
         if (!path) return;
 
         const base64Data = this.chartGrid.imageDataUrl.split(',')[1];
-        await invoke('save_file', { path, base64Data });
+        await tauriInvoke('save_file', { path, base64Data });
         Alpine.store('ui').toast('Chart exported', 'success');
       } catch (error) {
         console.error('[stats] Failed to export chart grid:', error);

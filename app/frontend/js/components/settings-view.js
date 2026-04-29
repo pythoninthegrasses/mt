@@ -1,6 +1,7 @@
 import { audio } from '../api/audio.js';
 import { lastfm } from '../api/lastfm.js';
 import { settings } from '../api/settings.js';
+import { tauriConfirm, tauriInvoke } from '../api/shared.js';
 import { modLabel, SHORTCUT_DEFINITIONS } from '../shortcuts.js';
 
 export function createSettingsView(Alpine) {
@@ -238,8 +239,7 @@ export function createSettingsView(Alpine) {
       }
 
       try {
-        const { invoke } = window.__TAURI__.core;
-        const info = await invoke('app_get_info');
+        const info = await tauriInvoke('app_get_info');
         this.appInfo = {
           version: info.version || '—',
           build: info.build || '—',
@@ -292,8 +292,7 @@ export function createSettingsView(Alpine) {
 
       this.watchedFoldersLoading = true;
       try {
-        const { invoke } = window.__TAURI__.core;
-        this.watchedFolders = await invoke('watched_folders_list');
+        this.watchedFolders = await tauriInvoke('watched_folders_list');
       } catch (error) {
         console.error('[settings] Failed to load watched folders:', error);
         Alpine.store('ui').toast('Failed to load watched folders', 'error');
@@ -313,8 +312,7 @@ export function createSettingsView(Alpine) {
         const path = await open({ directory: true, multiple: false });
         if (!path) return;
 
-        const { invoke } = window.__TAURI__.core;
-        const folder = await invoke('watched_folders_add', {
+        const folder = await tauriInvoke('watched_folders_add', {
           request: { path, mode: 'continuous', cadence_minutes: 10, enabled: true },
         });
         this.watchedFolders.push(folder);
@@ -329,8 +327,7 @@ export function createSettingsView(Alpine) {
       if (!window.__TAURI__) return;
 
       try {
-        const { invoke } = window.__TAURI__.core;
-        await invoke('watched_folders_remove', { id });
+        await tauriInvoke('watched_folders_remove', { id });
       } catch (error) {
         // If the folder was already removed (e.g. by delete-all), just clean up the UI
         if (!error?.toString().includes('not found')) {
@@ -347,8 +344,7 @@ export function createSettingsView(Alpine) {
       if (!window.__TAURI__) return;
 
       try {
-        const { invoke } = window.__TAURI__.core;
-        const updated = await invoke('watched_folders_update', { id, request: updates });
+        const updated = await tauriInvoke('watched_folders_update', { id, request: updates });
         const index = this.watchedFolders.findIndex((f) => f.id === id);
         if (index !== -1) {
           this.watchedFolders[index] = updated;
@@ -364,8 +360,7 @@ export function createSettingsView(Alpine) {
 
       this.scanningFolders.add(id);
       try {
-        const { invoke } = window.__TAURI__.core;
-        await invoke('watched_folders_rescan', { id });
+        await tauriInvoke('watched_folders_rescan', { id });
         Alpine.store('ui').toast('Rescan started', 'success');
       } catch (error) {
         console.error('[settings] Failed to rescan folder:', error);
@@ -387,18 +382,10 @@ export function createSettingsView(Alpine) {
     },
 
     async resetSettings() {
-      let confirmed = false;
-
-      if (window.__TAURI__?.dialog?.confirm) {
-        confirmed = await window.__TAURI__.dialog.confirm(
-          'This will reset all settings to their defaults. Your library and playlists will not be affected.',
-          { title: 'Reset Settings', kind: 'warning' },
-        );
-      } else {
-        confirmed = confirm(
-          'This will reset all settings to their defaults. Your library and playlists will not be affected.',
-        );
-      }
+      const confirmed = await tauriConfirm(
+        'This will reset all settings to their defaults. Your library and playlists will not be affected.',
+        { title: 'Reset Settings', kind: 'warning' },
+      );
 
       if (!confirmed) return;
 
@@ -421,7 +408,6 @@ export function createSettingsView(Alpine) {
 
       this.isExportingLogs = true;
       try {
-        const { invoke } = window.__TAURI__.core;
         const { save } = window.__TAURI__.dialog;
 
         const path = await save({
@@ -434,7 +420,7 @@ export function createSettingsView(Alpine) {
           return;
         }
 
-        await invoke('export_diagnostics', { path });
+        await tauriInvoke('export_diagnostics', { path });
         Alpine.store('ui').toast('Diagnostics exported successfully', 'success');
       } catch (error) {
         console.error('[settings] Failed to export logs:', error);
@@ -452,8 +438,7 @@ export function createSettingsView(Alpine) {
       if (!window.__TAURI__) return;
 
       try {
-        const { invoke } = window.__TAURI__.core;
-        const status = await invoke('network_cache_status');
+        const status = await tauriInvoke('network_cache_status');
         this.networkCache.enabled = status.enabled;
         this.networkCache.persistent = status.persistent;
         this.networkCache.maxGb = status.max_bytes / 1_073_741_824;
@@ -519,8 +504,7 @@ export function createSettingsView(Alpine) {
 
       this.networkCache.isPurging = true;
       try {
-        const { invoke } = window.__TAURI__.core;
-        await invoke('network_cache_purge');
+        await tauriInvoke('network_cache_purge');
         this.networkCache.usedBytes = 0;
         this.networkCache.fileCount = 0;
         Alpine.store('ui').toast('Network cache cleared', 'success');
@@ -792,18 +776,10 @@ export function createSettingsView(Alpine) {
     },
 
     async resetLovedCache() {
-      let confirmed = false;
-
-      if (window.__TAURI__?.dialog?.confirm) {
-        confirmed = await window.__TAURI__.dialog.confirm(
-          'This will clear the loved tracks cache and remove auto-favorited tracks (synced from Last.fm). Manually favorited tracks are kept.\n\nYou can re-sync from Last.fm afterward to rebuild the cache.',
-          { title: 'Reset Loved Tracks Cache', kind: 'warning' },
-        );
-      } else {
-        confirmed = confirm(
-          'This will clear the loved tracks cache and remove auto-favorited tracks (synced from Last.fm). Manually favorited tracks are kept.\n\nYou can re-sync from Last.fm afterward to rebuild the cache.',
-        );
-      }
+      const confirmed = await tauriConfirm(
+        'This will clear the loved tracks cache and remove auto-favorited tracks (synced from Last.fm). Manually favorited tracks are kept.\n\nYou can re-sync from Last.fm afterward to rebuild the cache.',
+        { title: 'Reset Loved Tracks Cache', kind: 'warning' },
+      );
 
       if (!confirmed) return;
 
@@ -850,14 +826,13 @@ export function createSettingsView(Alpine) {
 
       let unlisten = null;
       try {
-        const { invoke } = window.__TAURI__.core;
         const { listen } = window.__TAURI__.event;
 
         unlisten = await listen('reconcile:progress', (e) => {
           this.reconcileScan.progress = e.payload;
         });
 
-        const result = await invoke('library_reconcile_scan');
+        const result = await tauriInvoke('library_reconcile_scan');
         this.reconcileScan.lastResult = result;
 
         const total = result.backfilled + result.duplicates_merged;
@@ -980,16 +955,10 @@ export function createSettingsView(Alpine) {
         if (this.columnSettings.resetSort) parts.push('sort settings');
 
         const message = `Reset column ${parts.join(', ')}?`;
-
-        let confirmed = false;
-        if (window.__TAURI__?.dialog?.confirm) {
-          confirmed = await window.__TAURI__.dialog.confirm(message, {
-            title: 'Reset Column Settings',
-            kind: 'warning',
-          });
-        } else {
-          confirmed = confirm(message);
-        }
+        const confirmed = await tauriConfirm(message, {
+          title: 'Reset Column Settings',
+          kind: 'warning',
+        });
 
         if (!confirmed) return;
       }

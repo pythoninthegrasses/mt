@@ -1,3 +1,4 @@
+import { tauriInvoke } from '../api/shared.js';
 import { formatDuration } from '../utils/formatting.js';
 
 export function createMetadataModal(Alpine) {
@@ -200,8 +201,7 @@ export function createMetadataModal(Alpine) {
         return;
       }
 
-      const { invoke } = window.__TAURI__.core;
-      const data = await invoke('get_track_metadata', { path: trackPath });
+      const data = await tauriInvoke('get_track_metadata', { path: trackPath });
 
       this.metadata = {
         title: data.title || '',
@@ -262,8 +262,7 @@ export function createMetadataModal(Alpine) {
           genre: track.genre || '',
         }));
       } else {
-        const { invoke } = window.__TAURI__.core;
-        const results = await invoke('get_tracks_metadata_batch', { paths });
+        const results = await tauriInvoke('get_tracks_metadata_batch', { paths });
         allMetadata = results.map((data) => ({
           title: data.title || '',
           artist: data.artist || '',
@@ -357,8 +356,6 @@ export function createMetadataModal(Alpine) {
       this.isSaving = true;
 
       try {
-        const { invoke } = window.__TAURI__.core;
-
         const updates = [];
         for (const track of this.tracks) {
           const trackPath = this.getTrackPath(track);
@@ -390,7 +387,7 @@ export function createMetadataModal(Alpine) {
 
         if (updates.length > 0) {
           await Promise.all(
-            updates.map(({ update }) => invoke('save_track_metadata', { update })),
+            updates.map(({ update }) => tauriInvoke('save_track_metadata', { update })),
           );
 
           if (!silent) {

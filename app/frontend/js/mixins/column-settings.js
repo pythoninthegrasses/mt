@@ -3,6 +3,7 @@ import {
   DEFAULT_COLUMN_VISIBILITY,
   DEFAULT_COLUMN_WIDTHS,
 } from '../constants.js';
+import { tauriConfirm } from '../api/shared.js';
 
 /**
  * Column settings mixin for library browser.
@@ -213,15 +214,10 @@ export function columnSettingsMixin() {
       const message = 'Reset all column settings to defaults?\n\n' +
         '\u2022 Column widths\n\u2022 Column order\n\u2022 Column visibility\n\u2022 Sort settings';
 
-      let confirmed = false;
-      if (window.__TAURI__?.dialog?.confirm) {
-        confirmed = await window.__TAURI__.dialog.confirm(message, {
-          title: 'Reset Column Settings',
-          kind: 'warning',
-        });
-      } else {
-        confirmed = confirm(message);
-      }
+      const confirmed = await tauriConfirm(message, {
+        title: 'Reset Column Settings',
+        kind: 'warning',
+      });
 
       if (confirmed) {
         this.resetColumnDefaults();

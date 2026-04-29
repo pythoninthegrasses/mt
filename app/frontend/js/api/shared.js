@@ -73,3 +73,14 @@ export async function tauriInvoke(cmd, params = {}) {
     throw new ApiError(500, error.toString());
   }
 }
+
+/**
+ * Show a native Tauri confirmation dialog, falling back to window.confirm
+ * @param {string} message - Confirmation message
+ * @param {object} options - Dialog options (title, kind)
+ * @returns {Promise<boolean>} Whether the user confirmed
+ */
+export async function tauriConfirm(message, options = {}) {
+  return (await window.__TAURI__?.dialog?.confirm(message, options)) ??
+    window.confirm(message);
+}

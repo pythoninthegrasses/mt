@@ -1,6 +1,7 @@
 import { playlists } from '../api/playlists.js';
 import { favorites } from '../api/favorites.js';
 import { queue } from '../api/queue.js';
+import { tauriInvoke } from '../api/shared.js';
 
 /**
  * Context menu mixin for single-track context menus (artists, albums, now-playing views).
@@ -154,9 +155,9 @@ export function singleTrackContextMenuMixin() {
 
     async _ctxShowInFinder(track) {
       this.closeContextMenu();
-      if (window.__TAURI__?.core?.invoke && track.filepath) {
+      if (track.filepath) {
         try {
-          await window.__TAURI__.core.invoke('show_in_folder', { path: track.filepath });
+          await tauriInvoke('show_in_folder', { path: track.filepath });
         } catch (err) {
           console.error('[context-menu] Failed to show in finder:', err);
         }
