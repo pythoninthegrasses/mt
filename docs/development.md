@@ -251,6 +251,16 @@ cargo add crate-name
 cargo add --dev crate-name
 ```
 
+## Troubleshooting
+
+### ffmpeg: `Library not loaded: libx265.*.dylib`
+
+When x265 is upgraded via Homebrew, ffmpeg's installed bottle may still reference the old dylib version (e.g., `libx265.215.dylib` after x265 ships `libx265.216.dylib`). Fix by reinstalling ffmpeg against the current x265:
+
+```bash
+brew reinstall ffmpeg
+```
+
 ## Known Incompatibilities
 
 ### Cranelift codegen backend (last tested: 2026-03-12)
