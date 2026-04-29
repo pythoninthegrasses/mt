@@ -164,6 +164,30 @@ pub(crate) fn get_all_tracks(
     })
 }
 
+/// Get all track IDs matching the query in sort order (no pagination).
+pub(crate) fn get_track_ids(conn: &Connection, query: &LibraryQuery) -> DbResult<Vec<i64>> {
+    let (where_clause, params_vec) = build_library_where(query);
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+
+    let sql = format!(
+        "SELECT id FROM library {} ORDER BY {} {}{}",
+        where_clause,
+        query.sort_by.as_order_by(query.ignore_words.as_deref()),
+        query.sort_order.as_sql(),
+        query
+            .sort_by
+            .secondary_order_by(query.ignore_words.as_deref())
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+    let ids: Vec<i64> = stmt
+        .query_map(params_refs.as_slice(), |row| row.get(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(ids)
+}
+
 /// Get filtered count, total duration, and total size without loading track data.
 pub(crate) fn get_filtered_count(
     conn: &Connection,
@@ -248,6 +272,44 @@ pub(crate) fn find_sort_offset(
     let mut all_params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
     all_params.push(&like_pattern);
     all_params.push(&like_pattern);
+
+    let result = conn
+        .query_row(&sql, all_params.as_slice(), |row| row.get::<_, i64>(0))
+        .ok();
+
+    Ok(result)
+}
+
+/// Find the 0-based offset of a specific track ID in the current sort/filter order.
+///
+/// Returns `None` if the track is not found (e.g. filtered out by search).
+pub(crate) fn find_track_offset(
+    conn: &Connection,
+    query: &LibraryQuery,
+    track_id: i64,
+) -> DbResult<Option<i64>> {
+    let (where_clause, params_vec) = build_library_where(query);
+
+    let order_by = format!(
+        "{} {}{}",
+        query.sort_by.as_order_by(query.ignore_words.as_deref()),
+        query.sort_order.as_sql(),
+        query
+            .sort_by
+            .secondary_order_by(query.ignore_words.as_deref())
+    );
+
+    let sql = format!(
+        "WITH ranked AS (
+            SELECT id, ROW_NUMBER() OVER (ORDER BY {order_by}) AS rn
+            FROM library
+            {where_clause}
+        )
+        SELECT rn - 1 FROM ranked WHERE id = ?"
+    );
+
+    let mut all_params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+    all_params.push(&track_id);
 
     let result = conn
         .query_row(&sql, all_params.as_slice(), |row| row.get::<_, i64>(0))
@@ -3370,5 +3432,238 @@ mod tests {
         };
         let offset = find_sort_offset(&conn, &query, "xyz").unwrap();
         assert_eq!(offset, None);
+    }
+
+    // ===== find_track_offset Tests =====
+
+    #[test]
+    fn test_find_track_offset_basic() {
+        let conn = setup_test_db();
+        insert_test_tracks_for_pagination(&conn);
+
+        let query = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            limit: 100,
+            ..Default::default()
+        };
+
+        // Get track IDs in sorted order
+        let result = get_all_tracks(&conn, &query).unwrap();
+        let ids: Vec<i64> = result.items.iter().map(|t| t.id).collect();
+
+        // Alpha should be at offset 0
+        assert_eq!(find_track_offset(&conn, &query, ids[0]).unwrap(), Some(0));
+        // Beta should be at offset 1
+        assert_eq!(find_track_offset(&conn, &query, ids[1]).unwrap(), Some(1));
+        // Zeta should be at offset 4
+        assert_eq!(find_track_offset(&conn, &query, ids[4]).unwrap(), Some(4));
+    }
+
+    #[test]
+    fn test_find_track_offset_descending() {
+        let conn = setup_test_db();
+        insert_test_tracks_for_pagination(&conn);
+
+        let query = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Desc,
+            limit: 100,
+            ..Default::default()
+        };
+
+        let result = get_all_tracks(&conn, &query).unwrap();
+        let ids: Vec<i64> = result.items.iter().map(|t| t.id).collect();
+
+        // In descending order: Zeta(0), Gamma(1), Delta(2), Beta(3), Alpha(4)
+        assert_eq!(find_track_offset(&conn, &query, ids[0]).unwrap(), Some(0));
+        assert_eq!(find_track_offset(&conn, &query, ids[4]).unwrap(), Some(4));
+    }
+
+    #[test]
+    fn test_find_track_offset_with_search_filter() {
+        let conn = setup_test_db();
+        insert_test_tracks_for_pagination(&conn);
+
+        let query = LibraryQuery {
+            search: Some("Alpha".to_string()),
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            limit: 100,
+            ..Default::default()
+        };
+
+        let result = get_all_tracks(&conn, &query).unwrap();
+        assert_eq!(result.total, 1);
+        let alpha_id = result.items[0].id;
+
+        // Alpha is at offset 0 when filtered
+        assert_eq!(find_track_offset(&conn, &query, alpha_id).unwrap(), Some(0));
+
+        // Other tracks are filtered out
+        let all_result = get_all_tracks(
+            &conn,
+            &LibraryQuery {
+                sort_by: LibrarySortColumn::Artist,
+                sort_order: SortOrder::Asc,
+                limit: 100,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let beta_id = all_result.items[1].id;
+        assert_eq!(find_track_offset(&conn, &query, beta_id).unwrap(), None);
+    }
+
+    #[test]
+    fn test_find_track_offset_nonexistent() {
+        let conn = setup_test_db();
+        insert_test_tracks_for_pagination(&conn);
+
+        let query = LibraryQuery::default();
+        assert_eq!(find_track_offset(&conn, &query, 99999).unwrap(), None);
+    }
+
+    // ===== get_track_ids Tests =====
+
+    #[test]
+    fn test_get_track_ids_returns_all_in_sort_order() {
+        let conn = setup_test_db();
+        insert_test_tracks_for_pagination(&conn);
+
+        let query = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            limit: 100,
+            ..Default::default()
+        };
+        let ids = get_track_ids(&conn, &query).unwrap();
+        assert_eq!(ids.len(), 5);
+
+        // Verify order matches get_all_tracks
+        let result = get_all_tracks(&conn, &query).unwrap();
+        let expected_ids: Vec<i64> = result.items.iter().map(|t| t.id).collect();
+        assert_eq!(ids, expected_ids);
+    }
+
+    #[test]
+    fn test_get_track_ids_respects_search_filter() {
+        let conn = setup_test_db();
+        insert_test_tracks_for_pagination(&conn);
+
+        let query = LibraryQuery {
+            search: Some("Alpha".to_string()),
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            limit: 100,
+            ..Default::default()
+        };
+        let ids = get_track_ids(&conn, &query).unwrap();
+        assert_eq!(ids.len(), 1);
+
+        let track = get_track_by_id(&conn, ids[0]).unwrap().unwrap();
+        assert_eq!(track.artist.as_deref(), Some("Alpha"));
+    }
+
+    #[test]
+    fn test_get_track_ids_respects_descending_sort() {
+        let conn = setup_test_db();
+        insert_test_tracks_for_pagination(&conn);
+
+        let query = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Desc,
+            limit: 100,
+            ..Default::default()
+        };
+        let ids = get_track_ids(&conn, &query).unwrap();
+        assert_eq!(ids.len(), 5);
+
+        let result = get_all_tracks(&conn, &query).unwrap();
+        let expected_ids: Vec<i64> = result.items.iter().map(|t| t.id).collect();
+        assert_eq!(ids, expected_ids);
+
+        // First item should be Zeta (descending)
+        let first_track = get_track_by_id(&conn, ids[0]).unwrap().unwrap();
+        assert_eq!(first_track.artist.as_deref(), Some("Zeta"));
+    }
+
+    #[test]
+    fn test_get_track_ids_empty_result() {
+        let conn = setup_test_db();
+        insert_test_tracks_for_pagination(&conn);
+
+        let query = LibraryQuery {
+            search: Some("NonExistentArtist".to_string()),
+            limit: 100,
+            ..Default::default()
+        };
+        let ids = get_track_ids(&conn, &query).unwrap();
+        assert!(ids.is_empty());
+    }
+
+    #[test]
+    fn test_get_track_ids_no_pagination_limit() {
+        let conn = setup_test_db();
+
+        // Add more tracks than default page size
+        for i in 1..=150 {
+            let metadata = TrackMetadata {
+                title: Some(format!("Song {}", i)),
+                artist: Some(format!("Artist {}", i)),
+                ..Default::default()
+            };
+            add_track(&conn, &format!("/music/track{}.mp3", i), &metadata).unwrap();
+        }
+
+        // get_track_ids ignores pagination and returns all matching IDs
+        let query_all = LibraryQuery {
+            limit: 100,
+            ..Default::default()
+        };
+        let ids = get_track_ids(&conn, &query_all).unwrap();
+        assert_eq!(ids.len(), 150);
+
+        // get_all_tracks with same limit returns only 100 items
+        let result = get_all_tracks(&conn, &query_all).unwrap();
+        assert_eq!(result.items.len(), 100);
+        assert_eq!(result.total, 150);
+    }
+
+    #[test]
+    fn test_get_track_ids_with_ignore_words() {
+        let conn = setup_test_db();
+
+        // Add tracks with "The" prefix
+        let meta1 = TrackMetadata {
+            title: Some("Song 1".to_string()),
+            artist: Some("The Decemberists".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/the_decemberists.mp3", &meta1).unwrap();
+
+        let meta2 = TrackMetadata {
+            title: Some("Song 2".to_string()),
+            artist: Some("Arcade Fire".to_string()),
+            ..Default::default()
+        };
+        add_track(&conn, "/music/arcade_fire.mp3", &meta2).unwrap();
+
+        let query = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            ignore_words: Some("the,a,an".to_string()),
+            limit: 100,
+            ..Default::default()
+        };
+
+        let ids = get_track_ids(&conn, &query).unwrap();
+        assert_eq!(ids.len(), 2);
+
+        // With "The" stripped, Arcade Fire should come before Decemberists
+        let first = get_track_by_id(&conn, ids[0]).unwrap().unwrap();
+        let second = get_track_by_id(&conn, ids[1]).unwrap().unwrap();
+        assert_eq!(first.artist.as_deref(), Some("Arcade Fire"));
+        assert_eq!(second.artist.as_deref(), Some("The Decemberists"));
     }
 }

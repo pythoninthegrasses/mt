@@ -34,7 +34,8 @@ pub(crate) use playlists::{
 
 pub(crate) use queue::{
     queue_add, queue_add_files, queue_add_play_next, queue_check_integrity, queue_clear, queue_get,
-    queue_get_playback_state, queue_play_context, queue_play_next_track, queue_play_previous_track,
+    queue_get_playback_state, queue_play_context, queue_play_context_query,
+    queue_play_next_track, queue_play_previous_track,
     queue_remove, queue_reorder, queue_set_current_index, queue_set_loop, queue_set_shuffle,
     queue_shuffle, queue_skip_next, queue_skip_previous,
 };

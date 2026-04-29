@@ -9,7 +9,7 @@ use tauri::{AppHandle, State};
 
 use crate::cache::NetworkFileCache;
 use crate::commands::audio::AudioState;
-use crate::db::{Database, QueueItem, QueueState, Track, queue};
+use crate::db::{Database, QueueItem, QueueState, SortOrder, Track, library, queue};
 use crate::events::{EventEmitter, QueueStateChangedEvent, QueueUpdatedEvent};
 
 /// Response for queue get operations
@@ -648,6 +648,80 @@ pub(crate) fn queue_play_context(
     let track_info = audio.load_and_play(&track.filepath, Some(track.id), &cache, &app)?;
 
     // Emit queue events (reuse existing event types)
+    let _ = app.emit_queue_updated(QueueUpdatedEvent::cleared());
+    let _ = app.emit_queue_state_changed(QueueStateChangedEvent::new(
+        0,
+        shuffle,
+        queue::get_queue_state(&conn)
+            .map(|s| s.loop_mode)
+            .unwrap_or_else(|_| "none".to_string()),
+    ));
+
+    Ok(PlayContextResponse {
+        items: result.items,
+        current_index: 0,
+        track,
+        shuffle_enabled: shuffle,
+        duration_ms: track_info.duration_ms,
+    })
+}
+
+/// Atomically replace the queue using a library query and start playback.
+///
+/// Runs the library sort/filter query once on the backend, resolves the full
+/// ordered ID list, and starts playback on `start_track_id` — all in a single
+/// IPC round-trip. Eliminates the N×`library_get_all` calls that
+/// `_loadAllPages()` required on the play hot path.
+#[allow(clippy::too_many_arguments)]
+#[tracing::instrument(skip(app, db, audio, cache))]
+#[tauri::command]
+pub(crate) fn queue_play_context_query(
+    app: AppHandle,
+    db: State<'_, Database>,
+    audio: State<'_, AudioState>,
+    cache: State<'_, NetworkFileCache>,
+    start_track_id: i64,
+    search: Option<String>,
+    sort_by: Option<String>,
+    sort_order: Option<String>,
+    ignore_words: Option<String>,
+    shuffle: bool,
+) -> Result<PlayContextResponse, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+
+    let query = library::LibraryQuery {
+        search,
+        sort_by: sort_by
+            .as_ref()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_default(),
+        sort_order: sort_order
+            .as_ref()
+            .map(|s| {
+                if s.to_lowercase() == "asc" {
+                    SortOrder::Asc
+                } else {
+                    SortOrder::Desc
+                }
+            })
+            .unwrap_or(SortOrder::Desc),
+        ignore_words,
+        ..Default::default()
+    };
+
+    let track_ids = library::get_track_ids(&conn, &query).map_err(|e| e.to_string())?;
+
+    let start_index = track_ids
+        .iter()
+        .position(|&id| id == start_track_id)
+        .unwrap_or(0) as i64;
+
+    let result =
+        queue::play_context(&conn, &track_ids, start_index, shuffle).map_err(|e| e.to_string())?;
+
+    let track = result.current_track.clone();
+    let track_info = audio.load_and_play(&track.filepath, Some(track.id), &cache, &app)?;
+
     let _ = app.emit_queue_updated(QueueUpdatedEvent::cleared());
     let _ = app.emit_queue_state_changed(QueueStateChangedEvent::new(
         0,

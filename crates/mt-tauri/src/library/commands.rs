@@ -429,6 +429,47 @@ pub(crate) fn library_find_offset(
     library::find_sort_offset(&conn, &query, &prefix).map_err(|e| e.to_string())
 }
 
+/// Find the 0-based offset of a specific track ID in the current sort/filter order.
+///
+/// Returns `None` if the track is filtered out (e.g. by search) or does not exist.
+#[allow(clippy::too_many_arguments)]
+#[tracing::instrument(skip(db))]
+#[tauri::command]
+pub(crate) fn library_find_track_offset(
+    db: State<'_, Database>,
+    track_id: i64,
+    search: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+    sort_by: Option<String>,
+    sort_order: Option<String>,
+    ignore_words: Option<String>,
+) -> Result<Option<i64>, String> {
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    let query = library::LibraryQuery {
+        search,
+        artist,
+        album,
+        sort_by: sort_by
+            .as_ref()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_default(),
+        sort_order: sort_order
+            .as_ref()
+            .map(|s| {
+                if s.to_lowercase() == "asc" {
+                    SortOrder::Asc
+                } else {
+                    SortOrder::Desc
+                }
+            })
+            .unwrap_or(SortOrder::Desc),
+        ignore_words,
+        ..Default::default()
+    };
+    library::find_track_offset(&conn, &query, track_id).map_err(|e| e.to_string())
+}
+
 /// Get library statistics
 #[tracing::instrument(skip(db))]
 #[tauri::command]
