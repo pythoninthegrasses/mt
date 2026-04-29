@@ -52,18 +52,12 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Resolve release tag
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            tag="${{ github.event.release.tag_name }}"
-          elif [ "${{ inputs.release-tag }}" != "latest" ] && [ -n "${{ inputs.release-tag }}" ]; then
-            tag="${{ inputs.release-tag }}"
-          else
-            tag="$(gh release view --json tagName -q .tagName)"
-          fi
-          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
-          echo "Resolved release tag: $tag"
+        uses: ./.github/actions/resolve-release-tag
+        with:
+          event-name: ${{ github.event_name }}
+          release-tag: ${{ inputs.release-tag }}
+          release-tag-name: ${{ github.event.release.tag_name }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
@@ -147,18 +141,12 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Resolve release tag
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            tag="${{ github.event.release.tag_name }}"
-          elif [ "${{ inputs.release-tag }}" != "latest" ] && [ -n "${{ inputs.release-tag }}" ]; then
-            tag="${{ inputs.release-tag }}"
-          else
-            tag="$(gh release view --json tagName -q .tagName)"
-          fi
-          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
-          echo "Resolved release tag: $tag"
+        uses: ./.github/actions/resolve-release-tag
+        with:
+          event-name: ${{ github.event_name }}
+          release-tag: ${{ inputs.release-tag }}
+          release-tag-name: ${{ github.event.release.tag_name }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Docker builder
         uses: useblacksmith/setup-docker-builder@v1
@@ -202,19 +190,12 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Resolve release tag
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if ("${{ github.event_name }}" -eq "release") {
-            $tag = "${{ github.event.release.tag_name }}"
-          } elseif ("${{ inputs.release-tag }}" -ne "latest" -and "${{ inputs.release-tag }}" -ne "") {
-            $tag = "${{ inputs.release-tag }}"
-          } else {
-            $tag = (gh release view --json tagName -q .tagName)
-          }
-          echo "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
-          Write-Host "Resolved release tag: $tag"
+        uses: ./.github/actions/resolve-release-tag
+        with:
+          event-name: ${{ github.event_name }}
+          release-tag: ${{ inputs.release-tag }}
+          release-tag-name: ${{ github.event.release.tag_name }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Tauri build environment
         uses: ./.github/actions/setup-tauri-build
@@ -322,18 +303,12 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve release tag
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            tag="${{ github.event.release.tag_name }}"
-          elif [ "${{ inputs.release-tag }}" != "latest" ] && [ -n "${{ inputs.release-tag }}" ]; then
-            tag="${{ inputs.release-tag }}"
-          else
-            tag="$(gh release view --json tagName -q .tagName)"
-          fi
-          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
-          echo "Resolved release tag: $tag"
+        uses: ./.github/actions/resolve-release-tag
+        with:
+          event-name: ${{ github.event_name }}
+          release-tag: ${{ inputs.release-tag }}
+          release-tag-name: ${{ github.event.release.tag_name }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update download table
         env:

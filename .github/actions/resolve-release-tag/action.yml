@@ -1,0 +1,53 @@
+name: 'Resolve Release Tag'
+description: 'Resolve the release tag and export RELEASE_TAG to the environment. Supports bash and pwsh.'
+
+inputs:
+  event-name:
+    description: 'github.event_name from the calling workflow'
+    required: true
+  release-tag:
+    description: 'The release-tag workflow input (defaults to "latest")'
+    required: false
+    default: 'latest'
+  release-tag-name:
+    description: 'github.event.release.tag_name for release events'
+    required: false
+    default: ''
+  github-token:
+    description: 'GitHub token for gh CLI'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve release tag (bash)
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        if [ "${{ inputs.event-name }}" = "release" ]; then
+          tag="${{ inputs.release-tag-name }}"
+        elif [ "${{ inputs.release-tag }}" != "latest" ] && [ -n "${{ inputs.release-tag }}" ]; then
+          tag="${{ inputs.release-tag }}"
+        else
+          tag="$(gh release view --json tagName -q .tagName)"
+        fi
+        echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+        echo "Resolved release tag: $tag"
+
+    - name: Resolve release tag (pwsh)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        if ("${{ inputs.event-name }}" -eq "release") {
+          $tag = "${{ inputs.release-tag-name }}"
+        } elseif ("${{ inputs.release-tag }}" -ne "latest" -and "${{ inputs.release-tag }}" -ne "") {
+          $tag = "${{ inputs.release-tag }}"
+        } else {
+          $tag = (gh release view --json tagName -q .tagName)
+        }
+        echo "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
+        Write-Host "Resolved release tag: $tag"

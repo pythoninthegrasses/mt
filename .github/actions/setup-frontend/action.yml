@@ -1,0 +1,31 @@
+name: 'Setup Frontend'
+description: 'Install Node.js and run npm ci for the frontend'
+
+inputs:
+  node-version:
+    description: 'Node.js version'
+    required: false
+    default: '20'
+  cache:
+    description: 'Package manager for caching (npm/yarn/pnpm, or empty to disable)'
+    required: false
+    default: ''
+  cache-dependency-path:
+    description: 'Path to lockfile for cache key (only used when cache is set)'
+    required: false
+    default: 'app/frontend/package-lock.json'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: ${{ inputs.cache }}
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+
+    - name: Install frontend dependencies
+      shell: bash
+      working-directory: ./app/frontend
+      run: npm ci

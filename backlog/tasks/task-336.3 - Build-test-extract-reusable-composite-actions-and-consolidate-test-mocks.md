@@ -1,10 +1,10 @@
 ---
 id: TASK-336.3
 title: 'Build/test: extract reusable composite actions and consolidate test mocks'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-29 04:21'
-updated_date: '2026-04-29 05:12'
+updated_date: '2026-04-29 19:48'
 labels:
   - refactor
   - ci
@@ -51,12 +51,18 @@ Lower-LOC but high-maintenance-value cleanup of build/test scaffolding. Estimate
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 resolve-release-tag composite action exists and is used by all 4 prior inline blocks in release.yml
-- [ ] #2 setup-frontend composite action exists and is used by all 3 prior inline blocks in test.yml/test-local.yml
-- [ ] #3 taskfiles/tauri.yml has a _deps-base-build internal task; the 7 inlined dep triples are replaced
-- [ ] #4 Tauri/API test-mock factories live in app/frontend/__tests__/mocks/ and are imported by the 3 affected test files — no duplicated inline mock blocks remain
-- [ ] #5 actionlint .github/workflows/ passes
+- [x] #1 resolve-release-tag composite action exists and is used by all 4 prior inline blocks in release.yml
+- [x] #2 setup-frontend composite action exists and is used by all 3 prior inline blocks in test.yml/test-local.yml
+- [x] #3 taskfiles/tauri.yml has a _deps-base-build internal task; the 7 inlined dep triples are replaced
+- [x] #4 Tauri/API test-mock factories live in app/frontend/__tests__/mocks/ and are imported by the 3 affected test files — no duplicated inline mock blocks remain
+- [x] #5 actionlint .github/workflows/ passes
 - [ ] #6 task lint passes
-- [ ] #7 cd app/frontend && npx vitest run passes
+- [x] #7 cd app/frontend && npx vitest run passes
 - [ ] #8 Trigger a workflow_dispatch run of release.yml in dry-run mode (or local act run) to confirm the resolve-release-tag action works end-to-end on bash + pwsh
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Created .github/actions/resolve-release-tag/action.yml (bash + pwsh steps, runner.os condition) and .github/actions/setup-frontend/action.yml (setup-node@v6 + npm ci). Replaced all 4 inline resolve-release-tag blocks in release.yml and all 3 setup-node+npm-ci blocks across test.yml and test-local.yml. Added _deps-base-build internal task to taskfiles/tauri.yml and replaced all 7 inlined dep triples. Created app/frontend/__tests__/mocks/tauri.js (createTauriMock factory with configurable invokeReturns and voidCmds) and mocks/api.js (createApiMock factory with overrides). Updated player.props.test.js, playback-regression.test.js, and setup-player-mocks.js to import from shared mocks. actionlint passes clean. vitest 515/515 pass. AC #6 (task lint): one pre-existing require-await failure in api/queue.js unrelated to this task. AC #8 (workflow_dispatch dry-run): pending CI run.
+<!-- SECTION:FINAL_SUMMARY:END -->

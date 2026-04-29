@@ -11,41 +11,19 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { createTauriMock } from './mocks/tauri.js';
 
-// Mock Tauri IPC — must be set before module imports
-global.window = {
-  __TAURI__: {
-    core: {
-      invoke: vi.fn((cmd) => {
-        if (cmd === 'audio_get_status') return Promise.resolve({ volume: 1.0, state: 'Stopped' });
-        if (cmd === 'queue_get') return Promise.resolve({ items: [], current_index: -1 });
-        if (cmd === 'queue_clear') return Promise.resolve();
-        if (cmd === 'queue_get_playback_state') return Promise.resolve({ shuffle: false, loop: 'none', current_index: -1 });
-        return Promise.resolve({});
-      }),
-    },
-    event: {
-      listen: vi.fn(() => Promise.resolve(() => {})),
-    },
+global.window = createTauriMock({
+  invokeReturns: {
+    audio_get_status: { volume: 1.0, state: 'Stopped' },
+    queue_get: { items: [], current_index: -1 },
+    queue_get_playback_state: { shuffle: false, loop: 'none', current_index: -1 },
   },
-};
+});
 
-vi.mock('../js/api.js', () => ({
-  api: {
-    favorites: {
-      check: vi.fn().mockResolvedValue({ is_favorite: false }),
-      add: vi.fn().mockResolvedValue({}),
-      remove: vi.fn().mockResolvedValue({}),
-    },
-    library: {
-      getArtwork: vi.fn().mockResolvedValue(null),
-      updatePlayCount: vi.fn().mockResolvedValue({}),
-    },
-    lastfm: {
-      getSettings: vi.fn().mockResolvedValue({ enabled: false, authenticated: false, scrobble_threshold: 90 }),
-      updateNowPlaying: vi.fn().mockResolvedValue({ status: 'disabled' }),
-      scrobble: vi.fn().mockResolvedValue({ status: 'disabled' }),
-    },
+vi.mock('../js/api.js', async () => {
+  const { createApiMock } = await import('./mocks/api.js');
+  return createApiMock({
     queue: {
       get: vi.fn().mockResolvedValue({ items: [], current_index: -1 }),
       clear: vi.fn().mockResolvedValue({}),
@@ -53,8 +31,8 @@ vi.mock('../js/api.js', () => ({
       remove: vi.fn().mockResolvedValue({}),
       reorder: vi.fn().mockResolvedValue({}),
     },
-  },
-}));
+  });
+});
 
 import { createPlayerStore } from '../js/stores/player.js';
 import { createQueueStore } from '../js/stores/queue.js';
