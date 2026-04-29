@@ -150,7 +150,7 @@ export const queue = {
    * @param {boolean} shuffle - Whether to shuffle the queue
    * @returns {Promise<{items: Array, current_index: number, track: Object, shuffle_enabled: boolean, duration_ms: number}>}
    */
-  async playContextQuery(startTrackId, queryParams, shuffle) {
+  playContextQuery(startTrackId, queryParams, shuffle) {
     return tauriInvoke('queue_play_context_query', {
       startTrackId,
       search: queryParams.search ?? null,
