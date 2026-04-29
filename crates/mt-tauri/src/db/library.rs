@@ -12,7 +12,7 @@ use crate::db::{
 };
 
 /// Map a database row to a Track struct
-fn row_to_track(row: &Row) -> rusqlite::Result<Track> {
+pub(crate) fn row_to_track(row: &Row) -> rusqlite::Result<Track> {
     Ok(Track {
         id: row.get("id")?,
         filepath: row.get("filepath")?,

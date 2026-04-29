@@ -6,9 +6,7 @@
 use tauri::{AppHandle, State};
 use tracing::{debug, warn};
 
-use crate::db::{
-    Database, FavoriteTrack, PaginatedResult, Track, favorites, library, revision, settings,
-};
+use crate::db::{Database, FavoriteTrack, Track, favorites, library, revision, settings};
 use crate::events::{EventEmitter, FavoritesUpdatedEvent, LibraryReconcileEvent};
 use crate::lastfm::LastFmClient;
 
@@ -107,9 +105,9 @@ pub(crate) fn favorites_get(
     let limit = limit.unwrap_or(100).clamp(1, 1000);
     let offset = offset.unwrap_or(0).max(0);
 
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let result: PaginatedResult<FavoriteTrack> =
-        favorites::get_favorites(&conn, limit, offset).map_err(|e| e.to_string())?;
+    let result = db
+        .with_conn(|conn| favorites::get_favorites(conn, limit, offset))
+        .map_err(|e| e.to_string())?;
 
     Ok(FavoritesResponse {
         tracks: result.items,
@@ -126,9 +124,9 @@ pub(crate) fn favorites_check(
     db: State<'_, Database>,
     track_id: i64,
 ) -> Result<FavoriteCheckResponse, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let (is_favorite, favorited_date) =
-        favorites::is_favorite(&conn, track_id).map_err(|e| e.to_string())?;
+    let (is_favorite, favorited_date) = db
+        .with_conn(|conn| favorites::is_favorite(conn, track_id))
+        .map_err(|e| e.to_string())?;
 
     Ok(FavoriteCheckResponse {
         is_favorite,
@@ -144,14 +142,17 @@ pub(crate) fn favorites_add(
     db: State<'_, Database>,
     track_id: i64,
 ) -> Result<FavoriteAddResponse, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
+    let (track, favorited_date, stats, rev) = db
+        .with_conn(|conn| {
+            let track = library::get_track_by_id(conn, track_id)?;
+            let favorited_date = favorites::add_favorite(conn, track_id)?;
+            let stats = library::get_library_stats(conn)?;
+            let rev = revision::get_revision(conn)?;
+            Ok((track, favorited_date, stats, rev))
+        })
+        .map_err(|e| e.to_string())?;
 
-    // Check track exists
-    let track = library::get_track_by_id(&conn, track_id).map_err(|e| e.to_string())?;
     let track = track.ok_or_else(|| format!("Track with id {} not found", track_id))?;
-
-    // Add to favorites
-    let favorited_date = favorites::add_favorite(&conn, track_id).map_err(|e| e.to_string())?;
 
     if favorited_date.is_none() {
         return Err("Track is already favorited".to_string());
@@ -159,8 +160,6 @@ pub(crate) fn favorites_add(
 
     // Emit favorites updated event (player UI) and reconcile event (section counts)
     let _ = app.emit_favorites_updated(FavoritesUpdatedEvent::added(track_id));
-    let stats = library::get_library_stats(&conn).map_err(|e| e.to_string())?;
-    let rev = revision::get_revision(&conn).map_err(|e| e.to_string())?;
     let _ = app.emit_library_reconcile(LibraryReconcileEvent::favorite(
         "add",
         stats.total_tracks,
@@ -187,12 +186,15 @@ pub(crate) fn favorites_remove(
     db: State<'_, Database>,
     track_id: i64,
 ) -> Result<(), String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-
-    // Fetch track metadata before removal for Last.fm sync
-    let track = library::get_track_by_id(&conn, track_id).map_err(|e| e.to_string())?;
-
-    let removed = favorites::remove_favorite(&conn, track_id).map_err(|e| e.to_string())?;
+    let (track, removed, stats, rev) = db
+        .with_conn(|conn| {
+            let track = library::get_track_by_id(conn, track_id)?;
+            let removed = favorites::remove_favorite(conn, track_id)?;
+            let stats = library::get_library_stats(conn)?;
+            let rev = revision::get_revision(conn)?;
+            Ok((track, removed, stats, rev))
+        })
+        .map_err(|e| e.to_string())?;
 
     if !removed {
         return Err(format!("Track with id {} not in favorites", track_id));
@@ -200,8 +202,6 @@ pub(crate) fn favorites_remove(
 
     // Emit favorites updated event (player UI) and reconcile event (section counts)
     let _ = app.emit_favorites_updated(FavoritesUpdatedEvent::removed(track_id));
-    let stats = library::get_library_stats(&conn).map_err(|e| e.to_string())?;
-    let rev = revision::get_revision(&conn).map_err(|e| e.to_string())?;
     let _ = app.emit_library_reconcile(LibraryReconcileEvent::favorite(
         "remove",
         stats.total_tracks,
@@ -223,8 +223,9 @@ pub(crate) fn favorites_remove(
 #[tracing::instrument(skip(db))]
 #[tauri::command]
 pub(crate) fn favorites_get_top25(db: State<'_, Database>) -> Result<TracksResponse, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let tracks = favorites::get_top_25(&conn).map_err(|e| e.to_string())?;
+    let tracks = db
+        .with_conn(favorites::get_top_25)
+        .map_err(|e| e.to_string())?;
 
     Ok(TracksResponse { tracks })
 }
@@ -240,8 +241,9 @@ pub(crate) fn favorites_get_recently_played(
     let days = days.unwrap_or(14).clamp(1, 365);
     let limit = limit.unwrap_or(100).clamp(1, 1000);
 
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let tracks = favorites::get_recently_played(&conn, days, limit).map_err(|e| e.to_string())?;
+    let tracks = db
+        .with_conn(|conn| favorites::get_recently_played(conn, days, limit))
+        .map_err(|e| e.to_string())?;
 
     Ok(RecentTracksResponse { tracks, days })
 }
@@ -257,8 +259,9 @@ pub(crate) fn favorites_get_recently_added(
     let days = days.unwrap_or(14).clamp(1, 365);
     let limit = limit.unwrap_or(100).clamp(1, 1000);
 
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let tracks = favorites::get_recently_added(&conn, days, limit).map_err(|e| e.to_string())?;
+    let tracks = db
+        .with_conn(|conn| favorites::get_recently_added(conn, days, limit))
+        .map_err(|e| e.to_string())?;
 
     Ok(RecentTracksResponse { tracks, days })
 }

@@ -128,6 +128,12 @@ impl AudioState {
         let _ = self.sender.send(cmd);
     }
 
+    fn dispatch<R>(&self, build: impl FnOnce(Sender<R>) -> AudioCommand) -> Result<R, String> {
+        let (tx, rx) = mpsc::channel();
+        self.send_command(build(tx));
+        rx.recv().map_err(|_| "Channel closed".to_string())
+    }
+
     /// Load and start playback of a track.
     ///
     /// Resolves network-cached paths, then sends LoadAndPlay to the audio
@@ -226,6 +232,17 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
         Ok(eng)
     }
 
+    fn send_engine_result(
+        reply: Sender<Result<(), String>>,
+        engine: &mut Option<AudioEngine>,
+        device_restored: &mut bool,
+        app: &AppHandle,
+        op: impl FnOnce(&mut AudioEngine) -> Result<(), String>,
+    ) {
+        let result = ensure_engine(engine, device_restored, app).and_then(op);
+        let _ = reply.send(result);
+    }
+
     let mut last_finished = false;
     let mut last_emit = std::time::Instant::now();
     let mut stall = StallDetector::new();
@@ -282,25 +299,21 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                 }
                 AudioCommand::Play(reply) => {
                     debug!("Audio thread received Play command");
-                    let result =
-                        ensure_engine(&mut engine, &mut device_restored, &app).and_then(|eng| {
-                            eng.play().map_err(|e| {
-                                error!(error = %e, "Audio play failed");
-                                e.to_string()
-                            })
-                        });
-                    let _ = reply.send(result);
+                    send_engine_result(reply, &mut engine, &mut device_restored, &app, |eng| {
+                        eng.play().map_err(|e| {
+                            error!(error = %e, "Audio play failed");
+                            e.to_string()
+                        })
+                    });
                 }
                 AudioCommand::Pause(reply) => {
                     debug!("Audio thread received Pause command");
-                    let result =
-                        ensure_engine(&mut engine, &mut device_restored, &app).and_then(|eng| {
-                            eng.pause().map_err(|e| {
-                                error!(error = %e, "Audio pause failed");
-                                e.to_string()
-                            })
-                        });
-                    let _ = reply.send(result);
+                    send_engine_result(reply, &mut engine, &mut device_restored, &app, |eng| {
+                        eng.pause().map_err(|e| {
+                            error!(error = %e, "Audio pause failed");
+                            e.to_string()
+                        })
+                    });
                 }
                 AudioCommand::Stop(reply) => {
                     debug!("Audio thread received Stop command");
@@ -310,9 +323,9 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                     let _ = reply.send(Ok(()));
                 }
                 AudioCommand::Seek(pos, reply) => {
-                    let result = ensure_engine(&mut engine, &mut device_restored, &app)
-                        .and_then(|eng| eng.seek(pos).map_err(|e| e.to_string()));
-                    let _ = reply.send(result);
+                    send_engine_result(reply, &mut engine, &mut device_restored, &app, |eng| {
+                        eng.seek(pos).map_err(|e| e.to_string())
+                    });
                 }
                 AudioCommand::SetVolume(vol, reply) => {
                     if let Some(eng) = engine.as_mut() {
@@ -349,9 +362,9 @@ fn audio_thread(rx: Receiver<AudioCommand>, app: AppHandle) {
                     let _ = reply.send(status);
                 }
                 AudioCommand::SetDevice(device, reply) => {
-                    let result = ensure_engine(&mut engine, &mut device_restored, &app)
-                        .and_then(|eng| eng.set_device_resolved(device).map_err(|e| e.to_string()));
-                    let _ = reply.send(result);
+                    send_engine_result(reply, &mut engine, &mut device_restored, &app, |eng| {
+                        eng.set_device_resolved(device).map_err(|e| e.to_string())
+                    });
                 }
             },
             Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -517,41 +530,31 @@ pub(crate) fn audio_load_and_play(
 #[tracing::instrument(skip(state))]
 #[tauri::command]
 pub(crate) fn audio_play(state: State<AudioState>) -> Result<(), String> {
-    let (tx, rx) = mpsc::channel();
-    state.send_command(AudioCommand::Play(tx));
-    rx.recv().map_err(|_| "Channel closed".to_string())?
+    state.dispatch(AudioCommand::Play)?
 }
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
 pub(crate) fn audio_pause(state: State<AudioState>) -> Result<(), String> {
-    let (tx, rx) = mpsc::channel();
-    state.send_command(AudioCommand::Pause(tx));
-    rx.recv().map_err(|_| "Channel closed".to_string())?
+    state.dispatch(AudioCommand::Pause)?
 }
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
 pub(crate) fn audio_stop(state: State<AudioState>) -> Result<(), String> {
-    let (tx, rx) = mpsc::channel();
-    state.send_command(AudioCommand::Stop(tx));
-    rx.recv().map_err(|_| "Channel closed".to_string())?
+    state.dispatch(AudioCommand::Stop)?
 }
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
 pub(crate) fn audio_seek(position_ms: u64, state: State<AudioState>) -> Result<(), String> {
-    let (tx, rx) = mpsc::channel();
-    state.send_command(AudioCommand::Seek(position_ms, tx));
-    rx.recv().map_err(|_| "Channel closed".to_string())?
+    state.dispatch(|tx| AudioCommand::Seek(position_ms, tx))?
 }
 
 #[tracing::instrument(skip(state))]
 #[tauri::command]
 pub(crate) fn audio_set_volume(volume: f32, state: State<AudioState>) -> Result<(), String> {
-    let (tx, rx) = mpsc::channel();
-    state.send_command(AudioCommand::SetVolume(volume, tx));
-    rx.recv().map_err(|_| "Channel closed".to_string())?
+    state.dispatch(|tx| AudioCommand::SetVolume(volume, tx))?
 }
 
 #[tracing::instrument(level = "trace", skip(state))]

@@ -4,7 +4,8 @@
 
 use rusqlite::{Connection, params};
 
-use crate::db::{DbResult, Playlist, PlaylistTrack, PlaylistWithTracks, Track};
+use crate::db::library::row_to_track;
+use crate::db::{DbResult, Playlist, PlaylistTrack, PlaylistWithTracks};
 
 /// Get all playlists with track counts
 pub(crate) fn get_playlists(conn: &Connection) -> DbResult<Vec<Playlist>> {
@@ -105,31 +106,7 @@ pub(crate) fn get_playlist(
             Ok(PlaylistTrack {
                 position: row.get("position")?,
                 added_date: row.get("added_at")?,
-                track: Track {
-                    id: row.get("id")?,
-                    filepath: row.get("filepath")?,
-                    title: row.get("title")?,
-                    artist: row.get("artist")?,
-                    album: row.get("album")?,
-                    album_artist: row.get("album_artist")?,
-                    track_number: row.get("track_number")?,
-                    track_total: row.get("track_total")?,
-                    disc_number: row.get("disc_number")?,
-                    disc_total: row.get("disc_total")?,
-                    date: row.get("date")?,
-                    genre: row.get("genre")?,
-                    duration: row.get("duration")?,
-                    file_size: row.get::<_, Option<i64>>("file_size")?.unwrap_or(0),
-                    file_mtime_ns: row.get("file_mtime_ns")?,
-                    file_ctime_ns: row.get("file_ctime_ns").unwrap_or(None),
-                    file_inode: row.get("file_inode")?,
-                    content_hash: row.get("content_hash")?,
-                    added_date: row.get("added_date")?,
-                    last_played: row.get("last_played")?,
-                    play_count: row.get::<_, Option<i64>>("play_count")?.unwrap_or(0),
-                    missing: row.get::<_, Option<i64>>("missing")?.unwrap_or(0) != 0,
-                    last_seen_at: row.get("last_seen_at")?,
-                },
+                track: row_to_track(row)?,
             })
         })?
         .filter_map(|r| r.ok())

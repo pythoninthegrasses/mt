@@ -65,8 +65,7 @@ pub struct QueueNavigationResult {
 #[tracing::instrument(skip(db))]
 #[tauri::command]
 pub(crate) fn queue_get(db: State<'_, Database>) -> Result<QueueResponse, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let items = queue::get_queue(&conn).map_err(|e| e.to_string())?;
+    let items = db.with_conn(queue::get_queue).map_err(|e| e.to_string())?;
     let count = items.len() as i64;
 
     Ok(QueueResponse { items, count })
@@ -85,9 +84,13 @@ pub(crate) fn queue_add(
         return Err("track_ids must not be empty".to_string());
     }
 
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let added = queue::add_to_queue(&conn, &track_ids, position).map_err(|e| e.to_string())?;
-    let queue_length = queue::get_queue_length(&conn).map_err(|e| e.to_string())?;
+    let (added, queue_length) = db
+        .with_conn(|conn| {
+            let added = queue::add_to_queue(conn, &track_ids, position)?;
+            let queue_length = queue::get_queue_length(conn)?;
+            Ok((added, queue_length))
+        })
+        .map_err(|e| e.to_string())?;
 
     // Calculate positions that were added
     let start_pos = position.unwrap_or(queue_length - added);
@@ -115,10 +118,13 @@ pub(crate) fn queue_add_files(
         return Err("filepaths must not be empty".to_string());
     }
 
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let (added, tracks) =
-        queue::add_files_to_queue(&conn, &filepaths, position).map_err(|e| e.to_string())?;
-    let queue_length = queue::get_queue_length(&conn).map_err(|e| e.to_string())?;
+    let (added, tracks, queue_length) = db
+        .with_conn(|conn| {
+            let (added, tracks) = queue::add_files_to_queue(conn, &filepaths, position)?;
+            let queue_length = queue::get_queue_length(conn)?;
+            Ok((added, tracks, queue_length))
+        })
+        .map_err(|e| e.to_string())?;
 
     // Calculate positions that were added
     let start_pos = position.unwrap_or(queue_length - added);
@@ -142,14 +148,17 @@ pub(crate) fn queue_remove(
     db: State<'_, Database>,
     position: i64,
 ) -> Result<(), String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let removed = queue::remove_from_queue(&conn, position).map_err(|e| e.to_string())?;
+    let (removed, queue_length) = db
+        .with_conn(|conn| {
+            let removed = queue::remove_from_queue(conn, position)?;
+            let queue_length = queue::get_queue_length(conn)?;
+            Ok((removed, queue_length))
+        })
+        .map_err(|e| e.to_string())?;
 
     if !removed {
         return Err(format!("No track at position {}", position));
     }
-
-    let queue_length = queue::get_queue_length(&conn).map_err(|e| e.to_string())?;
 
     // Emit queue updated event with payload
     let _ = app.emit_queue_updated(QueueUpdatedEvent::removed(position, queue_length));
@@ -161,8 +170,8 @@ pub(crate) fn queue_remove(
 #[tracing::instrument(skip(app, db))]
 #[tauri::command]
 pub(crate) fn queue_clear(app: AppHandle, db: State<'_, Database>) -> Result<(), String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    queue::clear_queue(&conn).map_err(|e| e.to_string())?;
+    db.with_conn(queue::clear_queue)
+        .map_err(|e| e.to_string())?;
 
     // Emit queue updated event with payload
     let _ = app.emit_queue_updated(QueueUpdatedEvent::cleared());
@@ -179,15 +188,17 @@ pub(crate) fn queue_reorder(
     from_position: i64,
     to_position: i64,
 ) -> Result<QueueOperationResponse, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let success =
-        queue::reorder_queue(&conn, from_position, to_position).map_err(|e| e.to_string())?;
+    let (success, queue_length) = db
+        .with_conn(|conn| {
+            let success = queue::reorder_queue(conn, from_position, to_position)?;
+            let queue_length = queue::get_queue_length(conn)?;
+            Ok((success, queue_length))
+        })
+        .map_err(|e| e.to_string())?;
 
     if !success {
         return Err("Invalid positions".to_string());
     }
-
-    let queue_length = queue::get_queue_length(&conn).map_err(|e| e.to_string())?;
 
     // Emit queue updated event with payload
     let _ = app.emit_queue_updated(QueueUpdatedEvent::reordered(
@@ -210,8 +221,7 @@ pub(crate) fn queue_shuffle(
     db: State<'_, Database>,
     keep_current: Option<bool>,
 ) -> Result<QueueOperationResponse, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let items = queue::get_queue(&conn).map_err(|e| e.to_string())?;
+    let items = db.with_conn(queue::get_queue).map_err(|e| e.to_string())?;
 
     if items.is_empty() {
         return Ok(QueueOperationResponse {
@@ -238,18 +248,19 @@ pub(crate) fn queue_shuffle(
         filepaths.shuffle(&mut rng());
     }
 
-    // Rebuild queue with shuffled order
-    queue::clear_queue(&conn).map_err(|e| e.to_string())?;
-
-    for filepath in &filepaths {
-        conn.execute(
-            "INSERT INTO queue (filepath) VALUES (?)",
-            rusqlite::params![filepath],
-        )
+    let queue_length = db
+        .with_conn(|conn| {
+            queue::clear_queue(conn)?;
+            for filepath in &filepaths {
+                conn.execute(
+                    "INSERT INTO queue (filepath) VALUES (?)",
+                    rusqlite::params![filepath],
+                )
+                .map_err(crate::db::DbError::from)?;
+            }
+            queue::get_queue_length(conn)
+        })
         .map_err(|e| e.to_string())?;
-    }
-
-    let queue_length = queue::get_queue_length(&conn).map_err(|e| e.to_string())?;
 
     // Emit queue updated event with payload
     let _ = app.emit_queue_updated(QueueUpdatedEvent::shuffled(queue_length));
@@ -264,9 +275,8 @@ pub(crate) fn queue_shuffle(
 #[tracing::instrument(level = "trace", skip(db))]
 #[tauri::command]
 pub(crate) fn queue_get_playback_state(db: State<'_, Database>) -> Result<QueueState, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let state: QueueState = queue::get_queue_state(&conn).map_err(|e| e.to_string())?;
-    Ok(state)
+    db.with_conn(queue::get_queue_state)
+        .map_err(|e| e.to_string())
 }
 
 /// Set current index in queue playback state
@@ -277,11 +287,14 @@ pub(crate) fn queue_set_current_index(
     db: State<'_, Database>,
     index: i64,
 ) -> Result<(), String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    queue::set_current_index(&conn, index).map_err(|e| e.to_string())?;
+    let state = db
+        .with_conn(|conn| {
+            queue::set_current_index(conn, index)?;
+            queue::get_queue_state(conn)
+        })
+        .map_err(|e| e.to_string())?;
 
     // Emit state changed event
-    let state = queue::get_queue_state(&conn).map_err(|e| e.to_string())?;
     let _ = app.emit_queue_state_changed(QueueStateChangedEvent::new(
         state.current_index,
         state.shuffle_enabled,
@@ -300,10 +313,13 @@ pub(crate) fn queue_set_shuffle(
     db: State<'_, Database>,
     enabled: bool,
 ) -> Result<QueueStateSnapshot, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let items = queue::toggle_shuffle(&conn, enabled).map_err(|e| e.to_string())?;
-
-    let state = queue::get_queue_state(&conn).map_err(|e| e.to_string())?;
+    let (items, state) = db
+        .with_conn(|conn| {
+            let items = queue::toggle_shuffle(conn, enabled)?;
+            let state = queue::get_queue_state(conn)?;
+            Ok((items, state))
+        })
+        .map_err(|e| e.to_string())?;
 
     // Emit events
     let queue_length = items.len() as i64;
@@ -331,11 +347,14 @@ pub(crate) fn queue_set_loop(
     db: State<'_, Database>,
     mode: String,
 ) -> Result<(), String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    queue::set_loop_mode(&conn, &mode).map_err(|e| e.to_string())?;
+    let state = db
+        .with_conn(|conn| {
+            queue::set_loop_mode(conn, &mode)?;
+            queue::get_queue_state(conn)
+        })
+        .map_err(|e| e.to_string())?;
 
     // Emit state changed event
-    let state = queue::get_queue_state(&conn).map_err(|e| e.to_string())?;
     let _ = app.emit_queue_state_changed(QueueStateChangedEvent::new(
         state.current_index,
         state.shuffle_enabled,
@@ -353,10 +372,13 @@ pub(crate) fn queue_add_play_next(
     db: State<'_, Database>,
     track_ids: Vec<i64>,
 ) -> Result<QueueStateSnapshot, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    let items = queue::add_play_next(&conn, &track_ids).map_err(|e| e.to_string())?;
-
-    let state = queue::get_queue_state(&conn).map_err(|e| e.to_string())?;
+    let (items, state) = db
+        .with_conn(|conn| {
+            let items = queue::add_play_next(conn, &track_ids)?;
+            let state = queue::get_queue_state(conn)?;
+            Ok((items, state))
+        })
+        .map_err(|e| e.to_string())?;
 
     let queue_length = items.len() as i64;
     let _ = app.emit_queue_updated(QueueUpdatedEvent::added(
@@ -583,8 +605,8 @@ pub(crate) fn queue_skip_previous(
 pub(crate) fn queue_check_integrity(
     db: State<'_, Database>,
 ) -> Result<queue::IntegrityReport, String> {
-    let conn = db.conn().map_err(|e| e.to_string())?;
-    queue::check_integrity(&conn).map_err(|e| e.to_string())
+    db.with_conn(queue::check_integrity)
+        .map_err(|e| e.to_string())
 }
 
 /// Response for atomic play-context operations

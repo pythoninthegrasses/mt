@@ -4,6 +4,7 @@
 
 use rusqlite::{Connection, params};
 
+use crate::db::library::row_to_track;
 use crate::db::{DbResult, FavoriteTrack, PaginatedResult, Track};
 
 /// Get favorited tracks with pagination
@@ -29,31 +30,7 @@ pub(crate) fn get_favorites(
     let tracks: Vec<FavoriteTrack> = stmt
         .query_map([limit, offset], |row| {
             Ok(FavoriteTrack {
-                track: Track {
-                    id: row.get("id")?,
-                    filepath: row.get("filepath")?,
-                    title: row.get("title")?,
-                    artist: row.get("artist")?,
-                    album: row.get("album")?,
-                    album_artist: row.get("album_artist")?,
-                    track_number: row.get("track_number")?,
-                    track_total: row.get("track_total")?,
-                    disc_number: row.get("disc_number")?,
-                    disc_total: row.get("disc_total")?,
-                    date: row.get("date")?,
-                    genre: row.get("genre")?,
-                    duration: row.get("duration")?,
-                    file_size: row.get::<_, Option<i64>>("file_size")?.unwrap_or(0),
-                    file_mtime_ns: row.get("file_mtime_ns")?,
-                    file_ctime_ns: row.get("file_ctime_ns").unwrap_or(None),
-                    file_inode: row.get("file_inode")?,
-                    content_hash: row.get("content_hash")?,
-                    added_date: row.get("added_date")?,
-                    last_played: row.get("last_played")?,
-                    play_count: row.get::<_, Option<i64>>("play_count")?.unwrap_or(0),
-                    missing: row.get::<_, Option<i64>>("missing")?.unwrap_or(0) != 0,
-                    last_seen_at: row.get("last_seen_at")?,
-                },
+                track: row_to_track(row)?,
                 favorited_date: row.get("favorited_date")?,
             })
         })?
@@ -80,33 +57,7 @@ pub(crate) fn get_top_25(conn: &Connection) -> DbResult<Vec<Track>> {
     )?;
 
     let tracks: Vec<Track> = stmt
-        .query_map([], |row| {
-            Ok(Track {
-                id: row.get("id")?,
-                filepath: row.get("filepath")?,
-                title: row.get("title")?,
-                artist: row.get("artist")?,
-                album: row.get("album")?,
-                album_artist: row.get("album_artist")?,
-                track_number: row.get("track_number")?,
-                track_total: row.get("track_total")?,
-                disc_number: row.get("disc_number")?,
-                disc_total: row.get("disc_total")?,
-                date: row.get("date")?,
-                genre: row.get("genre")?,
-                duration: row.get("duration")?,
-                file_size: row.get::<_, Option<i64>>("file_size")?.unwrap_or(0),
-                file_mtime_ns: row.get("file_mtime_ns")?,
-                file_ctime_ns: row.get("file_ctime_ns").unwrap_or(None),
-                file_inode: row.get("file_inode")?,
-                content_hash: row.get("content_hash")?,
-                added_date: row.get("added_date")?,
-                last_played: row.get("last_played")?,
-                play_count: row.get::<_, Option<i64>>("play_count")?.unwrap_or(0),
-                missing: row.get::<_, Option<i64>>("missing")?.unwrap_or(0) != 0,
-                last_seen_at: row.get("last_seen_at")?,
-            })
-        })?
+        .query_map([], row_to_track)?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -134,33 +85,7 @@ pub(crate) fn get_recently_played(
     )?;
 
     let tracks: Vec<Track> = stmt
-        .query_map(params![modifier, limit], |row| {
-            Ok(Track {
-                id: row.get("id")?,
-                filepath: row.get("filepath")?,
-                title: row.get("title")?,
-                artist: row.get("artist")?,
-                album: row.get("album")?,
-                album_artist: row.get("album_artist")?,
-                track_number: row.get("track_number")?,
-                track_total: row.get("track_total")?,
-                disc_number: row.get("disc_number")?,
-                disc_total: row.get("disc_total")?,
-                date: row.get("date")?,
-                genre: row.get("genre")?,
-                duration: row.get("duration")?,
-                file_size: row.get::<_, Option<i64>>("file_size")?.unwrap_or(0),
-                file_mtime_ns: row.get("file_mtime_ns")?,
-                file_ctime_ns: row.get("file_ctime_ns").unwrap_or(None),
-                file_inode: row.get("file_inode")?,
-                content_hash: row.get("content_hash")?,
-                added_date: row.get("added_date")?,
-                last_played: row.get("last_played")?,
-                play_count: row.get::<_, Option<i64>>("play_count")?.unwrap_or(0),
-                missing: row.get::<_, Option<i64>>("missing")?.unwrap_or(0) != 0,
-                last_seen_at: row.get("last_seen_at")?,
-            })
-        })?
+        .query_map(params![modifier, limit], row_to_track)?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -184,33 +109,7 @@ pub(crate) fn get_recently_added(conn: &Connection, days: i64, limit: i64) -> Db
     )?;
 
     let tracks: Vec<Track> = stmt
-        .query_map(params![modifier, limit], |row| {
-            Ok(Track {
-                id: row.get("id")?,
-                filepath: row.get("filepath")?,
-                title: row.get("title")?,
-                artist: row.get("artist")?,
-                album: row.get("album")?,
-                album_artist: row.get("album_artist")?,
-                track_number: row.get("track_number")?,
-                track_total: row.get("track_total")?,
-                disc_number: row.get("disc_number")?,
-                disc_total: row.get("disc_total")?,
-                date: row.get("date")?,
-                genre: row.get("genre")?,
-                duration: row.get("duration")?,
-                file_size: row.get::<_, Option<i64>>("file_size")?.unwrap_or(0),
-                file_mtime_ns: row.get("file_mtime_ns")?,
-                file_ctime_ns: row.get("file_ctime_ns").unwrap_or(None),
-                file_inode: row.get("file_inode")?,
-                content_hash: row.get("content_hash")?,
-                added_date: row.get("added_date")?,
-                last_played: row.get("last_played")?,
-                play_count: row.get::<_, Option<i64>>("play_count")?.unwrap_or(0),
-                missing: row.get::<_, Option<i64>>("missing")?.unwrap_or(0) != 0,
-                last_seen_at: row.get("last_seen_at")?,
-            })
-        })?
+        .query_map(params![modifier, limit], row_to_track)?
         .filter_map(|r| r.ok())
         .collect();
 
