@@ -3,10 +3,10 @@ id: TASK-329
 title: >-
   Backend playback session snapshot replacing frontend session assembly and
   scrobble timing
-status: In Progress
+status: To Do
 assignee: []
 created_date: '2026-04-13 03:20'
-updated_date: '2026-04-15 04:46'
+updated_date: '2026-04-29 05:12'
 labels:
   - backend
   - player
@@ -22,7 +22,7 @@ references:
   - crates/mt-tauri/src/commands/lastfm.rs
   - crates/mt-tauri/src/events.rs
 priority: medium
-ordinal: 4500
+ordinal: 1429.6875
 ---
 
 ## Description

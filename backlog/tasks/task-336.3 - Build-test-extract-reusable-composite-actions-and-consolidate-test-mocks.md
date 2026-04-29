@@ -1,9 +1,10 @@
 ---
 id: TASK-336.3
 title: 'Build/test: extract reusable composite actions and consolidate test mocks'
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-04-29 04:21'
+updated_date: '2026-04-29 05:12'
 labels:
   - refactor
   - ci
@@ -14,6 +15,7 @@ references:
   - 'https://github.com/pythoninthegrass/mt/commit/4ba8be8'
 parent_task_id: TASK-336
 priority: low
+ordinal: 8500
 ---
 
 ## Description

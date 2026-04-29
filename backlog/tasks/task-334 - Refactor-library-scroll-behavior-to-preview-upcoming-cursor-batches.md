@@ -1,10 +1,10 @@
 ---
 id: TASK-334
 title: Refactor library scroll behavior to preview upcoming cursor batches
-status: In Progress
+status: To Do
 assignee: []
 created_date: '2026-04-15 03:21'
-updated_date: '2026-04-15 04:30'
+updated_date: '2026-04-29 05:12'
 labels:
   - frontend
   - backend
@@ -17,7 +17,7 @@ references:
   - /Users/lance/Desktop/mt_music_fouc_2.mp4
   - /Users/lance/Desktop/mt_blank_scroll.mp4
 priority: high
-ordinal: 2500
+ordinal: 953.125
 ---
 
 ## Description

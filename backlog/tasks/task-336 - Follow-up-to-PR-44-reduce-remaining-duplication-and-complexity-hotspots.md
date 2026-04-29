@@ -1,10 +1,10 @@
 ---
 id: TASK-336
 title: 'Follow up to PR #44: reduce remaining duplication and complexity hotspots'
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-04-29 04:19'
-updated_date: '2026-04-29 04:21'
+updated_date: '2026-04-29 05:12'
 labels:
   - refactor
   - complexity
@@ -17,6 +17,7 @@ references:
   - 'https://github.com/pythoninthegrass/mt/commit/4ba8be8'
   - 'https://github.com/pythoninthegrass/mt/pull/44'
 priority: medium
+ordinal: 5500
 ---
 
 ## Description
