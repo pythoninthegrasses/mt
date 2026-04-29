@@ -12,6 +12,7 @@ export function queueDragReorderMixin() {
     dragY: 0,
     dragStartY: 0,
     dragItemHeight: 0,
+    _prevRelativeY: null,
 
     startDrag(originalIdx, event) {
       event.preventDefault();
@@ -26,6 +27,7 @@ export function queueDragReorderMixin() {
 
       this.draggingOriginalIdx = originalIdx;
       this.dragOverOriginalIdx = null;
+      this._prevRelativeY = null;
 
       const container = this.$refs.queueList;
 
@@ -46,15 +48,22 @@ export function queueDragReorderMixin() {
 
         this.stopAutoScroll();
 
-        if (
-          this.draggingOriginalIdx !== null && this.dragOverOriginalIdx !== null &&
-          this.draggingOriginalIdx !== this.dragOverOriginalIdx
-        ) {
-          this.reorder(this.draggingOriginalIdx, this.dragOverOriginalIdx);
+        if (this.draggingOriginalIdx !== null) {
+          // On release, recalculate drop target at exact cursor position using
+          // standard midpoint (no dead zone) so placement matches where the user let go.
+          this._finalizeDropTarget(this.dragY);
+
+          if (
+            this.dragOverOriginalIdx !== null &&
+            this.draggingOriginalIdx !== this.dragOverOriginalIdx
+          ) {
+            this.reorder(this.draggingOriginalIdx, this.dragOverOriginalIdx);
+          }
         }
 
         this.draggingOriginalIdx = null;
         this.dragOverOriginalIdx = null;
+        this._prevRelativeY = null;
       };
 
       document.addEventListener('mousemove', onMove);
@@ -63,6 +72,38 @@ export function queueDragReorderMixin() {
       document.addEventListener('touchend', onEnd);
     },
 
+    // Resolve drop position at exact cursor coordinates using standard midpoint.
+    // Called on mouseup so the final placement is always accurate.
+    _finalizeDropTarget(y) {
+      const container = this.$refs.queueList;
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const relativeY = y - containerRect.top + container.scrollTop;
+      const playOrderItems = this.$store.queue.playOrderItems;
+      if (playOrderItems.length === 0) return;
+
+      const rawIdx = Math.floor(relativeY / this._rowHeight);
+      const remainder = relativeY - rawIdx * this._rowHeight;
+      let displayIdx = remainder > this._rowHeight / 2 ? rawIdx + 1 : rawIdx;
+      displayIdx = Math.max(0, Math.min(displayIdx, playOrderItems.length));
+
+      if (displayIdx >= playOrderItems.length) {
+        const lastItem = playOrderItems[playOrderItems.length - 1];
+        this.dragOverOriginalIdx = lastItem
+          ? lastItem.originalIndex + 1
+          : this.$store.queue.items.length;
+      } else {
+        const item = playOrderItems[displayIdx];
+        if (item && item.originalIndex !== this.draggingOriginalIdx) {
+          this.dragOverOriginalIdx = item.originalIndex;
+        }
+      }
+    },
+
+    // Update the drop target indicator during drag using a direction-aware dead zone.
+    // Only snaps when cursor enters the outer 35% of a row in the direction of travel,
+    // preventing visual jitter when hovering near a row boundary.
     updateDropTarget(y) {
       const container = this.$refs.queueList;
       if (!container) return;
@@ -75,7 +116,25 @@ export function queueDragReorderMixin() {
 
       const rawIdx = Math.floor(relativeY / this._rowHeight);
       const remainder = relativeY - rawIdx * this._rowHeight;
-      let displayIdx = remainder > this._rowHeight / 2 ? rawIdx + 1 : rawIdx;
+
+      const prevRelY = this._prevRelativeY ?? relativeY;
+      const movingDown = relativeY >= prevRelY;
+      this._prevRelativeY = relativeY;
+
+      // Snap only when cursor is in the outer 35% of a row in the drag direction.
+      // The middle 30% is a dead zone — no indicator change — to prevent flickering.
+      const snapPoint = this._rowHeight * 0.65;
+      let displayIdx;
+      if (movingDown && remainder > snapPoint) {
+        displayIdx = rawIdx + 1;
+      } else if (!movingDown && remainder < this._rowHeight - snapPoint) {
+        displayIdx = rawIdx;
+      } else if (this.dragOverOriginalIdx === null) {
+        // No committed target yet: initialize using midpoint so indicator shows immediately.
+        displayIdx = remainder > this._rowHeight / 2 ? rawIdx + 1 : rawIdx;
+      } else {
+        return;
+      }
 
       displayIdx = Math.max(0, Math.min(displayIdx, playOrderItems.length));
 
@@ -135,9 +194,6 @@ export function queueDragReorderMixin() {
     },
 
     reorder(fromIdx, toIdx) {
-      const queue = this.$store.queue;
-      const items = [...queue.items];
-
       let actualToIdx = toIdx;
       if (fromIdx < toIdx) {
         actualToIdx = toIdx - 1;
@@ -145,21 +201,7 @@ export function queueDragReorderMixin() {
 
       if (fromIdx === actualToIdx) return;
 
-      const [moved] = items.splice(fromIdx, 1);
-      items.splice(actualToIdx, 0, moved);
-
-      let newCurrentIndex = queue.currentIndex;
-      if (fromIdx === queue.currentIndex) {
-        newCurrentIndex = actualToIdx;
-      } else if (fromIdx < queue.currentIndex && actualToIdx >= queue.currentIndex) {
-        newCurrentIndex--;
-      } else if (fromIdx > queue.currentIndex && actualToIdx <= queue.currentIndex) {
-        newCurrentIndex++;
-      }
-
-      queue.items = items;
-      queue.currentIndex = newCurrentIndex;
-      queue.save();
+      this.$store.queue.reorder(fromIdx, actualToIdx);
     },
 
     isDragging(originalIdx) {
