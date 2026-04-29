@@ -8,7 +8,7 @@ import { columnSettingsMixin } from '../mixins/column-settings.js';
 import { playlistDragMixin } from '../mixins/playlist-drag.js';
 import { contextMenuActionsMixin } from '../mixins/context-menu-actions.js';
 import { virtualScrollMixin } from '../mixins/virtual-scroll.js';
-import { handleDoubleClickPlay } from '../utils/queue-builder.js';
+import { handleDoubleClickPlay, handleDoubleClickPlayQuery } from '../utils/queue-builder.js';
 
 export function createLibraryBrowser(Alpine) {
   Alpine.data('libraryBrowser', () => ({
@@ -451,19 +451,35 @@ export function createLibraryBrowser(Alpine) {
     },
 
     async handleDoubleClick(track, index) {
-      // For paginated sections, load all pages so the full library is
-      // enqueued as context (not just the pages the user has scrolled through).
-      if (this.library._isPaginated() && !this.library._allPagesLoaded) {
-        await this.library._loadAllPages();
+      if (this.library._isPaginated()) {
+        const sortKeyMap = {
+          default: 'artist',
+          index: 'track_number',
+          dateAdded: 'added_date',
+          lastPlayed: 'last_played',
+          playCount: 'play_count',
+          year: 'date',
+          genre: 'genre',
+          trackTotal: 'track_total',
+          discNumber: 'disc_number',
+        };
+        const uiStore = this.$store.ui;
+        const queryParams = {
+          search: this.library.searchQuery.trim() || null,
+          sortBy: sortKeyMap[this.library.sortBy] || this.library.sortBy,
+          sortOrder: this.library.sortOrder,
+          ignoreWords: uiStore.sortIgnoreWords ? uiStore.sortIgnoreWordsList : null,
+        };
+        await handleDoubleClickPlayQuery(this, track, queryParams, 'library-browser');
+      } else {
+        await handleDoubleClickPlay(
+          this,
+          track,
+          this.library.filteredTracks,
+          index,
+          'library-browser',
+        );
       }
-
-      await handleDoubleClickPlay(
-        this,
-        track,
-        this.library.filteredTracks,
-        index,
-        'library-browser',
-      );
     },
 
     /**

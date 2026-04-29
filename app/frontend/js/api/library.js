@@ -53,6 +53,31 @@ export const library = {
   },
 
   /**
+   * Find the 0-based offset of a specific track ID in the current sort/filter order.
+   *
+   * @param {object} params
+   * @param {number} params.trackId - Track ID to locate
+   * @param {string} [params.search] - Search query
+   * @param {string} [params.sort] - Sort field
+   * @param {string} [params.order] - Sort order
+   * @param {string} [params.ignoreWords] - Ignore words for sort
+   * @returns {Promise<number|null>} 0-based offset or null if not found
+   */
+  async findTrackOffset(params = {}) {
+    const result = await tauriInvoke('library_find_track_offset', {
+      trackId: params.trackId,
+      search: params.search || null,
+      artist: params.artist || null,
+      album: params.album || null,
+      sortBy: params.sort || null,
+      sortOrder: params.order || null,
+      ignoreWords: params.ignoreWords || null,
+    });
+    if (result !== null) return result;
+    return null;
+  },
+
+  /**
    * Get all tracks in library (uses Tauri command)
    * @param {object} params - Query parameters
    * @param {string} [params.search] - Search query

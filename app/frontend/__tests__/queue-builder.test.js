@@ -11,11 +11,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../js/api/queue.js', () => ({
   queue: {
     playContext: vi.fn(),
+    playContextQuery: vi.fn(),
   },
 }));
 
 import { queue as queueApi } from '../js/api/queue.js';
-import { handleDoubleClickPlay } from '../js/utils/queue-builder.js';
+import { handleDoubleClickPlay, handleDoubleClickPlayQuery } from '../js/utils/queue-builder.js';
 
 function makeTracks(names) {
   return names.map((name, i) => ({
@@ -303,6 +304,121 @@ describe('handleDoubleClickPlay - paginated library regression (task-332)', () =
       false,
     );
     expect(ctx.player.playTrack).not.toHaveBeenCalled();
+  });
+});
+
+describe('handleDoubleClickPlayQuery', () => {
+  const defaultQueryParams = {
+    search: null,
+    sortBy: 'artist',
+    sortOrder: 'asc',
+    ignoreWords: 'the, a, an',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('calls playContextQuery with track id, query params, and shuffle state', async () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const result = makePlayContextResult(tracks, 1);
+    queueApi.playContextQuery.mockResolvedValue(result);
+
+    const ctx = createMockCtx({ shuffle: false });
+
+    await handleDoubleClickPlayQuery(ctx, tracks[1], defaultQueryParams, 'test');
+
+    expect(queueApi.playContextQuery).toHaveBeenCalledWith(
+      tracks[1].id,
+      defaultQueryParams,
+      false,
+    );
+  });
+
+  it('passes shuffle state from queue store', async () => {
+    const tracks = makeTracks(['A', 'B']);
+    const result = makePlayContextResult(tracks, 0);
+    queueApi.playContextQuery.mockResolvedValue(result);
+
+    const ctx = createMockCtx({ shuffle: true });
+
+    await handleDoubleClickPlayQuery(ctx, tracks[0], defaultQueryParams, 'test');
+
+    expect(queueApi.playContextQuery).toHaveBeenCalledWith(
+      tracks[0].id,
+      defaultQueryParams,
+      true,
+    );
+  });
+
+  it('falls back to playTrack when track is missing', async () => {
+    const track = { id: 1, title: 'A', missing: true };
+    const ctx = createMockCtx();
+
+    await handleDoubleClickPlayQuery(ctx, track, defaultQueryParams, 'test');
+
+    expect(ctx.player.playTrack).toHaveBeenCalledWith(track);
+    expect(queueApi.playContextQuery).not.toHaveBeenCalled();
+  });
+
+  it('updates queue store items from result', async () => {
+    const tracks = makeTracks(['A', 'B', 'C']);
+    const result = makePlayContextResult(tracks, 1);
+    queueApi.playContextQuery.mockResolvedValue(result);
+
+    const ctx = createMockCtx();
+
+    await handleDoubleClickPlayQuery(ctx, tracks[1], defaultQueryParams, 'test');
+
+    expect(ctx.queue.items).toEqual(tracks);
+    expect(ctx.queue.currentIndex).toBe(1);
+  });
+
+  it('calls updateTrackState with track and duration_ms from result', async () => {
+    const tracks = makeTracks(['A', 'B']);
+    const result = makePlayContextResult(tracks, 0, 240000);
+    queueApi.playContextQuery.mockResolvedValue(result);
+
+    const ctx = createMockCtx();
+
+    await handleDoubleClickPlayQuery(ctx, tracks[0], defaultQueryParams, 'test');
+
+    expect(ctx.player.updateTrackState).toHaveBeenCalledWith(tracks[0], 240000);
+  });
+
+  it('handles errors gracefully', async () => {
+    const track = makeTracks(['A'])[0];
+    queueApi.playContextQuery.mockRejectedValue(new Error('IPC failed'));
+
+    const ctx = createMockCtx();
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await handleDoubleClickPlayQuery(ctx, track, defaultQueryParams, 'test-prefix');
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      '[test-prefix] Failed to play context query:',
+      expect.any(Error),
+    );
+    expect(ctx.player.updateTrackState).not.toHaveBeenCalled();
+
+    consoleSpy.mockRestore();
+  });
+
+  it('calls beforePlay hook before IPC call', async () => {
+    const tracks = makeTracks(['A']);
+    const callOrder = [];
+
+    queueApi.playContextQuery.mockImplementation(async () => {
+      callOrder.push('playContextQuery');
+      return makePlayContextResult(tracks, 0);
+    });
+
+    const ctx = createMockCtx();
+    const beforePlay = vi.fn(() => callOrder.push('beforePlay'));
+
+    await handleDoubleClickPlayQuery(ctx, tracks[0], defaultQueryParams, 'test', { beforePlay });
+
+    expect(callOrder).toEqual(['beforePlay', 'playContextQuery']);
   });
 });
 

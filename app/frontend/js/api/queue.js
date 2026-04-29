@@ -138,6 +138,29 @@ export const queue = {
     });
   },
 
+  /**
+   * Atomically replace the queue using a backend library query and start playback.
+   * Runs the sort/filter SQL once — no frontend pagination needed.
+   * @param {number} startTrackId - Track ID to play first
+   * @param {Object} queryParams - Filter/sort params matching the current library view
+   * @param {string|null} queryParams.search
+   * @param {string|null} queryParams.sortBy
+   * @param {string|null} queryParams.sortOrder
+   * @param {string|null} queryParams.ignoreWords
+   * @param {boolean} shuffle - Whether to shuffle the queue
+   * @returns {Promise<{items: Array, current_index: number, track: Object, shuffle_enabled: boolean, duration_ms: number}>}
+   */
+  async playContextQuery(startTrackId, queryParams, shuffle) {
+    return tauriInvoke('queue_play_context_query', {
+      startTrackId,
+      search: queryParams.search ?? null,
+      sortBy: queryParams.sortBy ?? null,
+      sortOrder: queryParams.sortOrder ?? null,
+      ignoreWords: queryParams.ignoreWords ?? null,
+      shuffle,
+    });
+  },
+
   save(state) {
     console.debug('Queue save (local only):', state);
   },

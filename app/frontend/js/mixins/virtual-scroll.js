@@ -4,6 +4,8 @@
  * Note: Computed getters (startIndex, endIndex, visibleTracks, totalContentHeight, offsetY)
  * stay in the main component since spread loses getter descriptors.
  */
+import { library as libraryApi } from '../api/library.js';
+
 export function virtualScrollMixin() {
   return {
     // State
@@ -25,7 +27,7 @@ export function virtualScrollMixin() {
       });
     },
 
-    scrollToTrack(trackId) {
+    async scrollToTrack(trackId) {
       const lib = this.library;
 
       // For non-paginated sections, search the flat array directly
@@ -45,6 +47,39 @@ export function virtualScrollMixin() {
           this._scrollToRowIndex(globalIdx);
           return;
         }
+      }
+
+      // Track not in any loaded page — ask the backend for its offset,
+      // load the containing page, and then scroll.
+      const sortKeyMap = {
+        default: 'artist',
+        index: 'track_number',
+        dateAdded: 'added_date',
+        lastPlayed: 'last_played',
+        playCount: 'play_count',
+        year: 'date',
+        genre: 'genre',
+        trackTotal: 'track_total',
+        discNumber: 'disc_number',
+      };
+      const uiStore = Alpine.store('ui');
+
+      try {
+        const offset = await libraryApi.findTrackOffset({
+          trackId,
+          search: lib.searchQuery.trim() || null,
+          sort: sortKeyMap[lib.sortBy] || lib.sortBy,
+          order: lib.sortOrder,
+          ignoreWords: uiStore.sortIgnoreWords ? uiStore.sortIgnoreWordsList : null,
+        });
+
+        if (offset === null || offset === undefined) return;
+
+        const pageIndex = Math.floor(offset / lib._pageSize);
+        await lib._fetchPage(pageIndex);
+        this._scrollToRowIndex(offset);
+      } catch (err) {
+        console.error('[virtual-scroll] scrollToTrack failed:', err);
       }
     },
 
