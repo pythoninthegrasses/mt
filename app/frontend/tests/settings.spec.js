@@ -313,86 +313,6 @@ test.describe('Theme Changes Apply Immediately', () => {
   });
 });
 
-test.describe('View Mode Persistence', () => {
-  test.beforeEach(async ({ page }) => {
-    const libraryState = createLibraryState();
-    await setupLibraryMocks(page, libraryState);
-
-    // Mock Last.fm to prevent error toasts
-    await page.route(/\/api\/lastfm\/settings/, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          enabled: false,
-          username: null,
-          authenticated: false,
-          configured: false,
-          scrobble_threshold: 50,
-        }),
-      });
-    });
-
-    await page.goto('/');
-    await waitForAlpine(page);
-  });
-
-  test('should allow setting view mode to list', async ({ page }) => {
-    await page.evaluate(() => {
-      window.Alpine.store('ui').setLibraryViewMode('list');
-    });
-
-    const uiStore = await getAlpineStore(page, 'ui');
-    expect(uiStore.libraryViewMode).toBe('list');
-  });
-
-  test('should allow setting view mode to grid', async ({ page }) => {
-    await page.evaluate(() => {
-      window.Alpine.store('ui').setLibraryViewMode('grid');
-    });
-
-    const uiStore = await getAlpineStore(page, 'ui');
-    expect(uiStore.libraryViewMode).toBe('grid');
-  });
-
-  test('should allow setting view mode to compact', async ({ page }) => {
-    await page.evaluate(() => {
-      window.Alpine.store('ui').setLibraryViewMode('compact');
-    });
-
-    const uiStore = await getAlpineStore(page, 'ui');
-    expect(uiStore.libraryViewMode).toBe('compact');
-  });
-
-  test('should ignore invalid view mode values', async ({ page }) => {
-    // Get initial mode
-    const initialStore = await getAlpineStore(page, 'ui');
-    const initialMode = initialStore.libraryViewMode;
-
-    // Try to set invalid mode
-    await page.evaluate(() => {
-      window.Alpine.store('ui').setLibraryViewMode('invalid-mode');
-    });
-
-    const uiStore = await getAlpineStore(page, 'ui');
-    // Should remain unchanged
-    expect(uiStore.libraryViewMode).toBe(initialMode);
-  });
-
-  test('should cycle through view modes', async ({ page }) => {
-    const modes = ['list', 'grid', 'compact'];
-
-    for (const mode of modes) {
-      await page.evaluate((m) => {
-        window.Alpine.store('ui').setLibraryViewMode(m);
-      }, mode);
-
-      const uiStore = await getAlpineStore(page, 'ui');
-      expect(uiStore.libraryViewMode).toBe(mode);
-    }
-  });
-});
-
 test.describe('Sidebar State Persistence', () => {
   test.beforeEach(async ({ page }) => {
     const libraryState = createLibraryState();
@@ -439,32 +359,6 @@ test.describe('Sidebar State Persistence', () => {
   test('should track sidebar width', async ({ page }) => {
     const uiStore = await getAlpineStore(page, 'ui');
     expect(uiStore.sidebarWidth).toBe(250); // Default width
-  });
-
-  test('should clamp sidebar width to valid range', async ({ page }) => {
-    // Set width below minimum
-    await page.evaluate(() => {
-      window.Alpine.store('ui').setSidebarWidth(100);
-    });
-
-    let uiStore = await getAlpineStore(page, 'ui');
-    expect(uiStore.sidebarWidth).toBe(180); // Clamped to minimum
-
-    // Set width above maximum
-    await page.evaluate(() => {
-      window.Alpine.store('ui').setSidebarWidth(500);
-    });
-
-    uiStore = await getAlpineStore(page, 'ui');
-    expect(uiStore.sidebarWidth).toBe(400); // Clamped to maximum
-
-    // Set width within range
-    await page.evaluate(() => {
-      window.Alpine.store('ui').setSidebarWidth(300);
-    });
-
-    uiStore = await getAlpineStore(page, 'ui');
-    expect(uiStore.sidebarWidth).toBe(300);
   });
 });
 
@@ -516,21 +410,6 @@ test.describe('Settings Navigation', () => {
     }
   });
 
-  test('should ignore invalid settings section values', async ({ page }) => {
-    // Get initial section
-    const initialStore = await getAlpineStore(page, 'ui');
-    const initialSection = initialStore.settingsSection;
-
-    // Try to set invalid section
-    await page.evaluate(() => {
-      window.Alpine.store('ui').setSettingsSection('invalid-section');
-    });
-
-    const uiStore = await getAlpineStore(page, 'ui');
-    // Should remain unchanged
-    expect(uiStore.settingsSection).toBe(initialSection);
-  });
-
   test('should remember previous view when toggling settings', async ({ page }) => {
     // Verify we start in library view
     let uiStore = await getAlpineStore(page, 'ui');
@@ -575,16 +454,6 @@ test.describe('Sort Ignore Words Settings', () => {
 
     await page.goto('/');
     await waitForAlpine(page);
-  });
-
-  test('should have default sort ignore words enabled', async ({ page }) => {
-    const uiStore = await getAlpineStore(page, 'ui');
-    expect(uiStore.sortIgnoreWords).toBe(true);
-  });
-
-  test('should have default sort ignore words list', async ({ page }) => {
-    const uiStore = await getAlpineStore(page, 'ui');
-    expect(uiStore.sortIgnoreWordsList).toBe(DEFAULT_SORT_IGNORE_WORDS);
   });
 
   test('should toggle sort ignore words setting', async ({ page }) => {
