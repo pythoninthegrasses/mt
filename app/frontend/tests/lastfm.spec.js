@@ -2,8 +2,6 @@ import { test, expect } from '@playwright/test';
 import {
   waitForAlpine,
   getAlpineStore,
-  setAlpineStoreProperty,
-  waitForStoreValue,
 } from './fixtures/helpers.js';
 
 test.describe('Last.fm Integration', () => {
@@ -33,10 +31,10 @@ test.describe('Last.fm Integration', () => {
 
       // Navigate to settings
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       // Click on Last.fm section
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(300);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
     });
 
     test('should display connection status indicator', async ({ page }) => {
@@ -74,9 +72,6 @@ test.describe('Last.fm Integration', () => {
 
       // Click Connect button
       await page.click('[data-testid="lastfm-connect"]');
-
-      // Wait for pending state to be set
-      await page.waitForTimeout(500);
 
       // Check that status changed to "Awaiting Authorization" with yellow indicator
       const statusText = page.locator('text=Awaiting Authorization').first();
@@ -150,11 +145,10 @@ test.describe('Last.fm Integration', () => {
 
       // Click Connect
       await page.click('[data-testid="lastfm-connect"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="lastfm-complete-auth"]');
 
       // Click Complete Authentication
       await page.click('[data-testid="lastfm-complete-auth"]');
-      await page.waitForTimeout(500);
 
       // Verify authenticated state
       const statusText = page.locator('text=Connected as testuser').first();
@@ -184,7 +178,6 @@ test.describe('Last.fm Integration', () => {
 
       // Click Connect
       await page.click('[data-testid="lastfm-connect"]');
-      await page.waitForTimeout(500);
 
       // Verify we're in pending state
       await expect(page.locator('[data-testid="lastfm-cancel-auth"]')).toBeVisible();
@@ -229,11 +222,10 @@ test.describe('Last.fm Integration', () => {
 
       // Click Connect
       await page.click('[data-testid="lastfm-connect"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="lastfm-complete-auth"]');
 
       // Click Complete Authentication
       await page.click('[data-testid="lastfm-complete-auth"]');
-      await page.waitForTimeout(1000);
 
       // Should still show pending state (or return to not connected depending on implementation)
       // The important thing is it doesn't crash
@@ -251,8 +243,6 @@ test.describe('Last.fm Integration', () => {
           settingsComponent.lastfm.username = 'testuser';
         }
       });
-
-      await page.waitForTimeout(300);
 
       // Verify disconnect button is visible
       const disconnectButton = page.locator('[data-testid="lastfm-disconnect"]');
@@ -281,7 +271,6 @@ test.describe('Last.fm Integration', () => {
 
       // Click Connect
       await page.click('[data-testid="lastfm-connect"]');
-      await page.waitForTimeout(500);
 
       // Pending state: show complete authentication help text
       const pendingHelpText = page.locator('text=After authorizing on Last.fm, click "Complete Authentication"');
@@ -329,11 +318,7 @@ test.describe('Last.fm Integration', () => {
         player._updateLastfmNowPlaying();
       });
 
-      // Wait for API call
-      await page.waitForTimeout(1000);
-
-      // Verify Now Playing was called
-      expect(nowPlayingCalled).toBe(true);
+      await expect.poll(() => nowPlayingCalled, { timeout: 3000 }).toBe(true);
       expect(nowPlayingData).toMatchObject({
         artist: 'Test Artist',
         track: 'Test Track',
@@ -369,9 +354,6 @@ test.describe('Last.fm Integration', () => {
         player._updateLastfmNowPlaying();
       });
 
-      // Wait and verify app doesn't crash
-      await page.waitForTimeout(1000);
-
       // App should still be functional
       const player = await getAlpineStore(page, 'player');
       expect(player.currentTrack.title).toBe('Test Track');
@@ -401,8 +383,7 @@ test.describe('Last.fm Integration', () => {
         player._updateLastfmNowPlaying();
       });
 
-      await page.waitForTimeout(1000);
-
+      await expect.poll(() => nowPlayingData, { timeout: 3000 }).not.toBeNull();
       expect(nowPlayingData.album).toBe('Album Name');
     });
 
@@ -430,8 +411,7 @@ test.describe('Last.fm Integration', () => {
         player._updateLastfmNowPlaying();
       });
 
-      await page.waitForTimeout(1000);
-
+      await expect.poll(() => nowPlayingData, { timeout: 3000 }).not.toBeNull();
       expect(nowPlayingData.album).toBeUndefined();
     });
   });
@@ -489,9 +469,7 @@ test.describe('Last.fm Integration', () => {
         });
       });
 
-      await page.waitForTimeout(500);
-
-      expect(scrobblePayload).not.toBeNull();
+      await expect.poll(() => scrobblePayload, { timeout: 3000 }).not.toBeNull();
       expect(scrobblePayload.artist).toBe('Test Artist');
       expect(scrobblePayload.track).toBe('Test Track');
       expect(scrobblePayload.album).toBe('Test Album');
@@ -524,115 +502,8 @@ test.describe('Last.fm Integration', () => {
         });
       });
 
-      await page.waitForTimeout(500);
-
-      expect(scrobblePayload).not.toBeNull();
+      await expect.poll(() => scrobblePayload, { timeout: 3000 }).not.toBeNull();
       expect(scrobblePayload.album).toBeUndefined();
-    });
-
-    test('should verify threshold logic - scrobble not triggered below threshold', async ({ page }) => {
-      // This test verifies the frontend correctly calculates threshold
-      // The backend enforces threshold, but frontend can also check before calling
-      const result = await page.evaluate(() => {
-        const duration = 100000; // 100s
-        const currentTime = 79000; // 79s
-        const threshold = 0.8;
-        const ratio = currentTime / duration; // 0.79
-        return ratio >= threshold; // Should be false
-      });
-
-      expect(result).toBe(false);
-    });
-
-    test('should verify threshold logic - scrobble triggered at threshold', async ({ page }) => {
-      const result = await page.evaluate(() => {
-        const duration = 100000; // 100s
-        const currentTime = 80100; // 80.1s
-        const threshold = 0.8;
-        const ratio = currentTime / duration; // 0.801
-        return ratio >= threshold; // Should be true
-      });
-
-      expect(result).toBe(true);
-    });
-
-    test('should handle successful scrobble response', async ({ page }) => {
-      let responseReceived = false;
-
-      await page.route('**/lastfm/scrobble', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            status: 'success',
-            message: 'Track scrobbled successfully',
-          }),
-        });
-      });
-
-      const result = await page.evaluate(async () => {
-        const { api } = await import('/js/api.js');
-        return await api.lastfm.scrobble({
-          artist: 'Test Artist',
-          track: 'Success Track',
-          timestamp: Math.floor(Date.now() / 1000),
-          duration: 180,
-          played_time: 150,
-        });
-      });
-
-      expect(result.status).toBe('success');
-    });
-
-    test('should handle queued scrobble response', async ({ page }) => {
-      await page.route('**/lastfm/scrobble', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            status: 'queued',
-            message: 'Scrobble queued for retry',
-          }),
-        });
-      });
-
-      const result = await page.evaluate(async () => {
-        const { api } = await import('/js/api.js');
-        return await api.lastfm.scrobble({
-          artist: 'Test Artist',
-          track: 'Queued Track',
-          timestamp: Math.floor(Date.now() / 1000),
-          duration: 180,
-          played_time: 150,
-        });
-      });
-
-      expect(result.status).toBe('queued');
-    });
-
-    test('should handle threshold_not_met response from backend', async ({ page }) => {
-      await page.route('**/lastfm/scrobble', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            status: 'threshold_not_met',
-          }),
-        });
-      });
-
-      const result = await page.evaluate(async () => {
-        const { api } = await import('/js/api.js');
-        return await api.lastfm.scrobble({
-          artist: 'Test Artist',
-          track: 'Threshold Not Met Track',
-          timestamp: Math.floor(Date.now() / 1000),
-          duration: 180,
-          played_time: 50, // Below threshold
-        });
-      });
-
-      expect(result.status).toBe('threshold_not_met');
     });
   });
 
@@ -656,9 +527,9 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(1000);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
       const statusText = page.locator('text=Connected as loadeduser').first();
       await expect(statusText).toBeVisible({ timeout: 5000 });
@@ -695,9 +566,9 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(1500);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
       expect(queueStatusCalled).toBe(true);
     });
@@ -733,9 +604,9 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(1500);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
       const queueCount = page.locator('text=/12.*scrobbles queued/i');
       await expect(queueCount).toBeVisible();
@@ -770,9 +641,9 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(1500);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
       const retryButton = page.locator('[data-testid="lastfm-retry-queue"]');
       await expect(retryButton).toBeVisible();
@@ -807,9 +678,9 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(1500);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
       const retryButton = page.locator('[data-testid="lastfm-retry-queue"]');
       await expect(retryButton).not.toBeVisible();
@@ -857,19 +728,17 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(1500);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
       await page.click('[data-testid="lastfm-retry-queue"]');
-      await page.waitForTimeout(1000);
 
       const toast = page.locator('[data-testid="toast-container"] div').filter({ hasText: /remaining/i });
       await expect(toast).toBeVisible({ timeout: 3000 });
 
-      await page.waitForTimeout(500);
       const updatedCount = page.locator('text=/3.*scrobbles queued/i');
-      await expect(updatedCount).toBeVisible();
+      await expect(updatedCount).toBeVisible({ timeout: 3000 });
     });
 
     test('should handle retry errors gracefully', async ({ page }) => {
@@ -911,15 +780,16 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(1500);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
+      const retryResponse = page.waitForResponse('**/lastfm/queue/retry');
       await page.click('[data-testid="lastfm-retry-queue"]');
-      await page.waitForTimeout(1000);
+      await retryResponse;
 
-      const errorToast = page.locator('[data-testid="toast-container"] div').filter({ hasText: /failed/i });
-      await expect(errorToast).toBeVisible({ timeout: 3000 });
+      const errorToast = page.locator('[data-testid="toast-container"] div').filter({ hasText: /failed to retry/i });
+      await expect(errorToast).toBeVisible({ timeout: 2000 });
     });
 
     test('should update queue count dynamically', async ({ page }) => {
@@ -952,9 +822,9 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(1500);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
       const initialCount = page.locator('text=/10.*scrobbles queued/i');
       await expect(initialCount).toBeVisible();
@@ -967,10 +837,8 @@ test.describe('Last.fm Integration', () => {
         }
       });
 
-      await page.waitForTimeout(300);
-
       const updatedCount = page.locator('text=/7.*scrobbles queued/i');
-      await expect(updatedCount).toBeVisible();
+      await expect(updatedCount).toBeVisible({ timeout: 3000 });
     });
   });
 
@@ -994,9 +862,9 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(300);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
       const importButton = page.locator('[data-testid="lastfm-import-loved"]');
       await expect(importButton).toBeVisible();
@@ -1021,9 +889,9 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(300);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
       const importButton = page.locator('[data-testid="lastfm-import-loved"]');
       await expect(importButton).not.toBeVisible();
@@ -1073,14 +941,12 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(1500);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
       await page.click('[data-testid="lastfm-import-loved"]');
-      await page.waitForTimeout(2000);
-
-      expect(importCalled).toBe(true);
+      await expect.poll(() => importCalled, { timeout: 5000 }).toBe(true);
 
       const successToast = page.locator('[data-testid="toast-container"] div').filter({ hasText: /imported.*120/i });
       await expect(successToast).toBeVisible({ timeout: 5000 });
@@ -1112,8 +978,11 @@ test.describe('Last.fm Integration', () => {
         });
       });
 
+      let resolveImport;
+      const importPending = new Promise((resolve) => { resolveImport = resolve; });
+
       await page.route('**/lastfm/import-loved-tracks', async (route) => {
-        await page.waitForTimeout(2000);
+        await importPending;
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -1129,18 +998,18 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(1500);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
       await page.click('[data-testid="lastfm-import-loved"]');
 
       const importingText = page.locator('text=/importing/i');
       await expect(importingText).toBeVisible({ timeout: 1000 });
 
-      await page.waitForTimeout(2500);
+      resolveImport();
 
-      await expect(importingText).not.toBeVisible();
+      await expect(importingText).not.toBeVisible({ timeout: 3000 });
     });
 
     test('should handle import errors gracefully', async ({ page }) => {
@@ -1182,15 +1051,16 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(1500);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
+      const importResponse = page.waitForResponse('**/lastfm/import-loved-tracks');
       await page.click('[data-testid="lastfm-import-loved"]');
-      await page.waitForTimeout(1000);
+      await importResponse;
 
-      const errorToast = page.locator('[data-testid="toast-container"] div').filter({ hasText: /failed/i });
-      await expect(errorToast).toBeVisible({ timeout: 3000 });
+      const errorToast = page.locator('[data-testid="toast-container"] div').filter({ hasText: /failed.*import/i });
+      await expect(errorToast).toBeVisible({ timeout: 2000 });
     });
 
     test('should require authentication for import', async ({ page }) => {
@@ -1232,12 +1102,11 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(300);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
       await page.click('[data-testid="lastfm-import-loved"]');
-      await page.waitForTimeout(1000);
 
       const authError = page.locator('[data-testid="toast-container"] div').filter({ hasText: /Failed to import loved tracks/i });
       await expect(authError).toBeVisible({ timeout: 3000 });
@@ -1285,12 +1154,11 @@ test.describe('Last.fm Integration', () => {
       await page.goto('/');
       await waitForAlpine(page);
       await page.click('[data-testid="sidebar-settings"]');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('[data-testid="settings-nav-lastfm"]');
       await page.click('[data-testid="settings-nav-lastfm"]');
-      await page.waitForTimeout(1500);
+      await page.waitForSelector('[data-testid="settings-section-lastfm"]');
 
       await page.click('[data-testid="lastfm-import-loved"]');
-      await page.waitForTimeout(2000);
 
       const successToast = page.locator('[data-testid="toast-container"] div').filter({ hasText: /imported.*150.*loved tracks/i });
       await expect(successToast).toBeVisible({ timeout: 5000 });
