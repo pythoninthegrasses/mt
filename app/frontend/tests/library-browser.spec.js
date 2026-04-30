@@ -25,17 +25,19 @@ test.describe('Library Browser', () => {
   test('should display track metadata columns', async ({ page }) => {
     await page.waitForSelector('[data-track-id]', { state: 'visible' });
 
-    // Verify column headers are present
-    const headers = page.locator('.column-header, [class*="sort-header"]');
+    // Verify column headers are present — header cells render as span.truncate inside library-header
+    const headers = page.locator('[data-testid="library-header"] span.truncate');
     const headerTexts = await headers.allTextContents();
 
-    // Should have at least these columns
-    const expectedColumns = ['#', 'Title', 'Artist', 'Album', 'Duration'];
-    expectedColumns.forEach((col) => {
-      const hasColumn = headerTexts.some((text) => text.includes(col));
-      if (!hasColumn) {
-        // Column might be represented differently, check track data instead
-        console.log(`Column "${col}" not found in headers, but may be present in rows`);
+    // Always-visible columns (canHide: false)
+    expect(headerTexts).toContain('#');
+    expect(headerTexts).toContain('Title');
+
+    // Hideable columns — present by default but may be toggled off
+    const hideableColumns = ['Artist', 'Album', 'Time'];
+    hideableColumns.forEach((col) => {
+      if (!headerTexts.some((text) => text.includes(col))) {
+        console.log(`Column "${col}" not visible (may be hidden via column settings)`);
       }
     });
   });

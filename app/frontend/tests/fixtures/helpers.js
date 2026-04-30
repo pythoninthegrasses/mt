@@ -172,3 +172,15 @@ export async function getQueueItems(page) {
   return queueStore.items;
 }
 
+/**
+ * Wait for the library store to have tracks and a track row to be attached
+ * @param {import('@playwright/test').Page} page
+ */
+export async function waitForLibraryReady(page) {
+  await page.waitForFunction(() => {
+    const lib = window.Alpine?.store?.('library');
+    return lib && lib.totalTracks > 0;
+  });
+  await page.waitForSelector('[data-track-id]', { state: 'attached' });
+}
+

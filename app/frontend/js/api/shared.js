@@ -2,13 +2,10 @@
  * Shared API utilities
  *
  * Common infrastructure used by all domain API modules:
- * ApiError class, HTTP request helper, and Tauri invoke reference.
+ * ApiError class, HTTP request helper, and Tauri invoke wrapper.
  */
 
 const API_BASE = 'http://127.0.0.1:8765/api';
-
-// Get Tauri invoke function if available
-export const invoke = window.__TAURI__?.core?.invoke;
 
 /**
  * Custom API error class
@@ -65,6 +62,7 @@ export async function request(endpoint, options = {}) {
  * @returns {Promise<any>} Command result
  */
 export async function tauriInvoke(cmd, params = {}) {
+  const invoke = window.__TAURI__?.core?.invoke;
   if (!invoke) return null;
   try {
     return await invoke(cmd, params);

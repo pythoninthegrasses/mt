@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { waitForAlpine } from './fixtures/helpers.js';
+import { waitForAlpine, waitForLibraryReady } from './fixtures/helpers.js';
 import { createLibraryState, setupLibraryMocks } from './fixtures/mock-library.js';
 import { createPlaylistState, setupPlaylistMocks } from './fixtures/mock-playlists.js';
 
@@ -25,7 +25,7 @@ test.describe('Accessibility: ARIA Labels', () => {
 
     await page.goto('/');
     await waitForAlpine(page);
-    await page.waitForSelector('[data-track-id]', { state: 'visible' });
+    await waitForLibraryReady(page);
   });
 
   test.describe('Player Controls', () => {

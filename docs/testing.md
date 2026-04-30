@@ -10,7 +10,7 @@ MT uses a three-tier testing strategy:
 |-------|-----------|-------|---------|
 | **Rust Backend** | `cargo test` | ~596 | Unit tests for audio, database, and IPC logic |
 | **Vitest Unit** | Vitest | ~391 | Frontend store logic, property-based tests |
-| **Playwright E2E** | Playwright | ~650 | Integration and end-to-end user flows |
+| **Playwright E2E** | Playwright | ~566 | Integration and end-to-end user flows |
 
 ## Running Tests
 
@@ -97,7 +97,7 @@ Tests are controlled by the `E2E_MODE` environment variable:
 
 | Mode | Browsers | @tauri tests | Tests | Duration |
 |------|----------|--------------|-------|----------|
-| `fast` (default) | WebKit only | Skipped | ~650 | ~1m |
+| `fast` (default) | WebKit only | Skipped | ~566 | ~1.5m |
 | `full` | All 3 | Skipped | ~1950 | ~3m |
 | `tauri` | All 3 | Included | ~2000+ | ~4m |
 
@@ -140,6 +140,14 @@ Available fixtures:
 
 - `mock-library.js`: Library API (`/api/library`, track CRUD)
 - `mock-playlists.js`: Playlist API (`/api/playlists`, playlist CRUD)
+
+Available helpers (`fixtures/helpers.js`):
+
+- `waitForAlpine(page)` — wait for Alpine to initialise
+- `waitForLibraryReady(page)` — wait for `Alpine.store('library').totalTracks > 0`, then `[data-track-id]` attached; use this instead of `waitForSelector('[data-track-id]', { state: 'visible' })` to avoid intermittent WebKit timeouts
+- `getAlpineStore(page, name)` / `setAlpineStoreProperty` / `callAlpineStoreMethod` — read or mutate Alpine store state
+- `waitForPlaying(page)` / `waitForPaused(page)` — player state helpers
+- `clickTrackRow(page, index)` / `doubleClickTrackRow(page, index)` — interact with track rows
 
 ---
 
