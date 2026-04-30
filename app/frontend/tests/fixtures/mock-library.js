@@ -689,6 +689,40 @@ export async function setupLibraryMocks(page, state) {
     });
   });
 
+  // POST /api/queue/play-context-query - atomic queue replace via backend DB query
+  await page.route(/\/api\/queue\/play-context-query(\?.*)?$/, async (route, request) => {
+    if (request.method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    const body = request.postDataJSON();
+    const startTrackId = body?.start_track_id;
+    const shuffle = body?.shuffle ?? false;
+    state.apiCalls.push({ method: 'POST', url: '/queue/play-context-query', body });
+
+    // Return all tracks rotated so startTrackId is first (no real DB sort in mock)
+    const startIndex = state.tracks.findIndex((t) => t.id === startTrackId);
+    let items = [...state.tracks];
+    if (startIndex > 0) {
+      items = [...items.slice(startIndex), ...items.slice(0, startIndex)];
+    }
+
+    const currentTrack = items[0] || null;
+    const totalDuration = items.reduce((sum, t) => sum + (t.duration || 0), 0);
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: items.map((t) => ({ track: t })),
+        current_index: 0,
+        track: currentTrack,
+        shuffle_enabled: shuffle,
+        duration_ms: totalDuration,
+      }),
+    });
+  });
+
   // POST /api/queue/clear
   await page.route(/\/api\/queue\/clear(\?.*)?$/, async (route, request) => {
     if (request.method() !== 'POST') {

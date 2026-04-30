@@ -150,14 +150,26 @@ export const queue = {
    * @param {boolean} shuffle - Whether to shuffle the queue
    * @returns {Promise<{items: Array, current_index: number, track: Object, shuffle_enabled: boolean, duration_ms: number}>}
    */
-  playContextQuery(startTrackId, queryParams, shuffle) {
-    return tauriInvoke('queue_play_context_query', {
+  async playContextQuery(startTrackId, queryParams, shuffle) {
+    const result = await tauriInvoke('queue_play_context_query', {
       startTrackId,
       search: queryParams.search ?? null,
       sortBy: queryParams.sortBy ?? null,
       sortOrder: queryParams.sortOrder ?? null,
       ignoreWords: queryParams.ignoreWords ?? null,
       shuffle,
+    });
+    if (result !== null) return result;
+    return request('/queue/play-context-query', {
+      method: 'POST',
+      body: JSON.stringify({
+        start_track_id: startTrackId,
+        search: queryParams.search ?? null,
+        sort_by: queryParams.sortBy ?? null,
+        sort_order: queryParams.sortOrder ?? null,
+        ignore_words: queryParams.ignoreWords ?? null,
+        shuffle,
+      }),
     });
   },
 
