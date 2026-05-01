@@ -1,10 +1,10 @@
 ---
 id: TASK-340.5
 title: Consolidate add-to-playlist-browsing.spec.js via parametrized tests
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-30 19:29'
-updated_date: '2026-04-30 19:30'
+updated_date: '2026-05-01 23:34'
 labels:
   - testing
   - e2e
@@ -29,7 +29,7 @@ Critical file:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Tests consolidated to ~4 parametrized variants
-- [ ] #2 All view/interaction combinations still covered
-- [ ] #3 task test:e2e green
+- [x] #1 Tests consolidated to ~4 parametrized variants
+- [x] #2 All view/interaction combinations still covered
+- [x] #3 task test:e2e green
 <!-- AC:END -->
