@@ -1,10 +1,10 @@
 ---
 id: TASK-340.4
 title: Delete missing-tracks.spec.js existence-check tests
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-30 19:29'
-updated_date: '2026-04-30 19:30'
+updated_date: '2026-05-01 00:06'
 labels:
   - testing
   - e2e
@@ -33,7 +33,7 @@ Critical file:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 4 existence-check tests deleted
-- [ ] #2 Remaining missing-tracks tests (popover, modal, playback interception) still green
-- [ ] #3 task test:e2e green
+- [x] #1 4 existence-check tests deleted
+- [x] #2 Remaining missing-tracks tests (popover, modal, playback interception) still green
+- [x] #3 task test:e2e green
 <!-- AC:END -->

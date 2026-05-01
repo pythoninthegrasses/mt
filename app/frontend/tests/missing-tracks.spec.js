@@ -252,20 +252,6 @@ test.describe('Missing Track Popover', () => {
     await expect(popover).toBeVisible({ timeout: 5000 });
     await expect(popover).toContainText('Last seen');
   });
-
-  test('should have UI store with missingTrackPopover methods', async ({ page }) => {
-    const hasMethods = await page.evaluate(() => {
-      const ui = window.Alpine?.store('ui');
-      return (
-        'missingTrackPopover' in ui &&
-        typeof ui.openMissingTrackPopover === 'function' &&
-        typeof ui.closeMissingTrackPopover === 'function' &&
-        typeof ui.handlePopoverLocate === 'function' &&
-        typeof ui.handlePopoverIgnore === 'function'
-      );
-    });
-    expect(hasMethods).toBe(true);
-  });
 });
 
 test.describe('Missing Track Modal', () => {
@@ -392,41 +378,6 @@ test.describe('Missing Track Modal', () => {
     });
 
     await expect(modal).not.toBeVisible({ timeout: 5000 });
-  });
-});
-
-test.describe('Missing Track API Integration', () => {
-  // API is imported as an ES module in the app, not exposed on window.
-  // These tests verify the methods exist via the library store which uses the API.
-  test.beforeEach(async ({ page }) => {
-    const libraryState = createLibraryState();
-    await setupLibraryMocks(page, libraryState);
-    await page.goto('/');
-    await waitForAlpine(page);
-  });
-
-  test('should have library store with missing track support', async ({ page }) => {
-    const hasLibraryStore = await page.evaluate(() => {
-      const library = window.Alpine?.store('library');
-      return library !== undefined;
-    });
-    expect(hasLibraryStore).toBe(true);
-  });
-
-  test('should have UI store with missingTrackModal property', async ({ page }) => {
-    const hasModalProperty = await page.evaluate(() => {
-      const ui = window.Alpine?.store('ui');
-      return 'missingTrackModal' in ui;
-    });
-    expect(hasModalProperty).toBe(true);
-  });
-
-  test('should have closeMissingTrackModal method on UI store', async ({ page }) => {
-    const hasMethod = await page.evaluate(() => {
-      const ui = window.Alpine?.store('ui');
-      return typeof ui.closeMissingTrackModal === 'function';
-    });
-    expect(hasMethod).toBe(true);
   });
 });
 
