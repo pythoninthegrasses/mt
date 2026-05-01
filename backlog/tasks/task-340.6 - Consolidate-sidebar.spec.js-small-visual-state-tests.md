@@ -1,10 +1,10 @@
 ---
 id: TASK-340.6
 title: Consolidate sidebar.spec.js small visual/state tests
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-30 19:29'
-updated_date: '2026-04-30 19:30'
+updated_date: '2026-05-01 23:44'
 labels:
   - testing
   - e2e
@@ -36,7 +36,7 @@ Critical file:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Small isolated visual checks consolidated
-- [ ] #2 Interaction-heavy tests (multi-select, drag, keyboard) preserved unchanged
-- [ ] #3 task test:e2e green
+- [x] #1 Small isolated visual checks consolidated
+- [x] #2 Interaction-heavy tests (multi-select, drag, keyboard) preserved unchanged
+- [x] #3 task test:e2e green
 <!-- AC:END -->

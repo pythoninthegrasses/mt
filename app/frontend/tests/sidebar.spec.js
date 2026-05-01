@@ -13,14 +13,28 @@ test.describe('Sidebar Navigation', () => {
     await waitForAlpine(page);
   });
 
-  test('should display sidebar sections', async ({ page }) => {
-    // Wait for sidebar to be visible
+  test('sidebar nav renders correctly', async ({ page }) => {
     await page.waitForSelector('aside[x-data="sidebar"]', { state: 'visible' });
 
-    // Verify sidebar contains library sections
     const librarySections = page.locator('aside button');
-    const count = await librarySections.count();
-    expect(count).toBeGreaterThan(0);
+    expect(await librarySections.count()).toBeGreaterThan(0);
+
+    const sectionIcons = page.locator('aside button svg');
+    expect(await sectionIcons.count()).toBeGreaterThan(0);
+
+    await page.evaluate(() => {
+      const sidebar = window.Alpine.$data(document.querySelector('aside[x-data="sidebar"]'));
+      if (sidebar.isCollapsed) sidebar.toggleCollapse();
+    });
+    const sectionLabels = page.locator('aside button span');
+    expect(await sectionLabels.count()).toBeGreaterThan(0);
+
+    const musicSection = page.locator('[data-testid="sidebar-section-all"]');
+    await musicSection.click();
+    await expect.poll(async () => {
+      const classes = await musicSection.getAttribute('class');
+      return classes?.includes('bg-primary');
+    }, { timeout: 5000 }).toBe(true);
   });
 
   test('should navigate between sections', async ({ page }) => {
@@ -40,45 +54,6 @@ test.describe('Sidebar Navigation', () => {
       const store = await getAlpineStore(page, 'library');
       return store.currentSection;
     }, { timeout: 5000 }).toBe('liked');
-  });
-
-  test('should highlight active section', async ({ page }) => {
-    await page.waitForSelector('aside[x-data="sidebar"]', { state: 'visible' });
-
-    const musicSection = page.locator('[data-testid="sidebar-section-all"]');
-    await musicSection.click();
-
-    await expect.poll(async () => {
-      const classes = await musicSection.getAttribute('class');
-      return classes?.includes('bg-primary');
-    }, { timeout: 5000 }).toBe(true);
-  });
-
-  test('should show section icons', async ({ page }) => {
-    await page.waitForSelector('aside[x-data="sidebar"]', { state: 'visible' });
-
-    // Verify sections have icons (SVG elements)
-    const sectionIcons = page.locator('aside button svg');
-    const count = await sectionIcons.count();
-    expect(count).toBeGreaterThan(0);
-  });
-
-  test('should show section labels when expanded', async ({ page }) => {
-    await page.waitForSelector('aside[x-data="sidebar"]', { state: 'visible' });
-
-    // Ensure sidebar is expanded
-    const sidebarStore = await page.evaluate(() => {
-      const sidebar = window.Alpine.$data(document.querySelector('aside[x-data="sidebar"]'));
-      if (sidebar.isCollapsed) {
-        sidebar.toggleCollapse();
-      }
-      return sidebar;
-    });
-
-    // Verify section labels are visible
-    const sectionLabels = page.locator('aside button span');
-    const count = await sectionLabels.count();
-    expect(count).toBeGreaterThan(0);
   });
 });
 
@@ -291,29 +266,18 @@ test.describe('Playlists Section', () => {
     await page.waitForSelector('aside[x-data="sidebar"]', { state: 'visible' });
   });
 
-  test('should show playlists section header', async ({ page }) => {
-    // Verify playlists header exists
+  test('sidebar playlists section renders correctly', async ({ page }) => {
     const playlistsHeader = page.locator('aside:has-text("Playlists")');
     await expect(playlistsHeader).toBeVisible();
-  });
 
-  test('should show create playlist button', async ({ page }) => {
-    // Verify create button exists (+ icon)
     const createButton = page.locator('aside button[title*="Playlist"]');
-    const count = await createButton.count();
-    expect(count).toBeGreaterThan(0);
-  });
+    expect(await createButton.count()).toBeGreaterThan(0);
 
-  test('should show empty state when no playlists', async ({ page }) => {
-    // Set playlists to empty
     await page.evaluate(() => {
       const sidebar = window.Alpine.$data(document.querySelector('aside[x-data="sidebar"]'));
       sidebar.playlists = [];
     });
-
     await page.waitForTimeout(300);
-
-    // Verify empty message
     const emptyMessage = page.locator('aside:has-text("No playlists")');
     await expect(emptyMessage).toBeVisible();
   });
