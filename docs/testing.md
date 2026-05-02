@@ -8,9 +8,9 @@ MT uses a three-tier testing strategy:
 
 | Layer | Framework | Tests | Purpose |
 |-------|-----------|-------|---------|
-| **Rust Backend** | `cargo test` | ~596 | Unit tests for audio, database, and IPC logic |
-| **Vitest Unit** | Vitest | ~391 | Frontend store logic, property-based tests |
-| **Playwright E2E** | Playwright | ~566 | Integration and end-to-end user flows |
+| **Rust Backend** | `cargo test` | ~807 | Unit tests for audio, database, and IPC logic |
+| **Vitest Unit** | Vitest | ~535 | Frontend store logic, property-based tests |
+| **Playwright E2E** | Playwright | ~499 | Integration and end-to-end user flows |
 
 ## Running Tests
 
@@ -97,9 +97,9 @@ Tests are controlled by the `E2E_MODE` environment variable:
 
 | Mode | Browsers | @tauri tests | Tests | Duration |
 |------|----------|--------------|-------|----------|
-| `fast` (default) | WebKit only | Skipped | ~566 | ~1.5m |
-| `full` | All 3 | Skipped | ~1950 | ~3m |
-| `tauri` | All 3 | Included | ~2000+ | ~4m |
+| `fast` (default) | WebKit only | Skipped | ~499 | ~1m |
+| `full` | All 3 | Skipped | ~1700 | ~3m |
+| `tauri` | All 3 | Included | ~1750+ | ~4m |
 
 ```bash
 # Fast mode (default)
@@ -173,6 +173,33 @@ Before adding a Playwright E2E test, ask:
 2. **Does this test click buttons, type text, or drag elements?** Real user interactions justify Playwright.
 3. **Is there already a Vitest test for this logic?** Check `__tests__/` first. Do not duplicate coverage.
 4. **Does this test check CSS computed values?** CSS assertion tests are brittle and low-value — skip them.
+
+### Do not write `page.evaluate()`-only tests in Playwright
+
+A test that only uses `page.evaluate()` to mutate Alpine stores and assert on store state is a unit test in disguise. It runs slower, provides worse error messages, and duplicates coverage that belongs in Vitest.
+
+**Bad — belongs in Vitest:**
+
+```javascript
+// Playwright test that only manipulates stores via evaluate
+await page.evaluate(() => {
+  Alpine.store('queue').addTracks([track]);
+  Alpine.store('player').play();
+});
+const isPlaying = await page.evaluate(() => Alpine.store('player').isPlaying);
+expect(isPlaying).toBe(true);
+```
+
+**Good — real user interaction in Playwright:**
+
+```javascript
+// Click the actual UI, then assert on visible state
+await page.click('[data-testid="track-row-0"]');
+await page.click('[data-testid="play-button"]');
+await expect(page.locator('[data-testid="player-state"]')).toHaveText('Playing');
+```
+
+**Rule of thumb:** If you can replace every `page.evaluate()` call with a direct Vitest store test and nothing meaningful changes, the test belongs in Vitest.
 
 ### Tauri-tagged tests
 
