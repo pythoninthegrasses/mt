@@ -32,7 +32,7 @@ export default defineConfig({
   fullyParallel: true,
 
   // Optimize for CI performance
-  workers: process.env.CI ? 4 : undefined,
+  workers: process.env.CI ? 6 : 12,
 
   // Fail the build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env.CI,
@@ -53,8 +53,8 @@ export default defineConfig({
 
   // Shared settings for all the projects below
   use: {
-    // Base URL for testing (Vite dev server)
-    baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:5173',
+    // Base URL for testing (Vite preview build)
+    baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:4173',
 
     // Collect trace on failure (useful for debugging)
     trace: 'on-first-retry',
@@ -117,11 +117,12 @@ export default defineConfig({
         },
       ],
 
-  // Run dev server before starting tests
-  // Note: When running from Taskfile, we're already in app/frontend
+  // Run production preview build before starting tests.
+  // Eliminates per-request Vite transform cost under 8-12 concurrent workers.
+  // Set PLAYWRIGHT_TEST_BASE_URL=http://localhost:5173 to use the dev server instead.
   webServer: process.env.PLAYWRIGHT_SKIP_WEBSERVER ? undefined : {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
+    command: 'npm run build && npm run preview',
+    url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI || !!process.env.ACT,
     timeout: 120000,
     stdout: 'ignore',
