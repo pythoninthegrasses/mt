@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.6.0](https://github.com/pythoninthegrasses/mt/compare/v1.5.1...v1.6.0) (2026-05-04)
+
+
+### Features
+
+* add queue_play_context_query and find_track_offset backend commands ([7ccfbb6](https://github.com/pythoninthegrasses/mt/commit/7ccfbb6bb96ed2edf3e9d1533119f27155f8e22a))
+* **library:** add SWR snapshot to visibleTracks to eliminate blank viewport during scroll (task-334 option A) ([527bbef](https://github.com/pythoninthegrasses/mt/commit/527bbefa45c5c0cd952a1d3551a1bd894af6e012))
+
+
+### Bug Fixes
+
+* **frontend:** repair queue drag reorder and reduce snap aggressiveness ([c89e1cb](https://github.com/pythoninthegrasses/mt/commit/c89e1cbf0a175124da141e53efc9c63bd9d739cb))
+* **queue:** add HTTP fallback path to playContextQuery and mock route ([1784832](https://github.com/pythoninthegrasses/mt/commit/178483255d58de853f53a3ea00243a893a7e1ccc))
+* remove spurious async from playContextQuery in queue.js (task-338) ([cca91c7](https://github.com/pythoninthegrasses/mt/commit/cca91c7b9c3b73679cf20505d3de268293c25d08))
+* resolve six WebKit Playwright regressions (task-339) ([e81d947](https://github.com/pythoninthegrasses/mt/commit/e81d9477b2ff8e6c80738798b21bc56d5034fdc3))
+* use backend query for paginated double-click play and scroll-to-track ([f8f5a3a](https://github.com/pythoninthegrasses/mt/commit/f8f5a3a74c5f8a45663a43ce67361ec064a33358))
+
+
+### Performance Improvements
+
+* **tests:** tune Playwright for speed via preview build and worker fixture (task-340.7) ([89fda02](https://github.com/pythoninthegrasses/mt/commit/89fda02bae01fc84da14d431f3eccfab162d9ef7))
+
 ## [1.5.1](https://github.com/pythoninthegrasses/mt/compare/v1.5.0...v1.5.1) (2026-04-23)
 
 
