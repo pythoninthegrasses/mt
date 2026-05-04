@@ -22,6 +22,8 @@ export function createLibraryBrowser(Alpine) {
     submenuY: 0,
     submenuCloseTimeout: null,
     currentPlaylistId: null,
+    _swrSnapshot: [],
+    _swrGeneration: -1,
     ...playlistDragMixin(),
 
     ...columnGeometryMixin(),
@@ -340,6 +342,12 @@ export function createLibraryBrowser(Alpine) {
       const end = Math.min(this.endIndex, lib.totalTracks);
       const result = [];
 
+      // Clear SWR snapshot when load generation changes (section switch, search, sort)
+      if (lib._loadGeneration !== this._swrGeneration) {
+        this._swrSnapshot = [];
+        this._swrGeneration = lib._loadGeneration;
+      }
+
       // Trigger page prefetch for visible range + 1 page ahead
       if (lib._isPaginated()) {
         const pageSize = lib._pageSize;
@@ -356,11 +364,15 @@ export function createLibraryBrowser(Alpine) {
         if (track) {
           result.push({ track, globalIndex: i });
         }
-        // Skip indices where page data hasn't loaded yet — _ensurePage above
-        // will fetch the missing pages, and _dataVersion++ will trigger a
-        // re-render with real data. Showing placeholder rows here causes FOUC.
       }
-      return result;
+
+      if (result.length > 0) {
+        this._swrSnapshot = result;
+        return result;
+      }
+      // Viewport page not yet loaded: serve last known snapshot so the viewport
+      // stays populated while _ensurePage fetches the missing page.
+      return this._swrSnapshot;
     },
 
     get totalContentHeight() {
