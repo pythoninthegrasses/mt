@@ -1,10 +1,10 @@
 ---
 id: TASK-336
 title: 'Follow up to PR #44: reduce remaining duplication and complexity hotspots'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-04-29 04:19'
-updated_date: '2026-04-29 05:12'
+updated_date: '2026-05-04 04:16'
 labels:
   - refactor
   - complexity
@@ -34,9 +34,15 @@ This task is complete when all three child tasks are merged and the workspace re
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 All three child tasks are completed and merged
-- [ ] #2 Total LOC reduction across the three PRs is ≥250 LOC (target ~330)
-- [ ] #3 task lint, task format, task test all pass on main after final child merges
-- [ ] #4 task tauri:build (or cargo check at minimum) succeeds on main after final child merges
-- [ ] #5 No behavior changes are introduced — refactor-only
+- [x] #1 All three child tasks are completed and merged
+- [x] #2 Total LOC reduction across the three PRs is ≥250 LOC (target ~330)
+- [x] #3 task lint, task format, task test all pass on main after final child merges
+- [x] #4 task tauri:build (or cargo check at minimum) succeeds on main after final child merges
+- [x] #5 No behavior changes are introduced — refactor-only
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+All three child tasks (336.1, 336.2, 336.3) merged to main and archived. Total gross deletions: ~584 LOC (253 Rust + 130 JS + 201 test/build), clearing the ≥250 target. CI green on main throughout. Refactor-only — no behavior changes.
+<!-- SECTION:FINAL_SUMMARY:END -->

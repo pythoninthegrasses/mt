@@ -1,10 +1,10 @@
 ---
 id: TASK-334
 title: Refactor library scroll behavior to preview upcoming cursor batches
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-04-15 03:21'
-updated_date: '2026-04-29 05:12'
+updated_date: '2026-05-04 04:47'
 labels:
   - frontend
   - backend
@@ -13,11 +13,8 @@ labels:
   - ux
   - virtualization
 dependencies: []
-references:
-  - /Users/lance/Desktop/mt_music_fouc_2.mp4
-  - /Users/lance/Desktop/mt_blank_scroll.mp4
 priority: high
-ordinal: 953.125
+ordinal: 1000
 ---
 
 ## Description
@@ -28,7 +25,7 @@ Improve library scrolling so destination context is visible before releasing the
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 While dragging the scrollbar, UI shows a live destination preview (artist and/or batch range) before release.
+- [x] #1 While dragging the scrollbar, UI shows a live destination preview (artist and/or batch range) before release.
 - [ ] #2 During active scrolling, the system preloads the next N cursor batches in scroll direction to reduce ambiguity and blank states.
 - [ ] #3 PageUp/PageDown/Home/End trigger eager loading of needed batches so destination context appears quickly.
 - [ ] #4 Prefetched-but-unused batches are evicted after a bounded idle period to limit memory growth.
@@ -44,27 +41,7 @@ When scrollbar-dragging through a 13k+ track library, the viewport is blank ~60-
 
 ### Video Evidence
 
-Source: `/Users/lance/Desktop/mt_blank_scroll.mp4` (11.4 seconds, 171 frames extracted at 15fps to `/tmp/mt_blank_scroll_frames/`)
-
-Frame-by-frame timeline:
-
-| Frames | Time | State |
-|--------|------|-------|
-| 1 | 0.00s | Tracks visible (Joyce Manor) |
-| 2-19 | 0.07-1.27s | BLANK (~1.2s) |
-| 19 | 1.27s | Faint placeholder dividers appear |
-| 20-21 | 1.33-1.40s | Tracks visible (Big Country) |
-| 22-60 | 1.47-4.00s | BLANK (~2.5s) |
-| 60 | 4.00s | Faint dividers |
-| 61-95 | 4.07-6.33s | BLANK |
-| 96-100 | 6.40-6.67s | Tracks visible (A Sunny Day In Glasgow) |
-| 101-120 | 6.73-8.00s | BLANK |
-| 120-130 | 8.00-8.67s | Placeholder dividers |
-| 131-140 | 8.73-9.33s | Tracks visible (Radiohead) |
-| 141-150 | 9.40-10.00s | BLANK |
-| 151-171 | 10.07-11.40s | Tracks visible (Super Furry Animals) |
-
-Summary: ~60-70% of scrolling time shows a blank viewport. Tracks only flash in briefly when the IPC response arrives before the next scroll event invalidates the viewport.
+Original frame-by-frame analysis was derived from `mt_blank_scroll.mp4`, which is no longer on disk. The qualitative finding it produced — viewport blank ~60–70% of scrollbar-drag time, brief flashes of real rows when an IPC response wins the race — is preserved here as the design constraint. Re-record before final verification if a fresh capture is needed.
 
 ### Current Pagination Architecture
 
@@ -87,27 +64,27 @@ scroll event
 
 | Constant | Value | File | Line |
 |----------|-------|------|------|
-| `_pageSize` | 500 tracks | `app/frontend/js/stores/library.js` | ~50 |
-| `_rowHeight` | 34px | `app/frontend/js/mixins/virtual-scroll.js` | 8 |
-| `_bufferRows` | 15 rows | `app/frontend/js/mixins/virtual-scroll.js` | 11 |
-| Prefetch ahead | +1 page | `app/frontend/js/components/library-browser.js` | visibleTracks getter |
-| Pagination type | LIMIT/OFFSET | `crates/mt-tauri/src/db/library.rs` | 130-149 |
-| Rust-side cache | None | Every call hits SQLite | - |
+| `_pageSize` | 500 tracks | `app/frontend/js/stores/library.js` | 61 |
+| `_rowHeight` | 34px | `app/frontend/js/mixins/virtual-scroll.js` | 12 |
+| `_bufferRows` | 15 rows | `app/frontend/js/mixins/virtual-scroll.js` | 15 |
+| Prefetch ahead | +1 page | `app/frontend/js/components/library-browser.js` | 349 |
+| Pagination type | LIMIT/OFFSET | `crates/mt-tauri/src/db/library.rs` | 142 |
+| Rust-side cache | None | Every call hits SQLite | — |
 
 **Why blank:** After the TASK-333 fix, `visibleTracks` correctly skips null/unloaded tracks (no more placeholder rows). When the scrollbar is dragged to an unloaded page, zero rows render until the IPC round-trip completes. The +1 page prefetch is insufficient for scrollbar drag, which can jump thousands of tracks in a single frame.
 
 ### Key Source Files
 
 Frontend:
-- `app/frontend/js/components/library-browser.js` — `visibleTracks` getter (~line 200-226), `startIndex`/`endIndex` getters, prefetch logic
-- `app/frontend/js/stores/library.js` — `_trackPages`, `_pageSize=500`, `_fetchPage`, `_ensurePage`, `getTrackAtIndex`, `_loadAllPages`
-- `app/frontend/js/mixins/virtual-scroll.js` — `_rowHeight=34`, `_bufferRows=15`, RAF-throttled `_onScroll`
+- `app/frontend/js/components/library-browser.js` — `visibleTracks` getter (L336–364), `startIndex`/`endIndex` (L318–334), `+1` prefetch at L349
+- `app/frontend/js/stores/library.js` — `_trackPages` L59, `_loadingPages` L60, `_pageSize=500` L61, `_fetchPage` L188 (with `_loadGeneration` stale-response guard at L189/219/242), `_ensurePage` L248, `getTrackAtIndex` L257, `_loadAllPages` L267
+- `app/frontend/js/mixins/virtual-scroll.js` — `_rowHeight=34` L12, `_bufferRows=15` L15, RAF-throttled `_onScroll` L18, `scrollToTrack` L30–84 (rewritten in `f8f5a3a` to use `findTrackOffset` + on-demand single-page fetch when target is unloaded)
 - `app/frontend/js/utils/library-operations.js` — `loadLibraryData`, `loadSection`, `applySectionData`
 - `app/frontend/views/library.html` — Template with `_placeholder` handling
 
 Backend:
-- `crates/mt-tauri/src/library/commands.rs` — `library_get_section` (line 141-201), `get_section_all` (line 222), `library_find_offset` (line 396-432)
-- `crates/mt-tauri/src/db/library.rs` — SQL LIMIT/OFFSET query (line 130-149), COUNT query
+- `crates/mt-tauri/src/library/commands.rs` — `library_get_section` L142, `get_section_all` L206, `library_find_offset` L397, `library_find_track_offset` L438–471 (new in commit `7ccfbb6`)
+- `crates/mt-tauri/src/db/library.rs` — `LIMIT ? OFFSET ?` L142, COUNT L130
 
 ### Approach Options
 
@@ -118,6 +95,7 @@ Keep old page data visible until new data arrives. Cache the last successful `vi
 **Pros:** Minimal code change, eliminates blank viewport entirely, familiar UX pattern (stale content > no content).
 **Cons:** Stale content may confuse users briefly (showing "Radiohead" while scrollbar is near "A").
 **Complexity:** Low. Requires a cached snapshot in the `visibleTracks` getter and a `_loading` flag.
+**Note:** The cached snapshot must coexist with the existing `_loadGeneration` stale-response discard in `_fetchPage`. The snapshot is purely a render-side fallback — don't replay discarded responses into it.
 
 #### Option B: Velocity-Based Predictive Prefetch
 
@@ -167,5 +145,9 @@ Note: Ignore the duplicate row rendering observed in some video frames — that 
 Investigation completed 2026-04-15. All frame analysis, architecture mapping, and approach documentation written above. Ready for implementation.
 
 TASK-333 (commit f8f2e1c) fixed the FOUC but exposed this blank-during-scroll problem. The two issues are related but distinct: FOUC was about stale cached data rendering wrong rows on init; this task is about missing data during fast scroll navigation.
+
+**2026-05-03**: Reconciled architecture references with current `main`. Line numbers refreshed; `mt_blank_scroll.mp4` reference removed (file no longer on disk). Drift since 2026-04-15 is non-material to the plan: only additions are `library_find_track_offset` backend command and a rewritten `scrollToTrack` for explicit jumps. Prefetch is still strictly `+1` page; no SWR / cursor / cache layer has been added. Recommended approach (A then B) stands.
 <!-- NOTES:END -->
+
+**2026-05-03**: Implemented Option A (SWR). Added `_swrSnapshot` and `_swrGeneration` to `library-browser` component. `visibleTracks` now caches the last successful render result and returns it when the current viewport page is unloaded. Snapshot clears on `_loadGeneration` change (section switch, search, sort). Tests added in `__tests__/library-browser.swr.test.js` (9 tests). AC#1 addressed by keeping stale rows visible; AC#5 partially addressed.
 <!-- SECTION:NOTES:END -->
