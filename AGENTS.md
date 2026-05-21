@@ -237,6 +237,27 @@ The `finalSummary`, `description`, `implementationNotes`, and `planSet` MCP para
 - Use `task_edit` with the field for short single-paragraph content
 - For multiline content, edit the task markdown file directly with the file editing tool (the file path is shown in `task_view` output)
 
+### Backlog MCP Parameter Reference (Common Pitfalls)
+
+**`task_edit` parameter names are different from `task_create`:**
+
+| Operation | `task_create` param | `task_edit` param |
+|-----------|-------------------|-------------------|
+| Task ID | — (auto-assigned) | **`id`** (NOT `taskId`) |
+| Title | `title` | `title` |
+| Description | `description` | `description` |
+| Acceptance Criteria | `acceptanceCriteria` | **`acceptanceCriteriaSet`** (replaces all), `acceptanceCriteriaAdd`, `acceptanceCriteriaRemove`, `acceptanceCriteriaCheck`, `acceptanceCriteriaUncheck` |
+| Dependencies | `dependencies` | `dependencies` |
+| Parent Task | `parentTaskId` | `parentTaskId` |
+| Status | `status` | `status` |
+| Notes | — | `notesAppend`, `notesSet`, `notesClear` |
+| Plan | — | `planAppend`, `planSet`, `planClear` |
+| Final Summary | — | `finalSummary`, `finalSummaryAppend` |
+| References | `references` | `references`, `addReferences`, `removeReferences` |
+| Documentation | `documentation` | `documentation`, `addDocumentation`, `removeDocumentation` |
+
+**Common error:** Using `taskId` instead of `id`, or `acceptanceCriteria` instead of `acceptanceCriteriaSet` in `task_edit` calls. Always use `id` and the `acceptanceCriteria*` variant names.
+
 The overview resource contains additional detail on decision frameworks, search-first workflow, and guides for task creation, execution, and completion.
 
 </CRITICAL_INSTRUCTION>
