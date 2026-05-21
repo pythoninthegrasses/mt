@@ -4,7 +4,7 @@ task           3.49.1
 cargo-binstall 1.14.4
 deno           2.5.1
 rust           nightly-2026-02-09
-nodejs         24.2.0
+nodejs         24.12.0
 prek           0.3.2
 ruff           0.12.11
 uv             0.9.24
