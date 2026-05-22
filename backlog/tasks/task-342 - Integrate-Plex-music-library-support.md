@@ -1,18 +1,18 @@
 ---
-id: TASK-341
+id: TASK-342
 title: Integrate Plex music library support
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-05-21 22:56'
 updated_date: '2026-05-21 22:58'
 labels: []
 dependencies:
-  - TASK-341.1
-  - TASK-341.2
-  - TASK-341.3
-  - TASK-341.4
-  - TASK-341.5
-  - TASK-341.6
+  - TASK-342.1
+  - TASK-342.2
+  - TASK-342.3
+  - TASK-342.4
+  - TASK-342.5
+  - TASK-342.6
 ordinal: 52500
 ---
 
@@ -32,12 +32,12 @@ Integrate Plex music library support into mt, allowing users to browse, discover
 - plexamp-tui (`spiercey/plexamp-tui`) — alternative reference using PIN-OAuth + XML API. More complex auth flow.
 
 **Task breakdown:**
-1. **341.1** — Plex API client (Rust) — foundation module
-2. **341.2** — Database migration (source + remote_id columns)
-3. **341.3** — Config storage + Settings UI (depends on 341.2)
-4. **341.4** — Library fetch + merge (depends on 341.1, 341.2)
-5. **341.5** — Download-on-play (depends on 341.2)
-6. **341.6** — Frontend: cloud icons, download UI, Plex views (depends on 341.3, 341.4, 341.5)
+1. **342.1** — Plex API client (Rust) — foundation module
+2. **342.2** — Database migration (source + remote_id columns)
+3. **342.3** — Config storage + Settings UI (depends on 342.2)
+4. **342.4** — Library fetch + merge (depends on 342.1, 342.2)
+5. **342.5** — Download-on-play (depends on 342.2)
+6. **342.6** — Frontend: cloud icons, download UI, Plex views (depends on 342.3, 342.4, 342.5)
 
 **Key design decisions:**
 - Static X-Plex-Token (no PIN-OAuth) — user finds token in Plex Web View XML URL

@@ -226,6 +226,25 @@ This project uses Backlog.md MCP for all task and project management.
 
 **IMPORTANT**: Use `task_edit(status: "Done")` to mark tasks as done. Do NOT use `task_complete` unless the user explicitly asks to archive/clean up — it removes the task from the kanban.
 
+### Preventing ID Collisions
+
+Backlog.md does NOT enforce ID uniqueness on the filesystem. If two task files declare the same `id:` in their frontmatter, `task_view`/`task_search` silently resolve to whichever has the newer `updated_date`, hiding the other from the kanban and MCP lookups. This is how TASK-341 ended up with two owners (iOS-sync vs. Plex umbrella) in commit `89ff249`.
+
+**Before creating any task, ALWAYS:**
+
+1. Run `task_list` (or `rg "^id: TASK-" backlog/tasks/ backlog/archive/tasks/ backlog/completed/`) to find the highest existing ID.
+2. Let `task_create` auto-assign the next ID — **never set `id:` manually in frontmatter or filenames**.
+3. For subtasks, pass `parentTaskId` to `task_create` so Backlog.md generates the hierarchical ID (e.g., `TASK-342.1`) for you.
+
+**Detecting a collision:**
+
+```bash
+rg -N "^id: " backlog/tasks/ backlog/archive/tasks/ backlog/completed/ \
+  | awk -F': ' '{print $NF}' | sort | uniq -d
+```
+
+**Resolving a collision:** the MCP has no rename/change-id operation. Renumbering requires: (1) `git mv` the file to a new filename with the new ID; (2) edit the frontmatter `id:` field; (3) edit `parent_task_id:` if the task is a subtask whose parent was also renumbered (this field is NOT settable via `task_edit`); (4) edit `dependencies:` arrays in other tasks that reference the old ID; (5) verify with `rg "^id: TASK-OLD$" backlog/tasks/` returning zero results.
+
 ### Cross-Branch Task Scanning (disabled)
 
 `check_active_branches` and `remote_operations` are both **disabled** in `backlog/config.yml`. With worktrees, these features scan other branches and pull in tasks that were already completed/archived on `main` but still exist in `backlog/tasks/` on older branches — bloating the kanban with ghost tasks. Do not re-enable without accounting for worktree branch divergence.
@@ -248,7 +267,7 @@ The `finalSummary`, `description`, `implementationNotes`, and `planSet` MCP para
 | Description | `description` | `description` |
 | Acceptance Criteria | `acceptanceCriteria` | **`acceptanceCriteriaSet`** (replaces all), `acceptanceCriteriaAdd`, `acceptanceCriteriaRemove`, `acceptanceCriteriaCheck`, `acceptanceCriteriaUncheck` |
 | Dependencies | `dependencies` | `dependencies` |
-| Parent Task | `parentTaskId` | `parentTaskId` |
+| Parent Task | `parentTaskId` | **not supported — edit `parent_task_id:` in the markdown frontmatter directly** |
 | Status | `status` | `status` |
 | Notes | — | `notesAppend`, `notesSet`, `notesClear` |
 | Plan | — | `planAppend`, `planSet`, `planClear` |
@@ -256,7 +275,7 @@ The `finalSummary`, `description`, `implementationNotes`, and `planSet` MCP para
 | References | `references` | `references`, `addReferences`, `removeReferences` |
 | Documentation | `documentation` | `documentation`, `addDocumentation`, `removeDocumentation` |
 
-**Common error:** Using `taskId` instead of `id`, or `acceptanceCriteria` instead of `acceptanceCriteriaSet` in `task_edit` calls. Always use `id` and the `acceptanceCriteria*` variant names.
+**Common error:** Using `taskId` instead of `id`, or `acceptanceCriteria` instead of `acceptanceCriteriaSet` in `task_edit` calls. Always use `id` and the `acceptanceCriteria*` variant names, and `task_edit` cannot re-parent — edit the file's `parent_task_id:` frontmatter directly when a parent ID changes.
 
 The overview resource contains additional detail on decision frameworks, search-first workflow, and guides for task creation, execution, and completion.
 
