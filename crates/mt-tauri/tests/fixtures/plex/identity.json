@@ -1,0 +1,7 @@
+{
+  "MediaContainer": {
+    "machineIdentifier": "abc123def456",
+    "friendlyName": "My Plex Server",
+    "version": "1.30.0.1234-abc456def"
+  }
+}

@@ -1,5 +1,6 @@
 import { audio } from '../api/audio.js';
 import { lastfm } from '../api/lastfm.js';
+import { plex } from '../api/plex.js';
 import { settings } from '../api/settings.js';
 import { tauriConfirm, tauriInvoke } from '../api/shared.js';
 import { modLabel, SHORTCUT_DEFINITIONS } from '../shortcuts.js';
@@ -22,6 +23,7 @@ export function createSettingsView(Alpine) {
       { id: 'sorting', label: 'Sorting' },
       { id: 'advanced', label: 'Advanced' },
       { id: 'lastfm', label: 'Last.fm' },
+      { id: 'plex', label: 'Plex' },
       { id: 'stats', label: 'Statistics' },
     ],
 
@@ -43,6 +45,19 @@ export function createSettingsView(Alpine) {
       isCachingLoved: false,
       isMatchingLoved: false,
       isResettingLoved: false,
+    },
+
+    plex: {
+      url: '',
+      token: '',
+      serverName: null,
+      machineId: null,
+      version: null,
+      libraries: [],
+      selectedLibraries: [],
+      isConnecting: false,
+      isDiscovering: false,
+      connected: false,
     },
 
     reconcileScan: {
@@ -220,6 +235,7 @@ export function createSettingsView(Alpine) {
       });
       await this.loadWatchedFolders();
       await this.loadLastfmSettings();
+      await this.loadPlexSettings();
       await this.loadNetworkCacheStatus();
       this.loadColumnSettings();
       this.deduplicateAcrossDirectories = window.settings.get(
@@ -853,6 +869,114 @@ export function createSettingsView(Alpine) {
         if (unlisten) unlisten();
         this.reconcileScan.isRunning = false;
         this.reconcileScan.progress = null;
+      }
+    },
+
+    // ============================================
+    // Plex methods
+    // ============================================
+
+    plexStatusColor() {
+      return this.plex.connected ? 'bg-green-500' : 'bg-red-500';
+    },
+
+    plexStatusText() {
+      if (this.plex.connected) {
+        return this.plex.serverName ? `Connected to ${this.plex.serverName}` : 'Connected';
+      }
+      return 'Not Connected';
+    },
+
+    async loadPlexSettings() {
+      if (!window.__TAURI__) return;
+
+      try {
+        const config = await plex.getConfig();
+        if (config?.status === 'configured') {
+          this.plex.url = config.url;
+          this.plex.token = config.token;
+          this.plex.selectedLibraries = config.libraries ?? [];
+          this.plex.connected = true;
+        }
+      } catch (error) {
+        console.error('[settings] Failed to load Plex settings:', error);
+      }
+    },
+
+    async connectPlex() {
+      if (!this.plex.url || !this.plex.token) {
+        Alpine.store('ui').toast('Server URL and token are required', 'warning');
+        return;
+      }
+
+      this.plex.isConnecting = true;
+      try {
+        const info = await plex.ping(this.plex.url, this.plex.token);
+        this.plex.serverName = info.server_name;
+        this.plex.machineId = info.machine_id;
+        this.plex.version = info.version;
+
+        await plex.setConfig(this.plex.url, this.plex.token, this.plex.selectedLibraries);
+        this.plex.connected = true;
+        Alpine.store('settings').plex_configured = true;
+        Alpine.store('ui').toast(`Connected to ${info.server_name}`, 'success');
+      } catch (error) {
+        console.error('[settings] Failed to connect to Plex:', error);
+        Alpine.store('ui').toast(`Failed to connect: ${error}`, 'error');
+      } finally {
+        this.plex.isConnecting = false;
+      }
+    },
+
+    async disconnectPlex() {
+      try {
+        await plex.clearConfig();
+        this.plex.url = '';
+        this.plex.token = '';
+        this.plex.serverName = null;
+        this.plex.machineId = null;
+        this.plex.version = null;
+        this.plex.libraries = [];
+        this.plex.selectedLibraries = [];
+        this.plex.connected = false;
+        Alpine.store('settings').plex_configured = false;
+        Alpine.store('ui').toast('Disconnected from Plex', 'success');
+      } catch (error) {
+        console.error('[settings] Failed to disconnect from Plex:', error);
+        Alpine.store('ui').toast('Failed to disconnect from Plex', 'error');
+      }
+    },
+
+    async discoverPlexLibraries() {
+      if (!this.plex.url || !this.plex.token) {
+        Alpine.store('ui').toast('Server URL and token are required', 'warning');
+        return;
+      }
+
+      this.plex.isDiscovering = true;
+      try {
+        this.plex.libraries = await plex.listLibraries(this.plex.url, this.plex.token);
+        if (this.plex.libraries.length === 0) {
+          Alpine.store('ui').toast('No music libraries found on this server', 'info');
+        }
+      } catch (error) {
+        console.error('[settings] Failed to discover Plex libraries:', error);
+        Alpine.store('ui').toast(`Failed to discover libraries: ${error}`, 'error');
+      } finally {
+        this.plex.isDiscovering = false;
+      }
+    },
+
+    plexLibrarySelected(key) {
+      return this.plex.selectedLibraries.includes(key);
+    },
+
+    togglePlexLibrary(key) {
+      const idx = this.plex.selectedLibraries.indexOf(key);
+      if (idx === -1) {
+        this.plex.selectedLibraries = [...this.plex.selectedLibraries, key];
+      } else {
+        this.plex.selectedLibraries = this.plex.selectedLibraries.filter((k) => k !== key);
       }
     },
 

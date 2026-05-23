@@ -7,6 +7,7 @@ pub struct PlexConfig {
     pub url: String,
     pub token: String,
     pub libraries: Option<Vec<String>>,
+    pub client_identifier: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,4 +122,22 @@ pub(crate) struct MediaDto {
 #[derive(Deserialize)]
 pub(crate) struct PartDto {
     pub(crate) key: String,
+}
+
+// ── Identity endpoint DTOs ────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub(crate) struct IdentityRoot {
+    #[serde(rename = "MediaContainer")]
+    pub(crate) media_container: IdentityContainer,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct IdentityContainer {
+    #[serde(rename = "machineIdentifier", default)]
+    pub(crate) machine_identifier: String,
+    #[serde(rename = "friendlyName", default)]
+    pub(crate) friendly_name: String,
+    #[serde(rename = "version", default)]
+    pub(crate) version: String,
 }

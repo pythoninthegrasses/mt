@@ -3,6 +3,7 @@ mod favorites;
 mod lastfm;
 mod lyrics;
 mod playlists;
+mod plex;
 mod queue;
 mod settings;
 mod stats;
@@ -40,6 +41,10 @@ pub(crate) use queue::{
 };
 
 pub(crate) use lyrics::{lyrics_clear_cache, lyrics_get};
+
+pub(crate) use plex::{
+    plex_config_clear, plex_config_get, plex_config_set, plex_list_libraries, plex_server_ping,
+};
 
 pub(crate) use settings::{
     settings_get, settings_get_all, settings_reset, settings_set, settings_update,

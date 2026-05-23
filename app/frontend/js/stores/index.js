@@ -8,6 +8,7 @@
 import { createPlayerStore } from './player.js';
 import { createQueueStore } from './queue.js';
 import { createLibraryStore } from './library.js';
+import { createSettingsStore } from './settings.js';
 import { createUIStore } from './ui.js';
 import { initEventListeners } from '../events.js';
 
@@ -28,6 +29,9 @@ export function initStores(Alpine) {
 
   // Queue store (references player and library)
   createQueueStore(Alpine);
+
+  // Settings store (no store dependencies)
+  createSettingsStore(Alpine);
 
   console.log('[stores] All stores registered');
 

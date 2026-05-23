@@ -1,7 +1,5 @@
 use std::time::Duration;
 
-use uuid::Uuid;
-
 use super::types::*;
 
 const MAX_BODY_BYTES: usize = 10 * 1024 * 1024;
@@ -16,7 +14,7 @@ pub struct PlexClient {
 
 impl PlexClient {
     pub fn new(config: PlexConfig) -> Self {
-        let client_id = Uuid::new_v5(&Uuid::NAMESPACE_OID, config.token.as_bytes()).to_string();
+        let client_id = config.client_identifier.clone();
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
@@ -219,6 +217,7 @@ mod tests {
             url: url.to_string(),
             token: "test-token".to_string(),
             libraries: None,
+            client_identifier: "test-client-id".to_string(),
         }
     }
 
@@ -230,6 +229,7 @@ mod tests {
             url: "http://192.168.1.10:32400".to_string(),
             token: "mytoken".to_string(),
             libraries: None,
+            client_identifier: "test-client-id".to_string(),
         };
         let client = PlexClient::new(cfg);
         let url = client.stream_url("/library/parts/1/999/file.flac");
@@ -245,6 +245,7 @@ mod tests {
             url: "https://plex.example.com:32400".to_string(),
             token: "securetoken".to_string(),
             libraries: None,
+            client_identifier: "test-client-id".to_string(),
         };
         let client = PlexClient::new(cfg);
         let url = client.stream_url("/library/parts/2/888/file.mp3");
@@ -296,7 +297,7 @@ mod tests {
             .await;
 
         let mut cfg = config(&server.uri());
-        cfg.libraries = Some(vec!["classical".to_string()]); // case-insensitive
+        cfg.libraries = Some(vec!["classical".to_string()]);
         let client = PlexClient::new(cfg);
         let sections = client.music_sections().await.unwrap();
 
