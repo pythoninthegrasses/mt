@@ -22,7 +22,7 @@ mod concurrency_test;
 
 use cache::NetworkFileCache;
 use commands::{
-    AudioState, audio_get_status, audio_get_volume, audio_list_devices, audio_load,
+    AudioState, PlexState, audio_get_status, audio_get_volume, audio_list_devices, audio_load,
     audio_load_and_play, audio_pause, audio_play, audio_seek, audio_set_device, audio_set_volume,
     audio_stop, favorites_add, favorites_check, favorites_get, favorites_get_recently_added,
     favorites_get_recently_played, favorites_get_top25, favorites_remove, lastfm_auth_callback,
@@ -33,14 +33,14 @@ use commands::{
     network_cache_purge, network_cache_status, playlist_add_tracks, playlist_create,
     playlist_delete, playlist_generate_name, playlist_get, playlist_list, playlist_remove_track,
     playlist_reorder_tracks, playlist_update, playlists_reorder, plex_config_clear,
-    plex_config_get, plex_config_set, plex_list_libraries, plex_server_ping, queue_add,
-    queue_add_files, queue_add_play_next, queue_check_integrity, queue_clear, queue_get,
-    queue_get_playback_state, queue_play_context, queue_play_context_query, queue_play_next_track,
-    queue_play_previous_track, queue_remove, queue_reorder, queue_set_current_index,
-    queue_set_loop, queue_set_shuffle, queue_shuffle, queue_skip_next, queue_skip_previous,
-    settings_get, settings_get_all, settings_reset, settings_set, settings_update,
-    stats_generate_chart_grid, stats_get_genres, stats_get_overview, stats_get_plays_over_time,
-    stats_get_top_artists,
+    plex_config_get, plex_config_set, plex_fetch_albums, plex_fetch_tracks, plex_list_libraries,
+    plex_merge_library, plex_refresh_cache, plex_server_ping, queue_add, queue_add_files,
+    queue_add_play_next, queue_check_integrity, queue_clear, queue_get, queue_get_playback_state,
+    queue_play_context, queue_play_context_query, queue_play_next_track, queue_play_previous_track,
+    queue_remove, queue_reorder, queue_set_current_index, queue_set_loop, queue_set_shuffle,
+    queue_shuffle, queue_skip_next, queue_skip_previous, settings_get, settings_get_all,
+    settings_reset, settings_set, settings_update, stats_generate_chart_grid, stats_get_genres,
+    stats_get_overview, stats_get_plays_over_time, stats_get_top_artists,
 };
 use dialog::{open_add_music_dialog, open_file_dialog, open_folder_dialog};
 use library::commands::{
@@ -575,6 +575,10 @@ pub fn run() {
             plex_config_clear,
             plex_server_ping,
             plex_list_libraries,
+            plex_fetch_albums,
+            plex_fetch_tracks,
+            plex_refresh_cache,
+            plex_merge_library,
             agent_generate_playlist,
             agent_check_status,
             agent_check_ollama,
@@ -653,6 +657,9 @@ pub fn run() {
 
             app.manage(AudioState::new(app.handle().clone()));
             info!("Audio engine initialized");
+
+            app.manage(PlexState::new());
+            debug!("Plex state initialized");
 
             match MediaKeyManager::new(app.handle().clone()) {
                 Ok(media_keys) => {

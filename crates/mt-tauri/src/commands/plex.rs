@@ -1,12 +1,19 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
+use tauri::{AppHandle, State};
 use tauri_plugin_store::StoreExt;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::plex::{DirectoryDto, IdentityRoot, SectionsRoot};
+use crate::db::Database;
+use crate::plex::{
+    DirectoryDto, IdentityRoot, PlexAlbum, PlexConfig, PlexMergeStats, PlexTrack, SectionsRoot,
+};
+use crate::plex::client::PlexClient;
+use crate::plex::merge::merge_plex_library;
 
 const STORE_NAME: &str = "settings.json";
 const CONFIG_KEY: &str = "plex.config";
@@ -245,6 +252,164 @@ async fn do_list_libraries(url: &str, token: &str) -> Result<Vec<PlexLibrarySumm
         .collect();
 
     Ok(libs)
+}
+
+// ── In-memory cache ──────────────────────────────────────────────────────────
+
+#[derive(Default)]
+pub(crate) struct PlexCache {
+    albums: Option<Vec<PlexAlbum>>,
+    tracks: HashMap<String, Vec<PlexTrack>>,
+}
+
+pub(crate) struct PlexState {
+    pub cache: Mutex<PlexCache>,
+}
+
+impl PlexState {
+    pub(crate) fn new() -> Self {
+        Self {
+            cache: Mutex::new(PlexCache::default()),
+        }
+    }
+}
+
+// ── Config loading helper ─────────────────────────────────────────────────────
+
+fn load_plex_config(app: &AppHandle) -> Result<PlexConfig, String> {
+    let store = app
+        .store(STORE_NAME)
+        .map_err(|e| format!("Failed to open settings store: {e}"))?;
+    match store.get(CONFIG_KEY) {
+        Some(val) => {
+            let stored: PlexConfigStored = serde_json::from_value(val)
+                .map_err(|e| format!("Failed to parse Plex config: {e}"))?;
+            Ok(PlexConfig {
+                url: stored.url,
+                token: stored.token,
+                libraries: stored.libraries,
+                client_identifier: stored.client_identifier,
+            })
+        }
+        None => Err("Plex is not configured".to_string()),
+    }
+}
+
+// ── Fetch commands ────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub(crate) async fn plex_fetch_albums(
+    app: AppHandle,
+    plex_state: State<'_, PlexState>,
+) -> Result<Vec<PlexAlbum>, String> {
+    let config = load_plex_config(&app)?;
+    let client = PlexClient::new(config);
+
+    let sections = client
+        .music_sections()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut all_albums: Vec<PlexAlbum> = vec![];
+    for section in &sections {
+        let albums = client.albums(&section.key).await.map_err(|e| e.to_string())?;
+        all_albums.extend(albums);
+    }
+
+    let mut cache = plex_state.cache.lock().await;
+    cache.albums = Some(all_albums.clone());
+
+    Ok(all_albums)
+}
+
+#[tauri::command]
+pub(crate) async fn plex_fetch_tracks(
+    app: AppHandle,
+    plex_state: State<'_, PlexState>,
+    album_rating_key: String,
+) -> Result<Vec<PlexTrack>, String> {
+    let config = load_plex_config(&app)?;
+    let client = PlexClient::new(config);
+
+    let tracks = client
+        .tracks(&album_rating_key)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut cache = plex_state.cache.lock().await;
+    cache.tracks.insert(album_rating_key, tracks.clone());
+
+    Ok(tracks)
+}
+
+/// Refresh the full Plex cache: fetches all sections, albums, and their tracks.
+#[tauri::command]
+pub(crate) async fn plex_refresh_cache(
+    app: AppHandle,
+    plex_state: State<'_, PlexState>,
+) -> Result<u64, String> {
+    let config = load_plex_config(&app)?;
+    let client = PlexClient::new(config);
+
+    let sections = client
+        .music_sections()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut all_albums: Vec<PlexAlbum> = vec![];
+    let mut track_map: HashMap<String, Vec<PlexTrack>> = HashMap::new();
+
+    for section in &sections {
+        let albums = client.albums(&section.key).await.map_err(|e| e.to_string())?;
+        for album in &albums {
+            let tracks = client
+                .tracks(&album.rating_key)
+                .await
+                .map_err(|e| e.to_string())?;
+            track_map.insert(album.rating_key.clone(), tracks);
+        }
+        all_albums.extend(albums);
+    }
+
+    let total_tracks: u64 = track_map.values().map(|v| v.len() as u64).sum();
+
+    let mut cache = plex_state.cache.lock().await;
+    cache.albums = Some(all_albums);
+    cache.tracks = track_map;
+
+    Ok(total_tracks)
+}
+
+/// Merge Plex library into local DB using the in-memory cache.
+#[tauri::command]
+pub(crate) async fn plex_merge_library(
+    app: AppHandle,
+    db: State<'_, Database>,
+    plex_state: State<'_, PlexState>,
+) -> Result<PlexMergeStats, String> {
+    let config = load_plex_config(&app)?;
+    let client = PlexClient::new(config);
+
+    // Snapshot cache so we don't hold the lock across the DB transaction.
+    let (albums, track_map) = {
+        let cache = plex_state.cache.lock().await;
+        let albums = cache
+            .albums
+            .clone()
+            .ok_or("Cache is empty — call plex_refresh_cache first")?;
+        (albums, cache.tracks.clone())
+    };
+
+    let albums_with_tracks: Vec<(PlexAlbum, Vec<PlexTrack>)> = albums
+        .into_iter()
+        .map(|album| {
+            let tracks = track_map.get(&album.rating_key).cloned().unwrap_or_default();
+            (album, tracks)
+        })
+        .collect();
+
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    merge_plex_library(&conn, &albums_with_tracks, &client)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

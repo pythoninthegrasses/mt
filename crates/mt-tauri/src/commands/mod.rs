@@ -43,7 +43,9 @@ pub(crate) use queue::{
 pub(crate) use lyrics::{lyrics_clear_cache, lyrics_get};
 
 pub(crate) use plex::{
-    plex_config_clear, plex_config_get, plex_config_set, plex_list_libraries, plex_server_ping,
+    PlexState, plex_config_clear, plex_config_get, plex_config_set, plex_fetch_albums,
+    plex_fetch_tracks, plex_list_libraries, plex_merge_library, plex_refresh_cache,
+    plex_server_ping,
 };
 
 pub(crate) use settings::{

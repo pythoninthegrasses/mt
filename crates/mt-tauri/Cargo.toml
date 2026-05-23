@@ -58,6 +58,9 @@ rand = "0.9"
 # UUID generation (for scan job IDs)
 uuid = { version = "1", features = ["v4", "v5"] }
 
+# Unicode normalization (for Plex track matching)
+unicode-normalization = "0.1"
+
 # Filesystem watching with debouncing
 notify-debouncer-full = "0.5"
 
