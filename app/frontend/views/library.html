@@ -274,36 +274,37 @@
                           <line x1="12" y1="8" x2="12.01" y2="8" />
                         </svg>
                       </button>
-                    </span>
-                  </template>
-                  <template x-if="!item.track._placeholder && col.key === 'index'">
-                    <span x-text="getIndexDisplay(item)"></span>
-                  </template>
-                  <template x-if="!item.track._placeholder && col.key === 'title'">
-                    <span class="flex items-center gap-1 min-w-0">
+                      <!-- Remote (Plex) track indicator -->
                       <span
-                        class="truncate"
-                        :class="item.track.missing ? 'text-muted-foreground/70 italic' : ''"
-                        x-text="item.track.title || item.track.filename || 'Unknown'"
-                      ></span>
-                      <template x-if="library.isRemote(item.track)">
+                        x-show="!item.track.missing && library.isRemote(item.track)"
+                        class="text-muted-foreground/60"
+                        title="Available from Plex — not downloaded"
+                        data-testid="remote-track-icon"
+                      >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
-                          width="12"
-                          height="12"
+                          class="w-4 h-4"
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
                           stroke-width="2"
                           stroke-linecap="round"
                           stroke-linejoin="round"
-                          class="shrink-0 text-muted-foreground opacity-70 hover:opacity-100 transition-opacity"
-                          aria-label="Available from Plex (not downloaded)"
                         >
                           <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
                         </svg>
-                      </template>
+                      </span>
                     </span>
+                  </template>
+                  <template x-if="!item.track._placeholder && col.key === 'index'">
+                    <span x-text="getIndexDisplay(item)"></span>
+                  </template>
+                  <template x-if="!item.track._placeholder && col.key === 'title'">
+                    <span
+                      class="truncate"
+                      :class="item.track.missing ? 'text-muted-foreground/70 italic' : ''"
+                      x-text="item.track.title || item.track.filename || 'Unknown'"
+                    ></span>
                   </template>
                   <template x-if="!item.track._placeholder && col.key === 'artist'">
                     <span x-text="item.track.artist || 'Unknown Artist'"></span>
