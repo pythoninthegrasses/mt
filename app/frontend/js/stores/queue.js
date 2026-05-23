@@ -12,6 +12,7 @@
  * 3. Exposes computed UI properties
  */
 
+import { plex } from '../api/plex.js';
 import { queue as queueApi } from '../api/queue.js';
 
 export function createQueueStore(Alpine) {
@@ -33,6 +34,10 @@ export function createQueueStore(Alpine) {
 
     // Flag to prevent event listener from overriding during queue operations
     _updating: false,
+
+    // Plex prefetch worker state
+    _prefetchActive: false,
+    _prefetchCancelled: false,
 
     /**
      * Initialize queue from backend
@@ -334,6 +339,8 @@ export function createQueueStore(Alpine) {
         hadCurrentTrack: this.currentIndex >= 0,
       });
 
+      this._cancelPrefetch();
+
       // Update local state
       this.items = [];
       this.currentIndex = -1;
@@ -401,6 +408,7 @@ export function createQueueStore(Alpine) {
 
       await Alpine.store('player').playTrack(track);
       await queueApi.setCurrentIndex(this.currentIndex);
+      this._startPrefetch();
     },
 
     /**
@@ -588,6 +596,42 @@ export function createQueueStore(Alpine) {
         console.error('[queue] Integrity check failed:', error);
         return null;
       }
+    },
+
+    _startPrefetch() {
+      this._cancelPrefetch();
+      const lib = Alpine.store('library');
+      if (!lib) return;
+
+      const upcoming = this.items.slice(this.currentIndex + 1);
+      const remoteIds = upcoming
+        .filter((t) => lib.isRemote(t))
+        .map((t) => t.id);
+      if (remoteIds.length === 0) return;
+
+      this._prefetchActive = true;
+      this._prefetchCancelled = false;
+      this._runPrefetchWorker(remoteIds);
+    },
+
+    _cancelPrefetch() {
+      this._prefetchCancelled = true;
+      this._prefetchActive = false;
+    },
+
+    async _runPrefetchWorker(trackIds) {
+      for (const trackId of trackIds) {
+        if (this._prefetchCancelled) break;
+        const lib = Alpine.store('library');
+        const track = this.items.find((t) => t.id === trackId);
+        if (!track || !lib?.isRemote(track)) continue;
+        try {
+          await plex.downloadTrack(trackId);
+        } catch (error) {
+          console.error('[queue-prefetch]', 'download_failed', { trackId, error: error?.message });
+        }
+      }
+      this._prefetchActive = false;
     },
 
     /**

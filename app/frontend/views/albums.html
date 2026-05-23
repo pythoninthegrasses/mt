@@ -77,7 +77,12 @@
 
             <!-- Album info -->
             <div class="mt-2 px-0.5">
-              <p class="text-sm font-medium truncate" x-text="album.name"></p>
+              <p class="text-sm font-medium flex items-center gap-1">
+                <span class="truncate" x-text="album.name"></span>
+                <template x-if="album.hasRemote">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-muted-foreground opacity-70 hover:opacity-100 transition-opacity" aria-label="Available from Plex (not downloaded)"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                </template>
+              </p>
               <p class="text-xs text-muted-foreground truncate" x-text="album.artist"></p>
             </div>
           </div>
@@ -138,11 +143,12 @@
 
             <!-- Metadata -->
             <div class="flex flex-col justify-end min-w-0">
-              <h1
-                class="text-3xl font-bold mb-2 break-words"
-                x-text="selectedAlbum.name"
-                data-testid="album-detail-title"
-              ></h1>
+              <h1 class="text-3xl font-bold mb-2 break-words flex items-center gap-2" data-testid="album-detail-title">
+                <span x-text="selectedAlbum.name"></span>
+                <template x-if="selectedAlbum.hasRemote">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-muted-foreground opacity-70 hover:opacity-100 transition-opacity" aria-label="Available from Plex (not downloaded)"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                </template>
+              </h1>
               <p class="text-lg mb-1">
                 <span
                   class="text-primary hover:underline cursor-pointer"

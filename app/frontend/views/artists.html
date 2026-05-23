@@ -21,12 +21,20 @@
         <template x-for="artist in artists" :key="artist">
           <li>
             <button
-              class="w-full text-left px-3 py-1.5 text-sm transition-colors truncate"
+              class="w-full text-left px-3 py-1.5 text-sm transition-colors"
               :class="isSelectedArtist(artist) ? 'bg-primary/15 text-primary font-medium' : 'text-foreground/80 hover:bg-muted/70'"
               @click="selectArtist(artist)"
               :data-testid="'artist-item-' + artist"
-              x-text="artist"
-            ></button>
+            >
+              <span class="flex items-center gap-1 min-w-0">
+                <span class="truncate" x-text="artist"></span>
+                <template x-if="artistHasRemote(artist)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-muted-foreground opacity-70 hover:opacity-100" aria-label="Available from Plex (not downloaded)">
+                    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+                  </svg>
+                </template>
+              </span>
+            </button>
           </li>
         </template>
       </ul>

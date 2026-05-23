@@ -1,4 +1,5 @@
 import { favorites } from '../api/favorites.js';
+import { plex } from '../api/plex.js';
 import { playlists } from '../api/playlists.js';
 import { tauriConfirm, tauriInvoke } from '../api/shared.js';
 
@@ -115,6 +116,14 @@ export function contextMenuActionsMixin() {
           disabled: selectedCount > 1 || !track.album,
         },
       ];
+
+      if (selectedCount === 1 && this.$store.library.isRemote(track)) {
+        menuItems.push({ type: 'separator' });
+        menuItems.push({
+          label: 'Download from Plex',
+          action: () => this.downloadFromPlex(track),
+        });
+      }
 
       // Check favorite status and update label asynchronously
       favorites
@@ -322,6 +331,19 @@ export function contextMenuActionsMixin() {
           detail: { artist },
         }),
       );
+    },
+
+    async downloadFromPlex(track) {
+      this.contextMenu = null;
+      try {
+        await plex.downloadTrack(track.id);
+      } catch (error) {
+        console.error('[context-menu]', 'download_from_plex_error', {
+          trackId: track.id,
+          error: error.message,
+        });
+        this.$store.ui.toast(`Plex download failed: ${error.message}`, 'error');
+      }
     },
 
     createPlaylistWithTracks() {

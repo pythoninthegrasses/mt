@@ -144,6 +144,7 @@ export function createAlbumsBrowser(Alpine) {
           trackCount: tracks.length,
           firstTrackId: firstTrack.id,
           totalDuration: tracks.reduce((sum, t) => sum + (t.duration || 0), 0),
+          hasRemote: tracks.some((t) => this.$store.library.isRemote(t)),
         });
       }
 

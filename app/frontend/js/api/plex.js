@@ -26,4 +26,8 @@ export const plex = {
   listLibraries(url, token) {
     return tauriInvoke('plex_list_libraries', { url, token });
   },
+
+  downloadTrack(trackId) {
+    return tauriInvoke('plex_download_track', { trackId });
+  },
 };

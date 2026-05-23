@@ -23,7 +23,10 @@ pub(crate) fn normalize_for_match(s: &str) -> String {
     let lower = nfc.to_lowercase();
     let trimmed = lower.trim();
     let collapsed = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
-    collapsed.strip_prefix("the ").unwrap_or(&collapsed).to_string()
+    collapsed
+        .strip_prefix("the ")
+        .unwrap_or(&collapsed)
+        .to_string()
 }
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -65,8 +68,7 @@ fn load_local_rows(conn: &Connection) -> DbResult<Vec<LocalRow>> {
 }
 
 fn load_existing_remote_ids(conn: &Connection) -> DbResult<HashSet<String>> {
-    let mut stmt =
-        conn.prepare("SELECT remote_id FROM library WHERE remote_id IS NOT NULL")?;
+    let mut stmt = conn.prepare("SELECT remote_id FROM library WHERE remote_id IS NOT NULL")?;
     let ids = stmt
         .query_map([], |row| row.get::<_, String>(0))?
         .filter_map(|r| r.ok())
@@ -141,7 +143,10 @@ pub(crate) fn merge_plex_library(
         if let Some(ref h) = row.content_hash {
             hash_map.insert(h.clone(), row.id);
         }
-        norm_map.entry(row.norm_key.clone()).or_default().push(row.id);
+        norm_map
+            .entry(row.norm_key.clone())
+            .or_default()
+            .push(row.id);
     }
 
     let mut stats = PlexMergeStats {
@@ -175,10 +180,9 @@ pub(crate) fn merge_plex_library(
                     // Exactly one match — link without inserting.
                     match link_local_track(&tx, *local_id, &track.rating_key) {
                         Ok(()) => stats.linked += 1,
-                        Err(e) => stats.errors.push(format!(
-                            "link error for {}: {e}",
-                            track.rating_key
-                        )),
+                        Err(e) => stats
+                            .errors
+                            .push(format!("link error for {}: {e}", track.rating_key)),
                     }
                 }
                 Some(ids) if ids.len() > 1 => {
@@ -196,17 +200,17 @@ pub(crate) fn merge_plex_library(
                     let stream_url = client.stream_url(&track.part_key);
                     match insert_plex_track(&tx, track, &stream_url) {
                         Ok(()) => stats.inserted += 1,
-                        Err(e) => stats.errors.push(format!(
-                            "insert error for {}: {e}",
-                            track.rating_key
-                        )),
+                        Err(e) => stats
+                            .errors
+                            .push(format!("insert error for {}: {e}", track.rating_key)),
                     }
                 }
             }
         }
     }
 
-    tx.commit().map_err(|e| format!("Transaction commit failed: {e}"))?;
+    tx.commit()
+        .map_err(|e| format!("Transaction commit failed: {e}"))?;
     Ok(stats)
 }
 
@@ -282,7 +286,8 @@ mod tests {
 
     /// Build a JSON sections response with a single "Music" section (key="1").
     fn sections_json() -> String {
-        r#"{"MediaContainer":{"size":1,"Directory":[{"type":"artist","key":"1","title":"Music"}]}}"#.to_string()
+        r#"{"MediaContainer":{"size":1,"Directory":[{"type":"artist","key":"1","title":"Music"}]}}"#
+            .to_string()
     }
 
     /// Build an albums page with 3 albums (ratingKey 10, 11, 12).

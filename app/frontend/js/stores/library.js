@@ -65,10 +65,15 @@ export function createLibraryStore(Alpine) {
     // Non-paginated track storage (used by non-"all" sections: favorites, recent, playlists)
     _sectionTracks: null,
 
+    // Plex
+    showRemote: true,
+
     // Internal
     _searchDebounce: null,
     _saveCacheDebounce: null,
     _watchedFolderListener: null,
+    _plexListeners: null,
+    _plexDownloadToasts: {},
     _lastLoadedSection: null,
     _sectionCache: {},
     _backgroundRefreshing: false,
@@ -78,6 +83,12 @@ export function createLibraryStore(Alpine) {
 
     async init() {
       this._saveCache = createCacheSaver(window.settings);
+
+      const savedShowRemote = await window.settings.get('library:showRemote');
+      if (savedShowRemote !== null && savedShowRemote !== undefined) {
+        this.showRemote = savedShowRemote;
+      }
+
       const { cache, loaded: hasCachedData } = loadCacheFromSettings(
         window.settings,
       );
@@ -101,6 +112,7 @@ export function createLibraryStore(Alpine) {
 
       await this.load({ forceReload: true });
       await this._setupWatchedFolderListener();
+      await this._setupPlexListeners();
     },
 
     async _setupWatchedFolderListener() {
@@ -122,6 +134,84 @@ export function createLibraryStore(Alpine) {
             this.load({ forceReload: true });
           }
         },
+      );
+    },
+
+    async _setupPlexListeners() {
+      const unlistenProgress = await listen('plex_download_progress', (event) => {
+        const { track_id, percent } = event.payload || {};
+        const ui = Alpine.store('ui');
+
+        if (percent != null && percent >= 100) {
+          if (this._plexDownloadToasts[track_id]) {
+            ui.dismissToast(this._plexDownloadToasts[track_id]);
+            delete this._plexDownloadToasts[track_id];
+          }
+          ui.toast('Download complete', 'success', 3000);
+          // Refresh the track in-store so the cloud badge disappears reactively.
+          this._refreshPlexTrack(track_id);
+        } else if (percent != null) {
+          const msg = `Downloading from Plex… ${Math.round(percent)}%`;
+          if (this._plexDownloadToasts[track_id]) {
+            ui.updateToast(this._plexDownloadToasts[track_id], msg);
+          } else {
+            this._plexDownloadToasts[track_id] = ui.toast(msg, 'info', 0);
+          }
+        }
+      });
+
+      const unlistenFailed = await listen('plex_download_failed', (event) => {
+        const { track_id, error } = event.payload || {};
+        const ui = Alpine.store('ui');
+        if (this._plexDownloadToasts[track_id]) {
+          ui.dismissToast(this._plexDownloadToasts[track_id]);
+          delete this._plexDownloadToasts[track_id];
+        }
+        ui.toast(`Plex download failed: ${error}`, 'error', 5000);
+      });
+
+      this._plexListeners = () => {
+        unlistenProgress();
+        unlistenFailed();
+      };
+    },
+
+    async _refreshPlexTrack(trackId) {
+      try {
+        const updated = await libraryApi.getTrack(trackId);
+        if (!updated) return;
+        if (this._sectionTracks) {
+          const idx = this._sectionTracks.findIndex((t) => t.id === trackId);
+          if (idx >= 0) {
+            this._sectionTracks[idx] = updated;
+            this._dataVersion++;
+          }
+        } else {
+          for (const page of Object.values(this._trackPages)) {
+            const idx = page.findIndex((t) => t.id === trackId);
+            if (idx >= 0) {
+              page[idx] = updated;
+              this._dataVersion++;
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[library] Failed to refresh Plex track:', e);
+      }
+    },
+
+    isRemote(track) {
+      return (
+        track?.source === 'plex' &&
+        (track.filepath?.startsWith('http://') || track.filepath?.startsWith('https://'))
+      );
+    },
+
+    setShowRemote(value) {
+      this.showRemote = value;
+      window.settings.set('library:showRemote', value).catch((err) =>
+        console.error('[library] Failed to save showRemote:', err)
       );
     },
 
@@ -286,19 +376,22 @@ export function createLibraryStore(Alpine) {
     // -----------------------------------------------------------------------
 
     get filteredTracks() {
-      // For non-paginated sections, return the flat array
-      if (this._sectionTracks) return this._sectionTracks;
-
-      // For paginated sections, concatenate loaded pages in order
-      // Access _dataVersion to create Alpine reactive dependency
       void this._dataVersion;
-      const result = [];
-      const pageCount = Math.ceil(this.totalTracks / this._pageSize);
-      for (let i = 0; i < pageCount; i++) {
-        const page = this._trackPages[i];
-        if (page) result.push(...page);
+      // For non-paginated sections, return the flat array
+      const base = this._sectionTracks ?? (() => {
+        const result = [];
+        const pageCount = Math.ceil(this.totalTracks / this._pageSize);
+        for (let i = 0; i < pageCount; i++) {
+          const page = this._trackPages[i];
+          if (page) result.push(...page);
+        }
+        return result;
+      })();
+
+      if (!this.showRemote) {
+        return base.filter((t) => !this.isRemote(t));
       }
-      return result;
+      return base;
     },
 
     get tracks() {

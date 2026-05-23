@@ -303,6 +303,14 @@ export function createUIStore(Alpine) {
       this.toasts = this.toasts.filter((t) => t.id !== id);
     },
 
+    updateToast(id, message, type) {
+      const toast = this.toasts.find((t) => t.id === id);
+      if (toast) {
+        toast.message = message;
+        if (type) toast.type = type;
+      }
+    },
+
     /**
      * Show global loading overlay
      * @param {string} message - Loading message

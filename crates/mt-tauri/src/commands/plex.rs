@@ -9,11 +9,12 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::db::Database;
+use crate::plex::client::PlexClient;
+use crate::plex::downloader::resolve_plex_path;
+use crate::plex::merge::merge_plex_library;
 use crate::plex::{
     DirectoryDto, IdentityRoot, PlexAlbum, PlexConfig, PlexMergeStats, PlexTrack, SectionsRoot,
 };
-use crate::plex::client::PlexClient;
-use crate::plex::merge::merge_plex_library;
 
 const STORE_NAME: &str = "settings.json";
 const CONFIG_KEY: &str = "plex.config";
@@ -264,12 +265,17 @@ pub(crate) struct PlexCache {
 
 pub(crate) struct PlexState {
     pub cache: Mutex<PlexCache>,
+    /// Serialises all Plex downloads (playback-triggered and prefetch) to one at a time.
+    /// Both `plex_download_track` and `audio_load*` commands acquire this before calling
+    /// `resolve_plex_path` so that the underlying stream never runs concurrently.
+    pub download_lock: Mutex<()>,
 }
 
 impl PlexState {
     pub(crate) fn new() -> Self {
         Self {
             cache: Mutex::new(PlexCache::default()),
+            download_lock: Mutex::new(()),
         }
     }
 }
@@ -305,14 +311,14 @@ pub(crate) async fn plex_fetch_albums(
     let config = load_plex_config(&app)?;
     let client = PlexClient::new(config);
 
-    let sections = client
-        .music_sections()
-        .await
-        .map_err(|e| e.to_string())?;
+    let sections = client.music_sections().await.map_err(|e| e.to_string())?;
 
     let mut all_albums: Vec<PlexAlbum> = vec![];
     for section in &sections {
-        let albums = client.albums(&section.key).await.map_err(|e| e.to_string())?;
+        let albums = client
+            .albums(&section.key)
+            .await
+            .map_err(|e| e.to_string())?;
         all_albums.extend(albums);
     }
 
@@ -351,16 +357,16 @@ pub(crate) async fn plex_refresh_cache(
     let config = load_plex_config(&app)?;
     let client = PlexClient::new(config);
 
-    let sections = client
-        .music_sections()
-        .await
-        .map_err(|e| e.to_string())?;
+    let sections = client.music_sections().await.map_err(|e| e.to_string())?;
 
     let mut all_albums: Vec<PlexAlbum> = vec![];
     let mut track_map: HashMap<String, Vec<PlexTrack>> = HashMap::new();
 
     for section in &sections {
-        let albums = client.albums(&section.key).await.map_err(|e| e.to_string())?;
+        let albums = client
+            .albums(&section.key)
+            .await
+            .map_err(|e| e.to_string())?;
         for album in &albums {
             let tracks = client
                 .tracks(&album.rating_key)
@@ -403,13 +409,44 @@ pub(crate) async fn plex_merge_library(
     let albums_with_tracks: Vec<(PlexAlbum, Vec<PlexTrack>)> = albums
         .into_iter()
         .map(|album| {
-            let tracks = track_map.get(&album.rating_key).cloned().unwrap_or_default();
+            let tracks = track_map
+                .get(&album.rating_key)
+                .cloned()
+                .unwrap_or_default();
             (album, tracks)
         })
         .collect();
 
     let conn = db.conn().map_err(|e| e.to_string())?;
     merge_plex_library(&conn, &albums_with_tracks, &client)
+}
+
+// ── Download command ──────────────────────────────────────────────────────────
+
+/// Download a remote Plex track to the local filesystem without starting playback.
+///
+/// Acquires `PlexState::download_lock` before calling `resolve_plex_path` so that
+/// this command and any concurrent `audio_load_and_play` for a remote path are
+/// serialised — only one Plex stream download runs at a time.
+#[tauri::command]
+pub(crate) async fn plex_download_track(
+    track_id: i64,
+    app: AppHandle,
+    db: State<'_, Database>,
+    plex_state: State<'_, PlexState>,
+) -> Result<(), String> {
+    let _guard = plex_state.download_lock.lock().await;
+    let track = db
+        .with_conn(|c| crate::db::library::get_track_by_id(c, track_id))
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Track {track_id} not found"))?;
+
+    if !track.filepath.starts_with("http://") && !track.filepath.starts_with("https://") {
+        return Ok(()); // already local — nothing to do
+    }
+
+    resolve_plex_path(&track.filepath, track_id, &app, &db).await?;
+    Ok(())
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ use crate::audio::device_isolation;
 use crate::audio::{AudioEngine, PlaybackState, TrackInfo};
 use crate::cache::NetworkFileCache;
 use crate::cache::mount_detect::is_network_mount;
+use crate::commands::plex::PlexState;
 use crate::db::Database;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -498,7 +499,7 @@ fn resolve_cached_path(path: &str, cache: &NetworkFileCache, app: &AppHandle) ->
     }
 }
 
-#[tracing::instrument(skip(state, cache, app, db))]
+#[tracing::instrument(skip(state, cache, app, db, plex_state))]
 #[tauri::command]
 pub(crate) async fn audio_load(
     path: String,
@@ -507,9 +508,11 @@ pub(crate) async fn audio_load(
     cache: State<'_, NetworkFileCache>,
     app: AppHandle,
     db: State<'_, Database>,
+    plex_state: State<'_, PlexState>,
 ) -> Result<TrackInfo, String> {
     let resolved = if path.starts_with("http://") || path.starts_with("https://") {
         let id = track_id.ok_or_else(|| "track_id required for remote tracks".to_string())?;
+        let _guard = plex_state.download_lock.lock().await;
         crate::plex::downloader::resolve_plex_path(&path, id, &app, &db).await?
     } else {
         resolve_cached_path(&path, &cache, &app)
@@ -517,7 +520,7 @@ pub(crate) async fn audio_load(
     state.dispatch(|tx| AudioCommand::Load(resolved, track_id, tx))?
 }
 
-#[tracing::instrument(skip(state, cache, app, db))]
+#[tracing::instrument(skip(state, cache, app, db, plex_state))]
 #[tauri::command]
 pub(crate) async fn audio_load_and_play(
     path: String,
@@ -526,9 +529,11 @@ pub(crate) async fn audio_load_and_play(
     cache: State<'_, NetworkFileCache>,
     app: AppHandle,
     db: State<'_, Database>,
+    plex_state: State<'_, PlexState>,
 ) -> Result<TrackInfo, String> {
     let resolved = if path.starts_with("http://") || path.starts_with("https://") {
         let id = track_id.ok_or_else(|| "track_id required for remote tracks".to_string())?;
+        let _guard = plex_state.download_lock.lock().await;
         crate::plex::downloader::resolve_plex_path(&path, id, &app, &db).await?
     } else {
         resolve_cached_path(&path, &cache, &app)

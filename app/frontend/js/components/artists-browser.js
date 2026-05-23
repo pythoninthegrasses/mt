@@ -156,6 +156,22 @@ export function createArtistsBrowser(Alpine) {
       return str;
     },
 
+    get _artistRemoteSet() {
+      const set = new Set();
+      const lib = this.$store.library;
+      for (const track of this._allTracks) {
+        if (lib.isRemote(track)) {
+          const name = (track.album_artist || track.artist || '').replace(/;+$/, '').trim();
+          if (name) set.add(name.toLowerCase());
+        }
+      }
+      return set;
+    },
+
+    artistHasRemote(name) {
+      return this._artistRemoteSet.has((name || '').toLowerCase());
+    },
+
     get selectedArtistTracks() {
       if (!this.selectedArtist) return [];
       const canonicalMap = this._canonicalArtistMap;
