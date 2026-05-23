@@ -6,19 +6,6 @@
   @keydown.window="$store.ui.view === 'library' && handleKeydown($event)"
   class="h-full flex flex-col min-h-0 select-none"
 >
-  <!-- Library toolbar -->
-  <div class="flex items-center gap-3 px-4 py-1.5 border-b border-border/50 shrink-0 text-sm">
-    <label class="flex items-center gap-2 cursor-pointer select-none" data-testid="show-remote-toggle">
-      <input
-        type="checkbox"
-        class="switch"
-        :checked="library.showRemote"
-        @change="library.setShowRemote($event.target.checked)"
-      />
-      <span class="text-muted-foreground">Show remote</span>
-    </label>
-  </div>
-
   <!-- Track table - single scroll container for both vertical and horizontal -->
   <div class="flex-1 min-h-0 w-full overflow-auto" x-ref="scrollContainer">
     <!-- Table header (CSS Grid) - sticky at top of scroll container -->

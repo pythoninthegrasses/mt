@@ -119,4 +119,23 @@
       </template>
     </div>
   </div>
+
+  <!-- Display Options -->
+  <div class="mb-8">
+    <h4 class="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">Display</h4>
+    <div class="bg-muted/30 rounded-lg p-4 space-y-3">
+      <label class="flex items-center justify-between cursor-pointer" data-testid="show-remote-toggle">
+        <div>
+          <span class="text-sm font-medium">Show remote tracks</span>
+          <p class="text-xs text-muted-foreground mt-0.5">Include Plex tracks not yet downloaded in library, albums, and artists views</p>
+        </div>
+        <input
+          type="checkbox"
+          class="switch"
+          :checked="$store.library.showRemote"
+          @change="$store.library.setShowRemote($event.target.checked)"
+        />
+      </label>
+    </div>
+  </div>
 </div>
