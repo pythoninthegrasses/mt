@@ -20,7 +20,7 @@ pub(crate) fn get_favorites(
                 l.track_number, l.track_total, l.disc_number, l.disc_total, l.date, l.genre,
                 l.duration, l.file_size, l.play_count, l.last_played, l.added_date,
                 l.missing, l.last_seen_at, l.file_mtime_ns, l.file_inode, l.content_hash,
-                f.timestamp as favorited_date
+                l.source, l.remote_id, f.timestamp as favorited_date
          FROM favorites f
          JOIN library l ON f.track_id = l.id
          ORDER BY f.timestamp ASC
@@ -49,7 +49,8 @@ pub(crate) fn get_top_25(conn: &Connection) -> DbResult<Vec<Track>> {
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash,
+                source, remote_id
          FROM library
          WHERE play_count > 0
          ORDER BY play_count DESC, last_played DESC
@@ -76,7 +77,8 @@ pub(crate) fn get_recently_played(
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash,
+                source, remote_id
          FROM library
          WHERE last_played IS NOT NULL
            AND last_played >= datetime('now', ?)
@@ -100,7 +102,8 @@ pub(crate) fn get_recently_added(conn: &Connection, days: i64, limit: i64) -> Db
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash,
+                source, remote_id
          FROM library
          WHERE added_date IS NOT NULL
            AND added_date >= datetime('now', ?)

@@ -47,6 +47,7 @@ pub(crate) fn library_get_all(
     limit: Option<i64>,
     offset: Option<i64>,
     ignore_words: Option<String>,
+    source_filter: Option<String>,
 ) -> Result<LibraryResponse, String> {
     let start_time = std::time::Instant::now();
     let conn = db.conn().map_err(|e| e.to_string())?;
@@ -78,6 +79,7 @@ pub(crate) fn library_get_all(
         limit: limit.unwrap_or(100),
         offset: offset.unwrap_or(0),
         ignore_words,
+        source_filter,
     };
 
     let result = library::get_all_tracks(&conn, &query).map_err(|e| e.to_string())?;
@@ -242,6 +244,7 @@ fn get_section_all(
         limit: page_size,
         offset: page_offset,
         ignore_words,
+        source_filter: None,
     };
 
     let count_query = library::LibraryQuery {

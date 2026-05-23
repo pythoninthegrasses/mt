@@ -94,7 +94,8 @@ pub(crate) fn get_playlist(
                 l.track_number, l.track_total, l.disc_number, l.disc_total,
                 l.date, l.genre, l.duration, l.file_size,
                 l.play_count, l.last_played, l.added_date, l.missing, l.last_seen_at,
-                l.file_mtime_ns, l.file_ctime_ns, l.file_inode, l.content_hash, pi.position, pi.added_at
+                l.file_mtime_ns, l.file_ctime_ns, l.file_inode, l.content_hash,
+                l.source, l.remote_id, pi.position, pi.added_at
          FROM playlist_items pi
          JOIN library l ON pi.track_id = l.id
          WHERE pi.playlist_id = ?

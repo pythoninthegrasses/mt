@@ -5,6 +5,10 @@
 
 use serde::{Deserialize, Serialize};
 
+fn default_source() -> String {
+    "local".to_string()
+}
+
 /// Track metadata from the library table
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Track {
@@ -31,6 +35,9 @@ pub struct Track {
     pub play_count: i64,
     pub missing: bool,
     pub last_seen_at: Option<i64>,
+    #[serde(default = "default_source")]
+    pub source: String,
+    pub remote_id: Option<String>,
 }
 
 /// Track metadata for insertion (without id and computed fields)

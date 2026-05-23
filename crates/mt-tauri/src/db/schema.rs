@@ -553,6 +553,41 @@ pub(crate) fn run_migrations(conn: &Connection) -> DbResult<()> {
         info!("content_hash index created");
     }
 
+    // Migration: Add source column for Plex source tracking
+    let library_columns = get_table_columns(conn, "library")?;
+    if !library_columns.contains(&"source".to_string()) {
+        info!("Adding source column to library table");
+        conn.execute(
+            "ALTER TABLE library ADD COLUMN source TEXT NOT NULL DEFAULT 'local'",
+            [],
+        )?;
+        info!("source column added");
+    }
+
+    // Migration: Add remote_id column for Plex ratingKey
+    if !library_columns.contains(&"remote_id".to_string()) {
+        info!("Adding remote_id column to library table");
+        conn.execute("ALTER TABLE library ADD COLUMN remote_id TEXT", [])?;
+        info!("remote_id column added");
+    }
+
+    // Migration: Add index on remote_id for Plex dedup lookups
+    if !index_exists(conn, "idx_library_remote_id")? {
+        info!("Creating remote_id index on library table");
+        conn.execute(
+            "CREATE INDEX idx_library_remote_id ON library(remote_id) WHERE remote_id IS NOT NULL",
+            [],
+        )?;
+        info!("remote_id index created");
+    }
+
+    // Migration: Add index on source for source-filtered queries
+    if !index_exists(conn, "idx_library_source")? {
+        info!("Creating source index on library table");
+        conn.execute("CREATE INDEX idx_library_source ON library(source)", [])?;
+        info!("source index created");
+    }
+
     Ok(())
 }
 
@@ -645,6 +680,12 @@ mod tests {
         assert!(columns.contains(&"genre".to_string()));
         // Cross-directory dedup columns
         assert!(columns.contains(&"file_ctime_ns".to_string()));
+        // Plex source tracking columns
+        assert!(columns.contains(&"source".to_string()));
+        assert!(columns.contains(&"remote_id".to_string()));
+        // Plex indexes
+        assert!(index_exists(&conn, "idx_library_remote_id").unwrap());
+        assert!(index_exists(&conn, "idx_library_source").unwrap());
     }
 
     #[test]

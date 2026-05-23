@@ -1030,6 +1030,8 @@ mod tests {
             file_ctime_ns: None,
             file_inode: None,
             content_hash: None,
+            source: "local".to_string(),
+            remote_id: None,
         };
 
         let response = PlayContextResponse {
@@ -1081,6 +1083,8 @@ mod tests {
             file_ctime_ns: None,
             file_inode: None,
             content_hash: None,
+            source: "local".to_string(),
+            remote_id: None,
         };
 
         let response = PlayContextResponse {

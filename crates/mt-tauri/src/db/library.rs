@@ -37,6 +37,10 @@ pub(crate) fn row_to_track(row: &Row) -> rusqlite::Result<Track> {
         play_count: row.get::<_, Option<i64>>("play_count")?.unwrap_or(0),
         missing: row.get::<_, Option<i64>>("missing")?.unwrap_or(0) != 0,
         last_seen_at: row.get("last_seen_at")?,
+        source: row
+            .get::<_, String>("source")
+            .unwrap_or_else(|_| "local".to_string()),
+        remote_id: row.get("remote_id").unwrap_or(None),
     })
 }
 
@@ -55,6 +59,8 @@ pub struct LibraryQuery {
     pub offset: i64,
     /// CSV of prefix words to strip for text sort ordering (e.g. "the,a,an")
     pub ignore_words: Option<String>,
+    /// When Some, appends `AND source = ?` to filter by track source ('local' or 'plex')
+    pub source_filter: Option<String>,
 }
 
 impl LibraryQuery {
@@ -106,6 +112,11 @@ fn build_library_where(query: &LibraryQuery) -> (String, Vec<Box<dyn rusqlite::T
         params_vec.push(Box::new(year_to));
     }
 
+    if let Some(source) = &query.source_filter {
+        conditions.push("source = ?");
+        params_vec.push(Box::new(source.clone()));
+    }
+
     // Always filter out missing tracks from library view
     conditions.push("(missing = 0 OR missing IS NULL)");
 
@@ -135,7 +146,8 @@ pub(crate) fn get_all_tracks(
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash,
+                source, remote_id
          FROM library
          {}
          ORDER BY {} {}{}
@@ -330,7 +342,8 @@ pub(crate) fn find_tracks_by_artist_title(
     let sql = "SELECT id, filepath, title, artist, album, album_artist,
             track_number, track_total, disc_number, disc_total, date, genre,
             duration, file_size, play_count, last_played, added_date,
-            missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
+            missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash,
+            source, remote_id
      FROM library
      WHERE (missing = 0 OR missing IS NULL)
        AND title = ? COLLATE NOCASE
@@ -365,7 +378,8 @@ pub(crate) fn get_track_by_id(conn: &Connection, track_id: i64) -> DbResult<Opti
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash,
+                source, remote_id
          FROM library WHERE id = ?",
     )?;
 
@@ -383,7 +397,8 @@ pub(crate) fn get_track_by_filepath(conn: &Connection, filepath: &str) -> DbResu
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash,
+                source, remote_id
          FROM library WHERE filepath = ?",
     )?;
 
@@ -961,7 +976,8 @@ pub(crate) fn get_missing_tracks(conn: &Connection) -> DbResult<Vec<Track>> {
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash,
+                source, remote_id
          FROM library WHERE missing = 1 ORDER BY title ASC",
     )?;
 
@@ -1001,7 +1017,8 @@ pub(crate) fn find_missing_track_by_inode(
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash,
+                source, remote_id
          FROM library WHERE file_inode = ? AND missing = 1 LIMIT 1",
     )?;
 
@@ -1022,7 +1039,8 @@ pub(crate) fn find_missing_track_by_content_hash(
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
                 duration, file_size, play_count, last_played, added_date,
-                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash
+                missing, last_seen_at, file_mtime_ns, file_ctime_ns, file_inode, content_hash,
+                source, remote_id
          FROM library WHERE content_hash = ? AND missing = 1 LIMIT 1",
     )?;
 
@@ -3665,5 +3683,32 @@ mod tests {
         let second = get_track_by_id(&conn, ids[1]).unwrap().unwrap();
         assert_eq!(first.artist.as_deref(), Some("Arcade Fire"));
         assert_eq!(second.artist.as_deref(), Some("The Decemberists"));
+    }
+
+    #[test]
+    fn test_source_filter() {
+        let conn = setup_test_db();
+
+        conn.execute(
+            "INSERT INTO library (filepath, title, source, missing) VALUES ('/local.mp3', 'Local Track', 'local', 0)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO library (filepath, title, source, remote_id, missing) VALUES ('/plex/12345', 'Plex Track', 'plex', '12345', 0)",
+            [],
+        )
+        .unwrap();
+
+        let query = LibraryQuery {
+            source_filter: Some("plex".to_string()),
+            limit: 100,
+            ..Default::default()
+        };
+        let result = get_all_tracks(&conn, &query).unwrap();
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0].title, Some("Plex Track".to_string()));
+        assert_eq!(result.items[0].remote_id, Some("12345".to_string()));
+        assert_eq!(result.items[0].source, "plex");
     }
 }

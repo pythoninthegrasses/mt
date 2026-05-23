@@ -14,7 +14,8 @@ pub(crate) fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
                 l.track_number, l.track_total, l.disc_number, l.disc_total,
                 l.date, l.genre, l.duration, l.file_size,
                 l.play_count, l.last_played, l.added_date, l.missing, l.last_seen_at,
-                l.file_mtime_ns, l.file_ctime_ns, l.file_inode, l.content_hash
+                l.file_mtime_ns, l.file_ctime_ns, l.file_inode, l.content_hash,
+                l.source, l.remote_id
          FROM queue q
          LEFT JOIN library l ON q.filepath = l.filepath
          ORDER BY q.id",
@@ -50,6 +51,10 @@ pub(crate) fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
             play_count: row.get::<_, Option<i64>>("play_count")?.unwrap_or(0),
             missing: row.get::<_, Option<i64>>("missing")?.unwrap_or(0) != 0,
             last_seen_at: row.get("last_seen_at")?,
+            source: row
+                .get::<_, String>("source")
+                .unwrap_or_else(|_| "local".to_string()),
+            remote_id: row.get("remote_id").unwrap_or(None),
         };
 
         items.push(QueueItem { position, track });

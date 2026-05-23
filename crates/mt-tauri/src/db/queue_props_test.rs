@@ -41,7 +41,9 @@ mod tests {
                 last_played TEXT,
                 play_count INTEGER DEFAULT 0,
                 missing INTEGER DEFAULT 0,
-                last_seen_at TEXT
+                last_seen_at TEXT,
+                source TEXT NOT NULL DEFAULT 'local',
+                remote_id TEXT
             )",
             [],
         )
