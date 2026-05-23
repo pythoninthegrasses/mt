@@ -175,6 +175,7 @@ export function createUIStore(Alpine) {
           'sorting',
           'advanced',
           'lastfm',
+          'plex',
           'stats',
         ].includes(
           section,
