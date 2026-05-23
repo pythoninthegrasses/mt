@@ -2,6 +2,7 @@ use crate::audio::device_isolation;
 use crate::audio::{AudioEngine, PlaybackState, TrackInfo};
 use crate::cache::NetworkFileCache;
 use crate::cache::mount_detect::is_network_mount;
+use crate::db::Database;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
@@ -497,34 +498,42 @@ fn resolve_cached_path(path: &str, cache: &NetworkFileCache, app: &AppHandle) ->
     }
 }
 
-#[tracing::instrument(skip(state, cache, app))]
+#[tracing::instrument(skip(state, cache, app, db))]
 #[tauri::command]
-pub(crate) fn audio_load(
+pub(crate) async fn audio_load(
     path: String,
     track_id: Option<i64>,
-    state: State<AudioState>,
-    cache: State<NetworkFileCache>,
+    state: State<'_, AudioState>,
+    cache: State<'_, NetworkFileCache>,
     app: AppHandle,
+    db: State<'_, Database>,
 ) -> Result<TrackInfo, String> {
-    let resolved = resolve_cached_path(&path, &cache, &app);
-    let (tx, rx) = mpsc::channel();
-    state.send_command(AudioCommand::Load(resolved, track_id, tx));
-    rx.recv().map_err(|_| "Channel closed".to_string())?
+    let resolved = if path.starts_with("http://") || path.starts_with("https://") {
+        let id = track_id.ok_or_else(|| "track_id required for remote tracks".to_string())?;
+        crate::plex::downloader::resolve_plex_path(&path, id, &app, &db).await?
+    } else {
+        resolve_cached_path(&path, &cache, &app)
+    };
+    state.dispatch(|tx| AudioCommand::Load(resolved, track_id, tx))?
 }
 
-#[tracing::instrument(skip(state, cache, app))]
+#[tracing::instrument(skip(state, cache, app, db))]
 #[tauri::command]
-pub(crate) fn audio_load_and_play(
+pub(crate) async fn audio_load_and_play(
     path: String,
     track_id: Option<i64>,
-    state: State<AudioState>,
-    cache: State<NetworkFileCache>,
+    state: State<'_, AudioState>,
+    cache: State<'_, NetworkFileCache>,
     app: AppHandle,
+    db: State<'_, Database>,
 ) -> Result<TrackInfo, String> {
-    let resolved = resolve_cached_path(&path, &cache, &app);
-    let (tx, rx) = mpsc::channel();
-    state.send_command(AudioCommand::LoadAndPlay(resolved, track_id, tx));
-    rx.recv().map_err(|_| "Channel closed".to_string())?
+    let resolved = if path.starts_with("http://") || path.starts_with("https://") {
+        let id = track_id.ok_or_else(|| "track_id required for remote tracks".to_string())?;
+        crate::plex::downloader::resolve_plex_path(&path, id, &app, &db).await?
+    } else {
+        resolve_cached_path(&path, &cache, &app)
+    };
+    state.dispatch(|tx| AudioCommand::LoadAndPlay(resolved, track_id, tx))?
 }
 
 #[tracing::instrument(skip(state))]
