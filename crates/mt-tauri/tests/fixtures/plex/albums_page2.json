@@ -1,0 +1,22 @@
+{
+  "MediaContainer": {
+    "size": 2,
+    "totalSize": 4,
+    "Metadata": [
+      {
+        "ratingKey": "102",
+        "title": "Album C",
+        "parentTitle": "Artist B",
+        "year": 2002,
+        "leafCount": 8
+      },
+      {
+        "ratingKey": "103",
+        "title": "Album D",
+        "parentTitle": "Artist B",
+        "year": 2003,
+        "leafCount": 9
+      }
+    ]
+  }
+}

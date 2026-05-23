@@ -1,0 +1,10 @@
+{
+  "MediaContainer": {
+    "size": 3,
+    "Directory": [
+      {"type": "artist", "key": "1", "title": "Music"},
+      {"type": "photo", "key": "2", "title": "Photos"},
+      {"type": "artist", "key": "3", "title": "Classical"}
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "MediaContainer": {
+    "size": 2,
+    "totalSize": 2,
+    "Metadata": [
+      {
+        "ratingKey": "100",
+        "title": "Abbey Road",
+        "parentTitle": "The Beatles",
+        "year": 1969,
+        "leafCount": 17
+      },
+      {
+        "ratingKey": "101",
+        "title": "Let It Be",
+        "parentTitle": "The Beatles",
+        "year": 1970,
+        "leafCount": 12
+      }
+    ]
+  }
+}

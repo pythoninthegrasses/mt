@@ -10,6 +10,7 @@ pub(crate) mod logging;
 pub(crate) mod lyrics;
 pub(crate) mod media_keys;
 pub(crate) mod metadata;
+pub(crate) mod plex;
 pub(crate) mod scanner;
 pub(crate) mod watcher;
 

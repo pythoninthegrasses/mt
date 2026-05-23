@@ -1,0 +1,22 @@
+{
+  "MediaContainer": {
+    "size": 2,
+    "totalSize": 4,
+    "Metadata": [
+      {
+        "ratingKey": "100",
+        "title": "Album A",
+        "parentTitle": "Artist A",
+        "year": 2000,
+        "leafCount": 10
+      },
+      {
+        "ratingKey": "101",
+        "title": "Album B",
+        "parentTitle": "Artist A",
+        "year": 2001,
+        "leafCount": 11
+      }
+    ]
+  }
+}

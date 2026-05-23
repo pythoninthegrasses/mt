@@ -1,0 +1,37 @@
+{
+  "MediaContainer": {
+    "size": 3,
+    "Metadata": [
+      {
+        "ratingKey": "200",
+        "title": "Come Together",
+        "grandparentTitle": "The Beatles",
+        "parentTitle": "Abbey Road",
+        "year": 1969,
+        "index": 1,
+        "duration": 259000,
+        "Media": [{"Part": [{"key": "/library/parts/200/1234/file.flac"}]}]
+      },
+      {
+        "ratingKey": "201",
+        "title": "Something",
+        "grandparentTitle": "The Beatles",
+        "parentTitle": "Abbey Road",
+        "year": 1969,
+        "index": 2,
+        "duration": 182000,
+        "Media": []
+      },
+      {
+        "ratingKey": "202",
+        "title": "Maxwell's Silver Hammer",
+        "grandparentTitle": "The Beatles",
+        "parentTitle": "Abbey Road",
+        "year": 1969,
+        "index": 3,
+        "duration": 207000,
+        "Media": [{"Part": [{"key": "/library/parts/202/5678/file.mp3"}]}]
+      }
+    ]
+  }
+}
