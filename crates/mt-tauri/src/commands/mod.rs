@@ -45,7 +45,7 @@ pub(crate) use lyrics::{lyrics_clear_cache, lyrics_get};
 pub(crate) use plex::{
     PlexState, plex_config_clear, plex_config_get, plex_config_set, plex_download_track,
     plex_fetch_albums, plex_fetch_tracks, plex_list_libraries, plex_merge_library,
-    plex_refresh_cache, plex_server_ping,
+    plex_refresh_cache, plex_server_ping, plex_sync,
 };
 
 pub(crate) use settings::{

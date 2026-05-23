@@ -691,6 +691,32 @@ pub(crate) fn delete_missing_tracks(conn: &Connection) -> DbResult<usize> {
     Ok(deleted)
 }
 
+/// Delete all tracks with a given source value (e.g. "plex"), including favorites and playlist_items.
+/// Only removes tracks whose filepath is still a URL (i.e. never downloaded locally).
+/// Returns the number of library rows deleted.
+pub(crate) fn delete_remote_tracks_by_source(conn: &Connection, source: &str) -> DbResult<usize> {
+    conn.execute(
+        "DELETE FROM favorites WHERE track_id IN (
+            SELECT id FROM library WHERE source = ?1 AND (filepath LIKE 'http://%' OR filepath LIKE 'https://%')
+         )",
+        [source],
+    )?;
+    conn.execute(
+        "DELETE FROM playlist_items WHERE track_id IN (
+            SELECT id FROM library WHERE source = ?1 AND (filepath LIKE 'http://%' OR filepath LIKE 'https://%')
+         )",
+        [source],
+    )?;
+    let deleted = conn.execute(
+        "DELETE FROM library WHERE source = ?1 AND (filepath LIKE 'http://%' OR filepath LIKE 'https://%')",
+        [source],
+    )?;
+    if deleted > 0 {
+        crate::db::revision::bump_revision(conn)?;
+    }
+    Ok(deleted)
+}
+
 /// Delete multiple tracks by ID, including their favorites and playlist_items.
 /// Returns the number of library rows deleted.
 pub(crate) fn delete_tracks_by_ids(conn: &Connection, track_ids: &[i64]) -> DbResult<usize> {

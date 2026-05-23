@@ -127,7 +127,7 @@ pub(crate) fn plex_config_get(app: AppHandle) -> Result<PlexConfigResponse, Stri
 }
 
 #[tauri::command]
-pub(crate) fn plex_config_clear(app: AppHandle) -> Result<(), String> {
+pub(crate) fn plex_config_clear(app: AppHandle, db: State<'_, Database>) -> Result<(), String> {
     let store = app
         .store(STORE_NAME)
         .map_err(|e| format!("Failed to open settings store: {e}"))?;
@@ -137,7 +137,63 @@ pub(crate) fn plex_config_clear(app: AppHandle) -> Result<(), String> {
         .save()
         .map_err(|e| format!("Failed to save settings: {e}"))?;
 
+    db.with_conn(|c| crate::db::library::delete_remote_tracks_by_source(c, "plex"))
+        .map_err(|e| e.to_string())?;
+
     Ok(())
+}
+
+/// Fetch the Plex library cache and merge remote tracks into the local DB in one call.
+/// Idempotent: safe to call on every connect and on startup when already configured.
+#[tauri::command]
+pub(crate) async fn plex_sync(
+    app: AppHandle,
+    db: State<'_, Database>,
+    plex_state: State<'_, PlexState>,
+) -> Result<PlexMergeStats, String> {
+    let config = load_plex_config(&app)?;
+    let client = PlexClient::new(config.clone());
+
+    // Fetch albums
+    let library_keys: Vec<String> = config.libraries.unwrap_or_default();
+    let mut all_albums = Vec::new();
+    for key in &library_keys {
+        let mut albums = client.albums(key).await.map_err(|e| e.to_string())?;
+        all_albums.append(&mut albums);
+    }
+
+    // Fetch tracks per album
+    let mut track_map: HashMap<String, Vec<PlexTrack>> = HashMap::new();
+    for album in &all_albums {
+        let tracks = client
+            .tracks(&album.rating_key)
+            .await
+            .map_err(|e| e.to_string())?;
+        track_map.insert(album.rating_key.clone(), tracks);
+    }
+
+    // Store in cache
+    {
+        let mut cache = plex_state.cache.lock().await;
+        cache.albums = Some(all_albums.clone());
+        cache.tracks = track_map.clone();
+    }
+
+    // Merge into local DB
+    let albums_with_tracks: Vec<(PlexAlbum, Vec<PlexTrack>)> = all_albums
+        .into_iter()
+        .map(|album| {
+            let tracks = track_map
+                .get(&album.rating_key)
+                .cloned()
+                .unwrap_or_default();
+            (album, tracks)
+        })
+        .collect();
+
+    let conn = db.conn().map_err(|e| e.to_string())?;
+    let client = PlexClient::new(load_plex_config(&app)?);
+    merge_plex_library(&conn, &albums_with_tracks, &client)
 }
 
 #[tauri::command]

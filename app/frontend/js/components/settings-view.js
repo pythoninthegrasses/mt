@@ -897,6 +897,7 @@ export function createSettingsView(Alpine) {
           this.plex.token = config.token;
           this.plex.selectedLibraries = config.libraries ?? [];
           this.plex.connected = true;
+          this._syncPlex();
         }
       } catch (error) {
         console.error('[settings] Failed to load Plex settings:', error);
@@ -920,12 +921,28 @@ export function createSettingsView(Alpine) {
         this.plex.connected = true;
         Alpine.store('settings').plex_configured = true;
         Alpine.store('ui').toast(`Connected to ${info.server_name}`, 'success');
+        this._syncPlex();
       } catch (error) {
         console.error('[settings] Failed to connect to Plex:', error);
         Alpine.store('ui').toast(`Failed to connect: ${error}`, 'error');
       } finally {
         this.plex.isConnecting = false;
       }
+    },
+
+    _syncPlex() {
+      plex.sync().then((stats) => {
+        if (stats?.inserted > 0 || stats?.updated > 0) {
+          Alpine.store('library').fetchTracks();
+          const msg = [
+            stats.inserted > 0 ? `${stats.inserted} new` : '',
+            stats.updated > 0 ? `${stats.updated} updated` : '',
+          ].filter(Boolean).join(', ');
+          Alpine.store('ui').toast(`Plex sync: ${msg}`, 'success', 4000);
+        }
+      }).catch((error) => {
+        console.error('[settings] Plex sync failed:', error);
+      });
     },
 
     async disconnectPlex() {

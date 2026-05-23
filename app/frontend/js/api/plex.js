@@ -30,4 +30,8 @@ export const plex = {
   downloadTrack(trackId) {
     return tauriInvoke('plex_download_track', { trackId });
   },
+
+  sync() {
+    return tauriInvoke('plex_sync');
+  },
 };
