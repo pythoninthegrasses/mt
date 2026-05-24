@@ -30,7 +30,7 @@ function createStub(tracks = TRACKS) {
     filteredTracks: tracks,
     _isPaginated: () => false,
     _allPagesLoaded: true,
-    _pageSize: 1500,
+    _pageSize: 500,
     _jumpToPrefix: vi.fn(),
     _fetchPage: vi.fn().mockResolvedValue(undefined),
     getTrackAtIndex: vi.fn(),
@@ -185,7 +185,7 @@ describe('type-to-jump: _jumpViaBackend cancellation', () => {
       resolveFirst = () => res(0); // stale: offset 0 → page 0
     });
     const secondPromise = new Promise((res) => {
-      resolveSecond = () => res(3000); // winner: offset 3000 → page 2
+      resolveSecond = () => res(1000); // winner: offset 1000 → page 2 of 500-per-page
     });
 
     stub.library._jumpToPrefix
@@ -254,7 +254,7 @@ describe('type-to-jump: _jumpViaBackend scroll timing', () => {
     stub.library.filteredTracks = [];
     stub.library._isPaginated = () => true;
     stub.library._allPagesLoaded = false;
-    stub.library._jumpToPrefix = vi.fn().mockResolvedValue(3000); // page 2 of 1500-per-page
+    stub.library._jumpToPrefix = vi.fn().mockResolvedValue(1250); // page 2 of 500-per-page
     stub.library.getTrackAtIndex = vi.fn().mockReturnValue(null);
 
     await stub._jumpViaBackend('x');

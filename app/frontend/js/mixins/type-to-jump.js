@@ -149,15 +149,18 @@ export function typeToJumpMixin() {
         if (myGen !== this._jumpGen) return; // superseded by a newer keystroke
         if (offset === null || offset === undefined) return;
 
+        // Start the page fetch immediately after the gen check so the IPC is
+        // in-flight while scrollToOffset fires (pipeline overlap).
+        // _jumpToPrefix no longer calls _ensurePage, so this is the first fetch.
+        const pageIndex = Math.floor(offset / this.library._pageSize);
+        const pageFetch = this.library._fetchPage(pageIndex);
+
         // Snap to target immediately — gives instant visual feedback.
         // _isJumping badge stays visible until the page arrives.
         this.scrollToOffset(offset);
 
         // Await the page so rows populate before clearing the badge and selecting.
-        // _fetchPage dedupes: _jumpToPrefix's _ensurePage already started the fetch;
-        // this awaits that same in-flight promise.
-        const pageIndex = Math.floor(offset / this.library._pageSize);
-        await this.library._fetchPage(pageIndex);
+        await pageFetch;
         if (myGen !== this._jumpGen) return;
 
         const track = this.library.getTrackAtIndex(offset);
