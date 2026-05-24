@@ -567,7 +567,12 @@ pub(crate) fn library_delete_track(
             let track = library::get_track_by_id(conn, track_id)?;
             let deleted = library::delete_track(conn, track_id)?;
             if deleted && let Some(track) = track {
-                removed::record_removal(conn, &track.filepath, track.content_hash.as_deref())?;
+                removed::record_removal(
+                    conn,
+                    &track.filepath,
+                    track.content_hash.as_deref(),
+                    track.remote_id.as_deref(),
+                )?;
             }
             Ok(deleted)
         })

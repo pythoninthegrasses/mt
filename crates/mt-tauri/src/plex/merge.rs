@@ -4,7 +4,7 @@ use rusqlite::{Connection, params};
 use serde::Serialize;
 use unicode_normalization::UnicodeNormalization;
 
-use crate::db::DbResult;
+use crate::db::{DbResult, removed};
 use crate::plex::client::PlexClient;
 use crate::plex::types::{PlexAlbum, PlexTrack};
 
@@ -132,6 +132,7 @@ pub(crate) fn merge_plex_library(
 
     let local_rows = load_local_rows(&tx).map_err(|e| e.to_string())?;
     let existing_remote_ids = load_existing_remote_ids(&tx).map_err(|e| e.to_string())?;
+    let tombstoned_remote_ids = removed::get_removed_remote_ids(&tx).map_err(|e| e.to_string())?;
 
     // Build lookup tables from local rows.
     // hash_map: content_hash → local row id (for primary content_hash match).
@@ -158,6 +159,12 @@ pub(crate) fn merge_plex_library(
 
     for (_, tracks) in albums_with_tracks {
         for track in tracks {
+            // Skip tracks the user has explicitly removed from the library.
+            if tombstoned_remote_ids.contains(&track.rating_key) {
+                stats.skipped += 1;
+                continue;
+            }
+
             // Idempotency: skip if already present (as inserted plex row or linked local).
             if existing_remote_ids.contains(&track.rating_key) {
                 stats.skipped += 1;
@@ -451,5 +458,60 @@ mod tests {
         assert_eq!(stats.linked, 1, "linked");
         assert_eq!(stats.skipped, 0, "skipped");
         assert!(stats.errors.is_empty(), "errors: {:?}", stats.errors);
+    }
+
+    #[test]
+    fn merge_skips_tombstoned_remote_ids() {
+        let conn = make_test_db();
+
+        // Tombstone rating_key "101" (would be track 1 of album 10 in our fixture).
+        conn.execute(
+            "INSERT INTO removed_tracks (filepath, content_hash, remote_id, removed_at)
+             VALUES ('https://plex/part/101', NULL, '101', strftime('%s','now'))",
+            [],
+        )
+        .unwrap();
+
+        // Build a minimal album + track list: one track with rating_key "101".
+        let albums_with_tracks: Vec<(PlexAlbum, Vec<PlexTrack>)> = vec![(
+            PlexAlbum {
+                rating_key: "10".to_string(),
+                title: "Album A".to_string(),
+                artist_name: "Artist A".to_string(),
+                year: Some(2020),
+                track_count: 1,
+            },
+            vec![PlexTrack {
+                rating_key: "101".to_string(),
+                title: "Track 1".to_string(),
+                artist_name: "Artist A".to_string(),
+                album_name: "Album A".to_string(),
+                year: Some(2020),
+                track_number: 1,
+                duration: 180_000,
+                part_key: "/library/parts/101/file.flac".to_string(),
+            }],
+        )];
+
+        let client = PlexClient::new(crate::plex::types::PlexConfig {
+            url: "http://localhost:32400".to_string(),
+            token: "test".to_string(),
+            libraries: None,
+            client_identifier: "test".to_string(),
+        });
+
+        let stats = merge_plex_library(&conn, &albums_with_tracks, &client).unwrap();
+
+        assert_eq!(
+            stats.inserted, 0,
+            "tombstoned track must not be re-inserted"
+        );
+        assert_eq!(stats.skipped, 1, "skipped");
+        assert!(stats.errors.is_empty());
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM library", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0, "library must remain empty");
     }
 }

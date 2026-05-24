@@ -147,6 +147,7 @@ pub const CREATE_TABLES: &[(&str, &str)] = &[
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             filepath TEXT NOT NULL,
             content_hash TEXT,
+            remote_id TEXT,
             removed_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
             UNIQUE(filepath)
         )",
@@ -397,6 +398,24 @@ pub(crate) fn run_migrations(conn: &Connection) -> DbResult<()> {
             [],
         )?;
         info!("removed_tracks content_hash index created");
+    }
+
+    // Migration: Add remote_id column to removed_tracks for Plex tombstoning
+    let removed_tracks_columns = get_table_columns(conn, "removed_tracks")?;
+    if !removed_tracks_columns.contains(&"remote_id".to_string()) {
+        info!("Adding remote_id column to removed_tracks table");
+        conn.execute("ALTER TABLE removed_tracks ADD COLUMN remote_id TEXT", [])?;
+        info!("removed_tracks remote_id column added");
+    }
+
+    // Migration: Add index on removed_tracks remote_id for Plex tombstone lookups
+    if !index_exists(conn, "idx_removed_tracks_remote_id")? {
+        info!("Creating remote_id index on removed_tracks table");
+        conn.execute(
+            "CREATE INDEX idx_removed_tracks_remote_id ON removed_tracks(remote_id) WHERE remote_id IS NOT NULL",
+            [],
+        )?;
+        info!("removed_tracks remote_id index created");
     }
 
     // Migration: Add composite index for artist sort (canonical album_artist subquery)

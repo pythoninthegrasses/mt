@@ -10,17 +10,18 @@ use crate::db::{DbError, DbResult};
 
 type TrackVec = Vec<(String, crate::db::TrackMetadata)>;
 
-/// Record a track removal by filepath and optional content hash.
+/// Record a track removal by filepath, optional content hash, and optional remote_id.
 /// Uses INSERT OR REPLACE so re-removing the same filepath just updates the timestamp.
 pub(crate) fn record_removal(
     conn: &Connection,
     filepath: &str,
     content_hash: Option<&str>,
+    remote_id: Option<&str>,
 ) -> DbResult<()> {
     conn.execute(
-        "INSERT OR REPLACE INTO removed_tracks (filepath, content_hash, removed_at)
-         VALUES (?, ?, strftime('%s','now'))",
-        params![filepath, content_hash],
+        "INSERT OR REPLACE INTO removed_tracks (filepath, content_hash, remote_id, removed_at)
+         VALUES (?, ?, ?, strftime('%s','now'))",
+        params![filepath, content_hash, remote_id],
     )?;
     Ok(())
 }
@@ -29,20 +30,20 @@ pub(crate) fn record_removal(
 /// Caller must ensure this runs inside a transaction for atomicity.
 pub(crate) fn record_removals_bulk(
     conn: &Connection,
-    tracks: &[(String, Option<String>)],
+    tracks: &[(String, Option<String>, Option<String>)],
 ) -> DbResult<usize> {
     if tracks.is_empty() {
         return Ok(0);
     }
 
     let mut stmt = conn.prepare(
-        "INSERT OR REPLACE INTO removed_tracks (filepath, content_hash, removed_at)
-         VALUES (?, ?, strftime('%s','now'))",
+        "INSERT OR REPLACE INTO removed_tracks (filepath, content_hash, remote_id, removed_at)
+         VALUES (?, ?, ?, strftime('%s','now'))",
     )?;
 
     let mut count = 0;
-    for (filepath, content_hash) in tracks {
-        stmt.execute(params![filepath, content_hash])?;
+    for (filepath, content_hash, remote_id) in tracks {
+        stmt.execute(params![filepath, content_hash, remote_id])?;
         count += 1;
     }
     Ok(count)
@@ -76,6 +77,16 @@ pub(crate) fn get_removed_content_hashes(conn: &Connection) -> DbResult<HashSet<
         .query_map([], |row| row.get(0))?
         .collect::<Result<HashSet<_>, _>>()?;
     Ok(hashes)
+}
+
+/// Get all removed remote_ids as a set for Plex tombstone lookups during sync.
+pub(crate) fn get_removed_remote_ids(conn: &Connection) -> DbResult<HashSet<String>> {
+    let mut stmt =
+        conn.prepare("SELECT remote_id FROM removed_tracks WHERE remote_id IS NOT NULL")?;
+    let ids: HashSet<String> = stmt
+        .query_map([], |row| row.get(0))?
+        .collect::<Result<HashSet<_>, _>>()?;
+    Ok(ids)
 }
 
 /// Remove a filepath from the removed list (un-remove / re-allow).
@@ -134,18 +145,18 @@ pub(crate) fn filter_removed_tracks(
     Ok((filtered, skipped))
 }
 
-/// Fetch filepath and content_hash for multiple track IDs in a single query.
+/// Fetch filepath, content_hash, and remote_id for multiple track IDs in a single query.
 pub(crate) fn get_track_removal_info_bulk(
     conn: &Connection,
     track_ids: &[i64],
-) -> DbResult<Vec<(String, Option<String>)>> {
+) -> DbResult<Vec<(String, Option<String>, Option<String>)>> {
     if track_ids.is_empty() {
         return Ok(Vec::new());
     }
 
     let placeholders = track_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let sql = format!(
-        "SELECT filepath, content_hash FROM library WHERE id IN ({})",
+        "SELECT filepath, content_hash, remote_id FROM library WHERE id IN ({})",
         placeholders
     );
     let params: Vec<&dyn rusqlite::ToSql> = track_ids
@@ -156,7 +167,11 @@ pub(crate) fn get_track_removal_info_bulk(
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
         .query_map(params.as_slice(), |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, Option<String>>(2)?,
+            ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
@@ -180,7 +195,7 @@ mod tests {
 
         assert!(!is_filepath_removed(&conn, "/music/track.mp3").unwrap());
 
-        record_removal(&conn, "/music/track.mp3", None).unwrap();
+        record_removal(&conn, "/music/track.mp3", None, None).unwrap();
 
         assert!(is_filepath_removed(&conn, "/music/track.mp3").unwrap());
         assert!(!is_filepath_removed(&conn, "/music/other.mp3").unwrap());
@@ -190,7 +205,7 @@ mod tests {
     fn test_record_removal_with_hash() {
         let conn = setup_test_db();
 
-        record_removal(&conn, "/music/track.mp3", Some("abc123")).unwrap();
+        record_removal(&conn, "/music/track.mp3", Some("abc123"), None).unwrap();
 
         assert!(is_filepath_removed(&conn, "/music/track.mp3").unwrap());
 
@@ -199,11 +214,34 @@ mod tests {
     }
 
     #[test]
+    fn test_record_removal_with_remote_id() {
+        let conn = setup_test_db();
+
+        record_removal(&conn, "https://plex/part/42", None, Some("rk1")).unwrap();
+
+        assert!(is_filepath_removed(&conn, "https://plex/part/42").unwrap());
+        let ids = get_removed_remote_ids(&conn).unwrap();
+        assert!(ids.contains("rk1"));
+    }
+
+    #[test]
+    fn test_get_removed_remote_ids_excludes_nulls() {
+        let conn = setup_test_db();
+
+        record_removal(&conn, "/music/a.mp3", None, None).unwrap();
+        record_removal(&conn, "https://plex/part/1", None, Some("rk42")).unwrap();
+
+        let ids = get_removed_remote_ids(&conn).unwrap();
+        assert_eq!(ids.len(), 1);
+        assert!(ids.contains("rk42"));
+    }
+
+    #[test]
     fn test_record_removal_idempotent() {
         let conn = setup_test_db();
 
-        record_removal(&conn, "/music/track.mp3", None).unwrap();
-        record_removal(&conn, "/music/track.mp3", Some("hash1")).unwrap();
+        record_removal(&conn, "/music/track.mp3", None, None).unwrap();
+        record_removal(&conn, "/music/track.mp3", Some("hash1"), None).unwrap();
 
         // Should have exactly one entry (REPLACE on UNIQUE constraint)
         let count: i32 = conn
@@ -221,9 +259,9 @@ mod tests {
         let conn = setup_test_db();
 
         let tracks = vec![
-            ("/music/a.mp3".to_string(), None),
-            ("/music/b.mp3".to_string(), Some("hash_b".to_string())),
-            ("/music/c.mp3".to_string(), Some("hash_c".to_string())),
+            ("/music/a.mp3".to_string(), None, None),
+            ("/music/b.mp3".to_string(), Some("hash_b".to_string()), None),
+            ("https://plex/1".to_string(), None, Some("rk99".to_string())),
         ];
 
         let count = record_removals_bulk(&conn, &tracks).unwrap();
@@ -231,15 +269,18 @@ mod tests {
 
         assert!(is_filepath_removed(&conn, "/music/a.mp3").unwrap());
         assert!(is_filepath_removed(&conn, "/music/b.mp3").unwrap());
-        assert!(is_filepath_removed(&conn, "/music/c.mp3").unwrap());
+        assert!(is_filepath_removed(&conn, "https://plex/1").unwrap());
+
+        let ids = get_removed_remote_ids(&conn).unwrap();
+        assert!(ids.contains("rk99"));
     }
 
     #[test]
     fn test_get_removed_filepaths() {
         let conn = setup_test_db();
 
-        record_removal(&conn, "/music/a.mp3", None).unwrap();
-        record_removal(&conn, "/music/b.mp3", None).unwrap();
+        record_removal(&conn, "/music/a.mp3", None, None).unwrap();
+        record_removal(&conn, "/music/b.mp3", None, None).unwrap();
 
         let paths = get_removed_filepaths(&conn).unwrap();
         assert_eq!(paths.len(), 2);
@@ -251,7 +292,7 @@ mod tests {
     fn test_clear_removal() {
         let conn = setup_test_db();
 
-        record_removal(&conn, "/music/track.mp3", None).unwrap();
+        record_removal(&conn, "/music/track.mp3", None, None).unwrap();
         assert!(is_filepath_removed(&conn, "/music/track.mp3").unwrap());
 
         let cleared = clear_removal(&conn, "/music/track.mp3").unwrap();
@@ -267,8 +308,8 @@ mod tests {
     fn test_clear_all_removals() {
         let conn = setup_test_db();
 
-        record_removal(&conn, "/music/a.mp3", None).unwrap();
-        record_removal(&conn, "/music/b.mp3", None).unwrap();
+        record_removal(&conn, "/music/a.mp3", None, None).unwrap();
+        record_removal(&conn, "/music/b.mp3", None, None).unwrap();
 
         let cleared = clear_all_removals(&conn).unwrap();
         assert_eq!(cleared, 2);
@@ -303,7 +344,13 @@ mod tests {
 
         // Simulate user deleting the track (record removal + delete)
         let track = library::get_track_by_id(&conn, track_id).unwrap().unwrap();
-        record_removal(&conn, &track.filepath, track.content_hash.as_deref()).unwrap();
+        record_removal(
+            &conn,
+            &track.filepath,
+            track.content_hash.as_deref(),
+            track.remote_id.as_deref(),
+        )
+        .unwrap();
         library::delete_track(&conn, track_id).unwrap();
 
         // Verify the track is removed from library
@@ -352,7 +399,7 @@ mod tests {
         let conn = setup_test_db();
 
         // Record removal with content hash
-        record_removal(&conn, "/music/old/track.mp3", Some("hash_xyz")).unwrap();
+        record_removal(&conn, "/music/old/track.mp3", Some("hash_xyz"), None).unwrap();
 
         let removed_paths = get_removed_filepaths(&conn).unwrap();
         let removed_hashes = get_removed_content_hashes(&conn).unwrap();
@@ -372,8 +419,8 @@ mod tests {
     fn test_get_removed_content_hashes_excludes_nulls() {
         let conn = setup_test_db();
 
-        record_removal(&conn, "/music/a.mp3", None).unwrap();
-        record_removal(&conn, "/music/b.mp3", Some("hash_b")).unwrap();
+        record_removal(&conn, "/music/a.mp3", None, None).unwrap();
+        record_removal(&conn, "/music/b.mp3", Some("hash_b"), None).unwrap();
 
         let hashes = get_removed_content_hashes(&conn).unwrap();
         assert_eq!(hashes.len(), 1);
@@ -386,8 +433,8 @@ mod tests {
 
         let conn = setup_test_db();
 
-        record_removal(&conn, "/music/removed.mp3", None).unwrap();
-        record_removal(&conn, "/music/old.mp3", Some("hash_moved")).unwrap();
+        record_removal(&conn, "/music/removed.mp3", None, None).unwrap();
+        record_removal(&conn, "/music/old.mp3", Some("hash_moved"), None).unwrap();
 
         let tracks = vec![
             ("/music/removed.mp3".to_string(), TrackMetadata::default()),
@@ -456,9 +503,12 @@ mod tests {
         assert_eq!(info.len(), 2);
         assert!(
             info.iter()
-                .any(|(p, h)| p == "/music/a.mp3" && h.as_deref() == Some("h1"))
+                .any(|(p, h, r)| p == "/music/a.mp3" && h.as_deref() == Some("h1") && r.is_none())
         );
-        assert!(info.iter().any(|(p, h)| p == "/music/b.mp3" && h.is_none()));
+        assert!(
+            info.iter()
+                .any(|(p, h, r)| p == "/music/b.mp3" && h.is_none() && r.is_none())
+        );
     }
 
     #[test]
