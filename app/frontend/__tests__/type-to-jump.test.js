@@ -30,7 +30,7 @@ function createStub(tracks = TRACKS) {
     filteredTracks: tracks,
     _isPaginated: () => false,
     _allPagesLoaded: true,
-    _pageSize: 500,
+    _pageSize: 1500,
     _jumpToPrefix: vi.fn(),
     _fetchPage: vi.fn().mockResolvedValue(undefined),
     getTrackAtIndex: vi.fn(),
@@ -168,6 +168,49 @@ describe('type-to-jump: _jumpViaBackend cancellation', () => {
     // Should still be exactly one scroll — the stale call must not fire again
     expect(stub.scrollToOffset).toHaveBeenCalledTimes(1);
   });
+
+  it('stale jump does not call _fetchPage after being superseded', async () => {
+    // Ensures that a jump overtaken by a newer keystroke does not queue a page fetch.
+    // The _ensurePage side-effect was removed from _jumpToPrefix; the only _fetchPage
+    // call is gated behind the myGen check in _jumpViaBackend itself.
+    const stub = createStub();
+    stub.library.filteredTracks = [];
+    stub.library._isPaginated = () => true;
+    stub.library._allPagesLoaded = false;
+
+    let resolveFirst;
+    let resolveSecond;
+
+    const firstPromise = new Promise((res) => {
+      resolveFirst = () => res(0); // stale: offset 0 → page 0
+    });
+    const secondPromise = new Promise((res) => {
+      resolveSecond = () => res(3000); // winner: offset 3000 → page 2
+    });
+
+    stub.library._jumpToPrefix
+      .mockReturnValueOnce(firstPromise)
+      .mockReturnValueOnce(secondPromise);
+
+    stub.library.getTrackAtIndex = vi.fn().mockReturnValue(null);
+
+    const p1 = stub._jumpViaBackend('d');
+    const p2 = stub._jumpViaBackend('du');
+
+    // Resolve winner first
+    resolveSecond();
+    await p2;
+
+    // Only the winning page (2) must be fetched
+    expect(stub.library._fetchPage).toHaveBeenCalledTimes(1);
+    expect(stub.library._fetchPage).toHaveBeenCalledWith(2);
+
+    // Stale call resolves — must not trigger a second _fetchPage
+    resolveFirst();
+    await p1;
+
+    expect(stub.library._fetchPage).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -211,7 +254,7 @@ describe('type-to-jump: _jumpViaBackend scroll timing', () => {
     stub.library.filteredTracks = [];
     stub.library._isPaginated = () => true;
     stub.library._allPagesLoaded = false;
-    stub.library._jumpToPrefix = vi.fn().mockResolvedValue(1250); // page 2 of 500-per-page
+    stub.library._jumpToPrefix = vi.fn().mockResolvedValue(3000); // page 2 of 1500-per-page
     stub.library.getTrackAtIndex = vi.fn().mockReturnValue(null);
 
     await stub._jumpViaBackend('x');

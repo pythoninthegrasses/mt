@@ -60,7 +60,7 @@ export function createLibraryStore(Alpine) {
     // Sparse page map for paginated loading (used by "all" section)
     _trackPages: {},
     _loadingPages: {},
-    _pageSize: 500,
+    _pageSize: 1500,
     _loadGeneration: 0,
     _allPagesLoaded: false,
 
@@ -758,10 +758,6 @@ export function createLibraryStore(Alpine) {
           prefix,
         });
         if (offset === null || offset === undefined) return null;
-
-        // Ensure the target page is loaded
-        const pageIndex = Math.floor(offset / this._pageSize);
-        this._ensurePage(pageIndex);
 
         return offset;
       } catch (error) {
