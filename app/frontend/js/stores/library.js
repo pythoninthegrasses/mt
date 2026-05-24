@@ -160,7 +160,7 @@ export function createLibraryStore(Alpine) {
       });
 
       const unlistenSync = await listen('plex-sync-complete', () => {
-        this.fetchTracks();
+        this._onPlexSyncComplete();
       });
 
       this._plexListeners = () => {
@@ -602,6 +602,10 @@ export function createLibraryStore(Alpine) {
           this._persistCache();
         },
       });
+    },
+
+    _onPlexSyncComplete() {
+      this._backgroundRefresh('all');
     },
 
     // -----------------------------------------------------------------------
