@@ -174,8 +174,8 @@ describe('type-to-jump: _jumpViaBackend cancellation', () => {
 // Tests: _jumpViaBackend defers scroll until page is loaded
 // ---------------------------------------------------------------------------
 
-describe('type-to-jump: _jumpViaBackend defers scroll', () => {
-  it('scrollToOffset is not called until _fetchPage resolves', async () => {
+describe('type-to-jump: _jumpViaBackend scroll timing', () => {
+  it('scrollToOffset fires as soon as offset resolves, before _fetchPage completes', async () => {
     const stub = createStub();
     stub.library.filteredTracks = [];
     stub.library._isPaginated = () => true;
@@ -192,16 +192,18 @@ describe('type-to-jump: _jumpViaBackend defers scroll', () => {
 
     const p = stub._jumpViaBackend('m');
 
-    // Flush _jumpToPrefix microtask — _fetchPage started but not done
+    // Flush _jumpToPrefix microtask — offset is known, scroll should have fired
     await Promise.resolve();
     await Promise.resolve();
-    expect(stub.scrollToOffset).not.toHaveBeenCalled();
+    expect(stub.scrollToOffset).toHaveBeenCalledWith(600);
 
-    // Resolve the page fetch — now scroll should fire
+    // _isJumping stays true until _fetchPage resolves
+    expect(stub._isJumping).toBe(true);
+
     resolveFetch();
     await p;
     expect(stub.scrollToOffset).toHaveBeenCalledTimes(1);
-    expect(stub.scrollToOffset).toHaveBeenCalledWith(600);
+    expect(stub._isJumping).toBe(false);
   });
 
   it('_fetchPage is called with the correct page index', async () => {

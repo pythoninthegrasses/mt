@@ -149,15 +149,16 @@ export function typeToJumpMixin() {
         if (myGen !== this._jumpGen) return; // superseded by a newer keystroke
         if (offset === null || offset === undefined) return;
 
-        // Await the target page so visibleTracks has real rows on first render
-        // after the scroll. _fetchPage dedupes: if _jumpToPrefix's _ensurePage
-        // already started the fetch, this awaits that same in-flight promise.
+        // Snap to target immediately — gives instant visual feedback.
+        // _isJumping badge stays visible until the page arrives.
+        this.scrollToOffset(offset);
+
+        // Await the page so rows populate before clearing the badge and selecting.
+        // _fetchPage dedupes: _jumpToPrefix's _ensurePage already started the fetch;
+        // this awaits that same in-flight promise.
         const pageIndex = Math.floor(offset / this.library._pageSize);
         await this.library._fetchPage(pageIndex);
         if (myGen !== this._jumpGen) return;
-
-        // Snap instantly — page data is ready, no blank-row flash
-        this.scrollToOffset(offset);
 
         const track = this.library.getTrackAtIndex(offset);
         if (track) {
