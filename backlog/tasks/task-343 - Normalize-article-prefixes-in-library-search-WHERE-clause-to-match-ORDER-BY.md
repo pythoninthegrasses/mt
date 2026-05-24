@@ -1,9 +1,10 @@
 ---
 id: TASK-343
 title: Normalize article prefixes in library search WHERE clause to match ORDER BY
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-05-24 16:07'
+updated_date: '2026-05-24 17:22'
 labels:
   - backend
   - search
@@ -17,6 +18,7 @@ references:
   - 'crates/mt-tauri/src/db/library.rs:191'
   - 'crates/mt-tauri/src/db/library.rs:245-271'
 priority: low
+ordinal: 750
 ---
 
 ## Description

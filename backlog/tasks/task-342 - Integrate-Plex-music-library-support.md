@@ -4,7 +4,7 @@ title: Integrate Plex music library support
 status: In Progress
 assignee: []
 created_date: '2026-05-21 22:56'
-updated_date: '2026-05-21 22:58'
+updated_date: '2026-05-24 17:22'
 labels: []
 dependencies:
   - TASK-342.1
@@ -13,7 +13,8 @@ dependencies:
   - TASK-342.4
   - TASK-342.5
   - TASK-342.6
-ordinal: 52500
+priority: high
+ordinal: 875
 ---
 
 ## Description
