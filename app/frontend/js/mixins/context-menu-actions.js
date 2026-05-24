@@ -117,11 +117,14 @@ export function contextMenuActionsMixin() {
         },
       ];
 
-      if (selectedCount === 1 && this.$store.library.isRemote(track)) {
+      const plexTracks = this.getSelectedTracks().filter((t) => this.$store.library.isRemote(t));
+      if (plexTracks.length > 0) {
         menuItems.push({ type: 'separator' });
         menuItems.push({
-          label: 'Download from Plex',
-          action: () => this.downloadFromPlex(track),
+          label: plexTracks.length === 1
+            ? 'Download from Plex'
+            : `Download ${plexTracks.length} tracks from Plex`,
+          action: () => this.downloadFromPlex(plexTracks),
         });
       }
 
@@ -333,16 +336,28 @@ export function contextMenuActionsMixin() {
       );
     },
 
-    async downloadFromPlex(track) {
+    async downloadFromPlex(tracks) {
       this.contextMenu = null;
-      try {
-        await plex.downloadTrack(track.id);
-      } catch (error) {
-        console.error('[context-menu]', 'download_from_plex_error', {
-          trackId: track.id,
-          error: error.message,
-        });
-        this.$store.ui.toast(`Plex download failed: ${error.message}`, 'error');
+      const list = Array.isArray(tracks) ? tracks : [tracks];
+      const errors = [];
+      for (const t of list) {
+        try {
+          await plex.downloadTrack(t.id);
+        } catch (error) {
+          console.error('[context-menu]', 'download_from_plex_error', {
+            trackId: t.id,
+            error: error.message,
+          });
+          errors.push(error.message);
+        }
+      }
+      if (errors.length > 0) {
+        this.$store.ui.toast(
+          errors.length === 1
+            ? `Plex download failed: ${errors[0]}`
+            : `${errors.length} Plex downloads failed`,
+          'error',
+        );
       }
     },
 
