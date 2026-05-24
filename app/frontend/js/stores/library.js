@@ -75,7 +75,7 @@ export function createLibraryStore(Alpine) {
     _saveCacheDebounce: null,
     _watchedFolderListener: null,
     _plexListeners: null,
-    _plexDownloadToasts: {},
+    _plexBatch: null,
     _lastLoadedSection: null,
     _sectionCache: {},
     _backgroundRefreshing: false,
@@ -142,34 +142,24 @@ export function createLibraryStore(Alpine) {
     async _setupPlexListeners() {
       const unlistenProgress = await listen('plex_download_progress', (event) => {
         const { track_id, percent } = event.payload || {};
-        const ui = Alpine.store('ui');
-
         if (percent != null && percent >= 100) {
-          if (this._plexDownloadToasts[track_id]) {
-            ui.dismissToast(this._plexDownloadToasts[track_id]);
-            delete this._plexDownloadToasts[track_id];
+          if (this._plexBatch?.pendingIds.has(track_id)) {
+            this._plexBatch.pendingIds.delete(track_id);
+            this._plexBatchTrackDone(true);
           }
-          ui.toast('Download complete', 'success', 3000);
           // Refresh the track in-store so the cloud badge disappears reactively.
           this._refreshPlexTrack(track_id);
-        } else if (percent != null) {
-          const msg = `Downloading from Plex… ${Math.round(percent)}%`;
-          if (this._plexDownloadToasts[track_id]) {
-            ui.updateToast(this._plexDownloadToasts[track_id], msg);
-          } else {
-            this._plexDownloadToasts[track_id] = ui.toast(msg, 'info', 0);
-          }
         }
       });
 
       const unlistenFailed = await listen('plex_download_failed', (event) => {
         const { track_id, error } = event.payload || {};
-        const ui = Alpine.store('ui');
-        if (this._plexDownloadToasts[track_id]) {
-          ui.dismissToast(this._plexDownloadToasts[track_id]);
-          delete this._plexDownloadToasts[track_id];
+        if (this._plexBatch?.pendingIds.has(track_id)) {
+          this._plexBatch.pendingIds.delete(track_id);
+          this._plexBatchTrackDone(false, error);
+        } else {
+          Alpine.store('ui').toast(`Plex download failed: ${error}`, 'error', 5000);
         }
-        ui.toast(`Plex download failed: ${error}`, 'error', 5000);
       });
 
       const unlistenSync = await listen('plex-sync-complete', () => {
@@ -181,6 +171,47 @@ export function createLibraryStore(Alpine) {
         unlistenFailed();
         unlistenSync();
       };
+    },
+
+    _startPlexBatch(trackIds) {
+      const ui = Alpine.store('ui');
+      if (this._plexBatch?.toastId) {
+        for (const id of trackIds) this._plexBatch.pendingIds.add(id);
+        this._plexBatch.total += trackIds.length;
+        ui.updateToast(this._plexBatch.toastId, this._plexBatchMessage());
+        return;
+      }
+      const total = trackIds.length;
+      const toastId = ui.toast(`0 / ${total} tracks downloaded`, 'info', 0);
+      this._plexBatch = { total, completed: 0, failed: 0, toastId, pendingIds: new Set(trackIds) };
+    },
+
+    _plexBatchMessage() {
+      const { total, completed, failed } = this._plexBatch;
+      const base = `${completed} / ${total} tracks downloaded`;
+      return failed > 0 ? `${base} (${failed} failed)` : base;
+    },
+
+    _plexBatchTrackDone(succeeded, _error) {
+      if (!this._plexBatch) return;
+      if (succeeded) {
+        this._plexBatch.completed++;
+      } else {
+        this._plexBatch.failed++;
+      }
+      const { total, completed, failed, toastId } = this._plexBatch;
+      const ui = Alpine.store('ui');
+      if (completed + failed >= total) {
+        ui.dismissToast(toastId);
+        if (failed === 0) {
+          ui.toast(`${total} track${total === 1 ? '' : 's'} downloaded`, 'success', 3000);
+        } else {
+          ui.toast(`${completed} downloaded, ${failed} failed`, 'warning', 5000);
+        }
+        this._plexBatch = null;
+      } else {
+        ui.updateToast(toastId, this._plexBatchMessage());
+      }
     },
 
     async _refreshPlexTrack(trackId) {

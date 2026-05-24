@@ -339,7 +339,7 @@ export function contextMenuActionsMixin() {
     async downloadFromPlex(tracks) {
       this.contextMenu = null;
       const list = Array.isArray(tracks) ? tracks : [tracks];
-      const errors = [];
+      this.$store.library._startPlexBatch(list.map((t) => t.id));
       for (const t of list) {
         try {
           await plex.downloadTrack(t.id);
@@ -348,16 +348,7 @@ export function contextMenuActionsMixin() {
             trackId: t.id,
             error: error.message,
           });
-          errors.push(error.message);
         }
-      }
-      if (errors.length > 0) {
-        this.$store.ui.toast(
-          errors.length === 1
-            ? `Plex download failed: ${errors[0]}`
-            : `${errors.length} Plex downloads failed`,
-          'error',
-        );
       }
     },
 
