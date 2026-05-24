@@ -173,7 +173,8 @@ export function contextMenuActionsMixin() {
         danger: true,
       });
 
-      const menuHeight = 320;
+      const separators = menuItems.filter((i) => i.type === 'separator').length;
+      const menuHeight = (menuItems.length - separators) * 32 + separators * 9 + 16;
       const menuWidth = 200;
       const submenuWidth = 200;
       let x = event.clientX;
