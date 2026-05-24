@@ -15,6 +15,7 @@ export function typeToJumpMixin() {
     _typeDebounceTimer: null,
     _cycleChar: '',
     _cycleIndex: -1,
+    _jumpGen: 0,
 
     /**
      * Handle type-to-jump navigation - jump to artist matching typed characters
@@ -137,7 +138,9 @@ export function typeToJumpMixin() {
      * @param {string} prefix - Lowercase search prefix
      */
     async _jumpViaBackend(prefix) {
+      const myGen = ++this._jumpGen;
       const offset = await this.library._jumpToPrefix(prefix);
+      if (myGen !== this._jumpGen) return; // superseded by a newer keystroke
       if (offset === null || offset === undefined) return;
 
       // Scroll immediately — shimmer rows show while page loads
@@ -152,6 +155,7 @@ export function typeToJumpMixin() {
         } else {
           // Page still loading — retry once after a short delay
           setTimeout(() => {
+            if (myGen !== this._jumpGen) return;
             const t = this.library.getTrackAtIndex(offset);
             if (t) {
               this.selectedTracks.clear();
@@ -226,7 +230,7 @@ export function typeToJumpMixin() {
         this._cycleIndex = -1;
         this._typeDebounceTimer = null;
         this.$store.ui.typeToJumpActive = false;
-      }, 500); // 500ms matches existing debounce patterns in codebase
+      }, 1500);
     },
   };
 }
