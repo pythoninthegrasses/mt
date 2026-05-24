@@ -387,8 +387,13 @@ export async function backgroundRefreshLibrary(store, section) {
     }
 
     if (store.currentSection === section) {
-      // Reset and store page 0 from the unified response
-      store._resetPages();
+      // Preserve loaded pages so the user's scroll position survives a sync.
+      // Only update page 0 (which we just fetched) and drop in-flight loads to
+      // avoid stale-generation races. Other pages refetch on next access.
+      // Do NOT call _resetPages() or bump _loadGeneration — that wipes the SWR
+      // snapshot and causes the virtual scroll to snap back to the top.
+      store._loadingPages = {};
+      store._allPagesLoaded = false;
       if (sectionData.tracks && sectionData.tracks.length > 0) {
         store._trackPages[0] = sectionData.tracks;
       }
