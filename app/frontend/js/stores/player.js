@@ -19,6 +19,7 @@ export function createPlayerStore(Alpine) {
     isSeeking: false,
     isFavorite: false,
     artwork: null,
+    loadingTrackId: null,
 
     _progressListener: null,
     _trackEndedListener: null,
@@ -129,6 +130,7 @@ export function createPlayerStore(Alpine) {
         requestId,
       });
 
+      this.loadingTrackId = track.id;
       try {
         // Combined load+play in a single IPC call to minimize transition gap.
         // engine.load() already stops any current playback internally.
@@ -143,6 +145,7 @@ export function createPlayerStore(Alpine) {
             requestId,
             currentId: this._playRequestId,
           });
+          if (this.loadingTrackId === track.id) this.loadingTrackId = null;
           return;
         }
 
@@ -159,6 +162,7 @@ export function createPlayerStore(Alpine) {
         this.currentTime = 0;
         this.progress = 0;
         this.isPlaying = true;
+        if (this.loadingTrackId === track.id) this.loadingTrackId = null;
 
         await this.checkFavoriteStatus();
         await this.loadArtwork();
@@ -173,6 +177,7 @@ export function createPlayerStore(Alpine) {
           });
           this.isPlaying = false;
         }
+        if (this.loadingTrackId === track.id) this.loadingTrackId = null;
       }
     },
 

@@ -64,31 +64,45 @@ pub(crate) fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
     Ok(items)
 }
 
+/// Look up `id -> filepath` for arbitrary-length id lists, batching to stay
+/// under SQLite's SQLITE_MAX_VARIABLE_NUMBER limit (999 in our bundled build).
+fn fetch_filepaths_by_id(
+    conn: &Connection,
+    track_ids: &[i64],
+) -> DbResult<std::collections::HashMap<i64, String>> {
+    use std::collections::HashMap;
+    let mut map: HashMap<i64, String> = HashMap::with_capacity(track_ids.len());
+    if track_ids.is_empty() {
+        return Ok(map);
+    }
+    for chunk in track_ids.chunks(500) {
+        let placeholders = chunk.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "SELECT id, filepath FROM library WHERE id IN ({})",
+            placeholders
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::ToSql> =
+            chunk.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+        for row in stmt
+            .query_map(params.as_slice(), |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })?
+            .flatten()
+        {
+            map.insert(row.0, row.1);
+        }
+    }
+    Ok(map)
+}
+
 /// Add tracks to the queue by track IDs
 pub(crate) fn add_to_queue(
     conn: &Connection,
     track_ids: &[i64],
     position: Option<i64>,
 ) -> DbResult<i64> {
-    // Get filepaths for track IDs
-    let placeholders = track_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let sql = format!(
-        "SELECT id, filepath FROM library WHERE id IN ({})",
-        placeholders
-    );
-
-    let mut stmt = conn.prepare(&sql)?;
-    let params: Vec<&dyn rusqlite::ToSql> = track_ids
-        .iter()
-        .map(|id| id as &dyn rusqlite::ToSql)
-        .collect();
-
-    let tracks: Vec<(i64, String)> = stmt
-        .query_map(params.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
-        .filter_map(|r| r.ok())
-        .collect();
-
-    let track_map: std::collections::HashMap<i64, String> = tracks.into_iter().collect();
+    let track_map = fetch_filepaths_by_id(conn, track_ids)?;
 
     let tx = conn.unchecked_transaction()?;
 
@@ -440,22 +454,7 @@ pub(crate) fn add_play_next(conn: &Connection, track_ids: &[i64]) -> DbResult<Ve
         return get_queue(conn);
     }
 
-    // Resolve filepaths for the track IDs
-    let placeholders = track_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let sql = format!(
-        "SELECT id, filepath FROM library WHERE id IN ({})",
-        placeholders
-    );
-    let mut stmt = conn.prepare(&sql)?;
-    let params: Vec<&dyn rusqlite::ToSql> = track_ids
-        .iter()
-        .map(|id| id as &dyn rusqlite::ToSql)
-        .collect();
-    let track_map: std::collections::HashMap<i64, String> = stmt
-        .query_map(params.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
-        .filter_map(|r| r.ok())
-        .collect();
-    drop(stmt);
+    let track_map = fetch_filepaths_by_id(conn, track_ids)?;
 
     let current_idx = state.current_index.max(0) as usize;
     let current_track_id = items.get(current_idx).map(|i| i.track.id);
@@ -1060,21 +1059,7 @@ pub(crate) fn play_context(
     tx.execute("DELETE FROM queue", [])?;
 
     // Look up filepaths preserving input order
-    let placeholders = track_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let sql = format!(
-        "SELECT id, filepath FROM library WHERE id IN ({})",
-        placeholders
-    );
-    let mut stmt = tx.prepare(&sql)?;
-    let params_vec: Vec<&dyn rusqlite::ToSql> = track_ids
-        .iter()
-        .map(|id| id as &dyn rusqlite::ToSql)
-        .collect();
-    let track_map: std::collections::HashMap<i64, String> = stmt
-        .query_map(params_vec.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
-        .filter_map(|r| r.ok())
-        .collect();
-    drop(stmt);
+    let track_map = fetch_filepaths_by_id(&tx, track_ids)?;
 
     // Build ordered filepath list, skipping IDs not found in library
     let resolved: Vec<(i64, String)> = track_ids
@@ -2289,6 +2274,22 @@ mod tests {
         let ids: Vec<i64> = items.iter().map(|i| i.track.id).collect();
         let unique: std::collections::HashSet<i64> = ids.iter().copied().collect();
         assert_eq!(ids.len(), unique.len());
+    }
+
+    #[test]
+    fn play_context_handles_library_over_sqlite_param_limit() {
+        let conn = setup_test_db();
+        let ids = add_test_tracks(&conn, 1500);
+        let result = play_context(&conn, &ids, 0, false).expect("must not overflow IN()");
+        assert_eq!(result.items.len(), 1500);
+    }
+
+    #[test]
+    fn add_to_queue_handles_param_limit() {
+        let conn = setup_test_db();
+        let ids = add_test_tracks(&conn, 1200);
+        let n = add_to_queue(&conn, &ids, None).expect("must not overflow IN()");
+        assert_eq!(n, 1200);
     }
 }
 

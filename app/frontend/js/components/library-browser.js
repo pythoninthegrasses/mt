@@ -627,6 +627,7 @@ export function createLibraryBrowser(Alpine) {
     getTrackRowClasses(item) {
       const trackId = item.track.id;
       const idx = item.globalIndex;
+      const isRemoteNotMissing = !item.track.missing && this.library.isRemote(item.track);
       return [
         this.isSelected(trackId)
           ? 'track-row-selected'
@@ -635,6 +636,7 @@ export function createLibraryBrowser(Alpine) {
         !this.isSelected(trackId) && !this.isPlaying(trackId) ? 'hover:bg-muted/50' : '',
         this.isDraggingTrack(idx) ? 'bg-card shadow-lg z-10 relative' : '',
         this.isOtherTrackDragging(idx) ? 'opacity-50' : '',
+        isRemoteNotMissing ? 'opacity-75' : '',
         this.getDragOverClass(idx),
       ];
     },

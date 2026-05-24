@@ -36,6 +36,9 @@ export async function handleDoubleClickPlay(ctx, track, allTracks, index, logPre
     ctx.player.updateTrackState(result.track, result.duration_ms);
   } catch (err) {
     console.error(`[${logPrefix}] Failed to play context:`, err);
+    try {
+      Alpine.store('ui').toast(`Failed to play: ${err?.message || String(err)}`, 'error');
+    } catch { /* ui store may not exist in test harness */ }
   } finally {
     setTimeout(() => {
       ctx.queue._updating = false;
@@ -85,6 +88,9 @@ export async function handleDoubleClickPlayQuery(
     ctx.player.updateTrackState(result.track, result.duration_ms);
   } catch (err) {
     console.error(`[${logPrefix}] Failed to play context query:`, err);
+    try {
+      Alpine.store('ui').toast(`Failed to play: ${err?.message || String(err)}`, 'error');
+    } catch { /* ui store may not exist in test harness */ }
   } finally {
     setTimeout(() => {
       ctx.queue._updating = false;
