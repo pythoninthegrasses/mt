@@ -34,4 +34,12 @@ export const plex = {
   sync() {
     return tauriInvoke('plex_sync');
   },
+
+  setLibraries(libraries) {
+    return tauriInvoke('plex_set_libraries', { libraries });
+  },
+
+  listLibrariesCurrent() {
+    return tauriInvoke('plex_libraries_current');
+  },
 };

@@ -77,12 +77,13 @@ pub(crate) struct AlbumsContainer {
 pub(crate) struct AlbumDto {
     #[serde(rename = "ratingKey")]
     pub(crate) rating_key: String,
+    #[serde(default)]
     pub(crate) title: String,
     #[serde(rename = "parentTitle", default)]
-    pub(crate) parent_title: String,
+    pub(crate) parent_title: Option<String>,
     pub(crate) year: Option<u32>,
-    #[serde(rename = "leafCount", default)]
-    pub(crate) leaf_count: u32,
+    #[serde(rename = "leafCount")]
+    pub(crate) leaf_count: Option<u32>,
 }
 
 #[derive(Deserialize)]

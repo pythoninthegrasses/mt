@@ -24,17 +24,18 @@ use cache::NetworkFileCache;
 use commands::{
     AudioState, PlexState, audio_get_status, audio_get_volume, audio_list_devices, audio_load,
     audio_load_and_play, audio_pause, audio_play, audio_seek, audio_set_device, audio_set_volume,
-    audio_stop, favorites_add, favorites_check, favorites_get, favorites_get_recently_added,
-    favorites_get_recently_played, favorites_get_top25, favorites_remove, lastfm_auth_callback,
-    lastfm_cache_loved_tracks, lastfm_disconnect, lastfm_get_auth_url, lastfm_get_settings,
-    lastfm_import_loved_tracks, lastfm_loved_stats, lastfm_match_loved_tracks, lastfm_now_playing,
-    lastfm_queue_retry, lastfm_queue_status, lastfm_reset_loved_cache, lastfm_scrobble,
-    lastfm_update_settings, lyrics_clear_cache, lyrics_get, match_loved_tracks_impl,
-    network_cache_purge, network_cache_status, playlist_add_tracks, playlist_create,
-    playlist_delete, playlist_generate_name, playlist_get, playlist_list, playlist_remove_track,
-    playlist_reorder_tracks, playlist_update, playlists_reorder, plex_config_clear,
-    plex_config_get, plex_config_set, plex_download_track, plex_fetch_albums, plex_fetch_tracks,
-    plex_list_libraries, plex_merge_library, plex_refresh_cache, plex_server_ping, plex_sync,
+    audio_stop, do_plex_sync, favorites_add, favorites_check, favorites_get,
+    favorites_get_recently_added, favorites_get_recently_played, favorites_get_top25,
+    favorites_remove, lastfm_auth_callback, lastfm_cache_loved_tracks, lastfm_disconnect,
+    lastfm_get_auth_url, lastfm_get_settings, lastfm_import_loved_tracks, lastfm_loved_stats,
+    lastfm_match_loved_tracks, lastfm_now_playing, lastfm_queue_retry, lastfm_queue_status,
+    lastfm_reset_loved_cache, lastfm_scrobble, lastfm_update_settings, lyrics_clear_cache,
+    lyrics_get, match_loved_tracks_impl, network_cache_purge, network_cache_status,
+    playlist_add_tracks, playlist_create, playlist_delete, playlist_generate_name, playlist_get,
+    playlist_list, playlist_remove_track, playlist_reorder_tracks, playlist_update,
+    playlists_reorder, plex_config_clear, plex_config_get, plex_config_set, plex_download_track,
+    plex_fetch_albums, plex_fetch_tracks, plex_libraries_current, plex_list_libraries,
+    plex_merge_library, plex_refresh_cache, plex_server_ping, plex_set_libraries, plex_sync,
     queue_add, queue_add_files, queue_add_play_next, queue_check_integrity, queue_clear, queue_get,
     queue_get_playback_state, queue_play_context, queue_play_context_query, queue_play_next_track,
     queue_play_previous_track, queue_remove, queue_reorder, queue_set_current_index,
@@ -581,6 +582,8 @@ pub fn run() {
             plex_refresh_cache,
             plex_merge_library,
             plex_sync,
+            plex_set_libraries,
+            plex_libraries_current,
             plex_download_track,
             agent_generate_playlist,
             agent_check_status,
@@ -663,6 +666,22 @@ pub fn run() {
 
             app.manage(PlexState::new());
             debug!("Plex state initialized");
+
+            {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    let db = app_handle.state::<db::Database>();
+                    let plex_state = app_handle.state::<PlexState>();
+                    match do_plex_sync(&app_handle, &*db, &*plex_state).await {
+                        Ok(stats) => info!(?stats, "Startup Plex sync complete"),
+                        Err(e) if e.contains("not configured") => {
+                            debug!("Startup Plex sync: not configured")
+                        }
+                        Err(e) => warn!(error = %e, "Startup Plex sync failed"),
+                    }
+                });
+            }
 
             match MediaKeyManager::new(app.handle().clone()) {
                 Ok(media_keys) => {

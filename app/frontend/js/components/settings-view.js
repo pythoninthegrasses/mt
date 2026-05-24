@@ -897,6 +897,11 @@ export function createSettingsView(Alpine) {
           this.plex.token = config.token;
           this.plex.selectedLibraries = config.libraries ?? [];
           this.plex.connected = true;
+          try {
+            this.plex.libraries = await plex.listLibrariesCurrent();
+          } catch (error) {
+            console.warn('[settings] Could not refresh Plex libraries list:', error);
+          }
           this._syncPlex();
         }
       } catch (error) {
@@ -931,18 +936,22 @@ export function createSettingsView(Alpine) {
     },
 
     _syncPlex() {
-      plex.sync().then((stats) => {
-        if (stats?.inserted > 0 || stats?.updated > 0) {
-          Alpine.store('library').fetchTracks();
-          const msg = [
-            stats.inserted > 0 ? `${stats.inserted} new` : '',
-            stats.updated > 0 ? `${stats.updated} updated` : '',
-          ].filter(Boolean).join(', ');
-          Alpine.store('ui').toast(`Plex sync: ${msg}`, 'success', 4000);
-        }
-      }).catch((error) => {
-        console.error('[settings] Plex sync failed:', error);
-      });
+      plex
+        .sync()
+        .then((stats) => {
+          if (!stats) return;
+          if (stats.inserted > 0 || stats.linked > 0) {
+            Alpine.store('library').fetchTracks();
+            const parts = [
+              stats.inserted > 0 ? `${stats.inserted} new` : '',
+              stats.linked > 0 ? `${stats.linked} linked` : '',
+            ].filter(Boolean);
+            Alpine.store('ui').toast(`Plex sync: ${parts.join(', ')}`, 'success', 4000);
+          }
+        })
+        .catch((error) => {
+          console.error('[settings] Plex sync failed:', error);
+        });
     },
 
     async disconnectPlex() {
@@ -988,12 +997,18 @@ export function createSettingsView(Alpine) {
       return this.plex.selectedLibraries.includes(key);
     },
 
-    togglePlexLibrary(key) {
-      const idx = this.plex.selectedLibraries.indexOf(key);
-      if (idx === -1) {
-        this.plex.selectedLibraries = [...this.plex.selectedLibraries, key];
-      } else {
-        this.plex.selectedLibraries = this.plex.selectedLibraries.filter((k) => k !== key);
+    async togglePlexLibrary(key) {
+      const next = this.plex.selectedLibraries.includes(key)
+        ? this.plex.selectedLibraries.filter((k) => k !== key)
+        : [...this.plex.selectedLibraries, key];
+      this.plex.selectedLibraries = next;
+      if (!this.plex.connected) return;
+      try {
+        await plex.setLibraries(next);
+        this._syncPlex();
+      } catch (error) {
+        console.error('[settings] Failed to save Plex library selection:', error);
+        Alpine.store('ui').toast('Failed to save library selection', 'error');
       }
     },
 

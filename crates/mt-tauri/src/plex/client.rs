@@ -68,7 +68,7 @@ impl PlexClient {
             return Err(PlexError::ResponseTooLarge);
         }
 
-        serde_json::from_slice(&bytes).map_err(PlexError::ParseError)
+        serde_json::from_slice(&sanitize_lone_surrogates(&bytes)).map_err(PlexError::ParseError)
     }
 
     async fn get(&self, path: &str) -> Result<serde_json::Value, PlexError> {
@@ -131,9 +131,9 @@ impl PlexClient {
                 .map(|m| PlexAlbum {
                     rating_key: m.rating_key,
                     title: m.title,
-                    artist_name: m.parent_title,
+                    artist_name: m.parent_title.unwrap_or_default(),
                     year: m.year,
-                    track_count: m.leaf_count,
+                    track_count: m.leaf_count.unwrap_or(0),
                 })
                 .collect();
 
@@ -182,6 +182,47 @@ impl PlexClient {
             "{}{}?X-Plex-Token={}",
             self.config.url, part_key, self.config.token
         )
+    }
+}
+
+// Plex JSON responses contain two classes of invalid content that serde_json
+// rejects per RFC 8259:
+//
+//  1. \uXXXX lone surrogate escapes (e.g. \uD83D without a paired low surrogate)
+//     in description/summary text fields.
+//  2. Raw non-UTF-8 bytes (e.g. Windows-1252 0x95 "•") embedded directly in
+//     string values, typically in file-path fields for tracks whose filenames
+//     contain non-ASCII characters encoded in a legacy code page.
+//
+// Both are replaced with the Unicode replacement character so parsing succeeds.
+fn sanitize_lone_surrogates(bytes: &[u8]) -> Vec<u8> {
+    // Pass 1: replace \uXXXX escapes in the surrogate range (D800–DFFF).
+    // We scan for the 6-byte sequence b'\', b'u', then 4 hex digits.
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if i + 5 < bytes.len() && bytes[i] == b'\\' && bytes[i + 1] == b'u' {
+            let h = [bytes[i + 2], bytes[i + 3], bytes[i + 4], bytes[i + 5]];
+            if h.iter().all(|b| b.is_ascii_hexdigit()) {
+                let hex = std::str::from_utf8(&h).unwrap();
+                let cp = u16::from_str_radix(hex, 16).unwrap();
+                if (0xD800..=0xDFFF).contains(&cp) {
+                    out.extend_from_slice(b"\\uFFFD");
+                    i += 6;
+                    continue;
+                }
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+
+    // Pass 2: replace raw invalid UTF-8 byte sequences with U+FFFD (EF BF BD).
+    // String::from_utf8_lossy handles all invalid sequences; JSON structural
+    // bytes are ASCII so they are unaffected by this substitution.
+    match String::from_utf8_lossy(&out) {
+        std::borrow::Cow::Borrowed(_) => out,
+        std::borrow::Cow::Owned(s) => s.into_bytes(),
     }
 }
 
@@ -433,5 +474,55 @@ mod tests {
         let client = PlexClient::new(config(&server.uri()));
         let err = client.music_sections().await.unwrap_err();
         assert!(matches!(err, PlexError::ResponseTooLarge));
+    }
+
+    // ── sanitize_lone_surrogates unit tests ───────────────────────────────────
+
+    #[test]
+    fn sanitize_passthrough_clean_json() {
+        let input = br#"{"title":"Abbey Road"}"#;
+        assert_eq!(sanitize_lone_surrogates(input), input);
+    }
+
+    #[test]
+    fn sanitize_replaces_lone_high_surrogate() {
+        // \uD83D is a lone high surrogate (no following \uDC00–\uDFFF pair)
+        let input = b"{\"summary\":\"great \\uD83D album\"}";
+        let out = sanitize_lone_surrogates(input);
+        // � encoded as UTF-8: EF BF BD
+        assert_eq!(out, b"{\"summary\":\"great \\uFFFD album\"}");
+    }
+
+    #[test]
+    fn sanitize_replaces_lone_low_surrogate() {
+        let input = b"{\"summary\":\"bad \\uDC00 char\"}";
+        let out = sanitize_lone_surrogates(input);
+        assert_eq!(out, b"{\"summary\":\"bad \\uFFFD char\"}");
+    }
+
+    #[test]
+    fn sanitize_preserves_valid_unicode_escape() {
+        // é is 'é', not a surrogate — must pass through unchanged
+        let input = b"{\"title\":\"caf\\u00E9\"}";
+        assert_eq!(sanitize_lone_surrogates(input), input);
+    }
+
+    #[test]
+    fn sanitize_lone_surrogate_json_parses() {
+        // Verifies that after sanitization serde_json can parse the result
+        let input = br#"{"title":"rock \uD83D stuff","count":3}"#;
+        let clean = sanitize_lone_surrogates(input);
+        let v: serde_json::Value = serde_json::from_slice(&clean).unwrap();
+        assert_eq!(v["count"], 3);
+    }
+
+    #[test]
+    fn sanitize_replaces_raw_invalid_utf8() {
+        // Plex embeds raw Windows-1252 bytes (e.g. 0x95 = bullet) in file-path fields
+        let input = b"{\"file\":\"E\x95MO\x95TION.mp3\"}";
+        let clean = sanitize_lone_surrogates(input);
+        let v: serde_json::Value = serde_json::from_slice(&clean).unwrap();
+        // Each 0x95 replaced with U+FFFD; string still parses
+        assert!(v["file"].as_str().unwrap().contains('\u{FFFD}'));
     }
 }

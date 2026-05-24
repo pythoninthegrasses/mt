@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_store::StoreExt;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -145,24 +145,27 @@ pub(crate) fn plex_config_clear(app: AppHandle, db: State<'_, Database>) -> Resu
 
 /// Fetch the Plex library cache and merge remote tracks into the local DB in one call.
 /// Idempotent: safe to call on every connect and on startup when already configured.
-#[tauri::command]
-pub(crate) async fn plex_sync(
-    app: AppHandle,
-    db: State<'_, Database>,
-    plex_state: State<'_, PlexState>,
+pub(crate) async fn do_plex_sync(
+    app: &AppHandle,
+    db: &Database,
+    plex_state: &PlexState,
 ) -> Result<PlexMergeStats, String> {
-    let config = load_plex_config(&app)?;
+    let config = load_plex_config(app)?;
     let client = PlexClient::new(config.clone());
 
-    // Fetch albums
     let library_keys: Vec<String> = config.libraries.unwrap_or_default();
+    tracing::info!(keys = ?library_keys, "plex sync: fetching albums");
     let mut all_albums = Vec::new();
     for key in &library_keys {
         let mut albums = client.albums(key).await.map_err(|e| e.to_string())?;
+        tracing::debug!(
+            key,
+            count = albums.len(),
+            "plex sync: fetched albums for section"
+        );
         all_albums.append(&mut albums);
     }
 
-    // Fetch tracks per album
     let mut track_map: HashMap<String, Vec<PlexTrack>> = HashMap::new();
     for album in &all_albums {
         let tracks = client
@@ -172,14 +175,12 @@ pub(crate) async fn plex_sync(
         track_map.insert(album.rating_key.clone(), tracks);
     }
 
-    // Store in cache
     {
         let mut cache = plex_state.cache.lock().await;
         cache.albums = Some(all_albums.clone());
         cache.tracks = track_map.clone();
     }
 
-    // Merge into local DB
     let albums_with_tracks: Vec<(PlexAlbum, Vec<PlexTrack>)> = all_albums
         .into_iter()
         .map(|album| {
@@ -192,8 +193,19 @@ pub(crate) async fn plex_sync(
         .collect();
 
     let conn = db.conn().map_err(|e| e.to_string())?;
-    let client = PlexClient::new(load_plex_config(&app)?);
-    merge_plex_library(&conn, &albums_with_tracks, &client)
+    let client = PlexClient::new(load_plex_config(app)?);
+    let stats = merge_plex_library(&conn, &albums_with_tracks, &client)?;
+    let _ = app.emit("plex-sync-complete", &stats);
+    Ok(stats)
+}
+
+#[tauri::command]
+pub(crate) async fn plex_sync(
+    app: AppHandle,
+    db: State<'_, Database>,
+    plex_state: State<'_, PlexState>,
+) -> Result<PlexMergeStats, String> {
+    do_plex_sync(&app, &*db, &*plex_state).await
 }
 
 #[tauri::command]
@@ -210,6 +222,37 @@ pub(crate) async fn plex_list_libraries(
     token: String,
 ) -> Result<Vec<PlexLibrarySummary>, String> {
     do_list_libraries(&url, &token).await
+}
+
+#[tauri::command]
+pub(crate) fn plex_set_libraries(app: AppHandle, libraries: Vec<String>) -> Result<(), String> {
+    let store = app
+        .store(STORE_NAME)
+        .map_err(|e| format!("Failed to open settings store: {e}"))?;
+
+    match store.get(CONFIG_KEY) {
+        Some(val) => {
+            let mut stored: PlexConfigStored = serde_json::from_value(val)
+                .map_err(|e| format!("Failed to parse Plex config: {e}"))?;
+            tracing::info!(count = libraries.len(), keys = ?libraries, "plex_set_libraries: writing");
+            stored.libraries = Some(libraries);
+            let value = serde_json::to_value(&stored).map_err(|e| e.to_string())?;
+            store.set(CONFIG_KEY.to_string(), value);
+            store
+                .save()
+                .map_err(|e| format!("Failed to save settings: {e}"))?;
+            Ok(())
+        }
+        None => Err("Plex is not configured".to_string()),
+    }
+}
+
+#[tauri::command]
+pub(crate) async fn plex_libraries_current(
+    app: AppHandle,
+) -> Result<Vec<PlexLibrarySummary>, String> {
+    let config = load_plex_config(&app)?;
+    do_list_libraries(&config.url, &config.token).await
 }
 
 // ── Internal HTTP helpers (separated for testability) ─────────────────────────

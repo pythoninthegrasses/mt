@@ -94,7 +94,7 @@ pub(crate) fn init_tracing(log_dir: &Path) -> WorkerGuard {
     // Each layer gets its own filter so span formatting stays independent
     // (sharing a single filter causes ANSI codes to leak into the file layer).
     let default_level = if cfg!(debug_assertions) {
-        "debug"
+        "debug,hyper_util=info,hyper=info,h2=info,reqwest=info,rustls=info"
     } else {
         "info"
     };
