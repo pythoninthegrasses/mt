@@ -313,7 +313,7 @@ export function createPlayerControls(Alpine) {
 
     get libraryStats() {
       return computeLibraryStats(
-        this.library.totalTracks,
+        this.library.localFileCount,
         this.library.totalDuration,
         this.library.totalFileSize,
       );

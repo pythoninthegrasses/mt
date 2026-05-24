@@ -342,10 +342,13 @@ pub(crate) async fn scan_paths_to_library(
     if added_count > 0 || reconciled_count > 0 || recovered_count > 0 || modified_count > 0 {
         let conn = db.conn().map_err(|e| e.to_string())?;
         let stats = library::get_library_stats(&conn).map_err(|e| e.to_string())?;
+        let (local_file_count, _, _) =
+            library::get_local_file_stats(&conn).map_err(|e| e.to_string())?;
         let rev = revision::get_revision(&conn).map_err(|e| e.to_string())?;
         let _ = app.emit_library_reconcile(LibraryReconcileEvent::scan_complete(
             vec![],
             stats.total_tracks,
+            local_file_count,
             stats.total_duration as f64,
             rev,
         ));

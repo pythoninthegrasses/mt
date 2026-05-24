@@ -464,7 +464,9 @@ pub struct LibraryReconcileEvent {
     pub added_ids: Vec<i64>,
     /// Authoritative total track count from DB after mutation
     pub total_tracks: i64,
-    /// Authoritative total duration (seconds) from DB after mutation
+    /// Local-only file count (excludes remote Plex tracks not yet downloaded)
+    pub local_file_count: i64,
+    /// Authoritative total duration (seconds, local files only) from DB after mutation
     pub total_duration: f64,
     /// Monotonic revision from library_revision table
     pub revision: i64,
@@ -476,6 +478,7 @@ impl LibraryReconcileEvent {
     pub(crate) fn delete(
         removed_ids: Vec<i64>,
         total_tracks: i64,
+        local_file_count: i64,
         total_duration: f64,
         revision: i64,
     ) -> Self {
@@ -485,6 +488,7 @@ impl LibraryReconcileEvent {
             removed_ids,
             added_ids: vec![],
             total_tracks,
+            local_file_count,
             total_duration,
             revision,
         }
@@ -493,6 +497,7 @@ impl LibraryReconcileEvent {
     pub(crate) fn scan_complete(
         added_ids: Vec<i64>,
         total_tracks: i64,
+        local_file_count: i64,
         total_duration: f64,
         revision: i64,
     ) -> Self {
@@ -502,6 +507,7 @@ impl LibraryReconcileEvent {
             removed_ids: vec![],
             added_ids,
             total_tracks,
+            local_file_count,
             total_duration,
             revision,
         }
@@ -510,6 +516,7 @@ impl LibraryReconcileEvent {
     pub(crate) fn dedup(
         removed_ids: Vec<i64>,
         total_tracks: i64,
+        local_file_count: i64,
         total_duration: f64,
         revision: i64,
     ) -> Self {
@@ -519,6 +526,7 @@ impl LibraryReconcileEvent {
             removed_ids,
             added_ids: vec![],
             total_tracks,
+            local_file_count,
             total_duration,
             revision,
         }
@@ -527,6 +535,7 @@ impl LibraryReconcileEvent {
     pub(crate) fn favorite(
         action: &str,
         total_tracks: i64,
+        local_file_count: i64,
         total_duration: f64,
         revision: i64,
     ) -> Self {
@@ -536,6 +545,7 @@ impl LibraryReconcileEvent {
             removed_ids: vec![],
             added_ids: vec![],
             total_tracks,
+            local_file_count,
             total_duration,
             revision,
         }
@@ -1185,22 +1195,24 @@ mod tests {
 
     #[test]
     fn test_library_reconcile_event_serialization() {
-        let event = LibraryReconcileEvent::delete(vec![1, 2, 3], 100, 5400.5, 42);
+        let event = LibraryReconcileEvent::delete(vec![1, 2, 3], 100, 97, 5400.5, 42);
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("\"mutation\":\"delete\""));
         assert!(json.contains("\"removed_ids\":[1,2,3]"));
         assert!(json.contains("\"total_tracks\":100"));
+        assert!(json.contains("\"local_file_count\":97"));
         assert!(json.contains("\"revision\":42"));
         assert!(json.contains("\"affected_sections\":[\"all\"]"));
     }
 
     #[test]
     fn test_library_reconcile_event_delete() {
-        let event = LibraryReconcileEvent::delete(vec![5, 10], 98, 5000.0, 7);
+        let event = LibraryReconcileEvent::delete(vec![5, 10], 98, 95, 5000.0, 7);
         assert_eq!(event.mutation, "delete");
         assert_eq!(event.removed_ids, vec![5, 10]);
         assert!(event.added_ids.is_empty());
         assert_eq!(event.total_tracks, 98);
+        assert_eq!(event.local_file_count, 95);
         assert_eq!(event.total_duration, 5000.0);
         assert_eq!(event.revision, 7);
         assert_eq!(event.affected_sections, vec!["all"]);
@@ -1208,26 +1220,28 @@ mod tests {
 
     #[test]
     fn test_library_reconcile_event_scan_complete() {
-        let event = LibraryReconcileEvent::scan_complete(vec![100, 101], 200, 10000.0, 15);
+        let event = LibraryReconcileEvent::scan_complete(vec![100, 101], 200, 185, 10000.0, 15);
         assert_eq!(event.mutation, "scan_complete");
         assert!(event.removed_ids.is_empty());
         assert_eq!(event.added_ids, vec![100, 101]);
         assert_eq!(event.total_tracks, 200);
+        assert_eq!(event.local_file_count, 185);
         assert_eq!(event.affected_sections, vec!["all", "added"]);
     }
 
     #[test]
     fn test_library_reconcile_event_dedup() {
-        let event = LibraryReconcileEvent::dedup(vec![3, 7], 48, 2400.0, 20);
+        let event = LibraryReconcileEvent::dedup(vec![3, 7], 48, 48, 2400.0, 20);
         assert_eq!(event.mutation, "dedup");
         assert_eq!(event.removed_ids, vec![3, 7]);
         assert!(event.added_ids.is_empty());
         assert_eq!(event.total_tracks, 48);
+        assert_eq!(event.local_file_count, 48);
     }
 
     #[test]
     fn test_library_reconcile_event_favorite() {
-        let event = LibraryReconcileEvent::favorite("add", 50, 3000.0, 10);
+        let event = LibraryReconcileEvent::favorite("add", 50, 50, 3000.0, 10);
         assert_eq!(event.mutation, "favorite_add");
         assert_eq!(event.affected_sections, vec!["liked"]);
         assert!(event.removed_ids.is_empty());
@@ -1241,11 +1255,12 @@ mod tests {
 
     #[test]
     fn test_library_reconcile_event_clone() {
-        let event = LibraryReconcileEvent::delete(vec![1, 2], 50, 2500.0, 5);
+        let event = LibraryReconcileEvent::delete(vec![1, 2], 50, 50, 2500.0, 5);
         let cloned = event.clone();
         assert_eq!(event.mutation, cloned.mutation);
         assert_eq!(event.removed_ids, cloned.removed_ids);
         assert_eq!(event.total_tracks, cloned.total_tracks);
+        assert_eq!(event.local_file_count, cloned.local_file_count);
         assert_eq!(event.revision, cloned.revision);
     }
 }

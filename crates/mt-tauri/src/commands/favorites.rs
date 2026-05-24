@@ -142,13 +142,14 @@ pub(crate) fn favorites_add(
     db: State<'_, Database>,
     track_id: i64,
 ) -> Result<FavoriteAddResponse, String> {
-    let (track, favorited_date, stats, rev) = db
+    let (track, favorited_date, stats, local_file_count, rev) = db
         .with_conn(|conn| {
             let track = library::get_track_by_id(conn, track_id)?;
             let favorited_date = favorites::add_favorite(conn, track_id)?;
             let stats = library::get_library_stats(conn)?;
+            let (local_count, _, _) = library::get_local_file_stats(conn)?;
             let rev = revision::get_revision(conn)?;
-            Ok((track, favorited_date, stats, rev))
+            Ok((track, favorited_date, stats, local_count, rev))
         })
         .map_err(|e| e.to_string())?;
 
@@ -163,6 +164,7 @@ pub(crate) fn favorites_add(
     let _ = app.emit_library_reconcile(LibraryReconcileEvent::favorite(
         "add",
         stats.total_tracks,
+        local_file_count,
         stats.total_duration as f64,
         rev,
     ));
@@ -186,13 +188,14 @@ pub(crate) fn favorites_remove(
     db: State<'_, Database>,
     track_id: i64,
 ) -> Result<(), String> {
-    let (track, removed, stats, rev) = db
+    let (track, removed, stats, local_file_count, rev) = db
         .with_conn(|conn| {
             let track = library::get_track_by_id(conn, track_id)?;
             let removed = favorites::remove_favorite(conn, track_id)?;
             let stats = library::get_library_stats(conn)?;
+            let (local_count, _, _) = library::get_local_file_stats(conn)?;
             let rev = revision::get_revision(conn)?;
-            Ok((track, removed, stats, rev))
+            Ok((track, removed, stats, local_count, rev))
         })
         .map_err(|e| e.to_string())?;
 
@@ -205,6 +208,7 @@ pub(crate) fn favorites_remove(
     let _ = app.emit_library_reconcile(LibraryReconcileEvent::favorite(
         "remove",
         stats.total_tracks,
+        local_file_count,
         stats.total_duration as f64,
         rev,
     ));

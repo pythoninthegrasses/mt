@@ -714,10 +714,13 @@ impl WatcherManager {
             && let Ok(conn) = db.conn()
         {
             let stats = crate::db::library::get_library_stats(&conn).unwrap_or_default();
+            let (local_file_count, _, _) =
+                crate::db::library::get_local_file_stats(&conn).unwrap_or((0, 0, 0));
             let rev = revision::get_revision(&conn).unwrap_or(0);
             let _ = app.emit_library_reconcile(LibraryReconcileEvent::scan_complete(
                 vec![],
                 stats.total_tracks,
+                local_file_count,
                 stats.total_duration as f64,
                 rev,
             ));

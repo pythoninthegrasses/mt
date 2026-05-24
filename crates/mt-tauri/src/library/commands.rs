@@ -127,6 +127,10 @@ pub struct LibrarySectionResponse {
     pub total_tracks: i64,
     pub total_duration: f64,
     pub total_size: i64,
+    /// Count of local files only (excludes remote Plex tracks). For the "all"
+    /// section this differs from total_tracks; other sections set it equal to
+    /// total_tracks.
+    pub local_file_count: i64,
     pub page: Option<i64>,
     pub page_size: Option<i64>,
     pub has_more: bool,
@@ -256,14 +260,16 @@ fn get_section_all(
 
     let count = library::get_filtered_count(conn, &count_query)?;
     let result = library::get_all_tracks(conn, &query)?;
+    let (local_file_count, local_duration, local_size) = library::get_local_file_stats(conn)?;
     let has_more = (page_offset + page_size) < count.total;
 
     Ok(LibrarySectionResponse {
         section: "all".to_string(),
         tracks: result.items,
         total_tracks: count.total,
-        total_duration: count.total_duration as f64,
-        total_size: count.total_size,
+        total_duration: local_duration as f64,
+        total_size: local_size,
+        local_file_count,
         page: Some(page_offset / page_size),
         page_size: Some(page_size),
         has_more,
@@ -290,6 +296,7 @@ fn get_section_liked(
         total_tracks: total,
         total_duration: duration,
         total_size: size,
+        local_file_count: total,
         page: None,
         page_size: None,
         has_more: false,
@@ -311,6 +318,7 @@ fn get_section_top25(
         total_tracks: total,
         total_duration: duration,
         total_size: size,
+        local_file_count: total,
         page: None,
         page_size: None,
         has_more: false,
@@ -336,6 +344,7 @@ fn get_section_recent(
         total_tracks: total,
         total_duration: duration,
         total_size: size,
+        local_file_count: total,
         page: None,
         page_size: None,
         has_more: false,
@@ -361,6 +370,7 @@ fn get_section_added(
         total_tracks: total,
         total_duration: duration,
         total_size: size,
+        local_file_count: total,
         page: None,
         page_size: None,
         has_more: false,
@@ -386,6 +396,7 @@ fn get_section_playlist(
         total_tracks: total,
         total_duration: duration,
         total_size: size,
+        local_file_count: total,
         page: None,
         page_size: None,
         has_more: false,
@@ -532,10 +543,14 @@ pub(crate) fn library_get_artwork_url(
 }
 
 /// Query authoritative stats + revision for reconcile events.
-fn get_reconcile_stats(conn: &rusqlite::Connection) -> Result<(i64, f64, i64), String> {
+/// total_tracks includes all tracks (for virtual-scroll pagination);
+/// total_duration is local-only (remote Plex tracks excluded, for footer display).
+fn get_reconcile_stats(conn: &rusqlite::Connection) -> Result<(i64, i64, f64, i64), String> {
     let stats = library::get_library_stats(conn).map_err(|e| e.to_string())?;
+    let (local_count, local_duration, _) =
+        library::get_local_file_stats(conn).map_err(|e| e.to_string())?;
     let rev = revision::get_revision(conn).map_err(|e| e.to_string())?;
-    Ok((stats.total_tracks, stats.total_duration as f64, rev))
+    Ok((stats.total_tracks, local_count, local_duration as f64, rev))
 }
 
 /// Delete a track from the library and record the removal to prevent re-addition on scan
@@ -560,10 +575,11 @@ pub(crate) fn library_delete_track(
 
     if deleted {
         let conn = db.conn().map_err(|e| e.to_string())?;
-        let (total_tracks, total_duration, rev) = get_reconcile_stats(&conn)?;
+        let (total_tracks, local_file_count, total_duration, rev) = get_reconcile_stats(&conn)?;
         let _ = app.emit_library_reconcile(LibraryReconcileEvent::delete(
             vec![track_id],
             total_tracks,
+            local_file_count,
             total_duration,
             rev,
         ));
@@ -586,10 +602,11 @@ pub(crate) fn library_purge_missing(
     if deleted > 0 {
         info!(count = deleted, "Purged missing tracks from database");
         let conn = db.conn().map_err(|e| e.to_string())?;
-        let (total_tracks, total_duration, rev) = get_reconcile_stats(&conn)?;
+        let (total_tracks, local_file_count, total_duration, rev) = get_reconcile_stats(&conn)?;
         let _ = app.emit_library_reconcile(LibraryReconcileEvent::delete(
             vec![],
             total_tracks,
+            local_file_count,
             total_duration,
             rev,
         ));
@@ -625,10 +642,11 @@ pub(crate) fn library_delete_tracks(
     crate::logging::log_slow_command("library_delete_tracks", start);
     if deleted > 0 {
         let conn = db.conn().map_err(|e| e.to_string())?;
-        let (total_tracks, total_duration, rev) = get_reconcile_stats(&conn)?;
+        let (total_tracks, local_file_count, total_duration, rev) = get_reconcile_stats(&conn)?;
         let _ = app.emit_library_reconcile(LibraryReconcileEvent::delete(
             track_ids,
             total_tracks,
+            local_file_count,
             total_duration,
             rev,
         ));
@@ -652,7 +670,7 @@ pub(crate) fn library_delete_all(app: AppHandle, db: State<'_, Database>) -> Res
     info!(count = deleted, "Deleted all tracks from library");
     crate::logging::log_slow_command("library_delete_all", start);
     if deleted > 0 {
-        let _ = app.emit_library_reconcile(LibraryReconcileEvent::delete(vec![], 0, 0.0, 0));
+        let _ = app.emit_library_reconcile(LibraryReconcileEvent::delete(vec![], 0, 0, 0.0, 0));
     }
     Ok(deleted)
 }
@@ -804,10 +822,11 @@ pub(crate) fn library_locate_track(
 
     // If we removed a duplicate, emit reconcile event for it
     if let Some(dup_id) = deleted_duplicate_id {
-        let (total_tracks, total_duration, rev) = get_reconcile_stats(&conn)?;
+        let (total_tracks, local_file_count, total_duration, rev) = get_reconcile_stats(&conn)?;
         let _ = app.emit_library_reconcile(LibraryReconcileEvent::delete(
             vec![dup_id],
             total_tracks,
+            local_file_count,
             total_duration,
             rev,
         ));
@@ -1193,10 +1212,13 @@ pub(crate) fn run_backfill_and_dedup(
     // Emit a single reconcile event with all deleted IDs and authoritative stats
     if !deleted_ids.is_empty() {
         let stats = library::get_library_stats(conn).map_err(|e| e.to_string())?;
+        let (local_file_count, _, _) =
+            library::get_local_file_stats(conn).map_err(|e| e.to_string())?;
         let rev = revision::get_revision(conn).map_err(|e| e.to_string())?;
         let _ = app_handle.emit_library_reconcile(LibraryReconcileEvent::dedup(
             deleted_ids.clone(),
             stats.total_tracks,
+            local_file_count,
             stats.total_duration as f64,
             rev,
         ));
@@ -1778,6 +1800,7 @@ mod tests {
                 total_tracks: 0,
                 total_duration: 0.0,
                 total_size: 0,
+                local_file_count: 0,
                 page: None,
                 page_size: None,
                 has_more: false,

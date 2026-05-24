@@ -815,6 +815,26 @@ pub(crate) fn update_play_count(conn: &Connection, track_id: i64) -> DbResult<Op
     get_track_by_id(conn, track_id)
 }
 
+/// Count local files only (excludes remote Plex tracks not yet downloaded).
+/// Returns (file_count, total_duration_secs, total_size_bytes).
+pub(crate) fn get_local_file_stats(conn: &Connection) -> DbResult<(i64, i64, i64)> {
+    let (count, duration, size) = conn.query_row(
+        "SELECT COUNT(*), COALESCE(SUM(duration), 0), COALESCE(SUM(file_size), 0)
+         FROM library
+         WHERE (missing = 0 OR missing IS NULL)
+           AND NOT (source = 'plex' AND filepath LIKE 'http%')",
+        [],
+        |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, f64>(1).map(|v| v as i64)?,
+                row.get::<_, i64>(2)?,
+            ))
+        },
+    )?;
+    Ok((count, duration, size))
+}
+
 /// Get library statistics
 pub(crate) fn get_library_stats(conn: &Connection) -> DbResult<LibraryStats> {
     // Only count non-missing tracks

@@ -54,6 +54,8 @@ export function createLibraryStore(Alpine) {
     totalTracks: 0,
     totalDuration: 0,
     totalFileSize: 0,
+    // Local-only file count for "all" section footer display (excludes remote Plex tracks)
+    localFileCount: 0,
 
     // Sparse page map for paginated loading (used by "all" section)
     _trackPages: {},
@@ -170,9 +172,14 @@ export function createLibraryStore(Alpine) {
         ui.toast(`Plex download failed: ${error}`, 'error', 5000);
       });
 
+      const unlistenSync = await listen('plex-sync-complete', () => {
+        this.fetchTracks();
+      });
+
       this._plexListeners = () => {
         unlistenProgress();
         unlistenFailed();
+        unlistenSync();
       };
     },
 

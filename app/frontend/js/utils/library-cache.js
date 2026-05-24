@@ -21,8 +21,10 @@ const SETTINGS_KEY = 'library:sectionCache';
  */
 export function buildCacheEntry(data) {
   const tracks = data.tracks || [];
+  const totalTracks = data.total_tracks ?? data.total ?? tracks.length;
   return {
-    totalTracks: data.total_tracks ?? data.total ?? tracks.length,
+    totalTracks,
+    localFileCount: data.local_file_count ?? totalTracks,
     totalDuration: data.total_duration ??
       tracks.reduce((sum, t) => sum + (t.duration || 0), 0),
     totalFileSize: data.total_size ??

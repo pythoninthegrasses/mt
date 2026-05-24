@@ -165,18 +165,20 @@ function handleLibraryReconcile(Alpine, payload) {
     affected_sections,
     removed_ids,
     total_tracks,
+    local_file_count,
     total_duration,
     revision,
   } = payload;
   const library = Alpine.store('library');
 
   console.log(
-    `[events] Library reconcile (${mutation}): total=${total_tracks}, removed=${removed_ids.length}`,
+    `[events] Library reconcile (${mutation}): total=${total_tracks}, local=${local_file_count}, removed=${removed_ids.length}`,
   );
 
   // Apply authoritative totals from backend
   window.Alpine.disableEffectScheduling(() => {
     library.totalTracks = total_tracks;
+    library.localFileCount = local_file_count ?? total_tracks;
     library.totalDuration = total_duration;
   });
   library._lastRevision = revision;
