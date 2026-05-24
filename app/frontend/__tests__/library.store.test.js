@@ -1051,68 +1051,73 @@ describe('Plex batch download toast', () => {
     expect(mockUi.toast).toHaveBeenCalledWith('0 / 3 tracks downloaded', 'info', 0);
   });
 
-  it('_plexBatchTrackDone(true) updates toast to show incremented count', () => {
+  it('_plexBatchTrackDone(id, true) updates toast with incremented count', () => {
     const store = registeredStore;
     store._startPlexBatch([101, 102]);
     const toastId = mockUi.toast.mock.results[0].value;
-    store._plexBatch.pendingIds.delete(101);
-    store._plexBatchTrackDone(true);
+    store._plexBatchTrackDone(101, true);
     expect(mockUi.updateToast).toHaveBeenCalledWith(toastId, '1 / 2 tracks downloaded');
   });
 
-  it('dismisses progress toast and shows success toast when all complete', () => {
+  it('_plexBatchTrackDone deletes track from pendingIds', () => {
+    const store = registeredStore;
+    store._startPlexBatch([101, 102]);
+    store._plexBatchTrackDone(101, true);
+    expect(store._plexBatch.pendingIds.has(101)).toBe(false);
+    expect(store._plexBatch.pendingIds.has(102)).toBe(true);
+  });
+
+  it('updates toast in-place and schedules auto-dismiss when all complete', () => {
+    vi.useFakeTimers();
     const store = registeredStore;
     store._startPlexBatch([101]);
     const toastId = mockUi.toast.mock.results[0].value;
-    store._plexBatch.pendingIds.delete(101);
-    store._plexBatchTrackDone(true);
-    expect(mockUi.dismissToast).toHaveBeenCalledWith(toastId);
-    expect(mockUi.toast).toHaveBeenCalledWith('1 track downloaded', 'success', 3000);
+    store._plexBatchTrackDone(101, true);
+    // final message written to same toast, not a new one
+    expect(mockUi.updateToast).toHaveBeenCalledWith(toastId, '1 track downloaded');
+    expect(mockUi.dismissToast).not.toHaveBeenCalled();
     expect(store._plexBatch).toBeNull();
+    // toast dismisses after 3 s
+    vi.advanceTimersByTime(3000);
+    expect(mockUi.dismissToast).toHaveBeenCalledWith(toastId);
+    vi.useRealTimers();
   });
 
-  it('shows plural success message for multiple tracks', () => {
-    const store = registeredStore;
-    store._startPlexBatch([101, 102]);
-    store._plexBatch.pendingIds.delete(101);
-    store._plexBatchTrackDone(true);
-    store._plexBatch.pendingIds.delete(102);
-    store._plexBatchTrackDone(true);
-    expect(mockUi.toast).toHaveBeenCalledWith('2 tracks downloaded', 'success', 3000);
-  });
-
-  it('_plexBatchTrackDone(false) includes failure count in toast', () => {
+  it('shows plural final message for multiple tracks', () => {
+    vi.useFakeTimers();
     const store = registeredStore;
     store._startPlexBatch([101, 102]);
     const toastId = mockUi.toast.mock.results[0].value;
-    store._plexBatch.pendingIds.delete(101);
-    store._plexBatchTrackDone(false, 'Network error');
+    store._plexBatchTrackDone(101, true);
+    store._plexBatchTrackDone(102, true);
+    expect(mockUi.updateToast).toHaveBeenLastCalledWith(toastId, '2 tracks downloaded');
+    vi.useRealTimers();
+  });
+
+  it('_plexBatchTrackDone(id, false) includes failure count in progress update', () => {
+    const store = registeredStore;
+    store._startPlexBatch([101, 102]);
+    const toastId = mockUi.toast.mock.results[0].value;
+    store._plexBatchTrackDone(101, false);
     expect(mockUi.updateToast).toHaveBeenCalledWith(toastId, '0 / 2 tracks downloaded (1 failed)');
   });
 
-  it('shows warning summary when some tracks fail', () => {
+  it('shows warning-type final message when some tracks fail', () => {
+    vi.useFakeTimers();
     const store = registeredStore;
     store._startPlexBatch([101, 102]);
     const toastId = mockUi.toast.mock.results[0].value;
-    store._plexBatch.pendingIds.delete(101);
-    store._plexBatchTrackDone(true);
-    store._plexBatch.pendingIds.delete(102);
-    store._plexBatchTrackDone(false, 'err');
+    store._plexBatchTrackDone(101, true);
+    store._plexBatchTrackDone(102, false);
+    expect(mockUi.updateToast).toHaveBeenLastCalledWith(
+      toastId,
+      '1 downloaded, 1 failed',
+      'warning',
+    );
+    vi.advanceTimersByTime(5000);
     expect(mockUi.dismissToast).toHaveBeenCalledWith(toastId);
-    expect(mockUi.toast).toHaveBeenCalledWith('1 downloaded, 1 failed', 'warning', 5000);
     expect(store._plexBatch).toBeNull();
-  });
-
-  it('track not in batch pendingIds does not affect batch count', () => {
-    const store = registeredStore;
-    store._startPlexBatch([101]);
-    const before = { ...store._plexBatch, pendingIds: new Set(store._plexBatch.pendingIds) };
-    // Simulate a play-flow event for an unrelated track
-    store._plexBatch.pendingIds.delete(999); // 999 not in set — no-op
-    store._plexBatchTrackDone(true); // but we're calling directly — in real flow guard is in listener
-    // The batch should have counted it (this tests _plexBatchTrackDone directly)
-    // The guard belongs in the listener. This test just verifies the Set guard in the listener:
-    expect(before.pendingIds.has(999)).toBe(false);
+    vi.useRealTimers();
   });
 
   it('_startPlexBatch extends existing batch when one is already active', () => {
@@ -1120,9 +1125,28 @@ describe('Plex batch download toast', () => {
     store._startPlexBatch([101, 102]);
     const firstToastId = mockUi.toast.mock.results[0].value;
     store._startPlexBatch([103]);
-    // Should not create a new toast, only update
     expect(mockUi.toast).toHaveBeenCalledTimes(1);
     expect(mockUi.updateToast).toHaveBeenCalledWith(firstToastId, '0 / 3 tracks downloaded');
     expect(store._plexBatch.total).toBe(3);
+  });
+
+  it('starting a new batch cancels any pending dismiss timer', () => {
+    vi.useFakeTimers();
+    const store = registeredStore;
+    store._startPlexBatch([101]);
+    const firstToastId = mockUi.toast.mock.results[0].value;
+    store._plexBatchTrackDone(101, true);
+    // First batch done, timer scheduled for 3s
+    expect(store._plexBatch).toBeNull();
+    // Start second batch before 3s elapses
+    store._startPlexBatch([201]);
+    const secondToastId = mockUi.toast.mock.results[1].value;
+    // Advance past the first batch's dismiss window — should NOT dismiss second toast
+    vi.advanceTimersByTime(3000);
+    const dismissCalls = mockUi.dismissToast.mock.calls.map((c) => c[0]);
+    expect(dismissCalls).not.toContain(secondToastId);
+    // Only the first toast should have been dismissed
+    expect(dismissCalls).toContain(firstToastId);
+    vi.useRealTimers();
   });
 });

@@ -343,11 +343,14 @@ export function contextMenuActionsMixin() {
       for (const t of list) {
         try {
           await plex.downloadTrack(t.id);
+          this.$store.library._plexBatchTrackDone(t.id, true);
+          this.$store.library._refreshPlexTrack(t.id);
         } catch (error) {
           console.error('[context-menu]', 'download_from_plex_error', {
             trackId: t.id,
             error: error.message,
           });
+          this.$store.library._plexBatchTrackDone(t.id, false);
         }
       }
     },
