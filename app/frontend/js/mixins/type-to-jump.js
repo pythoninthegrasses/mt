@@ -16,6 +16,8 @@ export function typeToJumpMixin() {
     _cycleChar: '',
     _cycleIndex: -1,
     _jumpGen: 0,
+    _isJumping: false,
+    _jumpingPrefix: '',
 
     /**
      * Handle type-to-jump navigation - jump to artist matching typed characters
@@ -132,39 +134,42 @@ export function typeToJumpMixin() {
     },
 
     /**
-     * Backend-assisted jump: ask for the offset of the first matching row,
-     * ensure the target page is loaded, and scroll to it.
-     * Fire-and-forget from the keyboard handler — no spinner.
+     * Backend-assisted jump: resolve the offset, await the target page load,
+     * then snap the viewport to the target row.
+     * Shows a loading badge while in flight.
      * @param {string} prefix - Lowercase search prefix
      */
     async _jumpViaBackend(prefix) {
       const myGen = ++this._jumpGen;
-      const offset = await this.library._jumpToPrefix(prefix);
-      if (myGen !== this._jumpGen) return; // superseded by a newer keystroke
-      if (offset === null || offset === undefined) return;
+      this._isJumping = true;
+      this._jumpingPrefix = prefix;
 
-      // Scroll immediately — shimmer rows show while page loads
-      this.scrollToOffset(offset);
+      try {
+        const offset = await this.library._jumpToPrefix(prefix);
+        if (myGen !== this._jumpGen) return; // superseded by a newer keystroke
+        if (offset === null || offset === undefined) return;
 
-      // Wait for the page to load, then select the track
-      const checkAndSelect = () => {
+        // Await the target page so visibleTracks has real rows on first render
+        // after the scroll. _fetchPage dedupes: if _jumpToPrefix's _ensurePage
+        // already started the fetch, this awaits that same in-flight promise.
+        const pageIndex = Math.floor(offset / this.library._pageSize);
+        await this.library._fetchPage(pageIndex);
+        if (myGen !== this._jumpGen) return;
+
+        // Snap instantly — page data is ready, no blank-row flash
+        this.scrollToOffset(offset);
+
         const track = this.library.getTrackAtIndex(offset);
         if (track) {
           this.selectedTracks.clear();
           this.selectedTracks.add(track.id);
-        } else {
-          // Page still loading — retry once after a short delay
-          setTimeout(() => {
-            if (myGen !== this._jumpGen) return;
-            const t = this.library.getTrackAtIndex(offset);
-            if (t) {
-              this.selectedTracks.clear();
-              this.selectedTracks.add(t.id);
-            }
-          }, 200);
         }
-      };
-      checkAndSelect();
+      } finally {
+        if (myGen === this._jumpGen) {
+          this._isJumping = false;
+          this._jumpingPrefix = '';
+        }
+      }
     },
 
     /**

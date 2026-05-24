@@ -325,11 +325,17 @@ export function createLibraryStore(Alpine) {
       this._allPagesLoaded = true;
     },
 
-    async _fetchPage(pageIndex) {
+    _fetchPage(pageIndex) {
+      if (this._trackPages[pageIndex]) return;
+      // Return the in-flight promise so concurrent awaiters share one IPC round-trip
+      if (this._loadingPages[pageIndex]) return this._loadingPages[pageIndex];
       const gen = this._loadGeneration;
-      if (this._trackPages[pageIndex] || this._loadingPages[pageIndex]) return;
-      this._loadingPages[pageIndex] = true;
+      const promise = this._doFetchPage(pageIndex, gen);
+      this._loadingPages[pageIndex] = promise;
+      return promise;
+    },
 
+    async _doFetchPage(pageIndex, gen) {
       try {
         const sortKeyMap = {
           default: 'artist',

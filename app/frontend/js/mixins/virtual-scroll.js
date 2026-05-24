@@ -85,10 +85,12 @@ export function virtualScrollMixin() {
 
     scrollToOffset(offset) {
       if (offset < 0 || offset >= this.library.totalTracks) return;
-      this._scrollToRowIndex(offset);
+      // Instant scroll: page data is loaded before this is called, so smooth
+      // animation through unloaded rows is unnecessary and causes blank flashes.
+      this._scrollToRowIndex(offset, false);
     },
 
-    _scrollToRowIndex(idx) {
+    _scrollToRowIndex(idx, smooth = true) {
       const container = this.$refs.scrollContainer;
       if (!container) return;
       const trackTop = idx * this._rowHeight;
@@ -96,7 +98,7 @@ export function virtualScrollMixin() {
       const headerHeight = headerEl ? headerEl.offsetHeight : 0;
       const visibleHeight = container.clientHeight - headerHeight;
       const targetScroll = trackTop - visibleHeight / 2 + this._rowHeight / 2;
-      container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+      container.scrollTo({ top: Math.max(0, targetScroll), behavior: smooth ? 'smooth' : 'auto' });
     },
   };
 }

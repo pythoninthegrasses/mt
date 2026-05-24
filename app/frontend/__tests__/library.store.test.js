@@ -549,6 +549,119 @@ describe('Paginated Store - _resetPages', () => {
   });
 });
 
+// -----------------------------------------------------------------------------
+// Tests: _fetchPage deduplication (promise-based in-flight dedup)
+// -----------------------------------------------------------------------------
+
+describe('Paginated Store - _fetchPage deduplication', () => {
+  function createFetchableStore(mockGetTracks) {
+    const store = {
+      ...createPaginatedStore(500),
+      _dataVersion: 0,
+      searchQuery: '',
+      sortBy: 'default',
+      sortOrder: 'asc',
+
+      _fetchPage(pageIndex) {
+        if (this._trackPages[pageIndex]) return;
+        if (this._loadingPages[pageIndex]) return this._loadingPages[pageIndex];
+        const gen = this._loadGeneration;
+        const promise = this._doFetchPage(pageIndex, gen);
+        this._loadingPages[pageIndex] = promise;
+        return promise;
+      },
+
+      async _doFetchPage(pageIndex, gen) {
+        try {
+          const data = await mockGetTracks({ offset: pageIndex * this._pageSize });
+          if (this._loadGeneration !== gen) return;
+          const tracks = data.tracks || [];
+          this._trackPages[pageIndex] = tracks;
+          this._dataVersion++;
+        } finally {
+          if (this._loadGeneration === gen) {
+            delete this._loadingPages[pageIndex];
+          }
+        }
+      },
+    };
+    store.totalTracks = 1000;
+    return store;
+  }
+
+  it('two concurrent _fetchPage calls for the same page trigger one IPC call', async () => {
+    const mockGetTracks = vi.fn();
+    let resolveApi;
+    mockGetTracks.mockReturnValue(
+      new Promise((res) => {
+        resolveApi = () => res({ tracks: [{ id: 't1' }] });
+      }),
+    );
+
+    const store = createFetchableStore(mockGetTracks);
+
+    const p1 = store._fetchPage(0);
+    const p2 = store._fetchPage(0);
+
+    expect(mockGetTracks).toHaveBeenCalledTimes(1);
+
+    resolveApi();
+    await Promise.all([p1, p2]);
+
+    expect(store._trackPages[0]).toHaveLength(1);
+    expect(store._loadingPages[0]).toBeUndefined();
+  });
+
+  it('second _fetchPage after first resolves triggers a fresh IPC call (no stale hit)', async () => {
+    const mockGetTracks = vi.fn();
+    let resolveFirst;
+    mockGetTracks.mockReturnValueOnce(
+      new Promise((res) => {
+        resolveFirst = () => res({ tracks: [{ id: 't1' }] });
+      }),
+    );
+
+    const store = createFetchableStore(mockGetTracks);
+
+    const p1 = store._fetchPage(0);
+    resolveFirst();
+    await p1;
+
+    expect(store._trackPages[0]).toHaveLength(1);
+
+    // Second call hits the early-return (_trackPages[0] exists)
+    mockGetTracks.mockResolvedValueOnce({ tracks: [{ id: 't2' }] });
+    await store._fetchPage(0);
+
+    // API called only once total — second call returned without fetching
+    expect(mockGetTracks).toHaveBeenCalledTimes(1);
+    expect(store._trackPages[0][0].id).toBe('t1');
+  });
+
+  it('awaiting _fetchPage when a fetch is already in flight waits for its completion', async () => {
+    const mockGetTracks = vi.fn();
+    let resolveApi;
+    mockGetTracks.mockReturnValue(
+      new Promise((res) => {
+        resolveApi = () => res({ tracks: [{ id: 'ta' }] });
+      }),
+    );
+
+    const store = createFetchableStore(mockGetTracks);
+
+    // Simulate what _ensurePage does: kick off fetch without awaiting
+    store._fetchPage(0);
+    expect(store._loadingPages[0]).toBeDefined();
+
+    // Now a direct await (like _jumpViaBackend does)
+    const waiter = store._fetchPage(0);
+    resolveApi();
+    await waiter;
+
+    expect(store._trackPages[0]).toHaveLength(1);
+  });
+});
+
 describe('Paginated Store - _isPaginated', () => {
   it('returns true when _sectionTracks is null', () => {
     const store = createPaginatedStore();

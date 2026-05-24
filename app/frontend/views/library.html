@@ -91,6 +91,19 @@
 
     <!-- Track list - no scroll, parent handles both -->
     <div class="track-list min-h-full w-full relative">
+      <!-- Type-to-jump in-flight indicator -->
+      <div
+        x-show="_isJumping"
+        x-transition.opacity
+        class="absolute top-2 right-2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-md bg-background/95 border border-border shadow-md text-sm pointer-events-none"
+        data-testid="type-to-jump-indicator"
+      >
+        <svg class="animate-spin w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        <span>Jumping to "<span x-text="_jumpingPrefix"></span>"…</span>
+      </div>
       <!-- Loading state (shown during library fetch OR active scan with empty library) -->
       <template x-if="(library.loading || library.scanning) && library.totalTracks === 0">
         <div

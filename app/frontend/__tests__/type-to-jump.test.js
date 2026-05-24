@@ -7,7 +7,7 @@
  *   3. Slow-typed multi-character prefix resolves to the correct artist
  */
 
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { typeToJumpMixin } from '../js/mixins/type-to-jump.js';
 
 // ---------------------------------------------------------------------------
@@ -30,7 +30,9 @@ function createStub(tracks = TRACKS) {
     filteredTracks: tracks,
     _isPaginated: () => false,
     _allPagesLoaded: true,
+    _pageSize: 500,
     _jumpToPrefix: vi.fn(),
+    _fetchPage: vi.fn().mockResolvedValue(undefined),
     getTrackAtIndex: vi.fn(),
   };
 
@@ -137,12 +139,16 @@ describe('type-to-jump: _jumpViaBackend cancellation', () => {
     let resolveFirst;
     let resolveSecond;
 
-    const firstPromise = new Promise((res) => { resolveFirst = () => res(0); });
-    const secondPromise = new Promise((res) => { resolveSecond = () => res(100); });
+    const firstPromise = new Promise((res) => {
+      resolveFirst = () => res(0);
+    });
+    const secondPromise = new Promise((res) => {
+      resolveSecond = () => res(100);
+    });
 
     stub.library._jumpToPrefix
-      .mockReturnValueOnce(firstPromise)   // call #1 → offset 0
-      .mockReturnValueOnce(secondPromise);  // call #2 → offset 100
+      .mockReturnValueOnce(firstPromise) // call #1 → offset 0
+      .mockReturnValueOnce(secondPromise); // call #2 → offset 100
 
     // Fire both calls; neither has resolved yet
     const p1 = stub._jumpViaBackend('d');
@@ -165,12 +171,147 @@ describe('type-to-jump: _jumpViaBackend cancellation', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tests: _jumpViaBackend defers scroll until page is loaded
+// ---------------------------------------------------------------------------
+
+describe('type-to-jump: _jumpViaBackend defers scroll', () => {
+  it('scrollToOffset is not called until _fetchPage resolves', async () => {
+    const stub = createStub();
+    stub.library.filteredTracks = [];
+    stub.library._isPaginated = () => true;
+    stub.library._allPagesLoaded = false;
+
+    stub.library._jumpToPrefix = vi.fn().mockResolvedValue(600);
+
+    let resolveFetch;
+    const fetchPromise = new Promise((res) => {
+      resolveFetch = res;
+    });
+    stub.library._fetchPage = vi.fn().mockReturnValue(fetchPromise);
+    stub.library.getTrackAtIndex = vi.fn().mockReturnValue(null);
+
+    const p = stub._jumpViaBackend('m');
+
+    // Flush _jumpToPrefix microtask — _fetchPage started but not done
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(stub.scrollToOffset).not.toHaveBeenCalled();
+
+    // Resolve the page fetch — now scroll should fire
+    resolveFetch();
+    await p;
+    expect(stub.scrollToOffset).toHaveBeenCalledTimes(1);
+    expect(stub.scrollToOffset).toHaveBeenCalledWith(600);
+  });
+
+  it('_fetchPage is called with the correct page index', async () => {
+    const stub = createStub();
+    stub.library.filteredTracks = [];
+    stub.library._isPaginated = () => true;
+    stub.library._allPagesLoaded = false;
+    stub.library._jumpToPrefix = vi.fn().mockResolvedValue(1250); // page 2 of 500-per-page
+    stub.library.getTrackAtIndex = vi.fn().mockReturnValue(null);
+
+    await stub._jumpViaBackend('x');
+
+    expect(stub.library._fetchPage).toHaveBeenCalledWith(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: _isJumping loading-indicator state
+// ---------------------------------------------------------------------------
+
+describe('type-to-jump: _isJumping flag', () => {
+  it('is true while in flight and false after completion', async () => {
+    const stub = createStub();
+    stub.library.filteredTracks = [];
+    stub.library._isPaginated = () => true;
+    stub.library._allPagesLoaded = false;
+    stub.library._jumpToPrefix = vi.fn().mockResolvedValue(100);
+    stub.library.getTrackAtIndex = vi.fn().mockReturnValue(null);
+
+    let resolveFetch;
+    stub.library._fetchPage = vi.fn().mockReturnValue(
+      new Promise((res) => {
+        resolveFetch = res;
+      }),
+    );
+
+    expect(stub._isJumping).toBe(false);
+    expect(stub._jumpingPrefix).toBe('');
+
+    const p = stub._jumpViaBackend('m');
+
+    // Set synchronously before first await yields
+    expect(stub._isJumping).toBe(true);
+    expect(stub._jumpingPrefix).toBe('m');
+
+    resolveFetch();
+    await p;
+
+    expect(stub._isJumping).toBe(false);
+    expect(stub._jumpingPrefix).toBe('');
+  });
+
+  it('is false when superseded, not when stale call exits', async () => {
+    const stub = createStub();
+    stub.library.filteredTracks = [];
+    stub.library._isPaginated = () => true;
+    stub.library._allPagesLoaded = false;
+    stub.library.getTrackAtIndex = vi.fn().mockReturnValue(null);
+
+    let resolveFirst, resolveSecond;
+    stub.library._jumpToPrefix
+      .mockReturnValueOnce(
+        new Promise((res) => {
+          resolveFirst = () => res(0);
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((res) => {
+          resolveSecond = () => res(100);
+        }),
+      );
+
+    const p1 = stub._jumpViaBackend('d');
+    const p2 = stub._jumpViaBackend('du');
+
+    // Resolve the winning (second) call first
+    resolveSecond();
+    await p2;
+    expect(stub._isJumping).toBe(false);
+
+    // Stale first call resolves — superseded, does not re-set _isJumping
+    resolveFirst();
+    await p1;
+    expect(stub._isJumping).toBe(false);
+  });
+
+  it('is false when offset resolves to null', async () => {
+    const stub = createStub();
+    stub.library.filteredTracks = [];
+    stub.library._isPaginated = () => true;
+    stub.library._allPagesLoaded = false;
+    stub.library._jumpToPrefix = vi.fn().mockResolvedValue(null);
+
+    await stub._jumpViaBackend('zzz');
+
+    expect(stub._isJumping).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests: regression — existing correct behavior preserved
 // ---------------------------------------------------------------------------
 
 describe('type-to-jump: correct single-key jumps', () => {
-  beforeEach(() => { vi.useFakeTimers(); });
-  afterEach(() => { vi.useRealTimers(); });
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('typing "m" alone jumps to M. Ward', () => {
     const stub = createStub();
