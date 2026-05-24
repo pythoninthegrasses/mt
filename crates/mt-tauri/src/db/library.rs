@@ -249,25 +249,34 @@ pub(crate) fn find_sort_offset(
             .secondary_order_by(query.ignore_words.as_deref())
     );
 
-    // Match against artist with optional ignore-words prefix stripping,
-    // mirroring the frontend's stripIgnoredPrefix + artist comparison.
+    // For artist sort, match against COALESCE(album_artist, artist) — the same
+    // expression the ORDER BY uses — so the first visible row starting with the
+    // prefix is the one returned. For other sort keys the user expects an
+    // artist-prefix jump, so match plain artist.
+    let match_column: &str = match query.sort_by {
+        LibrarySortColumn::Artist => "COALESCE(NULLIF(album_artist, ''), artist)",
+        _ => "artist",
+    };
+
     let artist_expr = if let Some(ref words) = query.ignore_words {
         format!(
-            "LOWER(strip_sort_prefix(artist, '{}'))",
+            "LOWER(strip_sort_prefix({match_column}, '{}'))",
             words.replace('\'', "''")
         )
     } else {
-        "LOWER(artist)".to_string()
+        format!("LOWER({match_column})")
     };
 
     let sql = format!(
         "WITH ranked AS (
-            SELECT artist, {artist_expr} AS match_val, ROW_NUMBER() OVER (ORDER BY {order_by}) AS rn
+            SELECT {match_column} AS match_src,
+                   {artist_expr} AS match_val,
+                   ROW_NUMBER() OVER (ORDER BY {order_by}) AS rn
             FROM library
             {where_clause}
         )
         SELECT rn - 1 FROM ranked
-        WHERE match_val LIKE ? ESCAPE '\\' OR LOWER(artist) LIKE ? ESCAPE '\\'
+        WHERE match_val LIKE ? ESCAPE '\\' OR LOWER(match_src) LIKE ? ESCAPE '\\'
         ORDER BY rn
         LIMIT 1"
     );
@@ -3496,6 +3505,57 @@ mod tests {
         };
         let offset = find_sort_offset(&conn, &query, "xyz").unwrap();
         assert_eq!(offset, None);
+    }
+
+    #[test]
+    fn test_find_sort_offset_uses_album_artist_for_artist_sort() {
+        // Regression: matching plain `artist` while ORDER BY uses
+        // COALESCE(album_artist, artist) caused "men" to land on a track
+        // whose album_artist was "O.A.R." instead of Menomena.
+        let conn = setup_test_db();
+
+        // Artist and album_artist are both Menomena — sorts as "menomena".
+        add_track(
+            &conn,
+            "/music/menomena.mp3",
+            &TrackMetadata {
+                title: Some("Wet and Rusting".to_string()),
+                artist: Some("Menomena".to_string()),
+                album_artist: Some("Menomena".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        // Artist starts with "men" but album_artist is "Arcade Fire" — sorts
+        // before Menomena in the COALESCE order (a < m), so it occupies offset 0.
+        // The old LIKE-on-artist code returned offset 0 (the Arcade Fire row)
+        // when the user typed "men", instead of offset 1 (Menomena).
+        add_track(
+            &conn,
+            "/music/arcade_fire_feat.mp3",
+            &TrackMetadata {
+                title: Some("Collab Track".to_string()),
+                artist: Some("Men I Trust (feat. Arcade Fire)".to_string()),
+                album_artist: Some("Arcade Fire".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let query = LibraryQuery {
+            sort_by: LibrarySortColumn::Artist,
+            sort_order: SortOrder::Asc,
+            ..Default::default()
+        };
+
+        // COALESCE order: Arcade Fire (0), Menomena (1)
+        let offset = find_sort_offset(&conn, &query, "men").unwrap();
+        assert_eq!(
+            offset,
+            Some(1),
+            "prefix 'men' should resolve to Menomena (offset 1), not the Arcade Fire-filed track (offset 0)"
+        );
     }
 
     // ===== find_track_offset Tests =====
