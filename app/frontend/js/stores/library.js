@@ -448,9 +448,7 @@ export function createLibraryStore(Alpine) {
     },
 
     _getFilterParams() {
-      return {
-        search: this.searchQuery.trim() || null,
-      };
+      return this._getSortParams();
     },
 
     async _fetchLibraryData() {

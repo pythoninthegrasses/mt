@@ -897,3 +897,93 @@ describe('FOUC #2 - visibleTracks must not produce placeholders for unloaded pag
     expect(store._ensurePage).toHaveBeenCalled();
   });
 });
+
+// -----------------------------------------------------------------------------
+// Tests: _getFilterParams must include sort/order/ignoreWords for article stripping
+// -----------------------------------------------------------------------------
+
+describe('_getFilterParams includes sort params', () => {
+  let createLibraryStore;
+  let registeredStore;
+
+  beforeEach(async () => {
+    vi.resetModules();
+
+    vi.doMock('../js/api/library.js', () => ({
+      library: {
+        getSection: vi.fn().mockResolvedValue({
+          tracks: [],
+          total_tracks: 0,
+          total_duration: 0,
+          revision: 1,
+        }),
+      },
+    }));
+
+    vi.doMock('../js/utils/watched-folders.js', () => ({
+      promptToAddWatchedFolders: vi.fn(),
+    }));
+
+    registeredStore = null;
+    globalThis.window = globalThis.window || {};
+    globalThis.window.Alpine = {
+      disableEffectScheduling: (fn) => fn(),
+      store: (name, definition) => {
+        if (name === 'library') {
+          if (definition) registeredStore = definition;
+          return registeredStore;
+        }
+        if (name === 'ui') {
+          return {
+            sortIgnoreWords: true,
+            sortIgnoreWordsList: 'the, a, an, el, la',
+          };
+        }
+        return null;
+      },
+    };
+    globalThis.window.settings = {
+      initialized: true,
+      get: (_key, defaultVal) => defaultVal,
+      set: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const mod = await import('../js/stores/library.js');
+    createLibraryStore = mod.createLibraryStore;
+    createLibraryStore(globalThis.window.Alpine);
+  });
+
+  it('returns sort key mapped from sortBy', () => {
+    const store = registeredStore;
+    store.sortBy = 'default';
+    const params = store._getFilterParams();
+    expect(params.sort).toBe('artist');
+  });
+
+  it('returns order from sortOrder', () => {
+    const store = registeredStore;
+    store.sortOrder = 'desc';
+    const params = store._getFilterParams();
+    expect(params.order).toBe('desc');
+  });
+
+  it('returns ignoreWords from ui store when enabled', () => {
+    const store = registeredStore;
+    const params = store._getFilterParams();
+    expect(params.ignoreWords).toBe('the, a, an, el, la');
+  });
+
+  it('returns search query', () => {
+    const store = registeredStore;
+    store.searchQuery = 'tribe';
+    const params = store._getFilterParams();
+    expect(params.search).toBe('tribe');
+  });
+
+  it('returns null search when query is empty', () => {
+    const store = registeredStore;
+    store.searchQuery = '';
+    const params = store._getFilterParams();
+    expect(params.search).toBeNull();
+  });
+});
