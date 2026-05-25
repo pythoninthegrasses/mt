@@ -54,5 +54,12 @@
       "curl * | *sh*": "deny",
       "wget * | *sh*": "deny"
     }
+  },
+  "mcp": {
+    "tauri-mcp": {
+      "type": "local",
+      "command": [ "npx", "-y", "@hypothesi/tauri-mcp-server" ],
+      "enabled": true
+    }
   }
 }
