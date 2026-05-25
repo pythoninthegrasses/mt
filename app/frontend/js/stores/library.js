@@ -60,7 +60,7 @@ export function createLibraryStore(Alpine) {
     // Sparse page map for paginated loading (used by "all" section)
     _trackPages: {},
     _loadingPages: {},
-    _pageSize: 500,
+    _pageSize: 1500,
     _loadGeneration: 0,
     _allPagesLoaded: false,
 
