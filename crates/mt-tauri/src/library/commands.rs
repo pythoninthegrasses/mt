@@ -259,19 +259,47 @@ fn get_section_all(
     };
 
     let count = library::get_filtered_count(conn, &count_query)?;
-    let result = library::get_all_tracks(conn, &query)?;
+    // When the caller asks for limit=0 we treat the request as a stats-only
+    // query: return totals without fetching any rows. This is used by the
+    // frontend page cache to confirm a cached page 0 is still valid while
+    // avoiding the cost of re-fetching the full first page.
+    let (tracks, page, page_size_out, has_more) = if page_size == 0 {
+        let (local_file_count_tmp, local_duration_tmp, local_size_tmp) =
+            library::get_local_file_stats(conn)?;
+        return Ok(LibrarySectionResponse {
+            section: "all".to_string(),
+            tracks: Vec::new(),
+            total_tracks: count.total,
+            total_duration: local_duration_tmp as f64,
+            total_size: local_size_tmp,
+            local_file_count: local_file_count_tmp,
+            page: None,
+            page_size: Some(0),
+            has_more: count.total > 0,
+            revision: rev,
+        });
+    } else {
+        let result = library::get_all_tracks(conn, &query)?;
+        let has_more = (page_offset + page_size) < count.total;
+        (
+            result.items,
+            Some(page_offset / page_size),
+            Some(page_size),
+            has_more,
+        )
+    };
+
     let (local_file_count, local_duration, local_size) = library::get_local_file_stats(conn)?;
-    let has_more = (page_offset + page_size) < count.total;
 
     Ok(LibrarySectionResponse {
         section: "all".to_string(),
-        tracks: result.items,
+        tracks,
         total_tracks: count.total,
         total_duration: local_duration as f64,
         total_size: local_size,
         local_file_count,
-        page: Some(page_offset / page_size),
-        page_size: Some(page_size),
+        page,
+        page_size: page_size_out,
         has_more,
         revision: rev,
     })
@@ -1640,6 +1668,60 @@ mod tests {
             assert!(resp.has_more);
             assert_eq!(resp.page, Some(0));
             assert_eq!(resp.page_size, Some(3));
+        }
+
+        // Stats-only request: limit=0 means "return totals without any tracks".
+        // The frontend page cache uses this to confirm a cached page 0 is still
+        // valid while avoiding the cost of re-fetching the full first page.
+        // Pre-fix this panicked with division-by-zero on `page_offset / page_size`.
+        #[test]
+        fn test_section_all_stats_only_limit_zero() {
+            let conn = setup_test_db();
+            for i in 1..=10 {
+                add_test_track(&conn, i, 60.0);
+            }
+            let rev = revision::get_revision(&conn).unwrap();
+            let resp = get_section_all(
+                &conn,
+                rev,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(0),
+                Some(0),
+                None,
+            )
+            .unwrap();
+            assert!(resp.tracks.is_empty(), "stats-only must return no tracks");
+            assert_eq!(resp.total_tracks, 10);
+            assert_eq!(resp.total_duration, 60.0 * 10.0);
+            assert_eq!(resp.page_size, Some(0));
+            assert_eq!(resp.page, None);
+            assert!(resp.has_more, "has_more=true when rows exist");
+        }
+
+        #[test]
+        fn test_section_all_stats_only_empty_db() {
+            let conn = setup_test_db();
+            let rev = revision::get_revision(&conn).unwrap();
+            let resp = get_section_all(
+                &conn,
+                rev,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(0),
+                Some(0),
+                None,
+            )
+            .unwrap();
+            assert!(resp.tracks.is_empty());
+            assert_eq!(resp.total_tracks, 0);
+            assert!(!resp.has_more, "has_more=false when no rows exist");
         }
 
         #[test]

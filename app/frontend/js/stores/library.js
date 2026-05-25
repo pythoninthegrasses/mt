@@ -367,6 +367,12 @@ export function createLibraryStore(Alpine) {
     },
 
     _setSectionTracks(tracks) {
+      // Snapshot any paginated pages to the LRU before swapping to flat storage,
+      // so returning to the previous paginated query can rehydrate.
+      if (this._currentPageCacheKey && Object.keys(this._trackPages).length > 0) {
+        this._pageCache.save(this._currentPageCacheKey, this._trackPages);
+      }
+      this._currentPageCacheKey = null;
       this._sectionTracks = tracks;
       this._trackPages = {};
       this._loadingPages = {};

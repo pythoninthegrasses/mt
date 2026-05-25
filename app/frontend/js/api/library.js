@@ -135,7 +135,9 @@ export const library = {
       album: params.album || null,
       sortBy: params.sort || null,
       sortOrder: params.order || null,
-      limit: params.limit || null,
+      // Preserve `0` (stats-only request — see library-operations.js loadOp).
+      // Using `||` would coerce 0 to null and the backend would default to 500.
+      limit: params.limit ?? null,
       offset: params.offset || null,
       ignoreWords: params.ignoreWords || null,
       days: params.days || null,
