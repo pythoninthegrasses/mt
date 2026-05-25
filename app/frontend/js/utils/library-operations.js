@@ -276,6 +276,18 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
     store.totalDuration = 0;
     store.totalFileSize = 0;
 
+    // Attempt to rehydrate pages for this query from the LRU cache. Hit means
+    // previously-fetched pages reappear instantly; the IPC call below still
+    // runs to refresh totals and page 0 (which may overwrite the cached page 0
+    // with equivalent fresh data — acceptable).
+    const cacheHit = store._tryRestorePagesFromCache?.() === true;
+    if (cacheHit) {
+      console.log('[library]', 'page_cache_hit', {
+        section: loadSection,
+        pages: Object.keys(store._trackPages).length,
+      });
+    }
+
     // Fetch first page using unified endpoint (count + tracks in one transaction)
     const filterParams = store._getFilterParams();
     const sectionData = await library.getSection({
@@ -303,6 +315,11 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
     // Store page 0 tracks from the unified response
     if (sectionData.tracks && sectionData.tracks.length > 0) {
       store._trackPages[0] = sectionData.tracks;
+      // Stamp the cache key now that _trackPages is populated, so a later
+      // _resetPages() can save these pages back into the LRU.
+      if (!store._currentPageCacheKey) {
+        store._currentPageCacheKey = store._buildPageCacheKey?.();
+      }
     }
 
     window.Alpine.disableEffectScheduling(() => {
@@ -569,6 +586,10 @@ export function removeFromQueue(Alpine, idSet) {
  */
 export function removeTracksLocallyOp(store, Alpine, trackIds) {
   if (!trackIds || trackIds.length === 0) return;
+
+  // Mutating tracks invalidates every cached query bucket — they all
+  // potentially contain stale copies of the deleted tracks.
+  store._pageCache?.clear();
 
   const currentTracks = store.filteredTracks;
 

@@ -15,6 +15,7 @@ import {
   createCacheSaver,
   loadCacheFromSettings,
 } from '../utils/library-cache.js';
+import { LibraryPageCache } from '../utils/library-page-cache.js';
 import {
   applySectionData,
   backgroundRefreshLibrary,
@@ -63,6 +64,13 @@ export function createLibraryStore(Alpine) {
     _pageSize: 1500,
     _loadGeneration: 0,
     _allPagesLoaded: false,
+
+    // Per-query LRU page cache. Survives _resetPages() so that switching
+    // sections/search/sort and then returning re-uses fetched pages.
+    _pageCache: new LibraryPageCache(),
+    // Key under which _trackPages was last populated. Used by _resetPages()
+    // to deposit the current pages into the cache before clearing.
+    _currentPageCacheKey: null,
 
     // Non-paginated track storage (used by non-"all" sections: favorites, recent, playlists)
     _sectionTracks: null,
@@ -310,12 +318,52 @@ export function createLibraryStore(Alpine) {
       return this._sectionTracks === null;
     },
 
+    /**
+     * Compute the page-cache key for the current query state.
+     * Stable across reads as long as searchQuery/sortBy/sortOrder/section
+     * don't change.
+     */
+    _buildPageCacheKey() {
+      const uiStore = Alpine.store('ui');
+      const ignoreWords = uiStore?.sortIgnoreWords ? uiStore.sortIgnoreWordsList : null;
+      return this._pageCache.queryKey({
+        section: this.currentSection,
+        search: this.searchQuery,
+        sortBy: this.sortBy,
+        sortOrder: this.sortOrder,
+        ignoreWords,
+      });
+    },
+
     _resetPages() {
+      // Snapshot current pages into the LRU cache before clearing, so that
+      // returning to this query later can rehydrate without re-fetching.
+      if (this._currentPageCacheKey && Object.keys(this._trackPages).length > 0) {
+        this._pageCache.save(this._currentPageCacheKey, this._trackPages);
+      }
+      this._currentPageCacheKey = null;
       this._loadGeneration++;
       this._trackPages = {};
       this._loadingPages = {};
       this._allPagesLoaded = false;
       this._sectionTracks = null;
+    },
+
+    /**
+     * Attempt to rehydrate `_trackPages` from the LRU cache for the current
+     * query. Returns true on hit, false on miss. Updates _currentPageCacheKey.
+     */
+    _tryRestorePagesFromCache() {
+      const key = this._buildPageCacheKey();
+      const restored = this._pageCache.restore(key);
+      if (restored) {
+        this._trackPages = restored;
+        this._currentPageCacheKey = key;
+        this._dataVersion++;
+        return true;
+      }
+      this._currentPageCacheKey = key;
+      return false;
     },
 
     _setSectionTracks(tracks) {
@@ -366,6 +414,9 @@ export function createLibraryStore(Alpine) {
 
         const tracks = data.tracks || [];
         this._trackPages[pageIndex] = tracks;
+        if (!this._currentPageCacheKey) {
+          this._currentPageCacheKey = this._buildPageCacheKey();
+        }
 
         if (tracks.length < this._pageSize) {
           this._allPagesLoaded = true;
