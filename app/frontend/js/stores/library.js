@@ -400,6 +400,17 @@ export function createLibraryStore(Alpine) {
       }
     },
 
+    async _loadPageRange(startIndex, endIndex) {
+      if (!this._isPaginated()) return;
+      const firstPage = Math.floor(startIndex / this._pageSize);
+      const lastPage = Math.floor(endIndex / this._pageSize);
+      const pending = [];
+      for (let p = firstPage; p <= lastPage; p++) {
+        if (!this._trackPages[p]) pending.push(this._fetchPage(p));
+      }
+      if (pending.length) await Promise.all(pending);
+    },
+
     getTrackAtIndex(i) {
       if (this._sectionTracks) {
         return this._sectionTracks[i] || null;

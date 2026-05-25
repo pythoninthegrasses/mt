@@ -441,7 +441,7 @@ export function createLibraryBrowser(Alpine) {
      * @param {Object} track - Track object
      * @param {number} index - Track index
      */
-    handleRowClick(event, track, index) {
+    async handleRowClick(event, track, index) {
       if (event.shiftKey && this.lastSelectedIndex >= 0) {
         // Shift+click: range selection
         const start = Math.min(this.lastSelectedIndex, index);
@@ -451,9 +451,13 @@ export function createLibraryBrowser(Alpine) {
           this.selectedTracks.clear();
         }
 
+        await this.library._loadPageRange(start, end);
+
         for (let i = start; i <= end; i++) {
-          const t = this.library.filteredTracks[i];
-          if (t) this.selectedTracks.add(t.id);
+          const t = this.library.getTrackAtIndex(i);
+          if (!t) continue;
+          if (!this.library.showRemote && this.library.isRemote(t)) continue;
+          this.selectedTracks.add(t.id);
         }
       } else if (event.ctrlKey || event.metaKey) {
         // Ctrl/Cmd+click: toggle selection
@@ -533,8 +537,17 @@ export function createLibraryBrowser(Alpine) {
     /**
      * Select all tracks
      */
-    selectAll() {
-      this.library.filteredTracks.forEach((t) => this.selectedTracks.add(t.id));
+    async selectAll() {
+      if (this.library._isPaginated()) {
+        await this.library._loadAllPages();
+      }
+      const total = this.library.totalTracks;
+      for (let i = 0; i < total; i++) {
+        const t = this.library.getTrackAtIndex(i);
+        if (!t) continue;
+        if (!this.library.showRemote && this.library.isRemote(t)) continue;
+        this.selectedTracks.add(t.id);
+      }
     },
 
     isTypingInInput,
