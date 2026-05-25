@@ -4,7 +4,7 @@ title: Refactor library scroll behavior to preview upcoming cursor batches
 status: In Progress
 assignee: []
 created_date: '2026-04-15 03:21'
-updated_date: '2026-05-04 04:47'
+updated_date: '2026-05-25 06:24'
 labels:
   - frontend
   - backend
@@ -14,7 +14,7 @@ labels:
   - virtualization
 dependencies: []
 priority: high
-ordinal: 1000
+ordinal: 281.25
 ---
 
 ## Description

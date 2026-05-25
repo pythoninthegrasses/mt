@@ -1,10 +1,10 @@
 ---
 id: TASK-341
 title: Sync local library to attached iOS device with configurable filters and caps
-status: In Progress
+status: To Do
 assignee: []
 created_date: '2026-05-06 02:24'
-updated_date: '2026-05-22 03:39'
+updated_date: '2026-05-25 06:24'
 labels:
   - feature
   - macos
@@ -14,7 +14,7 @@ labels:
 dependencies:
   - TASK-214
 priority: high
-ordinal: 27250
+ordinal: 52500
 ---
 
 ## Description
