@@ -35,7 +35,7 @@ export function virtualScrollMixin() {
         const tracks = lib.filteredTracks;
         const idx = tracks.findIndex((t) => t.id === trackId);
         if (idx === -1) return;
-        this._scrollToRowIndex(idx);
+        this._scrollToRowIndex(idx, false);
         return;
       }
 
@@ -44,7 +44,7 @@ export function virtualScrollMixin() {
         const localIdx = page.findIndex((t) => t.id === trackId);
         if (localIdx !== -1) {
           const globalIdx = parseInt(pageIdx, 10) * lib._pageSize + localIdx;
-          this._scrollToRowIndex(globalIdx);
+          this._scrollToRowIndex(globalIdx, false);
           return;
         }
       }
@@ -77,7 +77,7 @@ export function virtualScrollMixin() {
 
         const pageIndex = Math.floor(offset / lib._pageSize);
         await lib._fetchPage(pageIndex);
-        this._scrollToRowIndex(offset);
+        this._scrollToRowIndex(offset, false);
       } catch (err) {
         console.error('[virtual-scroll] scrollToTrack failed:', err);
       }
@@ -90,7 +90,7 @@ export function virtualScrollMixin() {
       this._scrollToRowIndex(offset, false);
     },
 
-    _scrollToRowIndex(idx, smooth = true) {
+    _scrollToRowIndex(idx, _smooth = false) {
       const container = this.$refs.scrollContainer;
       if (!container) return;
       const trackTop = idx * this._rowHeight;
@@ -98,7 +98,14 @@ export function virtualScrollMixin() {
       const headerHeight = headerEl ? headerEl.offsetHeight : 0;
       const visibleHeight = container.clientHeight - headerHeight;
       const targetScroll = trackTop - visibleHeight / 2 + this._rowHeight / 2;
-      container.scrollTo({ top: Math.max(0, targetScroll), behavior: smooth ? 'smooth' : 'auto' });
+      // Always use 'auto' (instant). Smooth scrolling on long-distance jumps in
+      // a virtualized list (40k+ rows) leaves the row container translated to
+      // the target offset while container.scrollTop is still animating from
+      // the old position, producing a blank viewport for the animation
+      // duration. With 'auto', container.scrollTop updates synchronously, so
+      // the next line correctly mirrors the destination into _scrollTop.
+      // The `_smooth` parameter is retained for API compatibility but ignored.
+      container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'auto' });
       // Mirror scroll position synchronously so startIndex/offsetY are correct
       // before the async scroll event propagates through requestAnimationFrame.
       this._scrollTop = container.scrollTop;
