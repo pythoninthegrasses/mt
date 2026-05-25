@@ -53,7 +53,7 @@ function createLibStub({
  * parts of visibleTracks, startIndex, and endIndex.
  */
 function createBrowserStub(
-  { lib, scrollTop = 0, containerHeight = 100, rowHeight = 34, bufferRows = 0 } = {},
+  { lib, scrollTop = 0, containerHeight = 100, rowHeight = 34, bufferRows = 0, isJumping = false } = {},
 ) {
   const comp = {
     _swrSnapshot: [],
@@ -62,6 +62,7 @@ function createBrowserStub(
     _containerHeight: containerHeight,
     _rowHeight: rowHeight,
     _bufferRows: bufferRows,
+    _isJumping: isJumping,
 
     get library() {
       return lib;
@@ -112,6 +113,13 @@ function createBrowserStub(
       if (result.length > 0) {
         this._swrSnapshot = result;
         return result;
+      }
+      if (this._isJumping) {
+        const placeholders = [];
+        for (let i = this.startIndex; i < end; i++) {
+          placeholders.push({ track: { _placeholder: true }, globalIndex: i });
+        }
+        return placeholders;
       }
       return this._swrSnapshot;
     },
@@ -270,5 +278,81 @@ describe('visibleTracks SWR — section tracks (non-paginated)', () => {
 
     expect(result).toHaveLength(5);
     expect(result[0].track.id).toBe('track-0');
+  });
+});
+
+describe('visibleTracks SWR — placeholder rows during _isJumping', () => {
+  it('returns placeholder rows instead of stale snapshot when _isJumping=true', () => {
+    const page0tracks = Array.from({ length: 10 }, (_, i) => makeTrack(i));
+    const lib = createLibStub({ totalTracks: 100, pageSize: 10, loadedPages: { 0: page0tracks } });
+    const comp = createBrowserStub({ lib, scrollTop: 0, containerHeight: 340 });
+
+    // Populate snapshot with page-0 rows (the "old" viewport)
+    comp.visibleTracks;
+    expect(comp._swrSnapshot).toHaveLength(10);
+
+    // Simulate _jumpViaBackend: scroll to a remote region and mark as jumping
+    comp._scrollTop = 50 * 34; // target offset 50, page 5 not loaded
+    comp._isJumping = true;
+
+    const result = comp.visibleTracks;
+
+    // Should be placeholder rows, NOT stale page-0 tracks
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.every((item) => item.track._placeholder === true)).toBe(true);
+    expect(result[0].track.id).toBeUndefined();
+  });
+
+  it('placeholder items have correct globalIndex values matching target viewport', () => {
+    const page0tracks = Array.from({ length: 10 }, (_, i) => makeTrack(i));
+    const lib = createLibStub({ totalTracks: 100, pageSize: 10, loadedPages: { 0: page0tracks } });
+    // containerHeight = 340 → shows 10 rows at 34px each
+    const comp = createBrowserStub({ lib, scrollTop: 0, containerHeight: 340 });
+    comp.visibleTracks; // populate snapshot
+
+    comp._scrollTop = 50 * 34; // target row 50
+    comp._isJumping = true;
+
+    const result = comp.visibleTracks;
+
+    expect(result[0].globalIndex).toBe(50);
+    expect(result[result.length - 1].globalIndex).toBe(59);
+  });
+
+  it('returns real tracks once page loads even with _isJumping=true', () => {
+    const page0tracks = Array.from({ length: 10 }, (_, i) => makeTrack(i));
+    const page5tracks = Array.from({ length: 10 }, (_, i) => makeTrack(50 + i));
+    const lib = createLibStub({
+      totalTracks: 100,
+      pageSize: 10,
+      loadedPages: { 0: page0tracks, 5: page5tracks },
+    });
+    const comp = createBrowserStub({ lib, scrollTop: 0, containerHeight: 340 });
+    comp.visibleTracks; // populate snapshot
+
+    comp._scrollTop = 50 * 34;
+    comp._isJumping = true;
+
+    const result = comp.visibleTracks;
+
+    // Page 5 is loaded, so real tracks should be returned
+    expect(result.every((item) => item.track._placeholder === true)).toBe(false);
+    expect(result[0].track.id).toBe('track-50');
+  });
+
+  it('falls back to stale snapshot when _isJumping=false and page is unloaded', () => {
+    const page0tracks = Array.from({ length: 10 }, (_, i) => makeTrack(i));
+    const lib = createLibStub({ totalTracks: 100, pageSize: 10, loadedPages: { 0: page0tracks } });
+    const comp = createBrowserStub({ lib, scrollTop: 0, containerHeight: 340 });
+    comp.visibleTracks; // populate snapshot
+
+    comp._scrollTop = 50 * 34;
+    comp._isJumping = false; // not jumping — normal SWR scroll
+
+    const result = comp.visibleTracks;
+
+    // Stale snapshot should still be served for normal scroll (not jumping)
+    expect(result[0].track.id).toBe('track-0');
+    expect(result.every((item) => item.track._placeholder === true)).toBe(false);
   });
 });

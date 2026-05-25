@@ -370,6 +370,15 @@ export function createLibraryBrowser(Alpine) {
         this._swrSnapshot = result;
         return result;
       }
+      // During a backend jump, show shimmer rows in the target region instead of
+      // stale content from the previous viewport.
+      if (this._isJumping) {
+        const placeholders = [];
+        for (let i = this.startIndex; i < end; i++) {
+          placeholders.push({ track: { _placeholder: true }, globalIndex: i });
+        }
+        return placeholders;
+      }
       // Viewport page not yet loaded: serve last known snapshot so the viewport
       // stays populated while _ensurePage fetches the missing page.
       return this._swrSnapshot;
