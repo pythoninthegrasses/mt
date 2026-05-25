@@ -53,7 +53,8 @@ function createLibStub({
  * parts of visibleTracks, startIndex, and endIndex.
  */
 function createBrowserStub(
-  { lib, scrollTop = 0, containerHeight = 100, rowHeight = 34, bufferRows = 0, isJumping = false } = {},
+  { lib, scrollTop = 0, containerHeight = 100, rowHeight = 34, bufferRows = 0, isJumping = false } =
+    {},
 ) {
   const comp = {
     _swrSnapshot: [],
@@ -84,6 +85,26 @@ function createBrowserStub(
         trackCount,
         Math.floor(clampedScroll / this._rowHeight) + visibleRows + this._bufferRows,
       );
+    },
+
+    get totalContentHeight() {
+      if (this._isJumping && lib.totalTracks === 0) {
+        const rowHeight = this._rowHeight;
+        const visibleRows = Math.max(1, Math.ceil(this._containerHeight / rowHeight));
+        const rawRow = Math.floor(this._scrollTop / rowHeight);
+        return (rawRow + visibleRows + this._bufferRows) * rowHeight;
+      }
+      return lib.totalTracks * this._rowHeight;
+    },
+
+    get offsetY() {
+      if (this._isJumping && lib.totalTracks === 0) {
+        const rowHeight = this._rowHeight;
+        const rawRow = Math.floor(this._scrollTop / rowHeight);
+        const shimmerStart = Math.max(0, rawRow - this._bufferRows);
+        return shimmerStart * rowHeight;
+      }
+      return this.startIndex * this._rowHeight;
     },
 
     get visibleTracks() {
@@ -513,5 +534,128 @@ describe('visibleTracks SWR — _isJumping self-extinguish', () => {
     expect(result.every((item) => item.track._placeholder !== true)).toBe(true);
     expect(result[0].track.id).toBe('track-50');
     expect(comp._isJumping).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: totalContentHeight + offsetY zero-total fallback during _isJumping
+// (TASK-349 root cause: container collapses to height:0 / offset:0 during
+// the transient totalTracks=0 reload window, hiding shimmer placeholders.)
+// ---------------------------------------------------------------------------
+
+describe('totalContentHeight + offsetY — zero-total fallback during _isJumping', () => {
+  it('totalContentHeight is non-zero when _isJumping=true and totalTracks=0', () => {
+    const lib = createLibStub({ totalTracks: 0, pageSize: 10, loadedPages: {} });
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 50 * 34,
+      containerHeight: 3 * 34,
+      isJumping: true,
+    });
+
+    expect(comp.totalContentHeight).toBeGreaterThan(0);
+  });
+
+  it('totalContentHeight covers raw scroll row + visible rows when totalTracks=0', () => {
+    const lib = createLibStub({ totalTracks: 0, pageSize: 10, loadedPages: {} });
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 50 * 34,
+      containerHeight: 3 * 34,
+      bufferRows: 0,
+      isJumping: true,
+    });
+
+    // rawRow(50) + visibleRows(3) + bufferRows(0) = 53 rows * 34 = 1802
+    expect(comp.totalContentHeight).toBe(53 * 34);
+  });
+
+  it('offsetY anchors to shimmerStart row when _isJumping=true and totalTracks=0', () => {
+    const lib = createLibStub({ totalTracks: 0, pageSize: 10, loadedPages: {} });
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 50 * 34,
+      containerHeight: 3 * 34,
+      bufferRows: 0,
+      isJumping: true,
+    });
+
+    // shimmerStart = max(0, 50 - 0) = 50
+    expect(comp.offsetY).toBe(50 * 34);
+  });
+
+  it('offsetY uses bufferRows when subtracting from raw row', () => {
+    const lib = createLibStub({ totalTracks: 0, pageSize: 10, loadedPages: {} });
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 50 * 34,
+      containerHeight: 3 * 34,
+      bufferRows: 5,
+      isJumping: true,
+    });
+
+    // shimmerStart = max(0, 50 - 5) = 45
+    expect(comp.offsetY).toBe(45 * 34);
+  });
+
+  it('totalContentHeight remains zero when totalTracks=0 and not jumping', () => {
+    const lib = createLibStub({ totalTracks: 0, pageSize: 10, loadedPages: {} });
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 0,
+      containerHeight: 100,
+      isJumping: false,
+    });
+
+    expect(comp.totalContentHeight).toBe(0);
+  });
+
+  it('offsetY uses normal startIndex math when totalTracks > 0 even if _isJumping=true', () => {
+    const lib = createLibStub({ totalTracks: 100, pageSize: 10, loadedPages: {} });
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 50 * 34,
+      containerHeight: 3 * 34,
+      bufferRows: 0,
+      isJumping: true,
+    });
+
+    // startIndex = floor(50*34/34) - 0 = 50; offsetY = 50 * 34
+    expect(comp.offsetY).toBe(50 * 34);
+  });
+
+  it('totalContentHeight uses normal math when totalTracks > 0 even if _isJumping=true', () => {
+    const lib = createLibStub({ totalTracks: 100, pageSize: 10, loadedPages: {} });
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 50 * 34,
+      containerHeight: 3 * 34,
+      isJumping: true,
+    });
+
+    expect(comp.totalContentHeight).toBe(100 * 34);
+  });
+
+  it('shimmer rows + offsetY + totalContentHeight together cover viewport when totalTracks=0', () => {
+    // Integration: confirms the trio of values keeps the viewport renderable
+    // during the totalTracks=0 + _isJumping=true transient window.
+    const lib = createLibStub({ totalTracks: 0, pageSize: 10, loadedPages: {} });
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 50 * 34,
+      containerHeight: 3 * 34,
+      bufferRows: 0,
+      isJumping: true,
+    });
+
+    const rows = comp.visibleTracks;
+    const height = comp.totalContentHeight;
+    const offset = comp.offsetY;
+
+    expect(rows.length).toBeGreaterThan(0);
+    // Container is tall enough to hold the offset + visible rows
+    expect(height).toBeGreaterThanOrEqual(offset + rows.length * 34);
+    // First placeholder sits at the raw scroll row
+    expect(rows[0].globalIndex).toBe(50);
   });
 });

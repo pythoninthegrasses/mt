@@ -411,10 +411,28 @@ export function createLibraryBrowser(Alpine) {
     },
 
     get totalContentHeight() {
+      // During a jump while the library is transiently reporting totalTracks=0
+      // (concurrent loadLibraryData reset), fall back to a viewport-sized height
+      // so the row container does not collapse and hide shimmer placeholders.
+      if (this._isJumping && this.library.totalTracks === 0) {
+        const rowHeight = this._rowHeight;
+        const visibleRows = Math.max(1, Math.ceil(this._containerHeight / rowHeight));
+        const rawRow = Math.floor(this._scrollTop / rowHeight);
+        return (rawRow + visibleRows + this._bufferRows) * rowHeight;
+      }
       return this.library.totalTracks * this._rowHeight;
     },
 
     get offsetY() {
+      // Match the shimmer branch in visibleTracks: when totalTracks=0 during a
+      // jump, anchor offsetY to the raw scroll row so placeholders render at the
+      // correct viewport position instead of collapsing to 0.
+      if (this._isJumping && this.library.totalTracks === 0) {
+        const rowHeight = this._rowHeight;
+        const rawRow = Math.floor(this._scrollTop / rowHeight);
+        const shimmerStart = Math.max(0, rawRow - this._bufferRows);
+        return shimmerStart * rowHeight;
+      }
       return this.startIndex * this._rowHeight;
     },
 
