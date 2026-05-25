@@ -54,6 +54,7 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 | Cross-platform builds, CI/CD | [Build Configuration](docs/builds.md) |
 | Shuffle, Play Next pinning | [Shuffle Implementation](docs/shuffle.md) |
 | Agent script, prompt tuning | [Agent Script](docs/agent.md) |
+| Video/frame extraction for debugging | [Frame Extraction](docs/development.md#frame-extraction-for-debugging) |
 
 ## Architecture Overview
 
