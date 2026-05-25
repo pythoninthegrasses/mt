@@ -173,12 +173,16 @@ export function typeToJumpMixin() {
         // stays engaged through the first re-render after the page arrives and
         // _scrollTop has synced. Without this, _isJumping flips false in the same
         // microtask as scrollToOffset, before Alpine processes the scroll update.
+        //
+        // Skip clearing when the library is mid-reload with totalTracks=0 — the
+        // shimmer branch handles that window and visibleTracks self-extinguishes
+        // _isJumping when real data arrives after the reload completes.
         if (myGen === this._jumpGen) {
           this.$nextTick(() => {
-            if (myGen === this._jumpGen) {
-              this._isJumping = false;
-              this._jumpingPrefix = '';
-            }
+            if (myGen !== this._jumpGen) return;
+            if (this.library.loading && this.library.totalTracks === 0) return;
+            this._isJumping = false;
+            this._jumpingPrefix = '';
           });
         }
       }

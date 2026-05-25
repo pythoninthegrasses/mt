@@ -368,13 +368,27 @@ export function createLibraryBrowser(Alpine) {
 
       if (result.length > 0) {
         this._swrSnapshot = result;
+        // Self-extinguish: clear jump flag once real data has arrived at the
+        // target viewport. The $nextTick fallback in _jumpViaBackend also clears
+        // it, but may fire before data is ready when totalTracks is transiently 0.
+        this._isJumping = false;
         return result;
       }
       // During a backend jump, show shimmer rows in the target region instead of
-      // stale content from the previous viewport.
+      // stale content from the previous viewport. Use raw _scrollTop-based bounds
+      // rather than startIndex/end because both collapse to 0 when totalTracks is
+      // transiently 0 during a concurrent library reload, which would otherwise
+      // cause a blank viewport for the full reload duration.
       if (this._isJumping) {
+        const rowHeight = this._rowHeight;
+        const visibleRows = Math.max(1, Math.ceil(this._containerHeight / rowHeight));
+        const rawRow = Math.floor(this._scrollTop / rowHeight);
+        const shimmerStart = Math.max(0, rawRow - this._bufferRows);
+        const shimmerEnd = lib.totalTracks > 0
+          ? Math.min(lib.totalTracks, rawRow + visibleRows + this._bufferRows)
+          : rawRow + visibleRows;
         const placeholders = [];
-        for (let i = this.startIndex; i < end; i++) {
+        for (let i = shimmerStart; i < shimmerEnd; i++) {
           placeholders.push({ track: { _placeholder: true }, globalIndex: i });
         }
         return placeholders;

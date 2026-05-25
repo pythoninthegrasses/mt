@@ -112,11 +112,19 @@ function createBrowserStub(
 
       if (result.length > 0) {
         this._swrSnapshot = result;
+        this._isJumping = false;
         return result;
       }
       if (this._isJumping) {
+        const rowHeight = this._rowHeight;
+        const visibleRows = Math.max(1, Math.ceil(this._containerHeight / rowHeight));
+        const rawRow = Math.floor(this._scrollTop / rowHeight);
+        const shimmerStart = Math.max(0, rawRow - this._bufferRows);
+        const shimmerEnd = lib.totalTracks > 0
+          ? Math.min(lib.totalTracks, rawRow + visibleRows + this._bufferRows)
+          : rawRow + visibleRows;
         const placeholders = [];
-        for (let i = this.startIndex; i < end; i++) {
+        for (let i = shimmerStart; i < shimmerEnd; i++) {
           placeholders.push({ track: { _placeholder: true }, globalIndex: i });
         }
         return placeholders;
@@ -401,5 +409,109 @@ describe('visibleTracks SWR — placeholder rows during _isJumping', () => {
     // Range-gate: snapshot [0,9] does not overlap viewport [50,59] → placeholders
     expect(result.every((item) => item.track._placeholder === true)).toBe(true);
     expect(result[0].globalIndex).toBe(50);
+  });
+});
+
+describe('visibleTracks SWR — shimmer robustness when totalTracks is 0', () => {
+  it('shows shimmer rows when _isJumping=true and totalTracks is 0', () => {
+    // Simulates concurrent loadLibraryData: totalTracks reset to 0 while jump is in flight
+    const lib = createLibStub({ totalTracks: 0, pageSize: 10, loadedPages: {} });
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 50 * 34,
+      containerHeight: 3 * 34, // 3 visible rows
+      isJumping: true,
+    });
+
+    const result = comp.visibleTracks;
+
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.every((item) => item.track._placeholder === true)).toBe(true);
+  });
+
+  it('shimmer globalIndex values start at the raw scroll row when totalTracks is 0', () => {
+    const lib = createLibStub({ totalTracks: 0, pageSize: 10, loadedPages: {} });
+    // bufferRows=0 for simplicity, 3 visible rows
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 50 * 34,
+      containerHeight: 3 * 34,
+      isJumping: true,
+    });
+
+    const result = comp.visibleTracks;
+
+    expect(result[0].globalIndex).toBe(50);
+    expect(result[result.length - 1].globalIndex).toBe(52);
+  });
+
+  it('shimmer row count equals visibleRows when totalTracks is 0', () => {
+    const lib = createLibStub({ totalTracks: 0, pageSize: 10, loadedPages: {} });
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 100 * 34,
+      containerHeight: 5 * 34,
+      isJumping: true,
+    });
+
+    const result = comp.visibleTracks;
+
+    expect(result).toHaveLength(5);
+  });
+});
+
+describe('visibleTracks SWR — _isJumping self-extinguish', () => {
+  it('clears _isJumping when real data arrives', () => {
+    const page5tracks = Array.from({ length: 10 }, (_, i) => makeTrack(50 + i));
+    const lib = createLibStub({
+      totalTracks: 100,
+      pageSize: 10,
+      loadedPages: { 5: page5tracks },
+    });
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 50 * 34,
+      containerHeight: 10 * 34,
+      isJumping: true,
+    });
+
+    comp.visibleTracks;
+
+    expect(comp._isJumping).toBe(false);
+  });
+
+  it('keeps _isJumping true while page is unloaded', () => {
+    const lib = createLibStub({ totalTracks: 100, pageSize: 10, loadedPages: {} });
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 50 * 34,
+      containerHeight: 10 * 34,
+      isJumping: true,
+    });
+
+    comp.visibleTracks;
+
+    expect(comp._isJumping).toBe(true);
+  });
+
+  it('clears _isJumping before returning real rows', () => {
+    const page5tracks = Array.from({ length: 10 }, (_, i) => makeTrack(50 + i));
+    const lib = createLibStub({
+      totalTracks: 100,
+      pageSize: 10,
+      loadedPages: { 5: page5tracks },
+    });
+    const comp = createBrowserStub({
+      lib,
+      scrollTop: 50 * 34,
+      containerHeight: 10 * 34,
+      isJumping: true,
+    });
+
+    const result = comp.visibleTracks;
+
+    expect(result.every((item) => item.track._placeholder !== true)).toBe(true);
+    expect(result[0].track.id).toBe('track-50');
+    expect(comp._isJumping).toBe(false);
   });
 });
