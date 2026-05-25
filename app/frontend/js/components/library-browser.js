@@ -379,9 +379,21 @@ export function createLibraryBrowser(Alpine) {
         }
         return placeholders;
       }
-      // Viewport page not yet loaded: serve last known snapshot so the viewport
-      // stays populated while _ensurePage fetches the missing page.
-      return this._swrSnapshot;
+      // Only reuse snapshot when its globalIndex range overlaps the current viewport.
+      // Stale rows from a distant region would render off-screen (blank viewport).
+      const snap = this._swrSnapshot;
+      if (
+        snap.length &&
+        snap[snap.length - 1].globalIndex >= this.startIndex &&
+        snap[0].globalIndex <= end - 1
+      ) {
+        return snap;
+      }
+      const placeholders = [];
+      for (let i = this.startIndex; i < end; i++) {
+        placeholders.push({ track: { _placeholder: true }, globalIndex: i });
+      }
+      return placeholders;
     },
 
     get totalContentHeight() {

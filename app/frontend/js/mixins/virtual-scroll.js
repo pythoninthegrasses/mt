@@ -99,6 +99,9 @@ export function virtualScrollMixin() {
       const visibleHeight = container.clientHeight - headerHeight;
       const targetScroll = trackTop - visibleHeight / 2 + this._rowHeight / 2;
       container.scrollTo({ top: Math.max(0, targetScroll), behavior: smooth ? 'smooth' : 'auto' });
+      // Mirror scroll position synchronously so startIndex/offsetY are correct
+      // before the async scroll event propagates through requestAnimationFrame.
+      this._scrollTop = container.scrollTop;
     },
   };
 }

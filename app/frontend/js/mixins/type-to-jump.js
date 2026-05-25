@@ -169,9 +169,17 @@ export function typeToJumpMixin() {
           this.selectedTracks.add(track.id);
         }
       } finally {
+        // Defer the flag clear to $nextTick so the shimmer branch in visibleTracks
+        // stays engaged through the first re-render after the page arrives and
+        // _scrollTop has synced. Without this, _isJumping flips false in the same
+        // microtask as scrollToOffset, before Alpine processes the scroll update.
         if (myGen === this._jumpGen) {
-          this._isJumping = false;
-          this._jumpingPrefix = '';
+          this.$nextTick(() => {
+            if (myGen === this._jumpGen) {
+              this._isJumping = false;
+              this._jumpingPrefix = '';
+            }
+          });
         }
       }
     },

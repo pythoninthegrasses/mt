@@ -121,7 +121,19 @@ function createBrowserStub(
         }
         return placeholders;
       }
-      return this._swrSnapshot;
+      const snap = this._swrSnapshot;
+      if (
+        snap.length &&
+        snap[snap.length - 1].globalIndex >= this.startIndex &&
+        snap[0].globalIndex <= end - 1
+      ) {
+        return snap;
+      }
+      const placeholders = [];
+      for (let i = this.startIndex; i < end; i++) {
+        placeholders.push({ track: { _placeholder: true }, globalIndex: i });
+      }
+      return placeholders;
     },
   };
 
@@ -169,26 +181,58 @@ describe('visibleTracks SWR — returns real tracks when page is loaded', () => 
 });
 
 describe('visibleTracks SWR — serves stale snapshot when page is unloaded', () => {
-  it('returns snapshot when current viewport page is missing', () => {
+  it('returns placeholders (not stale snapshot) when viewport does not overlap snapshot range', () => {
     const page0tracks = Array.from({ length: 10 }, (_, i) => makeTrack(i));
     const lib = createLibStub({ totalTracks: 20, pageSize: 10, loadedPages: { 0: page0tracks } });
     // containerHeight = 10 * 34 = 340 so all 10 tracks fit in viewport
     const comp = createBrowserStub({ lib, scrollTop: 0, containerHeight: 340 });
 
-    // Populate snapshot by rendering the loaded page
+    // Populate snapshot by rendering the loaded page (globalIndex 0-9)
     comp.visibleTracks;
     expect(comp._swrSnapshot).toHaveLength(10);
 
-    // Scroll to page 1 (not loaded) — snapshot should be returned
-    comp._scrollTop = 10 * 34; // Jump to track index 10
+    // Scroll to page 1 (not loaded) — viewport [10,19] does not overlap snapshot [0,9]
+    comp._scrollTop = 10 * 34;
+    const result = comp.visibleTracks;
+
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.every((item) => item.track._placeholder === true)).toBe(true);
+    expect(result[0].globalIndex).toBe(10);
+  });
+
+  it('returns stale snapshot when viewport range overlaps snapshot range', () => {
+    const page0tracks = Array.from({ length: 10 }, (_, i) => makeTrack(i));
+    const lib = createLibStub({ totalTracks: 20, pageSize: 10, loadedPages: { 0: page0tracks } });
+    // containerHeight = 340 so all 10 tracks fit in viewport
+    const comp = createBrowserStub({ lib, scrollTop: 0, containerHeight: 340 });
+
+    // Populate snapshot with page 0 (globalIndex 0-9)
+    comp.visibleTracks;
+
+    // Clear the page from cache to force branch (C)
+    lib._trackPages = {};
+
+    // Viewport still [0,9] — overlaps snapshot
     const result = comp.visibleTracks;
 
     expect(result).toHaveLength(10);
-    expect(result[0].track.id).toBe('track-0'); // stale data from page 0
+    expect(result[0].track.id).toBe('track-0');
+    expect(result.every((item) => item.track._placeholder === true)).toBe(false);
   });
 
-  it('returns empty array when snapshot is empty and page is unloaded', () => {
+  it('returns placeholders when snapshot is empty and page is unloaded', () => {
     const lib = createLibStub({ totalTracks: 20, pageSize: 10, loadedPages: {} });
+    const comp = createBrowserStub({ lib, scrollTop: 0, containerHeight: 200 });
+
+    const result = comp.visibleTracks;
+
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.every((item) => item.track._placeholder === true)).toBe(true);
+    expect(result[0].globalIndex).toBe(0);
+  });
+
+  it('returns empty array when totalTracks is zero', () => {
+    const lib = createLibStub({ totalTracks: 0, pageSize: 10, loadedPages: {} });
     const comp = createBrowserStub({ lib, scrollTop: 0, containerHeight: 200 });
 
     const result = comp.visibleTracks;
@@ -196,22 +240,24 @@ describe('visibleTracks SWR — serves stale snapshot when page is unloaded', ()
     expect(result).toHaveLength(0);
   });
 
-  it('snapshot persists across multiple unloaded-page accesses', () => {
+  it('placeholders at non-overlapping viewports have correct globalIndex values', () => {
     const page0tracks = Array.from({ length: 10 }, (_, i) => makeTrack(i));
     const lib = createLibStub({ totalTracks: 30, pageSize: 10, loadedPages: { 0: page0tracks } });
     // containerHeight = 340 so all 10 tracks from page 0 fit in viewport
     const comp = createBrowserStub({ lib, scrollTop: 0, containerHeight: 340 });
 
-    comp.visibleTracks; // populate snapshot
+    comp.visibleTracks; // populate snapshot with rows [0,9]
 
-    comp._scrollTop = 10 * 34; // page 1, unloaded
+    comp._scrollTop = 10 * 34; // page 1, unloaded, viewport [10,19]
     const first = comp.visibleTracks;
-    comp._scrollTop = 20 * 34; // page 2, also unloaded
+    comp._scrollTop = 20 * 34; // page 2, unloaded, viewport [20,29]
     const second = comp.visibleTracks;
 
-    expect(first).toHaveLength(10);
-    expect(second).toHaveLength(10);
-    expect(first[0].track.id).toBe(second[0].track.id);
+    // Each access returns placeholders at the correct viewport position
+    expect(first.every((item) => item.track._placeholder === true)).toBe(true);
+    expect(first[0].globalIndex).toBe(10);
+    expect(second.every((item) => item.track._placeholder === true)).toBe(true);
+    expect(second[0].globalIndex).toBe(20);
   });
 });
 
@@ -340,19 +386,20 @@ describe('visibleTracks SWR — placeholder rows during _isJumping', () => {
     expect(result[0].track.id).toBe('track-50');
   });
 
-  it('falls back to stale snapshot when _isJumping=false and page is unloaded', () => {
+  it('returns placeholders (not stale snapshot) when _isJumping=false and viewport does not overlap snapshot', () => {
     const page0tracks = Array.from({ length: 10 }, (_, i) => makeTrack(i));
     const lib = createLibStub({ totalTracks: 100, pageSize: 10, loadedPages: { 0: page0tracks } });
     const comp = createBrowserStub({ lib, scrollTop: 0, containerHeight: 340 });
-    comp.visibleTracks; // populate snapshot
+    comp.visibleTracks; // populate snapshot with rows [0,9]
 
-    comp._scrollTop = 50 * 34;
-    comp._isJumping = false; // not jumping — normal SWR scroll
+    // Jump to a distant region with no overlap — _isJumping=false (page already loaded or cleared)
+    comp._scrollTop = 50 * 34; // viewport [50,59], snapshot [0,9], no overlap
+    comp._isJumping = false;
 
     const result = comp.visibleTracks;
 
-    // Stale snapshot should still be served for normal scroll (not jumping)
-    expect(result[0].track.id).toBe('track-0');
-    expect(result.every((item) => item.track._placeholder === true)).toBe(false);
+    // Range-gate: snapshot [0,9] does not overlap viewport [50,59] → placeholders
+    expect(result.every((item) => item.track._placeholder === true)).toBe(true);
+    expect(result[0].globalIndex).toBe(50);
   });
 });
