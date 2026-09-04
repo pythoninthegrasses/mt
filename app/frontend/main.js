@@ -144,6 +144,9 @@ async function revealApp() {
 const themeBackgrounds = {
   'metro-teal': '#1e1e1e',
   'neon-love': '#1f1731',
+  'midnight': '#000000',
+  'nightout': '#000000',
+  'spotify': '#0f0f0f',
   'dark': '#09090b',
   'light': '#ffffff',
 };
@@ -170,7 +173,7 @@ function applyInitialTheme() {
   document.documentElement.classList.remove('light', 'dark');
   delete document.documentElement.dataset.themePreset;
 
-  if (themePreset === 'metro-teal' || themePreset === 'neon-love') {
+  if (['metro-teal', 'neon-love', 'midnight', 'nightout', 'spotify'].includes(themePreset)) {
     document.documentElement.classList.add('dark');
     document.documentElement.dataset.themePreset = themePreset;
     document.documentElement.style.backgroundColor = themeBackgrounds[themePreset];

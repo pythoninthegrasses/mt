@@ -4,6 +4,14 @@ import { DEFAULT_SORT_IGNORE_WORDS } from '../constants.js';
 // Re-export for consumers that import from ui.js
 export { DEFAULT_SORT_IGNORE_WORDS };
 
+export const DARK_PRESETS = [
+  'metro-teal',
+  'neon-love',
+  'midnight',
+  'nightout',
+  'spotify',
+];
+
 export function createUIStore(Alpine) {
   Alpine.store('ui', {
     view: 'library',
@@ -34,11 +42,13 @@ export function createUIStore(Alpine) {
       this._migrateOldStorage();
       this.applyThemePreset();
 
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        if (this.themePreset === 'light' && this.theme === 'system') {
-          this.applyThemePreset();
-        }
-      });
+      window
+        .matchMedia('(prefers-color-scheme: dark)')
+        .addEventListener('change', () => {
+          if (this.themePreset === 'light' && this.theme === 'system') {
+            this.applyThemePreset();
+          }
+        });
     },
 
     /**
@@ -57,7 +67,10 @@ export function createUIStore(Alpine) {
       this.libraryViewMode = window.settings.get('ui:libraryViewMode', 'list');
       this.theme = window.settings.get('ui:theme', 'system');
       this.themePreset = window.settings.get('ui:themePreset', 'light');
-      this.settingsSection = window.settings.get('ui:settingsSection', 'general');
+      this.settingsSection = window.settings.get(
+        'ui:settingsSection',
+        'general',
+      );
       this.sortIgnoreWords = window.settings.get('ui:sortIgnoreWords', true);
       this.sortIgnoreWordsList = window.settings.get(
         'ui:sortIgnoreWordsList',
@@ -75,9 +88,15 @@ export function createUIStore(Alpine) {
       if (oldData) {
         try {
           const data = JSON.parse(oldData);
-          if (data.sidebarOpen !== undefined) this.sidebarOpen = data.sidebarOpen;
-          if (data.sidebarWidth !== undefined) this.sidebarWidth = data.sidebarWidth;
-          if (data.libraryViewMode !== undefined) this.libraryViewMode = data.libraryViewMode;
+          if (data.sidebarOpen !== undefined) {
+            this.sidebarOpen = data.sidebarOpen;
+          }
+          if (data.sidebarWidth !== undefined) {
+            this.sidebarWidth = data.sidebarWidth;
+          }
+          if (data.libraryViewMode !== undefined) {
+            this.libraryViewMode = data.libraryViewMode;
+          }
           if (data.theme !== undefined) this.theme = data.theme;
           localStorage.removeItem('mt:ui');
         } catch (_e) {
@@ -110,7 +129,7 @@ export function createUIStore(Alpine) {
     },
 
     toggleSettings() {
-      const newView = this.view === 'settings' ? (this._previousView || 'library') : 'settings';
+      const newView = this.view === 'settings' ? this._previousView || 'library' : 'settings';
 
       console.log('[navigation]', 'toggle_settings', {
         previousView: this.view,
@@ -152,7 +171,7 @@ export function createUIStore(Alpine) {
     },
 
     setThemePreset(preset) {
-      if (['light', 'metro-teal', 'neon-love'].includes(preset)) {
+      if (['light', ...DARK_PRESETS].includes(preset)) {
         console.log('[settings]', 'set_theme_preset', {
           previousPreset: this.themePreset,
           newPreset: preset,
@@ -177,9 +196,7 @@ export function createUIStore(Alpine) {
           'lastfm',
           'plex',
           'stats',
-        ].includes(
-          section,
-        )
+        ].includes(section)
       ) {
         console.log('[settings]', 'navigate_section', {
           previousSection: this.settingsSection,
@@ -197,14 +214,14 @@ export function createUIStore(Alpine) {
       let titleBarTheme;
       let contentTheme;
 
-      if (this.themePreset === 'metro-teal' || this.themePreset === 'neon-love') {
+      if (DARK_PRESETS.includes(this.themePreset)) {
         document.documentElement.classList.add('dark');
         document.documentElement.dataset.themePreset = this.themePreset;
         titleBarTheme = 'dark';
       } else {
         titleBarTheme = 'light';
         contentTheme = this.theme === 'system'
-          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
           : this.theme;
         document.documentElement.classList.add(contentTheme);
       }
@@ -234,7 +251,7 @@ export function createUIStore(Alpine) {
     },
 
     get effectiveTheme() {
-      if (this.themePreset === 'metro-teal') {
+      if (DARK_PRESETS.includes(this.themePreset)) {
         return 'dark';
       }
       if (this.theme === 'system') {
@@ -393,7 +410,16 @@ export function createUIStore(Alpine) {
           filters: [
             {
               name: 'Audio Files',
-              extensions: ['mp3', 'flac', 'ogg', 'm4a', 'wav', 'aac', 'wma', 'opus'],
+              extensions: [
+                'mp3',
+                'flac',
+                'ogg',
+                'm4a',
+                'wav',
+                'aac',
+                'wma',
+                'opus',
+              ],
             },
             { name: 'All Files', extensions: ['*'] },
           ],
@@ -451,7 +477,16 @@ export function createUIStore(Alpine) {
           filters: [
             {
               name: 'Audio Files',
-              extensions: ['mp3', 'flac', 'ogg', 'm4a', 'wav', 'aac', 'wma', 'opus'],
+              extensions: [
+                'mp3',
+                'flac',
+                'ogg',
+                'm4a',
+                'wav',
+                'aac',
+                'wma',
+                'opus',
+              ],
             },
             { name: 'All Files', extensions: ['*'] },
           ],
@@ -496,72 +531,72 @@ export function createUIStore(Alpine) {
     Alpine.effect(() => {
       const value = store.sidebarOpen;
       if (!isInitializing) {
-        window.settings.set('ui:sidebarOpen', value).catch((err) =>
-          console.error('[ui] Failed to sync sidebarOpen:', err)
-        );
+        window.settings
+          .set('ui:sidebarOpen', value)
+          .catch((err) => console.error('[ui] Failed to sync sidebarOpen:', err));
       }
     });
 
     Alpine.effect(() => {
       const value = store.sidebarWidth;
       if (!isInitializing) {
-        window.settings.set('ui:sidebarWidth', value).catch((err) =>
-          console.error('[ui] Failed to sync sidebarWidth:', err)
-        );
+        window.settings
+          .set('ui:sidebarWidth', value)
+          .catch((err) => console.error('[ui] Failed to sync sidebarWidth:', err));
       }
     });
 
     Alpine.effect(() => {
       const value = store.libraryViewMode;
       if (!isInitializing) {
-        window.settings.set('ui:libraryViewMode', value).catch((err) =>
-          console.error('[ui] Failed to sync libraryViewMode:', err)
-        );
+        window.settings
+          .set('ui:libraryViewMode', value)
+          .catch((err) => console.error('[ui] Failed to sync libraryViewMode:', err));
       }
     });
 
     Alpine.effect(() => {
       const value = store.theme;
       if (!isInitializing) {
-        window.settings.set('ui:theme', value).catch((err) =>
-          console.error('[ui] Failed to sync theme:', err)
-        );
+        window.settings
+          .set('ui:theme', value)
+          .catch((err) => console.error('[ui] Failed to sync theme:', err));
       }
     });
 
     Alpine.effect(() => {
       const value = store.themePreset;
       if (!isInitializing) {
-        window.settings.set('ui:themePreset', value).catch((err) =>
-          console.error('[ui] Failed to sync themePreset:', err)
-        );
+        window.settings
+          .set('ui:themePreset', value)
+          .catch((err) => console.error('[ui] Failed to sync themePreset:', err));
       }
     });
 
     Alpine.effect(() => {
       const value = store.settingsSection;
       if (!isInitializing) {
-        window.settings.set('ui:settingsSection', value).catch((err) =>
-          console.error('[ui] Failed to sync settingsSection:', err)
-        );
+        window.settings
+          .set('ui:settingsSection', value)
+          .catch((err) => console.error('[ui] Failed to sync settingsSection:', err));
       }
     });
 
     Alpine.effect(() => {
       const value = store.sortIgnoreWords;
       if (!isInitializing) {
-        window.settings.set('ui:sortIgnoreWords', value).catch((err) =>
-          console.error('[ui] Failed to sync sortIgnoreWords:', err)
-        );
+        window.settings
+          .set('ui:sortIgnoreWords', value)
+          .catch((err) => console.error('[ui] Failed to sync sortIgnoreWords:', err));
       }
     });
 
     Alpine.effect(() => {
       const value = store.sortIgnoreWordsList;
       if (!isInitializing) {
-        window.settings.set('ui:sortIgnoreWordsList', value).catch((err) =>
-          console.error('[ui] Failed to sync sortIgnoreWordsList:', err)
-        );
+        window.settings
+          .set('ui:sortIgnoreWordsList', value)
+          .catch((err) => console.error('[ui] Failed to sync sortIgnoreWordsList:', err));
       }
     });
   }

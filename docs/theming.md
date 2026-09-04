@@ -9,6 +9,9 @@ MT ships with three themes defined in `app/frontend/styles.css`:
 | (default) | Light | `:root` |
 | `metro-teal` | Dark | `[data-theme-preset='metro-teal']` |
 | `neon-love` | Dark | `[data-theme-preset='neon-love']` |
+| `midnight` | Dark | `[data-theme-preset='midnight']` |
+| `nightout` | Dark | `[data-theme-preset='nightout']` |
+| `spotify` | Dark | `[data-theme-preset='spotify']` |
 
 ## Dark Theme Toggle Overrides
 
@@ -39,6 +42,6 @@ When adding a new toggle to settings, add its `data-testid` selector to the exis
 ## Adding a New Theme
 
 1. Define CSS custom properties under a new `[data-theme-preset='name']` selector
-2. Add the preset to `themes.json`
+2. Add the preset name to `DARK_PRESETS` in `app/frontend/js/stores/ui.js`
 3. Check all toggles are readable in the new theme — add overrides if `bg-primary`/`bg-muted` lack contrast
-4. Run visual regression tests: `cd app/frontend && npx playwright test tests/visual-regression.spec.js`
+4. Add/extend Vitest coverage in `app/frontend/__tests__/ui.store.test.js`

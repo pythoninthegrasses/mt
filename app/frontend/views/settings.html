@@ -71,9 +71,33 @@
             >
               Neon Love
             </button>
+            <button
+              class="px-4 py-2 rounded-md border text-sm transition-colors"
+              :class="themeButtonClass('midnight')"
+              @click="$store.ui.setThemePreset('midnight')"
+              data-testid="settings-theme-midnight"
+            >
+              Midnight
+            </button>
+            <button
+              class="px-4 py-2 rounded-md border text-sm transition-colors"
+              :class="themeButtonClass('nightout')"
+              @click="$store.ui.setThemePreset('nightout')"
+              data-testid="settings-theme-nightout"
+            >
+              Night Out
+            </button>
+            <button
+              class="px-4 py-2 rounded-md border text-sm transition-colors"
+              :class="themeButtonClass('spotify')"
+              @click="$store.ui.setThemePreset('spotify')"
+              data-testid="settings-theme-spotify"
+            >
+              Spotify
+            </button>
           </div>
           <p class="text-xs text-muted-foreground mt-2">
-            Metro Teal and Neon Love use dark themes with accent colors.
+            Metro Teal, Neon Love, Midnight, Night Out, and Spotify use dark themes with accent colors.
           </p>
         </div>
       </div>

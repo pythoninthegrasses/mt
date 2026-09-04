@@ -68,6 +68,8 @@ global.localStorage = {
 /**
  * Create a minimal UI store for testing (no Alpine dependencies)
  */
+const DARK_PRESETS = ['metro-teal', 'neon-love', 'midnight', 'nightout', 'spotify'];
+
 function createTestUIStore() {
   return {
     view: 'library',
@@ -130,9 +132,16 @@ function createTestUIStore() {
     },
 
     setThemePreset(preset) {
-      if (['light', 'metro-teal', 'neon-love'].includes(preset)) {
+      if (['light', ...DARK_PRESETS].includes(preset)) {
         this.themePreset = preset;
       }
+    },
+
+    get effectiveTheme() {
+      if (DARK_PRESETS.includes(this.themePreset)) {
+        return 'dark';
+      }
+      return this.theme === 'system' ? 'light' : this.theme;
     },
 
     setSettingsSection(section) {
@@ -342,6 +351,15 @@ describe('UI Store - Theme Management', () => {
     store.setThemePreset('neon-love');
     expect(store.themePreset).toBe('neon-love');
 
+    store.setThemePreset('midnight');
+    expect(store.themePreset).toBe('midnight');
+
+    store.setThemePreset('nightout');
+    expect(store.themePreset).toBe('nightout');
+
+    store.setThemePreset('spotify');
+    expect(store.themePreset).toBe('spotify');
+
     store.setThemePreset('light');
     expect(store.themePreset).toBe('light');
   });
@@ -349,6 +367,13 @@ describe('UI Store - Theme Management', () => {
   it('should ignore invalid theme presets', () => {
     store.setThemePreset('invalid');
     expect(store.themePreset).toBe('light');
+  });
+
+  it('effectiveTheme should be dark for every dark preset', () => {
+    for (const preset of ['metro-teal', 'neon-love', 'midnight', 'nightout', 'spotify']) {
+      store.setThemePreset(preset);
+      expect(store.effectiveTheme).toBe('dark');
+    }
   });
 });
 

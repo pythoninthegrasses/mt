@@ -538,6 +538,501 @@ aside button:hover svg {
   background-color: hsl(191 76% 58%) !important;
 }
 
+/* Midnight theme — deep black with electric blue accent */
+[data-theme-preset='midnight'] {
+  --background: 0 0% 0%;
+  --foreground: 0 0% 100%;
+  --card: 0 0% 2%;
+  --card-foreground: 0 0% 100%;
+  --popover: 0 0% 2%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 234 92% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 10%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 0 0% 10%;
+  --muted-foreground: 0 0% 67%;
+  --accent: 234 92% 50%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 2%;
+  --input: 0 0% 10%;
+  --ring: 234 92% 50%;
+
+  --mt-playing-bg: 234 60% 14%;
+  --mt-playing-fg: 234 85% 62%;
+  --mt-row-even: 0 0% 2%;
+  --mt-row-odd: 0 0% 4%;
+  --mt-row-hover: 0 0% 10%;
+  --mt-progress-bg: 0 0% 13%;
+  --mt-progress-fill: 234 92% 50%;
+  --mt-toast-bg: hsl(234 92% 50%);
+  --mt-toast-fg: #000000;
+}
+
+[data-theme-preset='midnight'] .track-row-even {
+  background-color: hsl(var(--mt-row-even));
+}
+
+[data-theme-preset='midnight'] .track-row-odd {
+  background-color: hsl(var(--mt-row-odd));
+}
+
+[data-theme-preset='midnight'] .track-row-selected {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border-bottom: none !important;
+}
+
+[data-theme-preset='midnight'] .track-row-playing {
+  background-color: hsl(var(--mt-playing-bg)) !important;
+  box-shadow: inset 2px 0 0 0 hsl(var(--mt-playing-fg)) !important;
+  color: hsl(var(--mt-playing-fg)) !important;
+}
+
+[data-theme-preset='midnight'] .track-row-playing .text-muted-foreground {
+  color: hsl(var(--mt-playing-fg)) !important;
+}
+
+[data-theme-preset='midnight'] footer {
+  background-color: #050505;
+  border-color: #242424;
+}
+
+[data-theme-preset='midnight'] .border-border {
+  border-color: #242424;
+}
+
+[data-theme-preset='midnight'] footer button {
+  color: #b3b3b3 !important;
+}
+
+[data-theme-preset='midnight'] footer button:hover {
+  color: #5470ff !important;
+}
+
+[data-theme-preset='midnight'] footer button.text-primary,
+[data-theme-preset='midnight'] footer button.text-red-500 {
+  color: #5470ff !important;
+}
+
+[data-theme-preset='midnight'] [data-testid='player-progressbar'] {
+  background-color: #242424 !important;
+}
+
+[data-theme-preset='midnight'] [data-testid='player-progressbar'] > div:first-child {
+  background-color: #0a21f5 !important;
+}
+
+[data-theme-preset='midnight'] [data-testid='player-progressbar'] > div:last-child {
+  background-color: #0a21f5 !important;
+}
+
+[data-theme-preset='midnight'] footer .bg-\[\#8E8E93\]\/20 {
+  background-color: #242424 !important;
+}
+
+[data-theme-preset='midnight'] .track-row-even,
+[data-theme-preset='midnight'] .track-row-odd {
+  border-bottom: none !important;
+}
+
+[data-theme-preset='midnight'] aside > div:last-child {
+  border-top: none !important;
+}
+
+[data-theme-preset='midnight'] [data-testid='library-header'] {
+  background-color: #141414 !important;
+}
+
+[data-theme-preset='midnight'] [data-testid='library-header'] .column-header-active {
+  background: transparent !important;
+}
+
+[data-theme-preset='midnight'] aside {
+  background-color: #141414 !important;
+}
+
+[data-theme-preset='midnight'] .bg-card\/50,
+[data-theme-preset='midnight'] .bg-card {
+  background-color: #141414 !important;
+}
+
+[data-theme-preset='midnight'] .bg-background {
+  background-color: #000000 !important;
+}
+
+[data-theme-preset='midnight'] .titlebar-drag-region {
+  background-color: #141414 !important;
+}
+
+[data-theme-preset='midnight'] [data-testid='settings-view'] .bg-muted\/30 {
+  background-color: rgba(20, 20, 20, 0.6) !important;
+  border: 1px solid #242424;
+}
+
+[data-theme-preset='midnight'] [data-testid='settings-view'] .border-border\/50 {
+  border-color: #242424 !important;
+}
+
+[data-theme-preset='midnight'] [data-testid='settings-view'] button.border-border:hover {
+  background-color: rgba(10, 33, 245, 0.15) !important;
+  border-color: rgba(10, 33, 245, 0.4) !important;
+}
+
+[data-theme-preset='midnight'] [data-testid='settings-view'] nav button.bg-primary\/15 {
+  background-color: rgba(10, 33, 245, 0.15) !important;
+  color: #5470ff !important;
+}
+
+[data-theme-preset='midnight'] [data-testid='sidebar-search'] {
+  background-color: #191919 !important;
+  border: 1px solid #242424 !important;
+}
+
+[data-theme-preset='midnight'] [data-testid='lastfm-toggle'].bg-muted,
+[data-theme-preset='midnight'] [data-testid='network-cache-toggle'].bg-muted,
+[data-theme-preset='midnight'] [data-testid='network-cache-persistent-toggle'].bg-muted {
+  background-color: hsl(0 0% 13%) !important;
+}
+
+[data-theme-preset='midnight'] [data-testid='lastfm-toggle'].bg-primary,
+[data-theme-preset='midnight'] [data-testid='network-cache-toggle'].bg-primary,
+[data-theme-preset='midnight'] [data-testid='network-cache-persistent-toggle'].bg-primary {
+  background-color: hsl(234 92% 50%) !important;
+}
+
+/* Night Out theme — near-black with bright royal blue accent */
+[data-theme-preset='nightout'] {
+  --background: 0 0% 0%;
+  --foreground: 0 0% 100%;
+  --card: 0 0% 2%;
+  --card-foreground: 0 0% 100%;
+  --popover: 0 0% 2%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 223 82% 49%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 10%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 0 0% 10%;
+  --muted-foreground: 0 0% 67%;
+  --accent: 223 82% 49%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 2%;
+  --input: 0 0% 10%;
+  --ring: 223 82% 49%;
+
+  --mt-playing-bg: 223 60% 14%;
+  --mt-playing-fg: 223 85% 62%;
+  --mt-row-even: 0 0% 2%;
+  --mt-row-odd: 0 0% 4%;
+  --mt-row-hover: 0 0% 10%;
+  --mt-progress-bg: 0 0% 13%;
+  --mt-progress-fill: 223 82% 49%;
+  --mt-toast-bg: hsl(223 82% 49%);
+  --mt-toast-fg: #222222;
+}
+
+[data-theme-preset='nightout'] .track-row-even {
+  background-color: hsl(var(--mt-row-even));
+}
+
+[data-theme-preset='nightout'] .track-row-odd {
+  background-color: hsl(var(--mt-row-odd));
+}
+
+[data-theme-preset='nightout'] .track-row-selected {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border-bottom: none !important;
+}
+
+[data-theme-preset='nightout'] .track-row-playing {
+  background-color: hsl(var(--mt-playing-bg)) !important;
+  box-shadow: inset 2px 0 0 0 hsl(var(--mt-playing-fg)) !important;
+  color: hsl(var(--mt-playing-fg)) !important;
+}
+
+[data-theme-preset='nightout'] .track-row-playing .text-muted-foreground {
+  color: hsl(var(--mt-playing-fg)) !important;
+}
+
+[data-theme-preset='nightout'] footer {
+  background-color: #050505;
+  border-color: #242424;
+}
+
+[data-theme-preset='nightout'] .border-border {
+  border-color: #242424;
+}
+
+[data-theme-preset='nightout'] footer button {
+  color: #b3b3b3 !important;
+}
+
+[data-theme-preset='nightout'] footer button:hover {
+  color: #5c8bff !important;
+}
+
+[data-theme-preset='nightout'] footer button.text-primary,
+[data-theme-preset='nightout'] footer button.text-red-500 {
+  color: #5c8bff !important;
+}
+
+[data-theme-preset='nightout'] [data-testid='player-progressbar'] {
+  background-color: #242424 !important;
+}
+
+[data-theme-preset='nightout'] [data-testid='player-progressbar'] > div:first-child {
+  background-color: #164fe2 !important;
+}
+
+[data-theme-preset='nightout'] [data-testid='player-progressbar'] > div:last-child {
+  background-color: #164fe2 !important;
+}
+
+[data-theme-preset='nightout'] footer .bg-\[\#8E8E93\]\/20 {
+  background-color: #242424 !important;
+}
+
+[data-theme-preset='nightout'] .track-row-even,
+[data-theme-preset='nightout'] .track-row-odd {
+  border-bottom: none !important;
+}
+
+[data-theme-preset='nightout'] aside > div:last-child {
+  border-top: none !important;
+}
+
+[data-theme-preset='nightout'] [data-testid='library-header'] {
+  background-color: #141414 !important;
+}
+
+[data-theme-preset='nightout'] [data-testid='library-header'] .column-header-active {
+  background: transparent !important;
+}
+
+[data-theme-preset='nightout'] aside {
+  background-color: #141414 !important;
+}
+
+[data-theme-preset='nightout'] .bg-card\/50,
+[data-theme-preset='nightout'] .bg-card {
+  background-color: #141414 !important;
+}
+
+[data-theme-preset='nightout'] .bg-background {
+  background-color: #000000 !important;
+}
+
+[data-theme-preset='nightout'] .titlebar-drag-region {
+  background-color: #141414 !important;
+}
+
+[data-theme-preset='nightout'] [data-testid='settings-view'] .bg-muted\/30 {
+  background-color: rgba(20, 20, 20, 0.6) !important;
+  border: 1px solid #242424;
+}
+
+[data-theme-preset='nightout'] [data-testid='settings-view'] .border-border\/50 {
+  border-color: #242424 !important;
+}
+
+[data-theme-preset='nightout'] [data-testid='settings-view'] button.border-border:hover {
+  background-color: rgba(22, 79, 226, 0.15) !important;
+  border-color: rgba(22, 79, 226, 0.4) !important;
+}
+
+[data-theme-preset='nightout'] [data-testid='settings-view'] nav button.bg-primary\/15 {
+  background-color: rgba(22, 79, 226, 0.15) !important;
+  color: #5c8bff !important;
+}
+
+[data-theme-preset='nightout'] [data-testid='sidebar-search'] {
+  background-color: #191919 !important;
+  border: 1px solid #242424 !important;
+}
+
+[data-theme-preset='nightout'] [data-testid='lastfm-toggle'].bg-muted,
+[data-theme-preset='nightout'] [data-testid='network-cache-toggle'].bg-muted,
+[data-theme-preset='nightout'] [data-testid='network-cache-persistent-toggle'].bg-muted {
+  background-color: hsl(0 0% 13%) !important;
+}
+
+[data-theme-preset='nightout'] [data-testid='lastfm-toggle'].bg-primary,
+[data-theme-preset='nightout'] [data-testid='network-cache-toggle'].bg-primary,
+[data-theme-preset='nightout'] [data-testid='network-cache-persistent-toggle'].bg-primary {
+  background-color: hsl(223 82% 49%) !important;
+}
+
+/* Spotify theme — dark gray with signature green accent */
+[data-theme-preset='spotify'] {
+  --background: 0 0% 6%;
+  --foreground: 0 0% 78%;
+  --card: 0 0% 6%;
+  --card-foreground: 0 0% 78%;
+  --popover: 0 0% 6%;
+  --popover-foreground: 0 0% 78%;
+  --primary: 141 73% 42%;
+  --primary-foreground: 0 0% 6%;
+  --secondary: 0 0% 16%;
+  --secondary-foreground: 0 0% 78%;
+  --muted: 0 0% 16%;
+  --muted-foreground: 0 0% 65%;
+  --accent: 141 73% 42%;
+  --accent-foreground: 0 0% 6%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 78%;
+  --border: 0 0% 16%;
+  --input: 0 0% 16%;
+  --ring: 141 73% 42%;
+
+  --mt-playing-bg: 141 50% 15%;
+  --mt-playing-fg: 141 65% 60%;
+  --mt-row-even: 0 0% 7%;
+  --mt-row-odd: 0 0% 9%;
+  --mt-row-hover: 0 0% 16%;
+  --mt-progress-bg: 0 0% 19%;
+  --mt-progress-fill: 141 73% 42%;
+  --mt-toast-bg: hsl(141 73% 42%);
+  --mt-toast-fg: #0f0f0f;
+}
+
+[data-theme-preset='spotify'] .track-row-even {
+  background-color: hsl(var(--mt-row-even));
+}
+
+[data-theme-preset='spotify'] .track-row-odd {
+  background-color: hsl(var(--mt-row-odd));
+}
+
+[data-theme-preset='spotify'] .track-row-selected {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  border-bottom: none !important;
+}
+
+[data-theme-preset='spotify'] .track-row-playing {
+  background-color: hsl(var(--mt-playing-bg)) !important;
+  box-shadow: inset 2px 0 0 0 hsl(var(--mt-playing-fg)) !important;
+  color: hsl(var(--mt-playing-fg)) !important;
+}
+
+[data-theme-preset='spotify'] .track-row-playing .text-muted-foreground {
+  color: hsl(var(--mt-playing-fg)) !important;
+}
+
+[data-theme-preset='spotify'] footer {
+  background-color: #0a0a0a;
+  border-color: #282828;
+}
+
+[data-theme-preset='spotify'] .border-border {
+  border-color: #282828;
+}
+
+[data-theme-preset='spotify'] footer button {
+  color: #a7a7a7 !important;
+}
+
+[data-theme-preset='spotify'] footer button:hover {
+  color: #1db954 !important;
+}
+
+[data-theme-preset='spotify'] footer button.text-primary,
+[data-theme-preset='spotify'] footer button.text-red-500 {
+  color: #1db954 !important;
+}
+
+[data-theme-preset='spotify'] [data-testid='player-progressbar'] {
+  background-color: #282828 !important;
+}
+
+[data-theme-preset='spotify'] [data-testid='player-progressbar'] > div:first-child {
+  background-color: #1db954 !important;
+}
+
+[data-theme-preset='spotify'] [data-testid='player-progressbar'] > div:last-child {
+  background-color: #1db954 !important;
+}
+
+[data-theme-preset='spotify'] footer .bg-\[\#8E8E93\]\/20 {
+  background-color: #282828 !important;
+}
+
+[data-theme-preset='spotify'] .track-row-even,
+[data-theme-preset='spotify'] .track-row-odd {
+  border-bottom: none !important;
+}
+
+[data-theme-preset='spotify'] aside > div:last-child {
+  border-top: none !important;
+}
+
+[data-theme-preset='spotify'] [data-testid='library-header'] {
+  background-color: #1a1a1a !important;
+}
+
+[data-theme-preset='spotify'] [data-testid='library-header'] .column-header-active {
+  background: transparent !important;
+}
+
+[data-theme-preset='spotify'] aside {
+  background-color: #1a1a1a !important;
+}
+
+[data-theme-preset='spotify'] .bg-card\/50,
+[data-theme-preset='spotify'] .bg-card {
+  background-color: #1a1a1a !important;
+}
+
+[data-theme-preset='spotify'] .bg-background {
+  background-color: #0f0f0f !important;
+}
+
+[data-theme-preset='spotify'] .titlebar-drag-region {
+  background-color: #1a1a1a !important;
+}
+
+[data-theme-preset='spotify'] [data-testid='settings-view'] .bg-muted\/30 {
+  background-color: rgba(40, 40, 40, 0.6) !important;
+  border: 1px solid #282828;
+}
+
+[data-theme-preset='spotify'] [data-testid='settings-view'] .border-border\/50 {
+  border-color: #282828 !important;
+}
+
+[data-theme-preset='spotify'] [data-testid='settings-view'] button.border-border:hover {
+  background-color: rgba(29, 185, 84, 0.15) !important;
+  border-color: rgba(29, 185, 84, 0.4) !important;
+}
+
+[data-theme-preset='spotify'] [data-testid='settings-view'] nav button.bg-primary\/15 {
+  background-color: rgba(29, 185, 84, 0.15) !important;
+  color: #1db954 !important;
+}
+
+[data-theme-preset='spotify'] [data-testid='sidebar-search'] {
+  background-color: #1f1f1f !important;
+  border: 1px solid #282828 !important;
+}
+
+[data-theme-preset='spotify'] [data-testid='lastfm-toggle'].bg-muted,
+[data-theme-preset='spotify'] [data-testid='network-cache-toggle'].bg-muted,
+[data-theme-preset='spotify'] [data-testid='network-cache-persistent-toggle'].bg-muted {
+  background-color: hsl(0 0% 19%) !important;
+}
+
+[data-theme-preset='spotify'] [data-testid='lastfm-toggle'].bg-primary,
+[data-theme-preset='spotify'] [data-testid='network-cache-toggle'].bg-primary,
+[data-theme-preset='spotify'] [data-testid='network-cache-persistent-toggle'].bg-primary {
+  background-color: hsl(141 73% 42%) !important;
+}
+
 @layer components {
   /* Disable grid layout animations - instant column sizing at startup and view switch
    * This ensures columns snap to their widths immediately rather than animating.
