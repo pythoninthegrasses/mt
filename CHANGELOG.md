@@ -1,5 +1,57 @@
 # Changelog
 
+## [1.7.0](https://github.com/pythoninthegrasses/mt/compare/v1.6.0...v1.7.0) (2026-09-04)
+
+
+### Features
+
+* **frontend:** add LibraryPageCache for per-query LRU page caching ([6348851](https://github.com/pythoninthegrasses/mt/commit/6348851b814c7ed484426a5c00c9abfb5b91e09e))
+* **frontend:** wire LibraryPageCache into library store and loadOp ([0138429](https://github.com/pythoninthegrasses/mt/commit/0138429ff7bf763533c0f244fb1d70db75fc2182))
+* **library:** exclude remote Plex tracks from stats footer ([05f62f9](https://github.com/pythoninthegrasses/mt/commit/05f62f900a18a83cfff85b0f216372460204a7c2))
+* **plex:** add cloud badges, download UI, and prefetch worker (TASK-342.6) ([3fe2f8b](https://github.com/pythoninthegrasses/mt/commit/3fe2f8ba18d226c3a2d43a0a76730df36181eef1))
+* **plex:** add download-on-play for remote tracks (TASK-342.5) ([d37e59b](https://github.com/pythoninthegrasses/mt/commit/d37e59b0f7e9ac89cba1cfaa69bf7d98f4612e45))
+* **plex:** add library selection commands and auto-sync refactor ([72dce6e](https://github.com/pythoninthegrasses/mt/commit/72dce6e4ed32a01d3459ac00dca933bfc50fff52))
+* **plex:** add Plex API client library (TASK-342.1) ([e26efcd](https://github.com/pythoninthegrasses/mt/commit/e26efcddf691a1e87ebfea30f5fa5b9bcbd79d0e))
+* **plex:** add Plex config storage and Settings UI (TASK-342.3) ([aab6dbe](https://github.com/pythoninthegrasses/mt/commit/aab6dbe3ced2968ad403ff7f5894c6a0658a333c))
+* **plex:** add Plex library fetch, cache, and merge (TASK-342.4) ([1cfacef](https://github.com/pythoninthegrasses/mt/commit/1cfacef4e104973a08de0522fc053e77f28a9f49))
+* **plex:** add source/remote_id columns for Plex source tracking (TASK-342.2) ([19c4ff6](https://github.com/pythoninthegrasses/mt/commit/19c4ff63eee5efe280f6bb0be28aa844e7346854))
+* **plex:** auto-sync on connect/startup, purge remote tracks on disconnect ([2f89eb0](https://github.com/pythoninthegrasses/mt/commit/2f89eb0374db8a5194750ec6112435f9a6fdfb15))
+* **theming:** add midnight, night out, and spotify theme presets ([256aef9](https://github.com/pythoninthegrasses/mt/commit/256aef9f15fe99a177c377cff2abecf599d93243))
+
+
+### Bug Fixes
+
+* **frontend:** json-stringify non-Error unhandled rejection reasons ([faa52b5](https://github.com/pythoninthegrasses/mt/commit/faa52b53857cbf11c2e72074f478c2b5bb1add71))
+* **frontend:** use instant scroll in _scrollToRowIndex to prevent blank viewport ([1b477bd](https://github.com/pythoninthegrasses/mt/commit/1b477bd6da70223c979b45044b676b56b4c29439))
+* **library:** align find_sort_offset LIKE match with ORDER BY column for artist sort ([31a3a9d](https://github.com/pythoninthegrasses/mt/commit/31a3a9dda0e0035fd70d021559d0feabeeef4fb0))
+* **library:** eliminate blank-row flash in paginated type-to-jump (TASK-344) ([2841835](https://github.com/pythoninthegrasses/mt/commit/28418354e22d23183d4d6afc1b5ccfc48372f237))
+* **library:** eliminate stale page fetches in type-to-jump by removing _ensurePage from _jumpToPrefix ([3b694f6](https://github.com/pythoninthegrasses/mt/commit/3b694f61d089597524214f6be5429f4aeb632dcd))
+* **library:** eliminate type-to-jump blank viewport at root ([4bf54fa](https://github.com/pythoninthegrasses/mt/commit/4bf54faf31c0dfb0b087ae2fea908656d5ff090e))
+* **library:** extend type-to-jump debounce to 1500ms and cancel stale backend jumps ([8b084b7](https://github.com/pythoninthegrasses/mt/commit/8b084b71150c89c40ad4eda53f9647d93c24d537))
+* **library:** keep viewport rendered during transient totalTracks=0 reload (TASK-349) ([1a9aee4](https://github.com/pythoninthegrasses/mt/commit/1a9aee4987c125e706735c4c606a974743a22c93))
+* **library:** load missing pages before shift+click range selection ([61ce48b](https://github.com/pythoninthegrasses/mt/commit/61ce48b10b7a00236c30cfb410082a28a76448cb))
+* **library:** pass sort/order/ignoreWords to library_get_section on initial load ([31bdc97](https://github.com/pythoninthegrasses/mt/commit/31bdc97e9965891c4ca3e9102997a7da91bb7a0e))
+* **library:** preserve loaded pages on Plex/Last.fm background refresh ([5a21e42](https://github.com/pythoninthegrasses/mt/commit/5a21e42ef0654e9d12f8c7bada78dbaff074478b))
+* **library:** prevent blank viewport when type-to-jump races concurrent library reload ([7ea9c95](https://github.com/pythoninthegrasses/mt/commit/7ea9c95d3b90cb7b616feeee6bec91d15cc2c9fb))
+* **library:** revert page size to 500 and restore pipeline overlap in _jumpViaBackend ([6b54379](https://github.com/pythoninthegrasses/mt/commit/6b5437996113cabec21f14b5249930b324bc2666))
+* **library:** scroll to target immediately when offset resolves, not after page load ([4f06f58](https://github.com/pythoninthegrasses/mt/commit/4f06f5821bf341050e252540f950aa2ba8a4da6e))
+* **library:** show shimmer rows during cross-region type-to-jump ([8a98d0d](https://github.com/pythoninthegrasses/mt/commit/8a98d0df152243f2c0579200bd4b857b84006679))
+* **plex:** add plex to settings section allowlist ([599ef1d](https://github.com/pythoninthegrasses/mt/commit/599ef1d4989e1ceda8d728d1fc63ecd0d0da127a))
+* **plex:** move remote track cloud icon to index gutter alongside missing indicator ([cc0dc0b](https://github.com/pythoninthegrasses/mt/commit/cc0dc0b4910ec27d4679e6a049a4271961a3ee7d))
+* **plex:** move show-remote toggle from library toolbar to Settings &gt; Plex ([b458f62](https://github.com/pythoninthegrasses/mt/commit/b458f6240c5cf34454e670b0088693905f107dd3))
+* **plex:** preserve scroll position when plex-sync-complete fires ([040d247](https://github.com/pythoninthegrasses/mt/commit/040d247a2f24f92a0c62419601342f20d0a9cd62))
+* **plex:** resolve stuck batch toast and preserve primary color on completion ([4c98c36](https://github.com/pythoninthegrasses/mt/commit/4c98c36a9b82172cbf9bf67bf63b26efc2ed145a))
+* **plex:** skip already-downloaded tracks in bulk context menu download ([bd74d6a](https://github.com/pythoninthegrasses/mt/commit/bd74d6a2a83fbbb07f3fd89d117cd8e2a7d1fccd))
+* **plex:** tombstone remote_id to prevent deleted Plex tracks from reappearing ([d181dab](https://github.com/pythoninthegrasses/mt/commit/d181dabbb756c90eaa57250080823181b0df066d))
+* **queue:** chunk IN-clauses to stay under SQLite variable limit ([b9b8647](https://github.com/pythoninthegrasses/mt/commit/b9b8647f9270b7a4d746c24cbe0e2381edc87ff2))
+* **ui:** compute context menu height dynamically to prevent bottom-clipping ([6114157](https://github.com/pythoninthegrasses/mt/commit/6114157373708b2d87a84c552d1320e74785232b))
+
+
+### Performance Improvements
+
+* **frontend:** increase library page size from 500 to 1500 ([dcb4443](https://github.com/pythoninthegrasses/mt/commit/dcb4443a13f53a5771c3c95a2aa2407d805081e5))
+* **library:** stats-only IPC on page-cache hit avoids redundant 1500-track fetch ([c15d30f](https://github.com/pythoninthegrasses/mt/commit/c15d30f9514c270dc47c0bc29f0dcf51338a5942))
+
 ## [1.6.0](https://github.com/pythoninthegrasses/mt/compare/v1.5.1...v1.6.0) (2026-05-04)
 
 
