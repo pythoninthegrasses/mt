@@ -1,10 +1,10 @@
 ---
 id: TASK-292
 title: Fix watcher error path dropping new tracks instead of proceeding unfiltered
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-26 00:10'
-updated_date: '2026-03-31 03:38'
+updated_date: '2026-09-04 03:39'
 labels:
   - bug
   - roborev
@@ -43,8 +43,14 @@ Root cause: `filter_removed_tracks` takes ownership of the vec, so it's unavaila
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 When filter_removed_tracks fails, watcher falls back to unfiltered insertion (returns all new tracks, not empty vec)
-- [ ] #2 Error log message accurately describes actual behavior
-- [ ] #3 Existing tests continue to pass
-- [ ] #4 No unnecessary clone on the happy path (prefer option 1 or 3)
+- [x] #1 When filter_removed_tracks fails, watcher falls back to unfiltered insertion (returns all new tracks, not empty vec)
+- [x] #2 Error log message accurately describes actual behavior
+- [x] #3 Existing tests continue to pass
+- [x] #4 No unnecessary clone on the happy path (prefer option 1 or 3)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Already fixed prior to this session. filter_removed_tracks returns Result<(TrackVec, usize), (DbError, TrackVec)> (crates/mt-tauri/src/db/removed.rs:112-115), watcher.rs:639-642 returns the unfiltered vec on error, log message matches behavior, and test_filter_removed_tracks_returns_tracks_on_error (removed.rs:522) covers the regression. No code changes needed; closing as verified.
+<!-- SECTION:FINAL_SUMMARY:END -->
