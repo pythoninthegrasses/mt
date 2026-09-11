@@ -102,9 +102,7 @@ jobs:
           version: ${{ steps.zig-version.outputs.toolchain }}
 
       - name: Install Task
-        uses: arduino/setup-task@v2
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        uses: go-task/setup-task@v1
 
       - name: Zig format check
         run: task zig:lint
