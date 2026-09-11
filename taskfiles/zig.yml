@@ -9,14 +9,20 @@ vars:
   ZIG_CACHE_DIR: "{{.ZIG_CORE_DIR}}/.zig-cache"
   PINNED_ZIG:
     sh: grep '^zig ' {{.ROOT_DIR}}/.tool-versions 2>/dev/null | awk '{print $2}' || true
-  # Resolved through mise against the pinned version rather than PATH, which may
-  # hold an IDE-bundled zig or a mise default for a different version.
+  # Prefers mise resolved against the pinned version (avoids an IDE-bundled zig
+  # or a mise default for a different version), falling back to PATH for
+  # environments where zig is installed directly, e.g. CI via mlugg/setup-zig.
   ZIG:
-    sh: | 
+    sh: |
       pin="{{.PINNED_ZIG}}"
       if [ -n "$pin" ] && command -v mise &> /dev/null; then
-        mise which zig --tool "zig@$pin" 2>/dev/null || true
+        resolved=$(mise which zig --tool "zig@$pin" 2>/dev/null || true)
+        if [ -n "$resolved" ]; then
+          echo "$resolved"
+          exit 0
+        fi
       fi
+      command -v zig 2>/dev/null || true
   # Explicit target triple for the cross-compile task, e.g. TARGET=aarch64-macos
   TARGET: '{{.TARGET | default ""}}'
 
@@ -26,27 +32,22 @@ tasks:
     desc: "Verify the pinned zig resolves and matches .tool-versions"
     cmds:
       - |
-        mise_bin="{{.ZIG}}"
-        if [ ! -x "$mise_bin" ]; then
-          if ! command -v mise &> /dev/null; then
-            echo "error: zig {{.PINNED_ZIG}} not found and mise is not on PATH." >&2
-            echo "  Expected: {{.PINNED_ZIG}} (pinned in .tool-versions)" >&2
-            echo "  Fix: install mise (https://mise.jdx.dev), then run: mise install zig" >&2
-            exit 1
-          fi
-          echo "error: zig {{.PINNED_ZIG}} (pinned in .tool-versions) is not installed." >&2
-          echo "  Fix: mise install zig" >&2
+        zig_bin="{{.ZIG}}"
+        if [ -z "$zig_bin" ] || [ ! -x "$zig_bin" ]; then
+          echo "error: zig {{.PINNED_ZIG}} not found on mise or PATH." >&2
+          echo "  Expected: {{.PINNED_ZIG}} (pinned in .tool-versions)" >&2
+          echo "  Fix: install mise (https://mise.jdx.dev), then run: mise install zig" >&2
           exit 1
         fi
-        found=$("$mise_bin" version 2>/dev/null)
+        found=$("$zig_bin" version 2>/dev/null)
         if [ "$found" != "{{.PINNED_ZIG}}" ]; then
           echo "error: zig version mismatch." >&2
           echo "  Expected: {{.PINNED_ZIG}} (pinned in .tool-versions)" >&2
-          echo "  Found:    ${found:-unknown} ($mise_bin)" >&2
+          echo "  Found:    ${found:-unknown} ($zig_bin)" >&2
           echo "  Fix: mise install zig@{{.PINNED_ZIG}}" >&2
           exit 1
         fi
-        echo "zig $found -> $mise_bin"
+        echo "zig $found -> $zig_bin"
 
   format:
     desc: "Format Zig source files"
