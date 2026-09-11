@@ -670,6 +670,23 @@ pub(crate) fn run_migrations(conn: &Connection) -> DbResult<()> {
         [],
     )?;
 
+    // Migration: re-backfill artist_sort_key after strip_sort_prefix's
+    // whitespace rule was corrected to match its documented intent (any
+    // whitespace after the ignore word, not just a single space). Existing
+    // rows keep stale keys otherwise, since the triggers above only refresh
+    // a row's key on its own next insert/update.
+    if crate::db::settings::get_setting(conn, "migration.artist_sort_key_whitespace_v1")?.is_none()
+    {
+        info!("Re-backfilling artist_sort_key for corrected whitespace rule");
+        crate::db::library::refresh_artist_sort_keys(conn)?;
+        crate::db::settings::set_setting(
+            conn,
+            "migration.artist_sort_key_whitespace_v1",
+            &serde_json::Value::from(true),
+        )?;
+        info!("artist_sort_key re-backfill complete");
+    }
+
     Ok(())
 }
 

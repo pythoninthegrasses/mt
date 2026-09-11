@@ -1,5 +1,5 @@
 # Platform-specific build artifacts (would cause link failures in cross-build)
-vendor/
+/vendor/
 target/
 .cache/
 zig-core/zig-out/

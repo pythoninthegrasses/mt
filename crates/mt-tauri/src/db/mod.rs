@@ -109,14 +109,9 @@ fn register_custom_functions(conn: &Connection) -> Result<(), rusqlite::Error> {
             let Some(prefixes) = prefixes else {
                 return Ok(Some(value));
             };
-            let lower = value.to_lowercase();
-            for prefix in prefixes.split(',') {
-                let p = prefix.trim().to_lowercase();
-                if !p.is_empty() && lower.starts_with(&format!("{p} ")) {
-                    return Ok(Some(value[p.len() + 1..].trim_start().to_string()));
-                }
-            }
-            Ok(Some(value))
+            Ok(Some(
+                models::strip_sort_prefix(&value, &prefixes).to_string(),
+            ))
         },
     )?;
     Ok(())
@@ -383,5 +378,41 @@ mod tests {
             })
             .unwrap();
         assert_eq!(result, "The Beatles");
+    }
+
+    #[derive(serde::Deserialize)]
+    struct StripSortPrefixCase {
+        value: Option<String>,
+        prefixes: Option<String>,
+        expected: Option<String>,
+        note: String,
+    }
+
+    /// Golden fixture shared with the Zig port's own test of the same UDF
+    /// (`tests/fixtures/strip_sort_prefix.json`), so parity is proven by
+    /// both sides reading one file rather than by a one-time hand port.
+    #[test]
+    fn test_strip_sort_prefix_golden_fixture() {
+        let db = Database::new_in_memory().expect("Failed to create database");
+        let conn = db.conn().expect("Failed to get connection");
+        let fixture = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/strip_sort_prefix.json"
+        ))
+        .expect("Failed to read strip_sort_prefix golden fixture");
+        let cases: Vec<StripSortPrefixCase> =
+            serde_json::from_str(&fixture).expect("Failed to parse strip_sort_prefix fixture");
+        assert!(!cases.is_empty(), "golden fixture must not be empty");
+
+        for case in cases {
+            let result: Option<String> = conn
+                .query_row(
+                    "SELECT strip_sort_prefix(?1, ?2)",
+                    rusqlite::params![case.value, case.prefixes],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(result, case.expected, "case: {}", case.note);
+        }
     }
 }

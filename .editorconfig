@@ -32,3 +32,8 @@ indent_size = 4
 [*.{html,xml,js,css,json,jsonc,gql,lua,tf,tfvars,yml,yaml,Vagrantfile}]
 indent_style = space
 indent_size = 2
+
+# Vendored upstream sources: never rewritten by an editor save.
+[zig-core/vendor/**]
+trim_trailing_whitespace = false
+insert_final_newline = false

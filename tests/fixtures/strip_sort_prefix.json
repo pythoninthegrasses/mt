@@ -1,0 +1,86 @@
+[
+  {
+    "value": "The Beatles",
+    "prefixes": "the,a,an",
+    "expected": "Beatles",
+    "note": "strips 'the'"
+  },
+  {
+    "value": "A Night at the Opera",
+    "prefixes": "the,a,an",
+    "expected": "Night at the Opera",
+    "note": "strips 'a'"
+  },
+  {
+    "value": "THE ROLLING STONES",
+    "prefixes": "the",
+    "expected": "ROLLING STONES",
+    "note": "case-insensitive match against value"
+  },
+  {
+    "value": "Led Zeppelin",
+    "prefixes": "the,a,an",
+    "expected": "Led Zeppelin",
+    "note": "no prefix matches"
+  },
+  {
+    "value": "Therapy?",
+    "prefixes": "the",
+    "expected": "Therapy?",
+    "note": "prefix must be followed by whitespace, not stripped from 'Therapy?'"
+  },
+  {
+    "value": null,
+    "prefixes": "the,a,an",
+    "expected": null,
+    "note": "NULL value yields NULL"
+  },
+  {
+    "value": "The Beatles",
+    "prefixes": null,
+    "expected": "The Beatles",
+    "note": "NULL prefixes leaves value unchanged"
+  },
+  {
+    "value": "The\tBeatles",
+    "prefixes": "the",
+    "expected": "Beatles",
+    "note": "tab separator after prefix"
+  },
+  {
+    "value": "The\nBeatles",
+    "prefixes": "the",
+    "expected": "Beatles",
+    "note": "newline separator after prefix"
+  },
+  {
+    "value": "The\rBeatles",
+    "prefixes": "the",
+    "expected": "Beatles",
+    "note": "carriage-return separator after prefix"
+  },
+  {
+    "value": "The Beatles",
+    "prefixes": " the , a , an ",
+    "expected": "Beatles",
+    "note": "whitespace around ignore-words is trimmed"
+  },
+  {
+    "value": "The Beatles",
+    "prefixes": ",the,,a,",
+    "expected": "Beatles",
+    "note": "empty ignore-word entries are skipped"
+  },
+  {
+    "value": "The  Beatles",
+    "prefixes": "the",
+    "expected": "Beatles",
+    "note": "all leading whitespace after the matched prefix is trimmed, not just one character"
+  },
+  {
+    "value": "An Apple",
+    "prefixes": "THE, A, AN",
+    "expected": "Apple",
+    "note": "ignore-word casing does not matter"
+  }
+]

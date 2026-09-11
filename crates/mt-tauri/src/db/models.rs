@@ -389,10 +389,10 @@ pub fn artist_sort_key(
 
 /// Strip the first matching ignore-word prefix from `value`.
 ///
-/// Same rule as the `strip_sort_prefix` SQL function: the word must be
-/// followed by whitespace, so "Therapy?" is not stripped by "the".
-#[cfg(test)]
-fn strip_sort_prefix<'a>(value: &'a str, ignore_words: &str) -> &'a str {
+/// Same rule as the `strip_sort_prefix` SQL function (`db::register_custom_functions`),
+/// which delegates to this: the word must be followed by whitespace, so
+/// "Therapy?" is not stripped by "the".
+pub(crate) fn strip_sort_prefix<'a>(value: &'a str, ignore_words: &str) -> &'a str {
     let lower = value.to_lowercase();
     for word in ignore_words.split(',') {
         let word = word.trim().to_lowercase();
@@ -591,6 +591,48 @@ mod tests {
             order_by.contains("strip_sort_prefix"),
             "Artist ORDER BY with ignore_words must use strip_sort_prefix: {order_by}"
         );
+    }
+
+    #[derive(serde::Deserialize)]
+    struct StripSortPrefixCase {
+        value: Option<String>,
+        prefixes: Option<String>,
+        expected: Option<String>,
+        note: String,
+    }
+
+    /// Same golden fixture the SQL UDF test in `db::mod` runs, exercised
+    /// directly against the Rust function the UDF now delegates to.
+    #[test]
+    fn test_strip_sort_prefix_matches_golden_fixture() {
+        let fixture = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/strip_sort_prefix.json"
+        ))
+        .expect("Failed to read strip_sort_prefix golden fixture");
+        let cases: Vec<StripSortPrefixCase> =
+            serde_json::from_str(&fixture).expect("Failed to parse strip_sort_prefix fixture");
+
+        // Rows with a NULL value/prefixes exercise NULL propagation, which is
+        // handled by the SQL UDF wrapper (db::mod) before this function is
+        // ever called — not applicable to the raw &str function here.
+        let applicable: Vec<_> = cases
+            .into_iter()
+            .filter(|c| c.value.is_some() && c.prefixes.is_some())
+            .collect();
+        assert!(!applicable.is_empty(), "golden fixture must not be empty");
+
+        for case in applicable {
+            let value = case.value.unwrap();
+            let prefixes = case.prefixes.unwrap();
+            let result = strip_sort_prefix(&value, &prefixes);
+            assert_eq!(
+                Some(result.to_string()),
+                case.expected,
+                "case: {}",
+                case.note
+            );
+        }
     }
 
     #[test]

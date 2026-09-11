@@ -94,7 +94,7 @@ jobs:
           path: |
             zig-core/.zig-cache
             zig-core/zig-out
-          key: zig-build-${{ runner.os }}-${{ steps.zig-version.outputs.toolchain }}-${{ hashFiles('zig-core/build.zig', 'zig-core/build.zig.zon', 'zig-core/src/**/*.zig', '.tool-versions') }}
+          key: zig-build-${{ runner.os }}-${{ steps.zig-version.outputs.toolchain }}-${{ hashFiles('zig-core/build.zig', 'zig-core/build.zig.zon', 'zig-core/src/**/*.zig', 'zig-core/vendor/**', '.tool-versions') }}
 
       - name: Install Zig
         uses: mlugg/setup-zig@v2

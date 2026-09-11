@@ -47,6 +47,7 @@
       "repomix.config.json5",
       "requirements.txt",
       "uv.lock",
+      "zig-core/vendor/**",
     ]
   },
   "security": {

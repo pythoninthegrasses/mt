@@ -18,3 +18,6 @@
 *.otf  binary
 *.eot  binary
 *.pdf  binary
+
+# Vendored upstream sources: keep byte-identical to what was downloaded.
+zig-core/vendor/** -text
