@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "gnhf": {
+      "source": "pythoninthegrass/ai_skills",
+      "sourceType": "github",
+      "skillPath": "skills/gnhf/SKILL.md",
+      "computedHash": "4e99363f617f48338fba843aa65094624891c2587b04b2961d4d45385b996859"
+    },
     "ollama-optimizer": {
       "source": "luongnv89/skills",
       "sourceType": "github",
