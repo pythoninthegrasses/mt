@@ -1,7 +1,7 @@
 ---
 id: TASK-350.1
 title: 'Phase 1: Type-to-jump reliability guardrails (frontend)'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-25 20:00'
 labels:
@@ -38,11 +38,11 @@ Out of scope (deferred to Phase 2/3):
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Failing Vitest first: rapid key supersession test where only the latest generation finalizes
-- [ ] #2 Failing Playwright stress test first: rapid typing of j/i/n/End shows no fully-blank viewport > 250ms
-- [ ] #3 Debounce + generation token implemented in type-to-jump.js
-- [ ] #4 Stale jump responses are discarded without mutating scroll state
-- [ ] #5 library-browser.js retains last-known visible rows during pending jump; shimmer only for truly unknown rows
-- [ ] #6 Feature flag jump_reliability_guard can disable all new behavior at runtime
-- [ ] #7 All previously-green Vitest + Playwright tests still pass
+- [x] #1 Failing Vitest first: rapid key supersession test where only the latest generation finalizes
+- [x] #2 Failing Playwright stress test first: rapid typing of j/i/n/End shows no fully-blank viewport > 250ms
+- [x] #3 Debounce + generation token implemented in type-to-jump.js
+- [x] #4 Stale jump responses are discarded without mutating scroll state
+- [x] #5 library-browser.js retains last-known visible rows during pending jump; shimmer only for truly unknown rows
+- [x] #6 Feature flag jump_reliability_guard can disable all new behavior at runtime
+- [x] #7 All previously-green Vitest + Playwright tests still pass
 <!-- AC:END -->

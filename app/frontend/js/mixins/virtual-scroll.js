@@ -83,18 +83,27 @@ export function virtualScrollMixin() {
       }
     },
 
-    scrollToOffset(offset) {
+    scrollToOffset(offset, gen) {
       if (offset < 0 || offset >= this.library.totalTracks) return;
       // Instant scroll: page data is loaded before this is called, so smooth
       // animation through unloaded rows is unnecessary and causes blank flashes.
-      this._scrollToRowIndex(offset, false);
+      this._scrollToRowIndex(offset, false, gen);
     },
 
-    _scrollToRowIndex(idx, _smooth = false) {
+    _scrollToRowIndex(idx, _smooth = false, gen) {
+      // jump_reliability_guard: a scroll requested by an older jump generation
+      // is discarded so a stale backend response cannot move the viewport.
+      // Callers pass an explicit generation only when the guard is on, so a
+      // nullish gen is always an authoritative (unguarded) scroll.
+      if (gen != null && this._jumpGen !== undefined && gen !== this._jumpGen) {
+        return;
+      }
       const container = this.$refs.scrollContainer;
       if (!container) return;
       const trackTop = idx * this._rowHeight;
-      const headerEl = container.querySelector('[data-testid="library-header"]');
+      const headerEl = container.querySelector(
+        '[data-testid="library-header"]',
+      );
       const headerHeight = headerEl ? headerEl.offsetHeight : 0;
       const visibleHeight = container.clientHeight - headerHeight;
       const targetScroll = trackTop - visibleHeight / 2 + this._rowHeight / 2;

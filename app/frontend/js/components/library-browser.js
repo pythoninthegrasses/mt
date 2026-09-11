@@ -39,15 +39,69 @@ export function createLibraryBrowser(Alpine) {
 
     // Base column definitions
     baseColumns: [
-      { key: 'status', label: '', sortable: false, minWidth: 24, canHide: false },
-      { key: 'index', label: '#', sortable: true, minWidth: 40, canHide: false },
-      { key: 'title', label: 'Title', sortable: true, minWidth: 100, canHide: false },
-      { key: 'artist', label: 'Artist', sortable: true, minWidth: 80, canHide: true },
-      { key: 'album', label: 'Album', sortable: true, minWidth: 80, canHide: true },
-      { key: 'year', label: 'Year', sortable: true, minWidth: 50, canHide: true },
-      { key: 'genre', label: 'Genre', sortable: true, minWidth: 80, canHide: true },
-      { key: 'trackTotal', label: 'Total', sortable: true, minWidth: 40, canHide: true },
-      { key: 'discNumber', label: 'Disc', sortable: true, minWidth: 40, canHide: true },
+      {
+        key: 'status',
+        label: '',
+        sortable: false,
+        minWidth: 24,
+        canHide: false,
+      },
+      {
+        key: 'index',
+        label: '#',
+        sortable: true,
+        minWidth: 40,
+        canHide: false,
+      },
+      {
+        key: 'title',
+        label: 'Title',
+        sortable: true,
+        minWidth: 100,
+        canHide: false,
+      },
+      {
+        key: 'artist',
+        label: 'Artist',
+        sortable: true,
+        minWidth: 80,
+        canHide: true,
+      },
+      {
+        key: 'album',
+        label: 'Album',
+        sortable: true,
+        minWidth: 80,
+        canHide: true,
+      },
+      {
+        key: 'year',
+        label: 'Year',
+        sortable: true,
+        minWidth: 50,
+        canHide: true,
+      },
+      {
+        key: 'genre',
+        label: 'Genre',
+        sortable: true,
+        minWidth: 80,
+        canHide: true,
+      },
+      {
+        key: 'trackTotal',
+        label: 'Total',
+        sortable: true,
+        minWidth: 40,
+        canHide: true,
+      },
+      {
+        key: 'discNumber',
+        label: 'Disc',
+        sortable: true,
+        minWidth: 40,
+        canHide: true,
+      },
     ],
 
     // Extra columns for dynamic playlists
@@ -59,8 +113,20 @@ export function createLibraryBrowser(Alpine) {
         minWidth: 80,
         canHide: true,
       },
-      added: { key: 'dateAdded', label: 'Added', sortable: true, minWidth: 80, canHide: true },
-      top25: { key: 'playCount', label: 'Plays', sortable: true, minWidth: 50, canHide: true },
+      added: {
+        key: 'dateAdded',
+        label: 'Added',
+        sortable: true,
+        minWidth: 80,
+        canHide: true,
+      },
+      top25: {
+        key: 'playCount',
+        label: 'Plays',
+        sortable: true,
+        minWidth: 50,
+        canHide: true,
+      },
     },
 
     getColumnDef(key) {
@@ -72,7 +138,13 @@ export function createLibraryBrowser(Alpine) {
       }
 
       if (key === 'duration') {
-        return { key: 'duration', label: 'Time', sortable: true, minWidth: 40, canHide: true };
+        return {
+          key: 'duration',
+          label: 'Time',
+          sortable: true,
+          minWidth: 40,
+          canHide: true,
+        };
       }
       return null;
     },
@@ -97,7 +169,9 @@ export function createLibraryBrowser(Alpine) {
       }
 
       return this.columnOrder
-        .filter((key) => availableKeys.has(key) && this.columnVisibility[key] !== false)
+        .filter(
+          (key) => availableKeys.has(key) && this.columnVisibility[key] !== false,
+        )
         .map((key) => this.getColumnDef(key))
         .filter(Boolean);
     },
@@ -129,7 +203,9 @@ export function createLibraryBrowser(Alpine) {
 
     // Get count of visible columns (for preventing hiding all)
     get visibleColumnCount() {
-      return this.allColumns.filter((col) => this.columnVisibility[col.key] !== false).length;
+      return this.allColumns.filter(
+        (col) => this.columnVisibility[col.key] !== false,
+      ).length;
     },
 
     init() {
@@ -139,7 +215,10 @@ export function createLibraryBrowser(Alpine) {
       let initialSection = libraryStore.currentSection;
 
       if (window.settings?.initialized) {
-        initialSection = window.settings.get('sidebar:activeSection', initialSection);
+        initialSection = window.settings.get(
+          'sidebar:activeSection',
+          initialSection,
+        );
       } else {
         const legacySidebar = localStorage.getItem('mt:sidebar');
         if (legacySidebar) {
@@ -159,13 +238,22 @@ export function createLibraryBrowser(Alpine) {
         if (libraryStore.currentSection !== initialSection) {
           libraryStore.setSection(initialSection);
         }
-        this.currentPlaylistId = parseInt(initialSection.replace('playlist-', ''), 10);
+        this.currentPlaylistId = parseInt(
+          initialSection.replace('playlist-', ''),
+          10,
+        );
       }
 
       const shouldAutoLoadLibrary = !initialSection || initialSection === 'all';
-      if (libraryStore.tracks.length === 0 && !libraryStore.loading && shouldAutoLoadLibrary) {
+      if (
+        libraryStore.tracks.length === 0 &&
+        !libraryStore.loading &&
+        shouldAutoLoadLibrary
+      ) {
         this.$nextTick(() => {
-          const hasSidebar = Boolean(document.querySelector('[data-testid="playlist-list"]'));
+          const hasSidebar = Boolean(
+            document.querySelector('[data-testid="playlist-list"]'),
+          );
           if (hasSidebar) return;
           if (
             libraryStore.tracks.length === 0 &&
@@ -206,7 +294,9 @@ export function createLibraryBrowser(Alpine) {
 
           // Virtual scroll: track scroll position and container height
           this._containerHeight = container.clientHeight;
-          container.addEventListener('scroll', () => this._onScroll(), { passive: true });
+          container.addEventListener('scroll', () => this._onScroll(), {
+            passive: true,
+          });
         }
       });
 
@@ -231,7 +321,10 @@ export function createLibraryBrowser(Alpine) {
           this.contextMenu = null;
           this.showPlaylistSubmenu = false;
         }
-        if (this.headerContextMenu && !e.target.closest('.header-context-menu')) {
+        if (
+          this.headerContextMenu &&
+          !e.target.closest('.header-context-menu')
+        ) {
           this.headerContextMenu = null;
         }
       });
@@ -288,7 +381,10 @@ export function createLibraryBrowser(Alpine) {
         }
         const section = e.detail?.section || '';
         if (section.startsWith('playlist-')) {
-          this.currentPlaylistId = parseInt(section.replace('playlist-', ''), 10);
+          this.currentPlaylistId = parseInt(
+            section.replace('playlist-', ''),
+            10,
+          );
         } else {
           this.currentPlaylistId = null;
         }
@@ -321,7 +417,10 @@ export function createLibraryBrowser(Alpine) {
       const trackCount = this.library.totalTracks;
       if (trackCount === 0) return 0;
       const scrollTop = Math.min(this._scrollTop, trackCount * this._rowHeight);
-      return Math.max(0, Math.floor(scrollTop / this._rowHeight) - this._bufferRows);
+      return Math.max(
+        0,
+        Math.floor(scrollTop / this._rowHeight) - this._bufferRows,
+      );
     },
 
     get endIndex() {
@@ -331,7 +430,9 @@ export function createLibraryBrowser(Alpine) {
       const visibleRows = Math.ceil(this._containerHeight / this._rowHeight);
       return Math.min(
         trackCount,
-        Math.floor(scrollTop / this._rowHeight) + visibleRows + this._bufferRows,
+        Math.floor(scrollTop / this._rowHeight) +
+          visibleRows +
+          this._bufferRows,
       );
     },
 
@@ -371,17 +472,49 @@ export function createLibraryBrowser(Alpine) {
         // Self-extinguish: clear jump flag once real data has arrived at the
         // target viewport. The $nextTick fallback in _jumpViaBackend also clears
         // it, but may fire before data is ready when totalTracks is transiently 0.
-        this._isJumping = false;
+        this._finishJumpRender();
         return result;
       }
-      // During a backend jump, show shimmer rows in the target region instead of
-      // stale content from the previous viewport. Use raw _scrollTop-based bounds
-      // rather than startIndex/end because both collapse to 0 when totalTracks is
+
+      // Only reuse snapshot rows that overlap the current viewport range —
+      // rows outside it would render off-screen anyway.
+      const snap = this._swrSnapshot;
+      const overlap = snap.filter(
+        (item) =>
+          item.globalIndex >= this.startIndex &&
+          item.globalIndex <= end - 1 &&
+          !item.track._placeholder,
+      );
+
+      // jump_reliability_guard: never blank the viewport while a jump fetch is
+      // pending. Keep the stale overlapping rows visible and shimmer only the
+      // rows that are truly unknown (no stale row covers them).
+      if (this._isJumping && this.jumpReliabilityGuard() && overlap.length > 0) {
+        const merged = [];
+        let next = 0;
+        for (let i = this.startIndex; i < end; i++) {
+          while (next < overlap.length && overlap[next].globalIndex < i) next++;
+          if (next < overlap.length && overlap[next].globalIndex === i) {
+            merged.push(overlap[next]);
+            next++;
+          } else {
+            merged.push({ track: { _placeholder: true }, globalIndex: i });
+          }
+        }
+        return merged;
+      }
+
+      // During a backend jump with no overlapping stale rows, shimmer the
+      // target region. Use raw _scrollTop-based bounds rather than
+      // startIndex/end because both collapse to 0 when totalTracks is
       // transiently 0 during a concurrent library reload, which would otherwise
       // cause a blank viewport for the full reload duration.
       if (this._isJumping) {
         const rowHeight = this._rowHeight;
-        const visibleRows = Math.max(1, Math.ceil(this._containerHeight / rowHeight));
+        const visibleRows = Math.max(
+          1,
+          Math.ceil(this._containerHeight / rowHeight),
+        );
         const rawRow = Math.floor(this._scrollTop / rowHeight);
         const shimmerStart = Math.max(0, rawRow - this._bufferRows);
         const shimmerEnd = lib.totalTracks > 0
@@ -393,15 +526,9 @@ export function createLibraryBrowser(Alpine) {
         }
         return placeholders;
       }
-      // Only reuse snapshot when its globalIndex range overlaps the current viewport.
-      // Stale rows from a distant region would render off-screen (blank viewport).
-      const snap = this._swrSnapshot;
-      if (
-        snap.length &&
-        snap[snap.length - 1].globalIndex >= this.startIndex &&
-        snap[0].globalIndex <= end - 1
-      ) {
-        return snap;
+
+      if (overlap.length > 0) {
+        return overlap;
       }
       const placeholders = [];
       for (let i = this.startIndex; i < end; i++) {
@@ -410,13 +537,37 @@ export function createLibraryBrowser(Alpine) {
       return placeholders;
     },
 
+    /**
+     * Single authoritative jump-finalization hook for the render path.
+     * Guard on: only the render that receives data for the jump's own prefix
+     * may clear _isJumping — a section reload or unrelated render cannot.
+     * Guard off: legacy behavior (any real-data render clears the flag).
+     */
+    _finishJumpRender() {
+      if (this.jumpReliabilityGuard()) {
+        if (!this._isJumping) return;
+        if (
+          this._jumpingPrefix &&
+          this._typeBuffer &&
+          this._typeBuffer !== this._jumpingPrefix
+        ) {
+          return;
+        }
+      }
+      this._isJumping = false;
+      this._jumpingPrefix = '';
+    },
+
     get totalContentHeight() {
       // During a jump while the library is transiently reporting totalTracks=0
       // (concurrent loadLibraryData reset), fall back to a viewport-sized height
       // so the row container does not collapse and hide shimmer placeholders.
       if (this._isJumping && this.library.totalTracks === 0) {
         const rowHeight = this._rowHeight;
-        const visibleRows = Math.max(1, Math.ceil(this._containerHeight / rowHeight));
+        const visibleRows = Math.max(
+          1,
+          Math.ceil(this._containerHeight / rowHeight),
+        );
         const rawRow = Math.floor(this._scrollTop / rowHeight);
         return (rawRow + visibleRows + this._bufferRows) * rowHeight;
       }
@@ -539,7 +690,12 @@ export function createLibraryBrowser(Alpine) {
           sortOrder: this.library.sortOrder,
           ignoreWords: uiStore.sortIgnoreWords ? uiStore.sortIgnoreWordsList : null,
         };
-        await handleDoubleClickPlayQuery(this, track, queryParams, 'library-browser');
+        await handleDoubleClickPlayQuery(
+          this,
+          track,
+          queryParams,
+          'library-browser',
+        );
       } else {
         await handleDoubleClickPlay(
           this,
@@ -602,7 +758,10 @@ export function createLibraryBrowser(Alpine) {
      */
     handleKeydown(event) {
       // Suppress all library shortcuts when typing in inputs or when metadata modal is open
-      if (this.isTypingInInput(event) || this.$store.ui.modal?.type === 'editMetadata') {
+      if (
+        this.isTypingInInput(event) ||
+        this.$store.ui.modal?.type === 'editMetadata'
+      ) {
         return;
       }
 
@@ -635,8 +794,10 @@ export function createLibraryBrowser(Alpine) {
 
     isInPlaylistView() {
       // Check the library store directly for reliability (avoids event timing issues)
-      return this.$store.library.currentSection?.startsWith('playlist-') ||
-        this.currentPlaylistId !== null;
+      return (
+        this.$store.library.currentSection?.startsWith('playlist-') ||
+        this.currentPlaylistId !== null
+      );
     },
 
     // --- Template helper methods (extracted from inline expressions) ---
@@ -677,7 +838,11 @@ export function createLibraryBrowser(Alpine) {
     },
 
     handleColumnHeaderClick(col) {
-      if (!this.draggingColumnKey && !this.wasResizing && !this.wasColumnDragging) {
+      if (
+        !this.draggingColumnKey &&
+        !this.wasResizing &&
+        !this.wasColumnDragging
+      ) {
         this.handleSort(col.key);
       }
     },
@@ -686,7 +851,9 @@ export function createLibraryBrowser(Alpine) {
       const base = `grid-template-columns: ${this.getGridTemplateColumns()};`;
       if (!this.isDraggingTrack(item.globalIndex)) return base;
       return `${base} transform: ${
-        this.getTrackDragTransform(item.globalIndex)
+        this.getTrackDragTransform(
+          item.globalIndex,
+        )
       }; transition: none;`;
     },
 
@@ -697,7 +864,9 @@ export function createLibraryBrowser(Alpine) {
       return [
         this.isSelected(trackId)
           ? 'track-row-selected'
-          : (idx % 2 === 0 ? 'track-row-even' : 'track-row-odd'),
+          : idx % 2 === 0
+          ? 'track-row-even'
+          : 'track-row-odd',
         this.isPlaying(trackId) && !this.isSelected(trackId) ? 'track-row-playing' : '',
         !this.isSelected(trackId) && !this.isPlaying(trackId) ? 'hover:bg-muted/50' : '',
         this.isDraggingTrack(idx) ? 'bg-card shadow-lg z-10 relative' : '',
@@ -711,14 +880,16 @@ export function createLibraryBrowser(Alpine) {
       return [
         'py-1.5 overflow-hidden text-ellipsis whitespace-nowrap',
         this.getColumnPaddingClass(col.key),
-        col.key !== 'title' && col.key !== 'status' && !this.isSelected(item.track.id)
+        col.key !== 'title' &&
+          col.key !== 'status' &&
+          !this.isSelected(item.track.id)
           ? 'text-muted-foreground'
           : '',
       ];
     },
 
     getIndexDisplay(item) {
-      return this.isInPlaylistView() ? (item.globalIndex + 1) : (item.track.track_number || '');
+      return this.isInPlaylistView() ? item.globalIndex + 1 : item.track.track_number || '';
     },
 
     handleContextMenuItemClick(item) {
