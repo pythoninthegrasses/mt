@@ -1,9 +1,10 @@
 ---
 id: TASK-355.1
 title: 'Zig toolchain, Taskfile integration, and CI job'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-11 00:38'
+updated_date: '2026-09-11 21:01'
 labels: []
 dependencies: []
 parent_task_id: TASK-355
@@ -24,15 +25,17 @@ The Zig toolchain must be reproducibly available to both local developers and CI
 - [x] #3 A missing or version-mismatched zig installation fails with an actionable error message rather than silently using the wrong binary
 - [x] #4 task lint, task format, and task test invoke the Zig equivalents alongside the existing Rust and Deno ones
 - [x] #5 A new zig CI job runs on a Blacksmith Linux runner in parallel with the existing rust job and does not extend the critical path
-- [ ] #6 Both a cold-cache and a warm-cache run of the zig job are measured and the timings recorded on this task
+- [x] #6 Both a cold-cache and a warm-cache run of the zig job are measured and the timings recorded on this task
 <!-- AC:END -->
 
-## Plan
+## Implementation Plan
+
 <!-- SECTION:PLAN:BEGIN -->
-See PROMPT.md decisions on the branch: `zig-core/` placeholder executable (no SQLite/HTTP — that is TASK-355.2), zig resolved through mise against the pinned version rather than PATH, and a standalone `zig` CI job that no other job depends on.
+Follow-up (PR #48, 2026-09-11): the first real CI run showed the `zig` job resolving zig exclusively through `mise which`, but CI installs Zig directly onto PATH via mlugg/setup-zig with no mise present at all. taskfiles/zig.yml's ZIG var now tries mise first, falling back to `command -v zig` on PATH, so the same taskfile works for both mise-managed local dev and PATH-managed CI.
 <!-- SECTION:PLAN:END -->
 
-## Notes
+## Implementation Notes
+
 <!-- SECTION:NOTES:BEGIN -->
 ### Local verification (2026-09-11)
 
@@ -41,7 +44,14 @@ See PROMPT.md decisions on the branch: `zig-core/` placeholder executable (no SQ
 
 AC#3 was exercised by hand: a pinned version that is not installed, a resolved binary reporting a different version, and `mise` absent from PATH each produce their own error naming the expected version, what was found, and the `mise install zig` fix.
 
-### AC#6 still open — needs a push
+### AC#5/AC#6 CI results and fix (2026-09-11)
 
-Cold/warm cache timings cannot be measured from this unpushed worktree. The job caches `zig-core/.zig-cache` and `zig-core/zig-out` under a key of runner OS + pinned version + `hashFiles(build.zig, build.zig.zon, src/**/*.zig, .tool-versions)`, so the measurement is ready to take: push this branch, run the `zig` job twice (first run cold, second warm with unchanged inputs), and record both durations from the Actions UI here.
+The first automatic `pull_request` run on `task-355.1` (run 34644057303) showed the `zig` job **failing** in ~25s: `_check-zig-version` only resolved zig via `mise which`, but the Blacksmith runner has no mise at all — CI installs Zig straight onto PATH via `mlugg/setup-zig@v2`. Fixed in PR #48 (merged as `219c8ef`) by falling back to `command -v zig` when mise can't resolve the pin.
+
+Confirmed via `gh workflow run test.yml --ref main` (workflow_dispatch, twice in a row, same cache key since no source files changed):
+
+- **Cold cache** (run 34646813761): `Cache not found for input keys: zig-build-Linux-0.15.2-...` — zig job completed in **44s** (20:56:32–20:57:16).
+- **Warm cache** (run 34647003875): `Cache hit for: zig-build-Linux-0.15.2-...` (and cache hit on the setup-zig tarball too) — zig job completed in **23s** (20:58:45–20:59:08).
+
+Confirmed via `gh run view --json jobs` that `zig` is not in the `needs:` list of `build` or `playwright-tests`, so it does not extend the critical path (AC#5). The pre-existing `Rust Lint, Format, and Test` (clippy) and `Vitest Unit Tests` failures in these runs are unrelated to this task and predate it.
 <!-- SECTION:NOTES:END -->
