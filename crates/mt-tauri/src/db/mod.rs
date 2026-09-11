@@ -25,6 +25,8 @@ mod benchmarks;
 mod compat_test;
 #[cfg(test)]
 mod dedup_scope_test;
+#[cfg(test)]
+mod sort_key_test;
 
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
@@ -35,7 +37,34 @@ use std::sync::Arc;
 use thiserror::Error;
 use tracing::{error, info};
 
+#[cfg(test)]
+pub(crate) use library::refresh_artist_sort_keys;
 pub(crate) use models::*;
+
+/// Whether the indexed `artist_sort_key` prefix-lookup path is enabled.
+///
+/// `MT_INDEXED_PREFIX_LOOKUP` (`1`/`true`/`TRUE`/`yes`) takes precedence over
+/// the `settings` table key `feature.indexed_prefix_lookup` (`"1"`/`"true"`,
+/// matching [`settings::set_setting`]'s boolean serialization); defaults to
+/// off (the legacy `ROW_NUMBER()` path) when neither is set. Read fresh on
+/// every call rather than cached, so a runtime settings toggle takes effect
+/// on the next lookup instead of requiring a process restart — this is a
+/// cheap point lookup, not a hot loop.
+pub(crate) fn indexed_prefix_lookup_enabled(conn: &Connection) -> bool {
+    let env_enabled = std::env::var("MT_INDEXED_PREFIX_LOOKUP")
+        .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes"))
+        .unwrap_or(false);
+    if env_enabled {
+        return true;
+    }
+    conn.query_row(
+        "SELECT value FROM settings WHERE key = 'feature.indexed_prefix_lookup'",
+        [],
+        |row| row.get::<_, String>(0),
+    )
+    .map(|v| v == "1" || v == "true")
+    .unwrap_or(false)
+}
 
 /// Database error types
 #[derive(Error, Debug)]

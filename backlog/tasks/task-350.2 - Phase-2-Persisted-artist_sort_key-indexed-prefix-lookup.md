@@ -1,7 +1,7 @@
 ---
 id: TASK-350.2
 title: 'Phase 2: Persisted artist_sort_key + indexed prefix lookup'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-05-25 20:00'
 labels:
@@ -45,13 +45,22 @@ Out of scope:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Failing Rust test first: indexed prefix lookup returns correct offset for known sample library
-- [ ] #2 Migration adds artist_sort_key column and backfills existing rows without data loss
-- [ ] #3 Insert/update/scan/rescan paths populate artist_sort_key correctly
-- [ ] #4 Covering index (artist_sort_key, id) exists and is used by the new query (EXPLAIN QUERY PLAN assertion)
-- [ ] #5 find_sort_offset no longer uses ROW_NUMBER() when indexed_prefix_lookup flag is enabled
-- [ ] #6 Ignore-words and album_artist behavior match previous semantics (regression tests)
-- [ ] #7 Perf harness: prefix lookup p95 < 100ms on 40k synthetic library
-- [ ] #8 Feature flag indexed_prefix_lookup can disable the new path and restore the old ROW_NUMBER query
-- [ ] #9 Phase 1 (TASK-350.1) is complete
+- [x] #1 Failing Rust test first: indexed prefix lookup returns correct offset for known sample library
+- [x] #2 Migration adds artist_sort_key column and backfills existing rows without data loss
+- [x] #3 Insert/update/scan/rescan paths populate artist_sort_key correctly
+- [x] #4 Covering index (artist_sort_key, id) exists and is used by the new query (EXPLAIN QUERY PLAN assertion)
+- [x] #5 find_sort_offset no longer uses ROW_NUMBER() when indexed_prefix_lookup flag is enabled
+- [x] #6 Ignore-words and album_artist behavior match previous semantics (regression tests)
+- [x] #7 Perf harness: prefix lookup p95 < 100ms on 40k synthetic library
+- [x] #8 Feature flag indexed_prefix_lookup can disable the new path and restore the old ROW_NUMBER query
+- [x] #9 Phase 1 (TASK-350.1) is complete
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+- `artist_sort_key` is derived once via `LOWER(TRIM(strip_sort_prefix(COALESCE(NULLIF(LOWER(TRIM(album_artist)), ''), NULLIF(LOWER(TRIM(artist)), '')), <ignore-words>)))`, persisted by the migration backfill and kept current by `AFTER INSERT`/`AFTER UPDATE OF artist, album_artist` triggers (no changes needed to `add_track`/`add_tracks_bulk`/`update_tracks_bulk`/`update_track_metadata` — they already write plain artist/album_artist columns and the triggers do the rest).
+- The indexed path is keyed to the single ignore-words list the persisted column was built with (`ARTIST_SORT_KEY_IGNORE_WORDS` in `schema.rs`). A query with a different ignore-words list, or one whose typed prefix is itself a prefix of one of those ignore words (e.g. "the" against the default list), falls back to the legacy `ROW_NUMBER()` path — the persisted key has no representation for those cases, and this is a deliberate, tested divergence guard rather than an oversight.
+- Feature flag `indexed_prefix_lookup` is read fresh on every lookup (env var `MT_INDEXED_PREFIX_LOOKUP`, or `settings` key `feature.indexed_prefix_lookup`) rather than cached — this is a point lookup, not a hot loop, and caching it was tried and reverted after it caused a genuine bug: the settings-driven half of the flag would never re-take-effect at runtime without an app restart once a cache went warm.
+- Perf harness (40k rows, release build): indexed p95 = 6.07ms vs legacy p95 = 141.4ms (budget: p95 < 100ms). Run via `cargo test --release -p mt-tauri sort_key -- --ignored --nocapture`.
+<!-- SECTION:NOTES:END -->

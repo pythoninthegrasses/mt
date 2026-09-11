@@ -319,6 +319,95 @@ pub enum LibrarySortColumn {
 /// Raw column expression for artist sort (no COLLATE).
 const ARTIST_SORT_EXPR: &str = "COALESCE(NULLIF(album_artist, ''), artist)";
 
+/// Derive the persisted sort key for a row in SQL, using the single
+/// ignore-words list ([`crate::db::schema::ARTIST_SORT_KEY_IGNORE_WORDS`])
+/// the index is built for. `artist_col`/`album_artist_col` let callers reuse
+/// this for either plain column names (migration backfill) or `NEW.`-qualified
+/// trigger references.
+///
+/// `album_artist` wins over `artist` (empty or blank counts as absent), the
+/// first matching ignore word is stripped, and the result is lowercased so a
+/// plain BINARY-collated range scan matches case-folded prefix lookups.
+/// A generated column cannot call the `strip_sort_prefix` UDF (SQLite rejects
+/// non-built-in functions in GENERATED ALWAYS), so this backs an ordinary
+/// column maintained by the schema triggers and the migration backfill.
+pub(crate) fn artist_sort_key_sql_expr(artist_col: &str, album_artist_col: &str) -> String {
+    format!(
+        "LOWER(TRIM(strip_sort_prefix(COALESCE(NULLIF(LOWER(TRIM({album_artist_col})), ''), \
+         NULLIF(LOWER(TRIM({artist_col})), '')), '{}')))",
+        crate::db::schema::ARTIST_SORT_KEY_IGNORE_WORDS.replace('\'', "''")
+    )
+}
+
+/// Whether a persisted key derived with
+/// [`crate::db::schema::ARTIST_SORT_KEY_IGNORE_WORDS`] answers a query that
+/// asked for `query_ignore_words`.
+///
+/// Comparison is order- and whitespace-insensitive, so the CSV the frontend
+/// sends (`"the, a, an"`) matches the persisted spelling. A `None` request has
+/// no ignore-words semantics at all, so it never matches.
+pub(crate) fn artist_sort_key_matches_ignore_words(query_ignore_words: Option<&str>) -> bool {
+    let Some(words) = query_ignore_words else {
+        return false;
+    };
+    normalize_ignore_words(words)
+        == normalize_ignore_words(crate::db::schema::ARTIST_SORT_KEY_IGNORE_WORDS)
+}
+
+fn normalize_ignore_words(words: &str) -> std::collections::HashSet<String> {
+    words
+        .split(',')
+        .map(|w| w.trim().to_lowercase())
+        .filter(|w| !w.is_empty())
+        .collect()
+}
+
+/// Derive the same key as [`ARTIST_SORT_KEY_SQL_EXPR`] in Rust.
+///
+/// Returns `None` when neither source yields a sortable value, so the row keeps
+/// a NULL key and sorts after every keyed row.
+///
+/// Only used by tests, to check the persisted SQL expression's behavior
+/// against an independent Rust implementation.
+#[cfg(test)]
+pub fn artist_sort_key(
+    artist: Option<&str>,
+    album_artist: Option<&str>,
+    ignore_words: Option<&str>,
+) -> Option<String> {
+    let source = album_artist
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or_else(|| artist.map(str::trim).filter(|s| !s.is_empty()))?;
+    let stripped = match ignore_words {
+        Some(words) => strip_sort_prefix(source, words),
+        None => source,
+    };
+    let key = stripped.trim().to_lowercase();
+    (!key.is_empty()).then_some(key)
+}
+
+/// Strip the first matching ignore-word prefix from `value`.
+///
+/// Same rule as the `strip_sort_prefix` SQL function: the word must be
+/// followed by whitespace, so "Therapy?" is not stripped by "the".
+#[cfg(test)]
+fn strip_sort_prefix<'a>(value: &'a str, ignore_words: &str) -> &'a str {
+    let lower = value.to_lowercase();
+    for word in ignore_words.split(',') {
+        let word = word.trim().to_lowercase();
+        if word.is_empty() {
+            continue;
+        }
+        if let Some(rest) = lower.strip_prefix(&word)
+            && rest.starts_with([' ', '\t', '\n', '\r'])
+        {
+            return value[word.len()..].trim_start();
+        }
+    }
+    value
+}
+
 impl LibrarySortColumn {
     /// Raw column expression without COLLATE or wrapping
     fn column_expr(&self) -> &'static str {

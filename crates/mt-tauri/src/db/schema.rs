@@ -8,6 +8,15 @@ use tracing::info;
 
 use crate::db::DbResult;
 
+/// Ignore-words list the persisted `library.artist_sort_key` column is
+/// derived with, mirroring `DEFAULT_SORT_IGNORE_WORDS` in
+/// `app/frontend/js/constants.js`. This is the one configuration the
+/// indexed prefix lookup can serve — a request with a different list falls
+/// back to the ROW_NUMBER path (see `artist_sort_key_matches_ignore_words`
+/// in `db/models.rs`).
+pub(crate) const ARTIST_SORT_KEY_IGNORE_WORDS: &str =
+    "the, a, an, la, le, les, los, las, el, die, der, das, il, lo, gli, ...";
+
 /// SQL statements for creating all database tables
 pub const CREATE_TABLES: &[(&str, &str)] = &[
     (
@@ -188,6 +197,13 @@ pub(crate) fn create_tables(conn: &Connection) -> DbResult<()> {
 /// These migrations match the Python backend's migration logic exactly
 /// to ensure backward compatibility with existing databases.
 pub(crate) fn run_migrations(conn: &Connection) -> DbResult<()> {
+    // The artist_sort_key backfill below calls the `strip_sort_prefix` SQL
+    // UDF, which callers may not have registered yet (e.g. a bare
+    // `Connection::open_in_memory()` in a test) — make sure it exists on
+    // this connection regardless. Re-registering on an already-initialized
+    // connection is a harmless no-op.
+    crate::db::register_custom_functions(conn)?;
+
     // Get current library columns
     let library_columns = get_table_columns(conn, "library")?;
 
@@ -606,6 +622,53 @@ pub(crate) fn run_migrations(conn: &Connection) -> DbResult<()> {
         conn.execute("CREATE INDEX idx_library_source ON library(source)", [])?;
         info!("source index created");
     }
+
+    // Migration: persisted artist_sort_key column + covering index (TASK-350.2)
+    let library_columns = get_table_columns(conn, "library")?;
+    if !library_columns.contains(&"artist_sort_key".to_string()) {
+        info!("Adding artist_sort_key column to library table");
+        conn.execute("ALTER TABLE library ADD COLUMN artist_sort_key TEXT", [])?;
+        crate::db::library::refresh_artist_sort_keys(conn)?;
+        info!("artist_sort_key column added and backfilled");
+    }
+
+    if !index_exists(conn, "idx_library_artist_sort_key")? {
+        info!("Creating artist_sort_key covering index on library table");
+        conn.execute(
+            "CREATE INDEX idx_library_artist_sort_key ON library(artist_sort_key, id)",
+            [],
+        )?;
+        info!("artist_sort_key index created");
+    }
+
+    // Triggers keep artist_sort_key current on every insert/update without
+    // touching every write call site (add_track, add_tracks_bulk,
+    // update_tracks_bulk, scan/rescan, and raw source-tracking inserts alike).
+    conn.execute(
+        &format!(
+            "CREATE TRIGGER IF NOT EXISTS trg_library_artist_sort_key_ai
+             AFTER INSERT ON library
+             BEGIN
+                 UPDATE library SET artist_sort_key = {}
+                 WHERE id = NEW.id;
+             END",
+            crate::db::models::artist_sort_key_sql_expr("NEW.artist", "NEW.album_artist")
+        ),
+        [],
+    )?;
+    conn.execute(
+        &format!(
+            "CREATE TRIGGER IF NOT EXISTS trg_library_artist_sort_key_au
+             AFTER UPDATE OF artist, album_artist ON library
+             WHEN NEW.artist IS NOT OLD.artist OR NEW.album_artist IS NOT OLD.album_artist
+             BEGIN
+                 UPDATE library SET artist_sort_key = {}
+                 WHERE id = NEW.id;
+             END",
+            crate::db::models::artist_sort_key_sql_expr("NEW.artist", "NEW.album_artist")
+        ),
+        [],
+    )?;
 
     Ok(())
 }

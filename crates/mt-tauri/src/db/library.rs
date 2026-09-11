@@ -229,15 +229,109 @@ pub(crate) fn get_filtered_count(
     })
 }
 
-/// Find the 0-based row offset of the first row whose artist starts with
-/// `prefix` in the current sort order. Matches against artist with optional
-/// ignore-words stripping (same logic as frontend type-to-jump).
-/// Returns `None` if no match.
-pub(crate) fn find_sort_offset(
+/// Whether the indexed seek can answer this prefix jump right now.
+///
+/// Needs artist sort, the `indexed_prefix_lookup` flag, the migration having
+/// added the column, a request whose ignore-words list is the one the
+/// persisted key was derived with, and a prefix the persisted (stripped) key
+/// can represent. A prefix that is itself a prefix of one of the configured
+/// ignore words is excluded: the legacy path's raw, unstripped `match_src`
+/// fallback can match an earlier row than the stripped key would (e.g. "the"
+/// matches raw "The Beatles" even though its stripped key is "beatles" and
+/// sorts under B) — that fallback has no indexed representation, so those
+/// requests keep the `ROW_NUMBER()` path. See TASK-350.2 notes.
+fn indexed_prefix_lookup_available(conn: &Connection, query: &LibraryQuery, prefix: &str) -> bool {
+    query.sort_by == LibrarySortColumn::Artist
+        && crate::db::indexed_prefix_lookup_enabled(conn)
+        && crate::db::artist_sort_key_matches_ignore_words(query.ignore_words.as_deref())
+        && artist_sort_key_column_exists(conn)
+        && !raw_fallback_could_diverge(prefix)
+}
+
+/// Whether the migration has run against this connection.
+fn artist_sort_key_column_exists(conn: &Connection) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM pragma_table_info('library') WHERE name = 'artist_sort_key'",
+        [],
+        |_| Ok(()),
+    )
+    .is_ok()
+}
+
+/// See [`indexed_prefix_lookup_available`] for why this forces a fallback.
+fn raw_fallback_could_diverge(prefix: &str) -> bool {
+    let prefix_lower = prefix.to_lowercase();
+    crate::db::schema::ARTIST_SORT_KEY_IGNORE_WORDS
+        .split(',')
+        .map(|w| w.trim().to_lowercase())
+        .any(|w| !w.is_empty() && w.starts_with(&prefix_lower))
+}
+
+/// Escape LIKE metacharacters in a (already lowercased) prefix and append the
+/// trailing wildcard. Pairs with `ESCAPE '\'` at every use site.
+fn like_prefix_pattern(prefix_lower: &str) -> String {
+    format!(
+        "{}%",
+        prefix_lower
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+    )
+}
+
+/// Build the prefix-jump SQL/params [`find_sort_offset`] executes: either the
+/// indexed seek on `artist_sort_key`, or — when the indexed path can't serve
+/// this request — the original `ROW_NUMBER()` query it replaces, preserved
+/// verbatim.
+pub(crate) fn sort_offset_sql(
     conn: &Connection,
     query: &LibraryQuery,
     prefix: &str,
-) -> DbResult<Option<i64>> {
+) -> DbResult<(String, Vec<Box<dyn rusqlite::ToSql>>)> {
+    if indexed_prefix_lookup_available(conn, query, prefix) {
+        let prefix_lower = prefix.to_lowercase();
+        let like_pattern = like_prefix_pattern(&prefix_lower);
+
+        // Offset of the first prefix-matching row = the number of rows whose
+        // key sorts strictly ahead of the first matching key. Every row
+        // sharing that key is contiguous with it in the full (tie-broken)
+        // sort order, so it never needs to be replicated here.
+        let (where_clause_min, params_min) = build_library_where(query);
+        let (where_clause_count, params_count) = build_library_where(query);
+        let sql = format!(
+            "WITH matched_key AS (
+                 SELECT MIN(artist_sort_key) AS key FROM library
+                 {where_clause_min}
+                   AND artist_sort_key >= ?
+                   AND artist_sort_key LIKE ? ESCAPE '\\'
+             )
+             SELECT (
+                 SELECT COUNT(*) FROM library
+                 {where_clause_count}
+                   AND artist_sort_key < matched_key.key
+             )
+             FROM matched_key
+             WHERE matched_key.key IS NOT NULL"
+        );
+
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = params_min;
+        params.push(Box::new(prefix_lower));
+        params.push(Box::new(like_pattern));
+        params.extend(params_count);
+
+        return Ok((sql, params));
+    }
+
+    Ok(legacy_sort_offset_sql(query, prefix))
+}
+
+/// The original `ROW_NUMBER()` prefix-jump query — kept as the fallback for
+/// non-Artist sort columns, custom ignore-words lists, and any request the
+/// indexed path can't otherwise serve.
+fn legacy_sort_offset_sql(
+    query: &LibraryQuery,
+    prefix: &str,
+) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
     let (where_clause, params_vec) = build_library_where(query);
 
     let order_by = format!(
@@ -281,24 +375,44 @@ pub(crate) fn find_sort_offset(
         LIMIT 1"
     );
 
-    let like_pattern = format!(
-        "{}%",
-        prefix
-            .to_lowercase()
-            .replace('\\', "\\\\")
-            .replace('%', "\\%")
-            .replace('_', "\\_")
-    );
+    let like_pattern = like_prefix_pattern(&prefix.to_lowercase());
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = params_vec;
+    params.push(Box::new(like_pattern.clone()));
+    params.push(Box::new(like_pattern));
 
-    let mut all_params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
-    all_params.push(&like_pattern);
-    all_params.push(&like_pattern);
+    (sql, params)
+}
 
-    let result = conn
-        .query_row(&sql, all_params.as_slice(), |row| row.get::<_, i64>(0))
-        .ok();
+/// Recompute `artist_sort_key` for every row. Write paths normally keep it
+/// current via the schema's insert/update triggers; this backs the migration
+/// backfill and lets tests/perf harnesses reseed after bulk inserts that
+/// bypass those triggers' per-row cost isn't a concern for (e.g. a single
+/// bulk `INSERT ... SELECT`).
+pub(crate) fn refresh_artist_sort_keys(conn: &Connection) -> DbResult<()> {
+    conn.execute(
+        &format!(
+            "UPDATE library SET artist_sort_key = {}",
+            crate::db::models::artist_sort_key_sql_expr("artist", "album_artist")
+        ),
+        [],
+    )?;
+    Ok(())
+}
 
-    Ok(result)
+/// Find the 0-based row offset of the first row whose artist starts with
+/// `prefix` in the current sort order. Matches against artist with optional
+/// ignore-words stripping (same logic as frontend type-to-jump).
+/// Returns `None` if no match.
+pub(crate) fn find_sort_offset(
+    conn: &Connection,
+    query: &LibraryQuery,
+    prefix: &str,
+) -> DbResult<Option<i64>> {
+    let (sql, params) = sort_offset_sql(conn, query, prefix)?;
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    Ok(conn
+        .query_row(&sql, param_refs.as_slice(), |row| row.get::<_, i64>(0))
+        .ok())
 }
 
 /// Find the 0-based offset of a specific track ID in the current sort/filter order.
