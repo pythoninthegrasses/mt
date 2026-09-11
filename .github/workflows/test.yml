@@ -71,6 +71,50 @@ jobs:
       - name: Run Deno lint
         run: deno lint
 
+  # Independent of the rust job and intentionally absent from build/playwright
+  # needs: so Zig work cannot extend the critical path.
+  zig:
+    name: Zig Lint, Test, and Build
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Read pinned Zig toolchain from .tool-versions
+        id: zig-version
+        shell: bash
+        run: |
+          version=$(grep '^zig ' .tool-versions | awk '{print $2}')
+          echo "toolchain=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Zig build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            zig-core/.zig-cache
+            zig-core/zig-out
+          key: zig-build-${{ runner.os }}-${{ steps.zig-version.outputs.toolchain }}-${{ hashFiles('zig-core/build.zig', 'zig-core/build.zig.zon', 'zig-core/src/**/*.zig', '.tool-versions') }}
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ steps.zig-version.outputs.toolchain }}
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Zig format check
+        run: task zig:lint
+
+      - name: Zig tests
+        run: task zig:test
+
+      - name: Zig build
+        run: task zig:build
+
   build:
     name: Build (${{ matrix.platform }})
     # Gate on lint/format/test jobs so builds don't burn CI minutes

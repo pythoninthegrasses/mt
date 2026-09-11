@@ -30,6 +30,8 @@ includes:
     taskfile: ./taskfiles/deno.yml
   cargo:
     taskfile: ./taskfiles/cargo.yml
+  zig:
+    taskfile: ./taskfiles/zig.yml
   tauri:
     taskfile: ./taskfiles/tauri.yml
   ci:
@@ -51,18 +53,21 @@ tasks:
     cmds:
       - task: cargo:lint
       - task: deno:lint
+      - task: zig:lint
 
   format:
     desc: "Run formatters"
     cmds:
       - task: cargo:format
       - task: deno:format
+      - task: zig:format
 
   test:
-    desc: "Run tests (Rust + Frontend)"
+    desc: "Run tests (Rust + Frontend + Zig)"
     cmds:
       - task: cargo:test
       - task: deno:test
+      - task: zig:test
 
   test:e2e:
     desc: "Run Playwright E2E tests"

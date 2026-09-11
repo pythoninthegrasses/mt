@@ -1,0 +1,107 @@
+version: "3.0"
+
+set: ['e', 'u', 'pipefail']
+shopt: ['globstar']
+
+vars:
+  ZIG_CORE_DIR: "{{.ROOT_DIR}}/zig-core"
+  ZIG_OUT_DIR: "{{.ZIG_CORE_DIR}}/zig-out"
+  ZIG_CACHE_DIR: "{{.ZIG_CORE_DIR}}/.zig-cache"
+  PINNED_ZIG:
+    sh: grep '^zig ' {{.ROOT_DIR}}/.tool-versions 2>/dev/null | awk '{print $2}' || true
+  # Resolved through mise against the pinned version rather than PATH, which may
+  # hold an IDE-bundled zig or a mise default for a different version.
+  ZIG:
+    sh: | 
+      pin="{{.PINNED_ZIG}}"
+      if [ -n "$pin" ] && command -v mise &> /dev/null; then
+        mise which zig --tool "zig@$pin" 2>/dev/null || true
+      fi
+  # Explicit target triple for the cross-compile task, e.g. TARGET=aarch64-macos
+  TARGET: '{{.TARGET | default ""}}'
+
+tasks:
+  _check-zig-version:
+    internal: true
+    desc: "Verify the pinned zig resolves and matches .tool-versions"
+    cmds:
+      - |
+        mise_bin="{{.ZIG}}"
+        if [ ! -x "$mise_bin" ]; then
+          if ! command -v mise &> /dev/null; then
+            echo "error: zig {{.PINNED_ZIG}} not found and mise is not on PATH." >&2
+            echo "  Expected: {{.PINNED_ZIG}} (pinned in .tool-versions)" >&2
+            echo "  Fix: install mise (https://mise.jdx.dev), then run: mise install zig" >&2
+            exit 1
+          fi
+          echo "error: zig {{.PINNED_ZIG}} (pinned in .tool-versions) is not installed." >&2
+          echo "  Fix: mise install zig" >&2
+          exit 1
+        fi
+        found=$("$mise_bin" version 2>/dev/null)
+        if [ "$found" != "{{.PINNED_ZIG}}" ]; then
+          echo "error: zig version mismatch." >&2
+          echo "  Expected: {{.PINNED_ZIG}} (pinned in .tool-versions)" >&2
+          echo "  Found:    ${found:-unknown} ($mise_bin)" >&2
+          echo "  Fix: mise install zig@{{.PINNED_ZIG}}" >&2
+          exit 1
+        fi
+        echo "zig $found -> $mise_bin"
+
+  format:
+    desc: "Format Zig source files"
+    deps: [_check-zig-version]
+    cmds:
+      - '{{.ZIG}} fmt {{.ZIG_CORE_DIR}}/'
+
+  lint:
+    desc: "Check Zig formatting without making changes"
+    deps: [_check-zig-version]
+    cmds:
+      - '{{.ZIG}} fmt --check {{.ZIG_CORE_DIR}}/'
+
+  test:
+    desc: "Run Zig unit tests"
+    deps: [_check-zig-version]
+    cmds:
+      - cd {{.ZIG_CORE_DIR}} && {{.ZIG}} build test
+
+  build:
+    desc: "Build zig-core sidecar (debug)"
+    deps: [_check-zig-version]
+    cmds:
+      - cd {{.ZIG_CORE_DIR}} && {{.ZIG}} build
+    sources:
+      - "{{.ZIG_CORE_DIR}}/src/**/*.zig"
+      - "{{.ZIG_CORE_DIR}}/build.zig"
+      - "{{.ZIG_CORE_DIR}}/build.zig.zon"
+    generates:
+      - "{{.ZIG_OUT_DIR}}/bin/mt-zig-core"
+
+  cross-compile:
+    desc: "Cross-compile zig-core for a Zig target triple (TARGET required)"
+    summary: |
+      Cross-compile the zig-core sidecar for an explicit Zig target triple.
+
+        task zig:cross-compile TARGET=aarch64-macos
+        task zig:cross-compile TARGET=x86_64-macos
+        task zig:cross-compile TARGET=x86_64-linux
+        task zig:cross-compile TARGET=x86_64-windows
+    deps: [_check-zig-version]
+    preconditions:
+      - sh: test -n "{{.TARGET}}"
+        msg: |
+          TARGET is not set. Pass a Zig target triple, e.g.:
+            task zig:cross-compile TARGET=aarch64-macos
+            task zig:cross-compile TARGET=x86_64-macos
+            task zig:cross-compile TARGET=x86_64-linux
+            task zig:cross-compile TARGET=x86_64-windows
+    cmds:
+      - cd {{.ZIG_CORE_DIR}} && {{.ZIG}} build -Dtarget={{.TARGET}}
+
+  clean:
+    desc: "Clean Zig build artifacts"
+    cmds:
+      - rm -rf {{.ZIG_OUT_DIR}}
+      - rm -rf {{.ZIG_CACHE_DIR}}
+    silent: true
