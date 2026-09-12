@@ -196,7 +196,7 @@ zig-out/
 /vendor/
 
 # Sidecar binaries
-src-tauri/bin/
+crates/mt-tauri/binaries/
 
 # Rust ICE (internal compiler error) reports
 rustc-ice-*.txt

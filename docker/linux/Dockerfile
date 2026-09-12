@@ -7,11 +7,11 @@ RUN true <<'DOCKERFILE'
 Multi-stage Dockerfile for Linux CI builds.
 
 Stages:
-  deps      - system packages, Rust nightly, Node.js, cargo-chef, tauri-cli
+  deps      - system packages, Rust nightly, Zig, Node.js, cargo-chef, tauri-cli
   planner   - cargo-chef prepare (generates recipe.json from lock/manifests)
   cook      - cargo-chef cook (compiles all dependencies, cached by Blacksmith)
-  check     - cargo check --workspace (test workflow target)
-  build     - cargo tauri build --no-bundle + cargo tauri bundle (release target)
+  check     - stage sidecar, cargo check --workspace (test workflow target)
+  build     - stage sidecar, cargo tauri build --no-bundle + cargo tauri bundle (release target)
   artifacts - extract .deb and binary
 
 Usage:
@@ -69,6 +69,16 @@ RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Pinned to .tool-versions' `zig` entry. Verified against ziglang.org/download/index.json.
+ARG ZIG_VERSION=0.15.2
+ARG ZIG_SHA256=02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
+RUN curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz \
+    && echo "${ZIG_SHA256}  /tmp/zig.tar.xz" | sha256sum -c - \
+    && mkdir -p /usr/local/zig \
+    && tar -xJf /tmp/zig.tar.xz -C /usr/local/zig --strip-components=1 \
+    && rm /tmp/zig.tar.xz
+ENV PATH="/usr/local/zig:${PATH}"
+
 ENV RUSTUP_TOOLCHAIN=nightly \
     RUSTFLAGS="-Zthreads=16"
 
@@ -99,6 +109,13 @@ FROM cook AS check
 
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
+COPY zig-core/ zig-core/
+
+# See the `build` stage's matching step for why this is needed even for a
+# plain cargo check: Tauri's build script resolves externalBin eagerly.
+RUN cd zig-core && zig build -Dtarget=x86_64-linux -Doptimize=ReleaseSafe -p zig-out/stage \
+    && mkdir -p /build/crates/mt-tauri/binaries \
+    && cp zig-out/stage/bin/mt-zig-core /build/crates/mt-tauri/binaries/mt-zig-core-x86_64-unknown-linux-gnu
 
 RUN cargo check --workspace --target x86_64-unknown-linux-gnu
 
@@ -113,8 +130,17 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 COPY app/ app/
 COPY static/ static/
+COPY zig-core/ zig-core/
 
 RUN cd app/frontend && npm run build
+
+# Mirrors taskfiles/zig.yml's zig:stage task for x86_64-unknown-linux-gnu only.
+# Tauri's externalBin resolves the sidecar by Rust host triple, not the Zig
+# target string -- Zig's x86_64-linux is static musl, filed here under the
+# Rust triple as Tauri expects. Plain cp, never strip/install -s (AC#8).
+RUN cd zig-core && zig build -Dtarget=x86_64-linux -Doptimize=ReleaseSafe -p zig-out/stage \
+    && mkdir -p /build/crates/mt-tauri/binaries \
+    && cp zig-out/stage/bin/mt-zig-core /build/crates/mt-tauri/binaries/mt-zig-core-x86_64-unknown-linux-gnu
 
 RUN cargo tauri build --no-bundle \
     --target x86_64-unknown-linux-gnu \

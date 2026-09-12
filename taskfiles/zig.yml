@@ -23,8 +23,11 @@ vars:
         fi
       fi
       command -v zig 2>/dev/null || true
-  # Explicit target triple for the cross-compile task, e.g. TARGET=aarch64-macos
-  TARGET: '{{.TARGET | default ""}}'
+  # Explicit Zig target triple for the cross-compile task, e.g. ZIG_TARGET=aarch64-macos.
+  # Named distinctly from ci.yml/tauri.yml's TARGET (a Rust triple) since the two
+  # naming schemes disagree (see zig:stage's map).
+  ZIG_TARGET: '{{.ZIG_TARGET | default ""}}'
+  BINARIES_DIR: "{{.ROOT_DIR}}/crates/mt-tauri/binaries"
 
 tasks:
   _check-zig-version:
@@ -98,25 +101,78 @@ tasks:
       - "{{.ZIG_OUT_DIR}}/bin/mt-zig-core"
 
   cross-compile:
-    desc: "Cross-compile zig-core for a Zig target triple (TARGET required)"
+    desc: "Cross-compile zig-core for a Zig target triple (ZIG_TARGET required)"
     summary: |
       Cross-compile the zig-core sidecar for an explicit Zig target triple.
 
-        task zig:cross-compile TARGET=aarch64-macos
-        task zig:cross-compile TARGET=x86_64-macos
-        task zig:cross-compile TARGET=x86_64-linux
-        task zig:cross-compile TARGET=x86_64-windows
+        task zig:cross-compile ZIG_TARGET=aarch64-macos
+        task zig:cross-compile ZIG_TARGET=x86_64-macos
+        task zig:cross-compile ZIG_TARGET=x86_64-linux
+        task zig:cross-compile ZIG_TARGET=x86_64-windows
     deps: [_check-zig-version]
+    preconditions:
+      - sh: test -n "{{.ZIG_TARGET}}"
+        msg: |
+          ZIG_TARGET is not set. Pass a Zig target triple, e.g.:
+            task zig:cross-compile ZIG_TARGET=aarch64-macos
+            task zig:cross-compile ZIG_TARGET=x86_64-macos
+            task zig:cross-compile ZIG_TARGET=x86_64-linux
+            task zig:cross-compile ZIG_TARGET=x86_64-windows
+    cmds:
+      - cd {{.ZIG_CORE_DIR}} && {{.ZIG}} build -Dtarget={{.ZIG_TARGET}}
+
+  stage:
+    desc: "Build zig-core for a Rust host triple and stage it under crates/mt-tauri/binaries (TARGET required)"
+    summary: |
+      Tauri's externalBin resolves a sidecar by appending the *Rust* host
+      triple to the configured binary name, not a Zig target triple, so this
+      task is keyed by TARGET=<rust-triple> and maps it to the matching Zig
+      target through an explicit table below -- never derived by pattern-
+      matching on the Zig triple string (see zig-core/README.md and
+      TASK-355.4 for why the two naming schemes disagree, e.g. Zig's
+      x86_64-linux is static musl but must be filed under the Rust triple
+      x86_64-unknown-linux-gnu).
+
+        task zig:stage TARGET=aarch64-apple-darwin
+        task zig:stage TARGET=x86_64-apple-darwin
+        task zig:stage TARGET=x86_64-unknown-linux-gnu
+        task zig:stage TARGET=x86_64-pc-windows-msvc
+    deps: [_check-zig-version]
+    vars:
+      ZIG_TARGET_FOR_STAGE:
+        sh: |
+          case "{{.TARGET}}" in
+            aarch64-apple-darwin) echo "aarch64-macos" ;;
+            x86_64-apple-darwin) echo "x86_64-macos" ;;
+            x86_64-unknown-linux-gnu) echo "x86_64-linux" ;;
+            x86_64-pc-windows-msvc) echo "x86_64-windows" ;;
+            *) echo "" ;;
+          esac
+      STAGE_OUT_DIR: "{{.ZIG_CORE_DIR}}/zig-out/stage-{{.TARGET}}"
+      DEST_EXT: '{{if eq .TARGET "x86_64-pc-windows-msvc"}}.exe{{else}}{{end}}'
     preconditions:
       - sh: test -n "{{.TARGET}}"
         msg: |
-          TARGET is not set. Pass a Zig target triple, e.g.:
-            task zig:cross-compile TARGET=aarch64-macos
-            task zig:cross-compile TARGET=x86_64-macos
-            task zig:cross-compile TARGET=x86_64-linux
-            task zig:cross-compile TARGET=x86_64-windows
+          TARGET is not set. Pass a Rust host triple, e.g.:
+            task zig:stage TARGET=aarch64-apple-darwin
+            task zig:stage TARGET=x86_64-apple-darwin
+            task zig:stage TARGET=x86_64-unknown-linux-gnu
+            task zig:stage TARGET=x86_64-pc-windows-msvc
+      - sh: test -n "{{.ZIG_TARGET_FOR_STAGE}}"
+        msg: "Unmapped Rust triple '{{.TARGET}}' -- add it to zig:stage's hardcoded case table in taskfiles/zig.yml."
     cmds:
-      - cd {{.ZIG_CORE_DIR}} && {{.ZIG}} build -Dtarget={{.TARGET}}
+      - mkdir -p {{.BINARIES_DIR}}
+      - cd {{.ZIG_CORE_DIR}} && {{.ZIG}} build -Dtarget={{.ZIG_TARGET_FOR_STAGE}} -Doptimize=ReleaseSafe -p {{.STAGE_OUT_DIR}}
+      # Plain copy, never strip/install -s/objcopy -- stripping would invalidate
+      # Zig's ad-hoc code signature on Apple Silicon (AC#8).
+      - cp {{.STAGE_OUT_DIR}}/bin/mt-zig-core{{.DEST_EXT}} {{.BINARIES_DIR}}/mt-zig-core-{{.TARGET}}{{.DEST_EXT}}
+    sources:
+      - "{{.ZIG_CORE_DIR}}/src/**/*.zig"
+      - "{{.ZIG_CORE_DIR}}/build.zig"
+      - "{{.ZIG_CORE_DIR}}/build.zig.zon"
+      - "{{.ZIG_CORE_DIR}}/vendor/**"
+    generates:
+      - "{{.BINARIES_DIR}}/mt-zig-core-{{.TARGET}}{{.DEST_EXT}}"
 
   clean:
     desc: "Clean Zig build artifacts"

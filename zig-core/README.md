@@ -20,6 +20,44 @@ task zig:cross-compile TARGET=x86_64-linux
 task zig:cross-compile TARGET=x86_64-windows
 ```
 
+## Packaging, spawning, and signing (TASK-355.4)
+
+The sidecar ships inside the Tauri bundle via `externalBin`
+(`crates/mt-tauri/tauri.conf.json`: `bundle.externalBin: ["binaries/mt-zig-core"]`).
+Tauri resolves the on-disk binary by appending the *Rust* host triple to that
+name, e.g. `binaries/mt-zig-core-aarch64-apple-darwin` — not a Zig target
+triple, and the two naming schemes disagree (Zig's `x86_64-linux` is static
+musl, filed under the Rust triple `x86_64-unknown-linux-gnu`).
+
+```bash
+task zig:stage TARGET=aarch64-apple-darwin
+task zig:stage TARGET=x86_64-apple-darwin
+task zig:stage TARGET=x86_64-unknown-linux-gnu
+task zig:stage TARGET=x86_64-pc-windows-msvc
+```
+
+`zig:stage` builds with `-Doptimize=ReleaseSafe`, maps `TARGET` to a Zig
+target through an explicit hardcoded table (`taskfiles/zig.yml`), and copies
+(never strips) the result into `crates/mt-tauri/binaries/`. Stripping would
+invalidate Zig's ad-hoc code signature on Apple Silicon. Because Tauri's
+build script resolves `externalBin` paths eagerly, even a plain `cargo
+check` on `mt-tauri` requires this binary to already be staged for the
+host's Rust triple — `tauri:build`, `tauri:dev`, and `ci:build` all carry a
+`zig:stage` dependency for exactly this reason.
+
+`crates/mt-tauri/src/sidecar.rs` owns the runtime side: it spawns the
+sidecar via `tauri-plugin-shell` in `.setup()`, forwards its stdout/stderr
+into `tracing` under `target: "sidecar"`, polls for `sidecar.json` and
+issues one authenticated health-check request, and kills the child on
+`RunEvent::Exit`. A missing or unspawnable binary is logged and does not
+prevent the rest of the app from starting.
+
+On macOS, `task ci:verify-signing TARGET=<target>` (`taskfiles/ci.yml`) runs
+after bundling and before notarizing: it asserts the sidecar's code
+signature is valid, that it carries the hardened runtime flag, and that the
+`.app`'s nested code signatures verify — so a signing problem fails in
+seconds rather than after a `notarytool` round trip.
+
 ## Running
 
 ```bash

@@ -12,6 +12,7 @@ pub(crate) mod media_keys;
 pub(crate) mod metadata;
 pub(crate) mod plex;
 pub(crate) mod scanner;
+pub(crate) mod sidecar;
 pub(crate) mod watcher;
 
 #[cfg(feature = "agent")]
@@ -603,6 +604,12 @@ pub fn run() {
                 std::fs::create_dir_all(parent).ok();
             }
 
+            if let Some(runtime_dir) = db_path.parent() {
+                sidecar::spawn(app, &db_path, runtime_dir);
+            } else {
+                error!("sidecar not started: could not determine app data directory");
+            }
+
             let database = db::Database::new(&db_path)
                 .expect("Failed to initialize database");
             let database_for_watcher = database.clone();
@@ -791,13 +798,12 @@ pub fn run() {
 
             Ok(())
         })
-        .on_window_event(|_window, _event| {
-            // Window event handler (sidecar removed in migration)
-        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             if let tauri::RunEvent::Exit = event {
+                sidecar::shutdown(app_handle);
+
                 // Purge non-persistent cache on exit
                 let persistent = app_handle
                     .store("settings.json")

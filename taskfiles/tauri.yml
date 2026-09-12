@@ -13,6 +13,18 @@ vars:
   LINUX_AMD64_TARGET: "x86_64-unknown-linux-gnu"
   LINUX_ARM64_TARGET: "aarch64-unknown-linux-gnu"
   WINDOWS_X64_TARGET: "x86_64-pc-windows-msvc"
+  # Rust host triple for the current platform, used to stage the matching
+  # zig-core sidecar before any build/dev task that spawns it (TASK-355.4).
+  CURRENT_TARGET:
+    sh: |
+      case "{{OS}}/{{ARCH}}" in
+        darwin/arm64)  echo "aarch64-apple-darwin" ;;
+        darwin/amd64)  echo "x86_64-apple-darwin" ;;
+        linux/amd64)   echo "x86_64-unknown-linux-gnu" ;;
+        linux/arm64)   echo "aarch64-unknown-linux-gnu" ;;
+        windows/amd64) echo "x86_64-pc-windows-msvc" ;;
+        *) echo "Unsupported platform: {{OS}}/{{ARCH}}" >&2; exit 1 ;;
+      esac
 env:
   APPLE_API_KEY_PATH: /tmp/auth_key.p8
 
@@ -95,9 +107,18 @@ tasks:
   _build:
     internal: true
     desc: "Internal task to build Tauri app"
+    summary: |
+      TARGET is optional for `tauri build` (falls back to the cargo host
+      triple), but the zig:stage dep below requires it explicitly -- every
+      real caller (build/build:arm64/build:x64/build:windows/build:signed)
+      always passes one.
     vars:
       TARGET: '{{.TARGET | default ""}}'
       TARGET_FLAG: '{{if .TARGET}}--target {{.TARGET}}{{end}}'
+    deps:
+      - task: ":zig:stage"
+        vars:
+          TARGET: "{{.TARGET}}"
     cmds:
       - |
         deno run -A npm:@tauri-apps/cli build {{.TARGET_FLAG}}
@@ -105,17 +126,6 @@ tasks:
   build:
     desc: "Build Tauri app for current platform"
     deps: ["_deps-base-build", "_install-linux-deps"]
-    vars:
-      CURRENT_TARGET:
-        sh: |
-          case "{{OS}}/{{ARCH}}" in
-            darwin/arm64)  echo "aarch64-apple-darwin" ;;
-            darwin/amd64)  echo "x86_64-apple-darwin" ;;
-            linux/amd64)   echo "x86_64-unknown-linux-gnu" ;;
-            linux/arm64)   echo "aarch64-unknown-linux-gnu" ;;
-            windows/amd64) echo "x86_64-pc-windows-msvc" ;;
-            *) echo "Unsupported platform: {{OS}}/{{ARCH}}" >&2; exit 1 ;;
-          esac
     cmds:
       - task: _build
         vars:
@@ -197,7 +207,11 @@ tasks:
 
   dev:
     desc: "Run Tauri in development mode"
-    deps: ["_deps-base-build"]
+    deps:
+      - "_deps-base-build"
+      - task: ":zig:stage"
+        vars:
+          TARGET: "{{.CURRENT_TARGET}}"
     cmds:
       - deno run -A npm:@tauri-apps/cli dev -- --features agent
     interactive: true
@@ -205,7 +219,11 @@ tasks:
 
   dev:mcp:
     desc: "Run Tauri in development mode with MCP bridge for AI agent debugging"
-    deps: ["_deps-base-build"]
+    deps:
+      - "_deps-base-build"
+      - task: ":zig:stage"
+        vars:
+          TARGET: "{{.CURRENT_TARGET}}"
     cmds:
       - deno run -A npm:@tauri-apps/cli dev -- --features mcp,agent
     interactive: true

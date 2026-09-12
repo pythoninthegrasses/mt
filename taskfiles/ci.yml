@@ -147,7 +147,15 @@ tasks:
 
   build:
     desc: "Build Tauri binary without bundling (TARGET optional)"
-    deps: [frontend-build]
+    summary: |
+      TARGET is optional for cargo (falls back to the cargo host triple),
+      but the zig:stage dependency below requires TARGET explicitly -- both
+      real callers (release.yml's macOS and Windows jobs) always pass it.
+    deps:
+      - frontend-build
+      - task: :zig:stage
+        vars:
+          TARGET: '{{.TARGET}}'
     cmds:
       - cargo tauri build --no-bundle {{.TARGET_FLAG}}
           --config '{"build":{"beforeBuildCommand":""}}'
@@ -173,6 +181,45 @@ tasks:
     preconditions:
       - sh: test -f "{{.TARGET_DIR}}/release/mt{{.EXE_EXT}}"
         msg: "Binary not found. Run 'task ci:build TARGET={{.TARGET}}' first."
+
+  verify-signing:
+    desc: "Verify the sidecar's code signature and hardened runtime before notarizing (macOS only)"
+    platforms: [darwin]
+    summary: |
+      Runs after 'bundle' and before 'notarize' so a signing problem fails
+      in seconds rather than after a ~10-minute notarytool round trip
+      (AC#6). Tauri signs the sidecar and the .app separately, inside-out
+      (sidecar, then the main binary, then the .app last) -- codesign
+      --deep on the .app alone does not reliably validate nested helper
+      binaries, so the sidecar gets its own direct --verify rather than
+      being assumed covered by the .app's. The bundler strips the Rust
+      target-triple suffix when it copies externalBin into the app, so the
+      in-bundle path is the bare sidecar name, not a suffixed one.
+    vars:
+      APP_GLOB: "{{.TARGET_DIR}}/release/bundle/macos/*.app"
+    preconditions:
+      - sh: ls -d {{.APP_GLOB}} 2>/dev/null
+        msg: "No .app bundle found. Run 'task ci:bundle TARGET={{.TARGET}}' first."
+    cmds:
+      - |
+        app=$(ls -d {{.APP_GLOB}} 2>/dev/null | head -n1)
+        sidecar="$app/Contents/MacOS/mt-zig-core"
+        if [ ! -f "$sidecar" ]; then
+          echo "error: sidecar not found at $sidecar" >&2
+          exit 1
+        fi
+
+        echo "verifying sidecar signature: $sidecar"
+        codesign --verify --strict --verbose=2 "$sidecar"
+
+        echo "verifying sidecar hardened runtime flag"
+        if ! codesign --display --verbose=4 "$sidecar" 2>&1 | grep -q 'flags=0x[0-9a-fA-F]*(runtime)'; then
+          echo "error: sidecar is not signed with the hardened runtime flag" >&2
+          exit 1
+        fi
+
+        echo "verifying app bundle nested code signatures: $app"
+        codesign --verify --deep --strict --verbose=2 "$app"
 
   notarize:
     desc: "Notarize and staple macOS DMG"

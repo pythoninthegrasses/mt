@@ -530,22 +530,31 @@ The release pipeline (`.github/workflows/release.yml`) runs on version tags (`v*
 
 Three parallel jobs:
 
+All three jobs package the `zig-core` sidecar into the app bundle via Tauri's
+`externalBin` (see [Sidecar Packaging](#sidecar-packaging) below) — they
+install the pinned Zig toolchain before building, and `task ci:build`
+stages the sidecar for the job's target as a hard dependency.
+
 ### `build-macos` — macOS ARM64
 
 Runs on a self-hosted `[macOS, ARM64]` runner:
 
 1. Imports the certificate into a temporary CI keychain
 2. Decodes the `.p8` API key from `APPLE_API_KEY_B64` secret
-3. Builds with `tauri-action` which handles signing + notarization
-4. Creates a draft GitHub Release with the signed `.dmg`
-5. Cleans up the keychain and key file (runs in `always()` step)
+3. Reads the pinned Zig version from `.tool-versions`, restores its build cache, and installs it (`mlugg/setup-zig@v2`)
+4. `task ci:build TARGET=aarch64-apple-darwin` — stages the sidecar (`zig:stage`) then builds the app binary
+5. `task ci:bundle TARGET=aarch64-apple-darwin` — bundles and signs the `.app`, including the sidecar
+6. `task ci:verify-signing TARGET=aarch64-apple-darwin` — verifies the sidecar's code signature and hardened runtime flag before notarizing, so a signing problem fails in seconds rather than after a ~10-minute `notarytool` round trip
+7. `task ci:notarize TARGET=aarch64-apple-darwin` — notarizes and staples the signed `.dmg`
+8. Creates a draft GitHub Release with the signed, notarized `.dmg`
+9. Cleans up the keychain and key file (runs in `always()` step)
 
 ### `build-linux-amd64` — Linux amd64
 
 Runs on a configurable Blacksmith runner (default: `blacksmith-4vcpu-ubuntu-2404`, selectable via `linux-runner` workflow input). Uses a containerized build via `docker/linux/Dockerfile` with Blacksmith Docker layer caching:
 
 1. Sets up the Blacksmith Docker builder (`useblacksmith/setup-docker-builder`)
-2. Builds via `useblacksmith/build-push-action` targeting the `artifacts` stage
+2. Builds via `useblacksmith/build-push-action` targeting the `artifacts` stage — the Dockerfile's `deps` stage installs the pinned Zig toolchain directly (checksum-verified tarball from `ziglang.org`, since this runs inside the container rather than through a GitHub Action), and both the `check` and `build` stages build+stage the sidecar (`mt-zig-core-x86_64-unknown-linux-gnu`) before `cargo check`/`cargo tauri build`
 3. Extracts `.deb` and binary from the container to `dist/`
 4. Attaches the `.deb` to the same draft GitHub Release
 
@@ -558,11 +567,28 @@ Runs on a self-hosted `[self-hosted, Windows, X64]` runner:
 1. Sets up the Tauri build environment (Chocolatey installs cmake and rustup; `~/.cargo/bin` is prepended to `GITHUB_PATH`; `RUSTUP_TOOLCHAIN` is set to the fully qualified `nightly-2026-02-09-x86_64-pc-windows-msvc` to ensure the MSVC-hosted toolchain is used — see [Windows Toolchain Pinning](#windows-toolchain-pinning) below)
 2. Installs Windows SDK for `signtool.exe`
 3. Generates a self-signed `CodeSigningCert` and exports to PFX
-4. Builds the frontend explicitly (`npm run build` in `app/frontend/`)
-5. Writes a config override that disables `beforeBuildCommand` (frontend already built) and sets `bundle.windows.signCommand` using structured `{ cmd, args }` format (handles spaces in `signtool.exe` path)
-6. Builds with `tauri-action` which calls the sign command for both the binary and NSIS installer
-7. Attaches the signed `.exe` to the same draft GitHub Release
-8. Cleans up the certificate and config override (runs in `always()` step)
+4. Writes a config override that disables `beforeBuildCommand` and sets `bundle.windows.signCommand` using structured `{ cmd, args }` format (handles spaces in `signtool.exe` path)
+5. Reads the pinned Zig version from `.tool-versions`, restores its build cache, and installs it (`mlugg/setup-zig@v2`)
+6. `task ci:build TARGET=x86_64-pc-windows-msvc CONFIG=<sign override>` — stages the sidecar (`zig:stage`) then builds the app binary, signed via the override's `signCommand`
+7. `task ci:bundle TARGET=x86_64-pc-windows-msvc BUNDLES=nsis CONFIG=<sign override>` — bundles the signed NSIS installer, including the sidecar
+8. Attaches the signed `.exe` to the same draft GitHub Release
+9. Cleans up the certificate and config override (runs in `always()` step)
+
+### Sidecar Packaging
+
+`crates/mt-tauri/tauri.conf.json`'s `bundle.externalBin` names the sidecar
+(`binaries/mt-zig-core`); Tauri resolves the on-disk file by appending the
+*Rust* host triple, e.g. `binaries/mt-zig-core-aarch64-apple-darwin`. The
+`zig:stage` Task (`taskfiles/zig.yml`) builds `zig-core` for the Zig target
+matching that Rust triple — via an explicit hardcoded table, since Zig and
+Rust triple naming schemes disagree (e.g. Zig's `x86_64-linux` is static
+musl, filed under the Rust triple `x86_64-unknown-linux-gnu`) — and copies
+(never strips) the result into `crates/mt-tauri/binaries/`.
+
+Because Tauri's build script resolves `externalBin` paths eagerly, even a
+plain `cargo check` on `mt-tauri` requires the sidecar to already be staged
+for the host's Rust triple. `ci:build`, `tauri:build`, and `tauri:dev` all
+carry a `zig:stage` dependency for exactly this reason.
 
 ### CI Runner Policy
 
