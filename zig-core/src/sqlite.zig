@@ -281,10 +281,7 @@ const GoldenCase = struct {
 
 test "strip_sort_prefix UDF matches the shared golden fixture" {
     const allocator = testing.allocator;
-    const file = try std.fs.cwd().openFile("../tests/fixtures/strip_sort_prefix.json", .{});
-    defer file.close();
-
-    const contents = try file.readToEndAlloc(allocator, 1 << 20);
+    const contents = try std.Io.Dir.cwd().readFileAlloc(testing.io, "../tests/fixtures/strip_sort_prefix.json", allocator, .limited(1 << 20));
     defer allocator.free(contents);
 
     const parsed = try std.json.parseFromSlice([]GoldenCase, allocator, contents, .{

@@ -18,43 +18,43 @@ pub const file_name = "sidecar.json";
 /// 256 bits of CSPRNG entropy, hex-encoded into a fixed array with no
 /// allocation. A fresh token is generated on every call — a leaked token
 /// from a previous run must stop working as soon as the sidecar restarts.
-pub fn generateToken() [token_hex_len]u8 {
+pub fn generateToken(io: std.Io) [token_hex_len]u8 {
     var raw: [token_bytes_len]u8 = undefined;
-    std.crypto.random.bytes(&raw);
+    std.Io.random(io, &raw);
     return std.fmt.bytesToHex(raw, .lower);
 }
 
 /// Writes `{"port":N,"token":"..."}` to `dir/sidecar.json` at 0600.
 ///
 /// A stale file from a previous run is unlinked before creating a new one
-/// with `O_EXCL`: `createFile`'s `mode` is only honored when the file is
-/// actually created, so simply truncating a pre-existing file would leave
+/// with `O_EXCL`: `createFile`'s `permissions` is only honored when the file
+/// is actually created, so simply truncating a pre-existing file would leave
 /// whatever permissions (or symlink target) were already there in place —
 /// including a file an attacker pre-planted at this path to defeat AC#2.
-pub fn write(dir: std.fs.Dir, port: u16, token: *const [token_hex_len]u8) !void {
-    dir.deleteFile(file_name) catch |err| switch (err) {
+pub fn write(dir: std.Io.Dir, io: std.Io, port: u16, token: *const [token_hex_len]u8) !void {
+    dir.deleteFile(io, file_name) catch |err| switch (err) {
         error.FileNotFound => {},
         else => return err,
     };
 
-    const create_flags: std.fs.File.CreateFlags = if (builtin.os.tag == .windows)
-        // `mode` is a no-op on Windows; ACL hardening is out of scope for
-        // this POC (see zig-core/README.md).
+    const create_flags: std.Io.Dir.CreateFileOptions = if (builtin.os.tag == .windows)
+        // `permissions` is a no-op on Windows; ACL hardening is out of scope
+        // for this POC (see zig-core/README.md).
         .{ .truncate = true, .exclusive = true }
     else
-        .{ .mode = 0o600, .truncate = true, .exclusive = true };
+        .{ .permissions = .fromMode(0o600), .truncate = true, .exclusive = true };
 
-    const file = try dir.createFile(file_name, create_flags);
-    defer file.close();
+    const file = try dir.createFile(io, file_name, create_flags);
+    defer file.close(io);
 
     var buf: [256]u8 = undefined;
-    var fw = file.writer(&buf);
+    var fw = file.writer(io, &buf);
     try fw.interface.print("{{\"port\":{d},\"token\":\"{s}\"}}\n", .{ port, token.* });
     try fw.interface.flush();
 }
 
-pub fn remove(dir: std.fs.Dir) void {
-    dir.deleteFile(file_name) catch {};
+pub fn remove(dir: std.Io.Dir, io: std.Io) void {
+    dir.deleteFile(io, file_name) catch {};
 }
 
 const testing = std.testing;
@@ -63,10 +63,10 @@ test "write then read back port and token" {
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const token = generateToken();
-    try write(tmp.dir, 54321, &token);
+    const token = generateToken(testing.io);
+    try write(tmp.dir, testing.io, 54321, &token);
 
-    const contents = try tmp.dir.readFileAlloc(testing.allocator, file_name, 256);
+    const contents = try tmp.dir.readFileAlloc(testing.io, file_name, testing.allocator, .limited(256));
     defer testing.allocator.free(contents);
 
     const Parsed = struct { port: u16, token: []const u8 };
@@ -83,11 +83,11 @@ test "the file is 0600, unix only" {
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const token = generateToken();
-    try write(tmp.dir, 1, &token);
+    const token = generateToken(testing.io);
+    try write(tmp.dir, testing.io, 1, &token);
 
-    const stat = try tmp.dir.statFile(file_name);
-    try testing.expectEqual(@as(std.fs.File.Mode, 0o600), stat.mode & 0o777);
+    const stat = try tmp.dir.statFile(testing.io, file_name, .{});
+    try testing.expectEqual(@as(std.posix.mode_t, 0o600), stat.permissions.toMode() & 0o777);
 }
 
 test "writing twice overwrites a stale file and keeps 0600" {
@@ -96,16 +96,16 @@ test "writing twice overwrites a stale file and keeps 0600" {
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const first = generateToken();
-    try write(tmp.dir, 1, &first);
+    const first = generateToken(testing.io);
+    try write(tmp.dir, testing.io, 1, &first);
 
-    const second = generateToken();
-    try write(tmp.dir, 2, &second);
+    const second = generateToken(testing.io);
+    try write(tmp.dir, testing.io, 2, &second);
 
-    const stat = try tmp.dir.statFile(file_name);
-    try testing.expectEqual(@as(std.fs.File.Mode, 0o600), stat.mode & 0o777);
+    const stat = try tmp.dir.statFile(testing.io, file_name, .{});
+    try testing.expectEqual(@as(std.posix.mode_t, 0o600), stat.permissions.toMode() & 0o777);
 
-    const contents = try tmp.dir.readFileAlloc(testing.allocator, file_name, 256);
+    const contents = try tmp.dir.readFileAlloc(testing.io, file_name, testing.allocator, .limited(256));
     defer testing.allocator.free(contents);
     const Parsed = struct { port: u16, token: []const u8 };
     const parsed = try std.json.parseFromSlice(Parsed, testing.allocator, contents, .{});
@@ -116,11 +116,11 @@ test "writing twice overwrites a stale file and keeps 0600" {
 test "remove is a no-op when the file does not exist" {
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    remove(tmp.dir);
+    remove(tmp.dir, testing.io);
 }
 
 test "two tokens are not equal" {
-    const a = generateToken();
-    const b = generateToken();
+    const a = generateToken(testing.io);
+    const b = generateToken(testing.io);
     try testing.expect(!std.mem.eql(u8, &a, &b));
 }

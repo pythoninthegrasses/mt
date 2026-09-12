@@ -34,13 +34,11 @@ fn parseArgs(argv: []const [:0]const u8) !Args {
     };
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
+    const io = init.io;
 
-    const argv = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, argv);
+    const argv = try init.minimal.args.toSlice(init.arena.allocator());
 
     const args = parseArgs(argv) catch |err| {
         std.log.err("usage: mt-zig-core --db <path/to/mt.db> --runtime-dir <dir> ({s})", .{@errorName(err)});
@@ -53,24 +51,24 @@ pub fn main() !void {
     };
     defer db.close();
 
-    var runtime_dir = std.fs.cwd().openDir(args.runtime_dir, .{}) catch |err| {
+    var runtime_dir = std.Io.Dir.cwd().openDir(io, args.runtime_dir, .{}) catch |err| {
         std.log.err("failed to open --runtime-dir {s}: {s}", .{ args.runtime_dir, @errorName(err) });
         std.process.exit(1);
     };
-    defer runtime_dir.close();
+    defer runtime_dir.close(io);
 
-    var net_server = try server.listen();
-    defer net_server.deinit();
-    const port = net_server.listen_address.getPort();
+    var net_server = try server.listen(io);
+    defer net_server.deinit(io);
+    const port = net_server.socket.address.getPort();
 
-    const token = runtime_file.generateToken();
-    try runtime_file.write(runtime_dir, port, &token);
-    defer runtime_file.remove(runtime_dir);
+    const token = runtime_file.generateToken(io);
+    try runtime_file.write(runtime_dir, io, port, &token);
+    defer runtime_file.remove(runtime_dir, io);
 
     std.log.info("mt-zig-core listening on 127.0.0.1:{d} (sqlite {s})", .{ port, sqlite.libVersion() });
 
     var stopping = std.atomic.Value(bool).init(false);
-    try server.serveForever(&net_server, allocator, .{ .db = &db, .token = &token }, &stopping);
+    try server.serveForever(io, &net_server, allocator, .{ .db = &db, .token = &token }, &stopping);
 }
 
 test "sanity" {

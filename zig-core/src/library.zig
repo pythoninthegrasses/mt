@@ -221,7 +221,7 @@ pub fn parseQuery(allocator: std.mem.Allocator, raw_query: []const u8) ParseErro
 /// malformed or truncated '%' escape is passed through literally rather
 /// than erroring.
 pub fn decodeFormComponent(allocator: std.mem.Allocator, raw: []const u8) ![]u8 {
-    var out: std.ArrayList(u8) = .{};
+    var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     var i: usize = 0;
     while (i < raw.len) {
@@ -260,8 +260,8 @@ const Where = struct {
 /// clause is never actually empty for this endpoint (the Rust `is_empty()`
 /// branch is dead here too).
 fn buildWhere(allocator: std.mem.Allocator, q: Query) !Where {
-    var conditions: std.ArrayList([]const u8) = .{};
-    var params: std.ArrayList(BindValue) = .{};
+    var conditions: std.ArrayList([]const u8) = .empty;
+    var params: std.ArrayList(BindValue) = .empty;
 
     if (q.search) |search| {
         try conditions.append(allocator, "(title LIKE ? OR artist LIKE ? OR album LIKE ?)");
@@ -304,7 +304,7 @@ fn buildWhere(allocator: std.mem.Allocator, q: Query) !Where {
 
     try conditions.append(allocator, "(missing = 0 OR missing IS NULL)");
 
-    var clause: std.ArrayList(u8) = .{};
+    var clause: std.ArrayList(u8) = .empty;
     try clause.appendSlice(allocator, "WHERE ");
     for (conditions.items, 0..) |cond, i| {
         if (i != 0) try clause.appendSlice(allocator, " AND ");

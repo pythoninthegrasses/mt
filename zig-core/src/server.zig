@@ -25,11 +25,11 @@ pub const Options = struct {
 };
 
 /// Binds 127.0.0.1 on an OS-assigned port (AC#1). The caller reads back the
-/// actual port via `net_server.listen_address.getPort()` and writes it to
+/// actual port via `net_server.socket.address.getPort()` and writes it to
 /// the runtime file (`runtime_file.write`) before calling `serveForever`.
-pub fn listen() !std.net.Server {
-    const address = try std.net.Address.parseIp("127.0.0.1", 0);
-    return address.listen(.{});
+pub fn listen(io: std.Io) !std.Io.net.Server {
+    const address = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
+    return address.listen(io, .{});
 }
 
 /// Blocks accepting connections until `stopping` is set. Closing the
@@ -38,15 +38,15 @@ pub fn listen() !std.net.Server {
 /// not a cancellation signal), so shutdown instead sets `stopping` and
 /// makes a throwaway connection to itself to unblock the pending `accept()`
 /// — see `TestServer.stop` in the test harness below.
-pub fn serveForever(net_server: *std.net.Server, allocator: std.mem.Allocator, options: Options, stopping: *std.atomic.Value(bool)) !void {
+pub fn serveForever(io: std.Io, net_server: *std.Io.net.Server, allocator: std.mem.Allocator, options: Options, stopping: *std.atomic.Value(bool)) !void {
     while (!stopping.load(.acquire)) {
-        const connection = net_server.accept() catch |err| switch (err) {
+        const stream = net_server.accept(io) catch |err| switch (err) {
             error.ConnectionAborted => continue,
             else => return err,
         };
-        defer connection.stream.close();
+        defer stream.close(io);
         if (stopping.load(.acquire)) return;
-        serveConnection(connection.stream, allocator, options) catch {};
+        serveConnection(io, stream, allocator, options) catch {};
     }
 }
 
@@ -54,12 +54,12 @@ pub fn serveForever(net_server: *std.net.Server, allocator: std.mem.Allocator, o
 /// sent with `keep_alive = false`, and the connection is closed by the
 /// caller. `std.http.Server` supports multiple requests per connection, but
 /// a single local frontend caller has no need for it — YAGNI.
-fn serveConnection(stream: std.net.Stream, allocator: std.mem.Allocator, options: Options) !void {
+fn serveConnection(io: std.Io, stream: std.Io.net.Stream, allocator: std.mem.Allocator, options: Options) !void {
     var recv_buf: [8 * 1024]u8 = undefined;
     var send_buf: [8 * 1024]u8 = undefined;
-    var conn_reader = stream.reader(&recv_buf);
-    var conn_writer = stream.writer(&send_buf);
-    var http_server = std.http.Server.init(conn_reader.interface(), &conn_writer.interface);
+    var conn_reader = stream.reader(io, &recv_buf);
+    var conn_writer = stream.writer(io, &send_buf);
+    var http_server = std.http.Server.init(&conn_reader.interface, &conn_writer.interface);
 
     // `receiveHead` returning an error (oversized/truncated/invalid head)
     // means there is no `Request` to respond on — the stdlib's own servers
@@ -157,17 +157,17 @@ fn createTestLibraryTable(db: *sqlite.Db) !void {
 }
 
 const TestServer = struct {
-    net_server: std.net.Server,
+    net_server: std.Io.net.Server,
     thread: std.Thread,
     stopping: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
 
     fn start(db: *sqlite.Db, token: *const [runtime_file.token_hex_len]u8) !*TestServer {
         const self = try testing.allocator.create(TestServer);
         errdefer testing.allocator.destroy(self);
-        self.* = .{ .net_server = try listen(), .thread = undefined };
+        self.* = .{ .net_server = try listen(testing.io), .thread = undefined };
         self.thread = try std.Thread.spawn(.{}, struct {
-            fn run(ns: *std.net.Server, opts: Options, stopping: *std.atomic.Value(bool)) void {
-                serveForever(ns, testing.allocator, opts, stopping) catch {};
+            fn run(ns: *std.Io.net.Server, opts: Options, stopping: *std.atomic.Value(bool)) void {
+                serveForever(testing.io, ns, testing.allocator, opts, stopping) catch {};
             }
         }.run, .{ &self.net_server, Options{ .db = db, .token = token }, &self.stopping });
         return self;
@@ -179,23 +179,25 @@ const TestServer = struct {
     // the pending `accept()` up so the loop can observe the flag.
     fn stop(self: *TestServer) void {
         self.stopping.store(true, .release);
-        if (std.net.tcpConnectToAddress(self.net_server.listen_address)) |stream| {
-            stream.close();
+        if (self.net_server.socket.address.connect(testing.io, .{ .mode = .stream })) |stream| {
+            stream.close(testing.io);
         } else |_| {}
         self.thread.join();
-        self.net_server.deinit();
+        self.net_server.deinit(testing.io);
         testing.allocator.destroy(self);
     }
 };
 
-fn readResponse(stream: std.net.Stream, buf: []u8) ![]u8 {
-    var total: usize = 0;
-    while (total < buf.len) {
-        const n = try stream.read(buf[total..]);
-        if (n == 0) break;
-        total += n;
-    }
-    return buf[0..total];
+fn sendRequest(stream: std.Io.net.Stream, bytes: []const u8) !void {
+    var conn_writer = stream.writer(testing.io, &.{});
+    try conn_writer.interface.writeAll(bytes);
+}
+
+fn readResponse(stream: std.Io.net.Stream, buf: []u8) ![]u8 {
+    var small_buf: [1024]u8 = undefined;
+    var stream_reader = stream.reader(testing.io, &small_buf);
+    const n = try stream_reader.interface.readSliceShort(buf);
+    return buf[0..n];
 }
 
 test "unauthorized: missing Authorization header returns 401" {
@@ -203,13 +205,13 @@ test "unauthorized: missing Authorization header returns 401" {
     defer db.close();
     try createTestLibraryTable(&db);
 
-    const token = runtime_file.generateToken();
+    const token = runtime_file.generateToken(testing.io);
     const server = try TestServer.start(&db, &token);
     defer server.stop();
 
-    const stream = try std.net.tcpConnectToAddress(server.net_server.listen_address);
-    defer stream.close();
-    try stream.writeAll("GET /api/library HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+    const stream = try server.net_server.socket.address.connect(testing.io, .{ .mode = .stream });
+    defer stream.close(testing.io);
+    try sendRequest(stream, "GET /api/library HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
 
     var buf: [4096]u8 = undefined;
     const response = try readResponse(stream, &buf);
@@ -222,13 +224,13 @@ test "unauthorized: wrong bearer token returns 401" {
     defer db.close();
     try createTestLibraryTable(&db);
 
-    const token = runtime_file.generateToken();
+    const token = runtime_file.generateToken(testing.io);
     const server = try TestServer.start(&db, &token);
     defer server.stop();
 
-    const stream = try std.net.tcpConnectToAddress(server.net_server.listen_address);
-    defer stream.close();
-    try stream.writeAll("GET /api/library HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer wrong-token-wrong-token-wrong-token-wrong-token\r\nConnection: close\r\n\r\n");
+    const stream = try server.net_server.socket.address.connect(testing.io, .{ .mode = .stream });
+    defer stream.close(testing.io);
+    try sendRequest(stream, "GET /api/library HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer wrong-token-wrong-token-wrong-token-wrong-token\r\nConnection: close\r\n\r\n");
 
     var buf: [4096]u8 = undefined;
     const response = try readResponse(stream, &buf);
@@ -241,15 +243,15 @@ test "authorized: valid token returns 200 with a parseable JSON body" {
     try createTestLibraryTable(&db);
     try db.exec("INSERT INTO library (id, filepath, title, missing) VALUES (1, '/a.mp3', 'A Song', 0)");
 
-    const token = runtime_file.generateToken();
+    const token = runtime_file.generateToken(testing.io);
     const server = try TestServer.start(&db, &token);
     defer server.stop();
 
-    const stream = try std.net.tcpConnectToAddress(server.net_server.listen_address);
-    defer stream.close();
+    const stream = try server.net_server.socket.address.connect(testing.io, .{ .mode = .stream });
+    defer stream.close(testing.io);
     var req_buf: [256]u8 = undefined;
     const req = try std.fmt.bufPrint(&req_buf, "GET /api/library HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {s}\r\nConnection: close\r\n\r\n", .{token});
-    try stream.writeAll(req);
+    try sendRequest(stream, req);
 
     var buf: [8192]u8 = undefined;
     const response = try readResponse(stream, &buf);
@@ -258,7 +260,7 @@ test "authorized: valid token returns 200 with a parseable JSON body" {
     const body_start = std.mem.indexOf(u8, response, "\r\n\r\n").? + 4;
     // chunked transfer-encoding (AC#5's streaming consequence): strip the
     // hex chunk-length lines rather than parsing the body as raw JSON.
-    var dechunked: std.ArrayList(u8) = .{};
+    var dechunked: std.ArrayList(u8) = .empty;
     defer dechunked.deinit(testing.allocator);
     var lines = std.mem.splitSequence(u8, response[body_start..], "\r\n");
     while (lines.next()) |line| {
@@ -278,13 +280,13 @@ test "malformed request: garbage head closes the connection without a response" 
     defer db.close();
     try createTestLibraryTable(&db);
 
-    const token = runtime_file.generateToken();
+    const token = runtime_file.generateToken(testing.io);
     const server = try TestServer.start(&db, &token);
     defer server.stop();
 
-    const stream = try std.net.tcpConnectToAddress(server.net_server.listen_address);
-    defer stream.close();
-    try stream.writeAll("this is not an HTTP request\r\n\r\n");
+    const stream = try server.net_server.socket.address.connect(testing.io, .{ .mode = .stream });
+    defer stream.close(testing.io);
+    try sendRequest(stream, "this is not an HTTP request\r\n\r\n");
 
     var buf: [256]u8 = undefined;
     const response = try readResponse(stream, &buf);
@@ -296,15 +298,15 @@ test "not found: unknown path returns 404" {
     defer db.close();
     try createTestLibraryTable(&db);
 
-    const token = runtime_file.generateToken();
+    const token = runtime_file.generateToken(testing.io);
     const server = try TestServer.start(&db, &token);
     defer server.stop();
 
-    const stream = try std.net.tcpConnectToAddress(server.net_server.listen_address);
-    defer stream.close();
+    const stream = try server.net_server.socket.address.connect(testing.io, .{ .mode = .stream });
+    defer stream.close(testing.io);
     var req_buf: [256]u8 = undefined;
     const req = try std.fmt.bufPrint(&req_buf, "GET /nope HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {s}\r\nConnection: close\r\n\r\n", .{token});
-    try stream.writeAll(req);
+    try sendRequest(stream, req);
 
     var buf: [4096]u8 = undefined;
     const response = try readResponse(stream, &buf);

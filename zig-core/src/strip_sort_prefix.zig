@@ -21,7 +21,7 @@ pub fn stripSortPrefix(value: []const u8, ignore_words: []const u8) []const u8 {
         if (!std.ascii.eqlIgnoreCase(value[0..word.len], word)) continue;
         const rest = value[word.len..];
         if (std.mem.indexOfScalar(u8, whitespace, rest[0]) != null) {
-            return std.mem.trimLeft(u8, rest, whitespace);
+            return std.mem.trimStart(u8, rest, whitespace);
         }
     }
     return value;
@@ -39,10 +39,7 @@ const GoldenCase = struct {
 test "matches the shared golden fixture" {
     const allocator = testing.allocator;
     const fixture_path = "../tests/fixtures/strip_sort_prefix.json";
-    const file = try std.fs.cwd().openFile(fixture_path, .{});
-    defer file.close();
-
-    const contents = try file.readToEndAlloc(allocator, 1 << 20);
+    const contents = try std.Io.Dir.cwd().readFileAlloc(testing.io, fixture_path, allocator, .limited(1 << 20));
     defer allocator.free(contents);
 
     const parsed = try std.json.parseFromSlice([]GoldenCase, allocator, contents, .{
