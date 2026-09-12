@@ -67,6 +67,23 @@ tasks:
     cmds:
       - cd {{.ZIG_CORE_DIR}} && {{.ZIG}} build test
 
+  fixture:
+    desc: "Generate tests/fixtures/mt_fixture.db from mt_20260127.sql (real schema, real rows)"
+    summary: |
+      Drives a real Database::new/init through the Rust crate to build a
+      fresh SQLite file with the current schema, then loads the `library`
+      rows out of the repo-root mt_20260127.sql dump. Zig tests that need a
+      real on-disk mt.db (TASK-355.3/355.5 AC#4) open this file and skip if
+      it's absent — run this task first to exercise those tests for real.
+    cmds:
+      - cargo test -p mt-tauri --lib db::fixture_gen::tests::generate_mt_fixture -- --ignored --exact --nocapture
+    sources:
+      - "{{.ROOT_DIR}}/mt_20260127.sql"
+      - "{{.ROOT_DIR}}/crates/mt-tauri/src/db/fixture_gen.rs"
+      - "{{.ROOT_DIR}}/crates/mt-tauri/src/db/schema.rs"
+    generates:
+      - "{{.ROOT_DIR}}/tests/fixtures/mt_fixture.db"
+
   build:
     desc: "Build zig-core sidecar (debug)"
     deps: [_check-zig-version]
@@ -76,6 +93,7 @@ tasks:
       - "{{.ZIG_CORE_DIR}}/src/**/*.zig"
       - "{{.ZIG_CORE_DIR}}/build.zig"
       - "{{.ZIG_CORE_DIR}}/build.zig.zon"
+      - "{{.ZIG_CORE_DIR}}/vendor/**"
     generates:
       - "{{.ZIG_OUT_DIR}}/bin/mt-zig-core"
 

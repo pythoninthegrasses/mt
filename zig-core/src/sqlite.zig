@@ -27,7 +27,12 @@ pub const SQLITE_NULL = 5;
 pub const SQLITE_UTF8: c_int = 1;
 pub const SQLITE_DETERMINISTIC: c_int = 0x000000800;
 
-const SQLITE_TRANSIENT: ?*const fn (?*anyopaque) callconv(.c) void = @ptrFromInt(std.math.maxInt(usize));
+// -1 as a pointer, the SQLite C API's sentinel for "copy this string now".
+// It is never dereferenced, so it doesn't need to satisfy a real function
+// pointer's alignment — `align(1)` tells Zig not to check for one (natural
+// alignment would reject an all-ones address on targets like aarch64).
+const SQLiteDestructor = ?*align(1) const fn (?*anyopaque) callconv(.c) void;
+const SQLITE_TRANSIENT: SQLiteDestructor = @ptrFromInt(std.math.maxInt(usize));
 
 extern fn sqlite3_open_v2(filename: [*:0]const u8, ppDb: *?*sqlite3, flags: c_int, zVfs: ?[*:0]const u8) c_int;
 extern fn sqlite3_close_v2(db: ?*sqlite3) c_int;
@@ -44,8 +49,11 @@ extern fn sqlite3_column_text(stmt: ?*sqlite3_stmt, iCol: c_int) ?[*:0]const u8;
 extern fn sqlite3_column_bytes(stmt: ?*sqlite3_stmt, iCol: c_int) c_int;
 extern fn sqlite3_column_type(stmt: ?*sqlite3_stmt, iCol: c_int) c_int;
 extern fn sqlite3_column_count(stmt: ?*sqlite3_stmt) c_int;
-extern fn sqlite3_bind_text(stmt: ?*sqlite3_stmt, idx: c_int, text: [*]const u8, n: c_int, destructor: ?*const fn (?*anyopaque) callconv(.c) void) c_int;
+extern fn sqlite3_column_int64(stmt: ?*sqlite3_stmt, iCol: c_int) i64;
+extern fn sqlite3_column_double(stmt: ?*sqlite3_stmt, iCol: c_int) f64;
+extern fn sqlite3_bind_text(stmt: ?*sqlite3_stmt, idx: c_int, text: [*]const u8, n: c_int, destructor: SQLiteDestructor) c_int;
 extern fn sqlite3_bind_null(stmt: ?*sqlite3_stmt, idx: c_int) c_int;
+extern fn sqlite3_bind_int64(stmt: ?*sqlite3_stmt, idx: c_int, value: i64) c_int;
 
 pub const ScalarFunc = *const fn (ctx: ?*sqlite3_context, argc: c_int, argv: [*]?*sqlite3_value) callconv(.c) void;
 
@@ -65,7 +73,7 @@ extern fn sqlite3_value_text(value: ?*sqlite3_value) ?[*:0]const u8;
 extern fn sqlite3_value_bytes(value: ?*sqlite3_value) c_int;
 extern fn sqlite3_value_type(value: ?*sqlite3_value) c_int;
 
-extern fn sqlite3_result_text(ctx: ?*sqlite3_context, text: [*]const u8, n: c_int, destructor: ?*const fn (?*anyopaque) callconv(.c) void) void;
+extern fn sqlite3_result_text(ctx: ?*sqlite3_context, text: [*]const u8, n: c_int, destructor: SQLiteDestructor) void;
 extern fn sqlite3_result_null(ctx: ?*sqlite3_context) void;
 extern fn sqlite3_result_error(ctx: ?*sqlite3_context, msg: [*]const u8, n: c_int) void;
 
@@ -111,6 +119,17 @@ pub const Db = struct {
     /// tests to exercise the UDF through real SQL without touching disk.
     fn openMemoryForTest() Error!Db {
         var db = try openRaw(":memory:", SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE);
+        errdefer db.close();
+        try db.registerScalarFunction("strip_sort_prefix", 2, stripSortPrefixUdf);
+        return db;
+    }
+
+    /// A read-write connection to an on-disk file, creating it if absent —
+    /// used by tests that need to build a throwaway fixture database (real
+    /// `library` table, own rows) before exercising it through
+    /// `openReadOnly`. Not used by the sidecar itself, which only reads.
+    pub fn openForTestFixture(path: [:0]const u8) Error!Db {
+        var db = try openRaw(path, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE);
         errdefer db.close();
         try db.registerScalarFunction("strip_sort_prefix", 2, stripSortPrefixUdf);
         return db;
@@ -187,6 +206,10 @@ pub const Stmt = struct {
         return sqlite3_column_type(self.handle, col);
     }
 
+    pub fn columnIsNull(self: *Stmt, col: c_int) bool {
+        return self.columnType(col) == SQLITE_NULL;
+    }
+
     /// Text of column `col`. Caller must not free — owned by the statement,
     /// valid until the next step()/finalize() call.
     pub fn columnText(self: *Stmt, col: c_int) ?[]const u8 {
@@ -195,12 +218,24 @@ pub const Stmt = struct {
         return ptr[0..len];
     }
 
+    pub fn columnInt64(self: *Stmt, col: c_int) i64 {
+        return sqlite3_column_int64(self.handle, col);
+    }
+
+    pub fn columnDouble(self: *Stmt, col: c_int) f64 {
+        return sqlite3_column_double(self.handle, col);
+    }
+
     pub fn bindText(self: *Stmt, idx: c_int, text: []const u8) Error!void {
         try check(null, sqlite3_bind_text(self.handle, idx, text.ptr, @intCast(text.len), SQLITE_TRANSIENT));
     }
 
     pub fn bindNull(self: *Stmt, idx: c_int) Error!void {
         try check(null, sqlite3_bind_null(self.handle, idx));
+    }
+
+    pub fn bindInt64(self: *Stmt, idx: c_int, value: i64) Error!void {
+        try check(null, sqlite3_bind_int64(self.handle, idx, value));
     }
 };
 
