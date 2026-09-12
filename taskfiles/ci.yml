@@ -202,8 +202,16 @@ tasks:
         msg: "No .app bundle found. Run 'task ci:bundle TARGET={{.TARGET}}' first."
     cmds:
       - |
-        app=$(ls -d {{.APP_GLOB}} 2>/dev/null | head -n1)
+        app_matches=$(ls -d {{.APP_GLOB}} 2>/dev/null)
+        app_count=$(echo "$app_matches" | grep -c .)
+        if [ "$app_count" -gt 1 ]; then
+          echo "warning: {{.APP_GLOB}} matched $app_count bundles, using the first:" >&2
+          echo "$app_matches" >&2
+        fi
+        app=$(echo "$app_matches" | head -n1)
         sidecar="$app/Contents/MacOS/mt-zig-core"
+        echo "resolved app bundle: $app"
+        echo "resolved sidecar: $sidecar ($(stat -f '%z bytes, mtime %Sm' "$sidecar" 2>/dev/null || echo 'stat failed'))"
         if [ ! -f "$sidecar" ]; then
           echo "error: sidecar not found at $sidecar" >&2
           exit 1
@@ -213,8 +221,11 @@ tasks:
         codesign --verify --strict --verbose=2 "$sidecar"
 
         echo "verifying sidecar hardened runtime flag"
-        if ! codesign --display --verbose=4 "$sidecar" 2>&1 | grep -q 'flags=0x[0-9a-fA-F]*(runtime)'; then
+        sidecar_display=$(codesign --display --verbose=4 "$sidecar" 2>&1)
+        if ! echo "$sidecar_display" | grep -q 'flags=0x[0-9a-fA-F]*(runtime)'; then
           echo "error: sidecar is not signed with the hardened runtime flag" >&2
+          echo "--- codesign --display --verbose=4 output ---" >&2
+          echo "$sidecar_display" >&2
           exit 1
         fi
 
