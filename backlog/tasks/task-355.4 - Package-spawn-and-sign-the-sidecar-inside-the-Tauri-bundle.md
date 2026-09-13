@@ -1,9 +1,10 @@
 ---
 id: TASK-355.4
 title: 'Package, spawn, and sign the sidecar inside the Tauri bundle'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-11 00:39'
+updated_date: '2026-09-13 22:45'
 labels: []
 dependencies:
   - TASK-355.3
@@ -26,7 +27,7 @@ The Zig sidecar binary must ship inside the Tauri app bundle via externalBin, be
 - [x] #4 Sidecar stderr output is forwarded into the existing tracing pipeline in crates/mt-tauri/src/logging.rs
 - [x] #5 capabilities/default.json is unchanged, since Rust (not JS) owns the sidecar lifecycle
 - [x] #6 A CI verification step confirms nested code signatures and the hardened runtime flag on the sidecar binary before the notarization step runs, failing fast on a problem rather than waiting on a 10-minute notarytool round trip (verified on real macOS CI, run 34723576889 — see Implementation Notes)
-- [ ] #7 A signed and notarized macOS app bundle successfully launches and the sidecar serves a request from it (deferred to a follow-up; needs a macOS host/CI run)
+- [x] #7 A signed and notarized macOS app bundle successfully launches and the sidecar serves a request from it (deferred to a follow-up; needs a macOS host/CI run)
 - [x] #8 The Zig-emitted binary is not stripped or otherwise post-processed after `zig build`, since that would invalidate Zig's ad-hoc code signature on Apple Silicon
 <!-- AC:END -->
 
@@ -54,4 +55,10 @@ Verified on real macOS CI, not just written and wired: run `34718953882` (the fi
 - Missing-binary run: moved `target/debug/mt-zig-core` aside and ran the built `mt` binary directly — logged `sidecar not started: failed to spawn mt-zig-core error=No such file or directory (os error 2)`, no panic, app started normally (db opened, audio engine up, watchers started) (AC#3). Binary restored afterward.
 
 AC#6 is now verified on real macOS CI (runs `34718953882`/`34723576889`, see above). AC#7 remains unverified — it needs the app to actually launch and the sidecar to serve a request, which this workflow never does (it only builds, signs, and notarizes); that's follow-up work. `release.yml` already exposes `workflow_dispatch` with `platform: macos` to close it without cutting a real release.
+
+**AC#7 closed out (2026-09-13), on real macOS hardware (`mini`).** While setting up the manual test, found and fixed a genuine bug: `crates/mt-tauri/src/lib.rs` called `sidecar::spawn()` *before* `db::Database::new()` created/migrated `mt.db`. On a true fresh install (no pre-existing db file) this is a deterministic race, not a flake -- the sidecar's own SQLite open failed (`sqlite error 14: unable to open database file`) before Rust finished creating the file, and the health probe timed out. Reproduced live: first launch on a wiped `~/Library/Application Support/com.mt.desktop` failed exactly this way; moving the spawn to after `Database::new()` returns (commit `73e0441`, pushed to main) fixed it -- reverified by wiping the app-data dir again and relaunching, sidecar came up clean.
+
+Full signed+notarized verification, also on `mini`: `task ci:bundle TARGET=aarch64-apple-darwin` (real Developer ID signing, ASC API key staged from `.env`'s `APPLE_API_KEY_B64`) produced `Notarizing Finished with status Accepted`, stapled. Confirmed independently, not just from the bundler's own claim: `xcrun stapler validate` -> "The validate action worked!", `spctl -a -vvv --type execute` -> `accepted, source=Notarized Developer ID`, and `task ci:verify-signing` passed (sidecar signature valid, hardened runtime flag present, nested `.app` signatures valid). Launched the signed bundle against a freshly wiped app-data dir: log showed `mt-zig-core listening on 127.0.0.1:<port>` then `sidecar health probe succeeded port=<port>`; independently re-verified by reading `sidecar.json` myself and issuing my own authenticated `GET /api/library?limit=1` outside the app's own probe -- `200 {"tracks":[],"total":0,...}`. Quit via a real Cocoa quit event (AppleScript `tell application "mt" to quit`, not SIGTERM -- SIGTERM doesn't hit `RunEvent::Exit`) and confirmed both `mt` and `mt-zig-core` processes gone from `ps`, with `sidecar terminated on exit` logged.
+
+All 8 acceptance criteria are now genuinely verified with first-hand evidence. Task moved to Done.
 <!-- SECTION:NOTES:END -->
