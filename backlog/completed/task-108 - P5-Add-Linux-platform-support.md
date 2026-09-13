@@ -66,7 +66,7 @@ cargo tauri build --target x86_64-unknown-linux-gnu
 - Audio playback: works (ALSA backend via rodio/symphonia)
 - PipeWire systems need `pipewire-alsa` runtime dep for audio
 - Last.fm integration: working (API keys embedded at compile time via `build.rs`)
-- Known issue: Last.fm settings buttons block main thread (task-260)
+- Known issue: Last.fm settings buttons block main thread (task-359)
 
 ### Debian/Ubuntu amd64 — CI builds, untested on hardware
 - CI release workflow builds `x86_64-unknown-linux-gnu` .deb via `tauri-action`

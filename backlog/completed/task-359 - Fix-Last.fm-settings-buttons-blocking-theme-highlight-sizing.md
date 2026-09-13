@@ -1,5 +1,5 @@
 ---
-id: task-260
+id: TASK-359
 title: 'Fix Last.fm settings buttons: blocking, theme highlight, sizing'
 status: Done
 assignee: []

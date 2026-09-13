@@ -1,5 +1,5 @@
 ---
-id: task-132
+id: TASK-357
 title: Playwright MCP viewport issue with Chromium driver
 status: To Do
 assignee: []

@@ -53,7 +53,7 @@ All fixes in: `core/controls/player_core.py`, `core/player/handlers.py`, `core/p
 Created follow-up tasks to address test coverage gaps discovered during migration:
 - **task-074**: Add integration tests for recent bug fixes (high priority)
 - **task-075**: Add unit tests for PlayerEventHandlers class (0% coverage)
-- **task-076**: Increase PlayerCore coverage from 29% to 50%+
+- **task-356**: Increase PlayerCore coverage from 29% to 50%+
 
 ### Python 3.12 Compatibility Notes
 - No deprecation warnings triggered
