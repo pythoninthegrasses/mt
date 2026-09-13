@@ -604,17 +604,20 @@ pub fn run() {
                 std::fs::create_dir_all(parent).ok();
             }
 
-            if let Some(runtime_dir) = db_path.parent() {
-                sidecar::spawn(app, &db_path, runtime_dir);
-            } else {
-                error!("sidecar not started: could not determine app data directory");
-            }
-
             let database = db::Database::new(&db_path)
                 .expect("Failed to initialize database");
             let database_for_watcher = database.clone();
             app.manage(database);
             info!(path = %db_path.display(), "Database initialized");
+
+            // Sidecar spawn must come after Database::new() creates and migrates
+            // mt.db -- otherwise the sidecar races Rust's own db creation and its
+            // SQLite open fails on every fresh install with no pre-existing db file.
+            if let Some(runtime_dir) = db_path.parent() {
+                sidecar::spawn(app, &db_path, runtime_dir);
+            } else {
+                error!("sidecar not started: could not determine app data directory");
+            }
 
             // Initialize artwork cache (Rust LRU cache)
             let artwork_cache = scanner::artwork_cache::ArtworkCache::with_capacity(50);
