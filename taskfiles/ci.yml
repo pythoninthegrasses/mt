@@ -21,7 +21,16 @@ vars:
 env:
   PATH: "{{.CARGO_BIN}}:{{.MISE_SHIMS}}:{{.PATH}}"
   RUSTC_WRAPPER: ""
-  RUSTUP_TOOLCHAIN: '{{if and (eq OS "windows") .PINNED_RUST}}{{.PINNED_RUST}}-x86_64-pc-windows-msvc{{else if .PINNED_RUST}}{{.PINNED_RUST}}{{end}}'
+
+# Task's file-level `env:` block above does not reliably resolve templates
+# referencing this same file's own `vars:` (e.g. .PINNED_RUST) when this
+# taskfile is pulled in via the root Taskfile's `includes:` -- confirmed by
+# instrumenting a live run: the template renders correctly in `cmds:`, but
+# the exported env var comes through empty, silently falling back to
+# whatever toolchain happens to be `rustup default` on the host. Task-level
+# `env:` blocks use the full local var scope and resolve correctly, so
+# RUSTUP_TOOLCHAIN is set per-task below on every task that invokes
+# cargo/rustc, rather than once at the file level.
 
 tasks:
   setup:
@@ -125,6 +134,8 @@ tasks:
 
   check:
     desc: "Run cargo check (TARGET optional)"
+    env:
+      RUSTUP_TOOLCHAIN: '{{if and (eq OS "windows") .PINNED_RUST}}{{.PINNED_RUST}}-x86_64-pc-windows-msvc{{else if .PINNED_RUST}}{{.PINNED_RUST}}{{end}}'
     cmds:
       - cargo check --workspace {{.TARGET_FLAG}}
     sources:
@@ -156,6 +167,8 @@ tasks:
       - task: :zig:stage
         vars:
           TARGET: '{{.TARGET}}'
+    env:
+      RUSTUP_TOOLCHAIN: '{{if and (eq OS "windows") .PINNED_RUST}}{{.PINNED_RUST}}-x86_64-pc-windows-msvc{{else if .PINNED_RUST}}{{.PINNED_RUST}}{{end}}'
     cmds:
       - cargo tauri build --no-bundle {{.TARGET_FLAG}}
           --config '{"build":{"beforeBuildCommand":""}}'
@@ -171,6 +184,8 @@ tasks:
 
   bundle:
     desc: "Bundle Tauri app (TARGET optional, BUNDLES optional)"
+    env:
+      RUSTUP_TOOLCHAIN: '{{if and (eq OS "windows") .PINNED_RUST}}{{.PINNED_RUST}}-x86_64-pc-windows-msvc{{else if .PINNED_RUST}}{{.PINNED_RUST}}{{end}}'
     cmds:
       - cargo tauri bundle {{.TARGET_FLAG}} {{.BUNDLES_FLAG}}
           {{.CONFIG_FLAG}}
