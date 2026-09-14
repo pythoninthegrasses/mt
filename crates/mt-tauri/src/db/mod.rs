@@ -26,7 +26,7 @@ mod compat_test;
 #[cfg(test)]
 mod dedup_scope_test;
 #[cfg(test)]
-mod fixture_gen;
+pub(crate) mod fixture_gen;
 #[cfg(test)]
 mod sort_key_test;
 

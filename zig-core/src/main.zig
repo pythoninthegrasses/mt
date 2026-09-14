@@ -1,16 +1,23 @@
 const std = @import("std");
 const sqlite = @import("sqlite.zig");
 const runtime_file = @import("runtime_file.zig");
+const library = @import("library.zig");
 const server = @import("server.zig");
 
 const Args = struct {
     db_path: [:0]const u8,
     runtime_dir: []const u8,
+    /// Deliberately break one field's serialization, so the Rust side of the
+    /// shadow-diff harness (TASK-355.5) can be shown to catch a divergence
+    /// instead of merely being told it compares two implementations. No CI
+    /// job passes this; it is inert without an explicit caller.
+    sabotage: bool = false,
 };
 
 fn parseArgs(argv: []const [:0]const u8) !Args {
     var db_path: ?[:0]const u8 = null;
     var runtime_dir: ?[]const u8 = null;
+    var sabotage = false;
 
     var i: usize = 1;
     while (i < argv.len) : (i += 1) {
@@ -22,6 +29,8 @@ fn parseArgs(argv: []const [:0]const u8) !Args {
             i += 1;
             if (i >= argv.len) return error.MissingArgValue;
             runtime_dir = argv[i];
+        } else if (std.mem.eql(u8, argv[i], "--sabotage")) {
+            sabotage = true;
         } else {
             std.log.err("unrecognized argument: {s}", .{argv[i]});
             return error.UnrecognizedArg;
@@ -31,6 +40,7 @@ fn parseArgs(argv: []const [:0]const u8) !Args {
     return Args{
         .db_path = db_path orelse return error.MissingDbPath,
         .runtime_dir = runtime_dir orelse return error.MissingRuntimeDir,
+        .sabotage = sabotage,
     };
 }
 
@@ -67,8 +77,12 @@ pub fn main(init: std.process.Init) !void {
 
     std.log.info("mt-zig-core listening on 127.0.0.1:{d} (sqlite {s})", .{ port, sqlite.libVersion() });
 
+    if (args.sabotage) {
+        std.log.warn("sabotage enabled: {s} will not match the Rust implementation", .{library.sabotage_field});
+    }
+
     var stopping = std.atomic.Value(bool).init(false);
-    try server.serveForever(io, &net_server, allocator, .{ .db = &db, .token = &token }, &stopping);
+    try server.serveForever(io, &net_server, allocator, .{ .db = &db, .token = &token, .sabotage = args.sabotage }, &stopping);
 }
 
 test "sanity" {
