@@ -1,7 +1,7 @@
 ---
 id: TASK-355.5
 title: Shadow-diff harness proving Rust/Zig parity
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-11 00:39'
 labels: []
