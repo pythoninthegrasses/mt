@@ -1,7 +1,7 @@
 ---
 id: TASK-355.6
 title: 'Frontend flip for the one endpoint, and the POC report'
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-11 00:39'
 labels: []
@@ -55,4 +55,13 @@ Revives the runtime-injection mechanism this repo had for the Python PEX sidecar
   - Two environment caveats, stated rather than papered over. (1) **WebKit, the default `fast` engine, cannot launch on this host** — AlmaLinux 10 ships `libjpeg.so.62`/`libjxl.so.0.10` where Playwright's webkit build wants `libjpeg.so.8`/`libjxl.so.0.8` (same finding as TASK-355.5); the 511 webkit tests error out with "Host system is missing dependencies", so the real browser evidence here is chromium-only. (2) **The 8 `visual-regression` snapshot tests failed in the first baseline run and pass now** — they self-skip when `CI` is set, because `*-snapshots/` is gitignored and this worktree starts with no baselines; the baseline run generated them locally, so they are no longer a comparison point either way. Nothing about the change affects them (they assert DOM/screenshot state, and the default `API_BASE` is the same string it was before).
 - **Rust: 892 passed / 0 failed** (`cargo test --workspace`, 2 ignored). Two `shadow_diff_parity_test` cases were failing on this machine before and after any edit of mine, for an environment reason worth recording since it is easy to mistake for a regression: they need a *staged* sidecar binary and a *populated* fixture, and resolve the former as `mt-zig-core{host}` where `host_triple()` returns `x86_64-unknown-linux-gnu` but `task zig:stage` writes `mt-zig-core-x86_64-unknown-linux-gnu` — a missing hyphen in the test's own candidate path, so only its second candidate, `zig-core/zig-out/bin/mt-zig-core` from `task zig:build`, can ever satisfy it. Building that binary and regenerating the fixture (`task zig:build`, then the `#[ignore]`d `generate_mt_fixture_test`, which is what `task zig:fixture` invokes — that task's own filter is also wrong: it drops the `_test` suffix and matches 0 tests, silently leaving 0 rows in `mt_fixture.db`) makes both pass. **Both mismatches are pre-existing and left untouched** — out of this task's scope, and neither is reachable from the ACs here.
 - **Lint/format:** `task lint` clean (deno lint + clippy + zig fmt), `deno fmt --check` clean, `rustfmt --check` clean on both Rust files. `cargo clippy -p mt-tauri --all-targets` reports zero findings in `sidecar.rs`; its 7 lib warnings are the same pre-existing `plex.rs`/`removed.rs`/`lib.rs` ones recorded on TASK-355.5.
+
+### Human review (post-run)
+
+Reviewed the agent's commit (`7e38f6a`) directly rather than trusting the notes above at face value:
+
+- Independently re-ran Vitest (626 passed / 17 failed) and Playwright chromium (`E2E_MODE=full --project=chromium`: 504 passed / 5 failed / 2 skipped) — both match the reported counts and failure sets exactly. Confirmed all 5 Playwright failures reproduce identically against base `main` (`92feb45`) in a throwaway comparison worktree, independent of the agent's own stash-based claim.
+- Found and reverted two out-of-scope stylistic hunks the agent's diff carried that the ACs never asked for: `main.js`'s `handleFileDrop`/`testDialog` `function` → arrow-function conversion, and a ternary condition-order flip in `library.js`'s `getSection` `page` calculation. Both were semantically identical to what they replaced; reverted in `7bb6a72` to keep the diff to what AC#1-#4 describe. (Note: `main.js` isn't in `deno.jsonc`'s lint `include` list, so neither version affected `task lint`.)
+- Discarded a stray, uncommitted `deno fmt`-style reformatting (double-quotes, altered indent) found sitting dirty in the worktree ~46s after the agent's commit — pure whitespace/quote noise (confirmed via `git diff -w`), never staged or committed by the agent itself, not part of the reviewed diff.
+- Status left as `In Progress`, not `Done`: AC#1-#4 are genuinely satisfied, but AC#5 (the POC report/recommendation) remains outstanding and is being done separately.
 <!-- SECTION:NOTES:END -->
