@@ -154,9 +154,10 @@ jobs:
 
   build:
     name: Build (${{ matrix.platform }})
-    # Gate on lint/format/test jobs so builds don't burn CI minutes
-    # when basic checks fail.
-    needs: [deno-lint, rust, vitest-tests, playwright-tests]
+    # Gate on deno-lint only -- rust/vitest-tests/playwright-tests run in
+    # parallel and don't produce artifacts the build matrix consumes, so
+    # serializing on them just adds wall-clock (see docs/builds.md#test-workflow-dependency-graph).
+    needs: [deno-lint]
     if: ${{ !failure() && !cancelled() }}
     strategy:
       fail-fast: false
@@ -278,7 +279,9 @@ jobs:
 
   playwright-tests:
     name: Playwright E2E Tests
-    needs: [changes, deno-lint, rust, vitest-tests]
+    # Runs against a Vite preview build with mocked IPC -- no Tauri/Rust
+    # artifact dependency, so it only needs deno-lint plus the change filter.
+    needs: [changes, deno-lint]
     if: ${{ !failure() && !cancelled() && (needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch') }}
     runs-on: [macOS, ARM64]
     timeout-minutes: 20
