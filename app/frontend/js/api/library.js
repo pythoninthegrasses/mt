@@ -78,7 +78,10 @@ export const library = {
   },
 
   /**
-   * Get all tracks in library (uses Tauri command)
+   * Get all tracks in the library over HTTP.
+   *
+   * This is the one endpoint the Zig sidecar serves (TASK-355.3/355.5), so it
+   * calls the sidecar directly rather than going through `library_get_all`.
    * @param {object} params - Query parameters
    * @param {string} [params.search] - Search query
    * @param {string} [params.sort] - Sort field
@@ -87,19 +90,7 @@ export const library = {
    * @param {number} [params.offset] - Offset for pagination
    * @returns {Promise<{tracks: Array, total: number, limit: number, offset: number}>}
    */
-  async getTracks(params = {}) {
-    const result = await tauriInvoke('library_get_all', {
-      search: params.search || null,
-      artist: params.artist || null,
-      album: params.album || null,
-      sortBy: params.sort || null,
-      sortOrder: params.order || null,
-      limit: params.limit || null,
-      offset: params.offset || null,
-      ignoreWords: params.ignoreWords || null,
-    });
-    if (result !== null) return result;
-    // Fallback to HTTP
+  getTracks(params = {}) {
     const query = new URLSearchParams();
     if (params.search) query.set('search', params.search);
     if (params.sort) query.set('sort_by', params.sort);
@@ -183,7 +174,7 @@ export const library = {
       tracks: trackData.tracks || [],
       total_tracks: countData.total ?? (trackData.tracks || []).length,
       total_duration: countData.total_duration ?? 0,
-      page: params.offset != null ? Math.floor(params.offset / (params.limit || 50)) : null,
+      page: params.offset == null ? null : Math.floor(params.offset / (params.limit || 50)),
       page_size: params.limit || null,
       has_more: trackData.total > (params.offset || 0) + (trackData.tracks || []).length,
       revision: 0,

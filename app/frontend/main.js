@@ -10,6 +10,7 @@ import { settings } from './js/services/settings.js';
 import { handleFilesDrop, handleInternalTrackDrop } from './js/utils/tauri-drag-drop.js';
 import { installGlobalErrorHandlers } from './js/utils/error-reporter.js';
 import { initWebVitals } from './js/utils/web-vitals.js';
+import { setBackendEndpoint } from './js/api/shared.js';
 import './styles.css';
 
 // Install global error handlers early so unhandled errors reach the backend log
@@ -28,7 +29,7 @@ window._mtInternalDragActive = false;
 window._mtDragJustEnded = false;
 window._mtDraggedTrackIds = null;
 
-window.handleFileDrop = async function (event) {
+window.handleFileDrop = async (event) => {
   console.log('[main] Browser drop event (Tauri handles via native events)');
 };
 
@@ -58,7 +59,7 @@ async function initTauriDragDrop() {
   }
 }
 
-window.testDialog = async function () {
+window.testDialog = async () => {
   console.log('[test] Testing dialog...');
   console.log(
     '[test] window.__TAURI__:',
@@ -80,6 +81,31 @@ window.testDialog = async function () {
 
 function initGlobalKeyboardShortcuts() {
   initKeyboardShortcuts();
+}
+
+/**
+ * Point the HTTP API client at the sidecar port this process actually got.
+ * The sidecar binds an ephemeral port and writes it, with its bearer token, to
+ * the runtime file the Rust health probe reads, so the value has to come from
+ * the running app rather than a constant. Any failure — no Tauri context, an
+ * unspawned sidecar, or a per-test invoke stub that answers unknown commands
+ * with `undefined` — leaves the client on its default base URL.
+ */
+async function initBackendUrl() {
+  if (!window.__TAURI__) return;
+
+  try {
+    const { invoke } = window.__TAURI__.core;
+    const endpoint = await invoke('sidecar_get_endpoint');
+    if (!endpoint || !endpoint.baseUrl) {
+      console.warn('[main] No sidecar endpoint reported, using default API base URL');
+      return;
+    }
+    setBackendEndpoint(endpoint.baseUrl, endpoint.token);
+    console.log('[main] Backend URL:', endpoint.baseUrl);
+  } catch (error) {
+    console.warn('[main] Failed to get backend URL, using default:', error);
+  }
 }
 
 async function initTitlebarDrag() {
@@ -198,6 +224,9 @@ async function initApp() {
 
   const t = { start: performance.now() };
   window._perfTimings = t;
+
+  // Resolve the sidecar endpoint before anything issues an HTTP request.
+  await initBackendUrl();
 
   // Initialize settings service first (loads settings from backend)
   if (window.__TAURI__) {

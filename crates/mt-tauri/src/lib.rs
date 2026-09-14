@@ -64,6 +64,7 @@ use scanner::commands::{
     scan_paths_to_library,
 };
 use serde::Serialize;
+use sidecar::sidecar_get_endpoint;
 use std::time::Duration;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
@@ -473,6 +474,7 @@ pub fn run() {
             media_set_paused,
             media_set_stopped,
             app_get_info,
+            sidecar_get_endpoint,
             export_diagnostics,
             save_file,
             log_frontend_error,
