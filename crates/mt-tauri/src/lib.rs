@@ -12,6 +12,9 @@ pub(crate) mod media_keys;
 pub(crate) mod metadata;
 pub(crate) mod plex;
 pub(crate) mod scanner;
+pub(crate) mod shadow_diff;
+#[cfg(test)]
+mod shadow_diff_parity_test;
 pub(crate) mod sidecar;
 pub(crate) mod watcher;
 

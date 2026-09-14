@@ -6,6 +6,7 @@
 //! trusts a file that reappears afterward, via the health probe below.
 
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
 use parking_lot::Mutex;
@@ -16,14 +17,14 @@ use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tracing::{error, info, warn};
 
 const SIDECAR_NAME: &str = "mt-zig-core";
-const RUNTIME_FILE_NAME: &str = "sidecar.json";
+pub(crate) const RUNTIME_FILE_NAME: &str = "sidecar.json";
 const HEALTH_PROBE_ATTEMPTS: u32 = 30;
 const HEALTH_PROBE_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Clone, Deserialize)]
-struct Endpoint {
-    port: u16,
-    token: String,
+pub(crate) struct Endpoint {
+    pub(crate) port: u16,
+    pub(crate) token: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -40,10 +41,14 @@ enum ProbeError {
 /// resolved (for TASK-355.6 to read from later). Cleared, never dropped
 /// implicitly — this crate has no `Drop` impls; cleanup is explicit via
 /// `RunEvent::Exit`, matching `NetworkFileCache`.
-#[derive(Default)]
+///
+/// `Arc`d so a command can hand the same state to a detached task (the
+/// shadow-diff harness) without borrowing `tauri::State<'_, _>` past its own
+/// invocation.
+#[derive(Clone, Default)]
 pub struct SidecarState {
-    child: Mutex<Option<CommandChild>>,
-    endpoint: Mutex<Option<Endpoint>>,
+    child: Arc<Mutex<Option<CommandChild>>>,
+    endpoint: Arc<Mutex<Option<Endpoint>>>,
 }
 
 impl SidecarState {
@@ -57,6 +62,23 @@ impl SidecarState {
 
     fn set_endpoint(&self, endpoint: Endpoint) {
         *self.endpoint.lock() = Some(endpoint);
+    }
+
+    /// The endpoint the startup health probe resolved, or `None` until it has
+    /// succeeded. The shadow-diff harness (TASK-355.5) short-circuits on `None`
+    /// rather than re-reading the runtime file itself.
+    pub(crate) fn endpoint(&self) -> Option<Endpoint> {
+        self.endpoint.lock().clone()
+    }
+
+    /// Build a `SidecarState` for an already-running sidecar, for tests that
+    /// spawn it themselves instead of going through the Tauri shell plugin.
+    #[cfg(test)]
+    pub(crate) fn for_test(endpoint: Endpoint) -> Self {
+        Self {
+            child: Arc::new(Mutex::new(None)),
+            endpoint: Arc::new(Mutex::new(Some(endpoint))),
+        }
     }
 }
 
@@ -100,8 +122,8 @@ pub fn spawn<R: Runtime>(app: &tauri::App<R>, db_path: &Path, runtime_dir: &Path
     };
 
     app.manage(SidecarState {
-        child: Mutex::new(Some(child)),
-        endpoint: Mutex::new(None),
+        child: Arc::new(Mutex::new(Some(child))),
+        endpoint: Arc::new(Mutex::new(None)),
     });
 
     let app_handle = app.handle().clone();

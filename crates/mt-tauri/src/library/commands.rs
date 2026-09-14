@@ -16,6 +16,7 @@ use crate::scanner::artwork::Artwork;
 use crate::scanner::artwork_cache::ArtworkCache;
 use crate::scanner::fingerprint::{FileFingerprint, compute_content_hash};
 use crate::scanner::metadata::extract_metadata_or_default;
+use crate::sidecar::SidecarState;
 
 /// Response for paginated library queries
 #[derive(Clone, serde::Serialize)]
@@ -35,10 +36,11 @@ pub struct MissingTracksResponse {
 
 /// Get all tracks with filtering, sorting, and pagination
 #[allow(clippy::too_many_arguments)]
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db, zig_core))]
 #[tauri::command]
 pub(crate) fn library_get_all(
     db: State<'_, Database>,
+    zig_core: State<'_, SidecarState>,
     search: Option<String>,
     artist: Option<String>,
     album: Option<String>,
@@ -91,6 +93,38 @@ pub(crate) fn library_get_all(
         limit: query.limit,
         offset: query.offset,
     };
+
+    // Shadow mode (TASK-355.5): also ask the Zig sidecar the same question and
+    // log any divergence. Off unless MT_SHADOW_DIFF is set, in which case this
+    // returns before the sidecar is touched and the call costs what it always
+    // did. Errors are never propagated to the frontend — the Rust response
+    // above is the one users see.
+    if crate::shadow_diff::enabled() {
+        // The sidecar's single-threaded accept loop blocks while it serves a
+        // request, and this command runs on Tauri's sync-command pool, so the
+        // comparison cannot share this thread's runtime. `block_on` here would
+        // panic inside a tokio worker; a detached task on the runtime the
+        // sidecar's own health probe uses keeps it off the request path.
+        let endpoint_state = zig_core.inner().clone();
+        let query = library::LibraryQuery {
+            search: query.search.clone(),
+            artist: query.artist.clone(),
+            album: query.album.clone(),
+            genre: None,
+            year_from: None,
+            year_to: None,
+            sort_by: query.sort_by,
+            sort_order: query.sort_order,
+            limit: query.limit,
+            offset: query.offset,
+            ignore_words: query.ignore_words.clone(),
+            source_filter: query.source_filter.clone(),
+        };
+        let checked = response.clone();
+        tauri::async_runtime::spawn(async move {
+            crate::shadow_diff::compare_library_get_all(&endpoint_state, &query, &checked).await;
+        });
+    }
 
     let duration_ms = start_time.elapsed().as_millis() as u64;
     info!(duration_ms, track_count, "library_get_all completed");

@@ -22,6 +22,9 @@ const sqlite = @import("sqlite.zig");
 pub const Options = struct {
     db: *sqlite.Db,
     token: *const [runtime_file.token_hex_len]u8,
+    /// Threaded from main.zig's `--sabotage` flag through to `library.respond`.
+    /// Default false, so the real endpoint path is byte-for-byte unchanged.
+    sabotage: bool = false,
 };
 
 /// Binds 127.0.0.1 on an OS-assigned port (AC#1). The caller reads back the
@@ -105,7 +108,7 @@ fn handleRequest(request: *std.http.Server.Request, allocator: std.mem.Allocator
     // queued — there is no way to downgrade to a 500 mid-stream. The
     // client sees a truncated body; that's an accepted consequence of
     // streaming (AC#5), not a bug to work around.
-    try library.respond(arena_allocator, options.db, query, &response.writer);
+    try library.respondWithSabotage(arena_allocator, options.db, query, &response.writer, options.sabotage);
     try response.end();
 }
 

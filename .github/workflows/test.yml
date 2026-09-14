@@ -113,6 +113,45 @@ jobs:
       - name: Zig build
         run: task zig:build
 
+  # Shadow-diff parity between the Rust library_get_all and its Zig port
+  # (TASK-355.5 AC#6). Deliberately not in any other job's `needs`, and
+  # continue-on-error, so a divergence is reported on the PR without blocking
+  # an unrelated change: the harness compares two implementations of the same
+  # query rather than verifying either against a spec, and it needs both the
+  # Rust and Zig toolchains plus a staged sidecar, which the rust job
+  # intentionally does not carry.
+  shadow-diff:
+    name: Rust/Zig Shadow-Diff Parity
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Tauri build environment
+        uses: ./.github/actions/setup-tauri-build
+        with:
+          mode: test
+
+      - name: Read pinned Zig toolchain from .tool-versions
+        id: zig-version
+        shell: bash
+        run: |
+          version=$(grep '^zig ' .tool-versions | awk '{print $2}')
+          echo "toolchain=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ steps.zig-version.outputs.toolchain }}
+
+      - name: Install Task
+        uses: go-task/setup-task@v1
+
+      - name: Run shadow-diff parity harness
+        continue-on-error: true
+        run: task ci:shadow-diff TARGET=x86_64-unknown-linux-gnu
+
   build:
     name: Build (${{ matrix.platform }})
     # Gate on lint/format/test jobs so builds don't burn CI minutes

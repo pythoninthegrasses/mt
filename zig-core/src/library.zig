@@ -452,9 +452,13 @@ fn writeF64(json: *std.json.Stringify, value: f64) !void {
     }
 }
 
+/// Which field `--sabotage` (main.zig) breaks. Named rather than hardcoded at
+/// the use site so the harness's log and the sabotage agree on what diverged.
+pub const sabotage_field = "genre";
+
 /// Writes one track object in `Track`'s declaration order
 /// (db/models.rs:13-41) — not `select_columns`' order.
-fn writeTrack(json: *std.json.Stringify, stmt: *sqlite.Stmt) !void {
+fn writeTrack(json: *std.json.Stringify, stmt: *sqlite.Stmt, sabotage: bool) !void {
     try json.beginObject();
 
     try json.objectField("id");
@@ -490,8 +494,14 @@ fn writeTrack(json: *std.json.Stringify, stmt: *sqlite.Stmt) !void {
     try json.objectField("date");
     try json.write(stmt.columnText(col_date));
 
-    try json.objectField("genre");
-    try json.write(stmt.columnText(col_genre));
+    try json.objectField(sabotage_field);
+    if (sabotage) {
+        // One value, one field: enough for the harness to prove it can localize
+        // a wrong value, not just notice the two documents differ.
+        try json.write("SABOTAGED");
+    } else {
+        try json.write(stmt.columnText(col_genre));
+    }
 
     try json.objectField("duration");
     if (stmt.columnIsNull(col_duration)) {
@@ -544,6 +554,14 @@ fn writeTrack(json: *std.json.Stringify, stmt: *sqlite.Stmt) !void {
 /// `total` is queried before streaming starts, so it can be emitted last
 /// without buffering rows to count them.
 pub fn respond(allocator: std.mem.Allocator, db: *sqlite.Db, query: Query, writer: *std.Io.Writer) !void {
+    try respondWithSabotage(allocator, db, query, writer, false);
+}
+
+/// `respond` with the sabotage switch the `--sabotage` CLI flag reaches; the
+/// endpoint itself always calls `respond`, so production behaviour is
+/// untouched. Tests call this directly to cover the sabotaged path without a
+/// second process.
+pub fn respondWithSabotage(allocator: std.mem.Allocator, db: *sqlite.Db, query: Query, writer: *std.Io.Writer, sabotage: bool) !void {
     const where = try buildWhere(allocator, query);
 
     const count_sql = try buildCountSql(allocator, where.clause);
@@ -574,7 +592,7 @@ pub fn respond(allocator: std.mem.Allocator, db: *sqlite.Db, query: Query, write
 
         while (try stmt.step()) {
             if (!rowIsMappable(&stmt)) continue;
-            try writeTrack(&json, &stmt);
+            try writeTrack(&json, &stmt, sabotage);
         }
     }
     try json.endArray();
@@ -830,6 +848,33 @@ test "respond: search filters via LIKE on title/artist/album" {
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, out.writer.buffered(), .{});
     const root = parsed.value.object;
     try testing.expectEqual(@as(i64, 1), root.get("total").?.integer);
+}
+
+test "respondWithSabotage: changes one field and leaves the rest alone" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var db = try sqlite.Db.openForTestFixture(":memory:");
+    defer db.close();
+    try createTestLibraryTable(&db);
+    try db.exec(
+        \\INSERT INTO library (id, filepath, title, genre, missing)
+        \\VALUES (1, '/a.mp3', 'A Song', 'Jazz', 0)
+    );
+
+    var clean = std.Io.Writer.Allocating.init(allocator);
+    try respond(allocator, &db, .{}, &clean.writer);
+    try testing.expect(std.mem.indexOf(u8, clean.writer.buffered(), "\"genre\":\"Jazz\"") != null);
+
+    var sabotaged = std.Io.Writer.Allocating.init(allocator);
+    try respondWithSabotage(allocator, &db, .{}, &sabotaged.writer, true);
+    const body = sabotaged.writer.buffered();
+    try testing.expect(std.mem.indexOf(u8, body, "\"genre\":\"SABOTAGED\"") != null);
+    // Only the one field moves; everything else the harness compares is byte
+    // for byte what the honest path emits.
+    try testing.expect(std.mem.indexOf(u8, body, "\"title\":\"A Song\"") != null);
+    try testing.expect(std.mem.indexOf(u8, body, "\"total\":1") != null);
 }
 
 // AC#4: exercises `respond` against a real mt.db generated from the Rust
