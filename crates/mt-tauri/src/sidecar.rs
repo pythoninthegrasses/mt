@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
@@ -25,6 +25,17 @@ const HEALTH_PROBE_INTERVAL: Duration = Duration::from_millis(100);
 pub(crate) struct Endpoint {
     pub(crate) port: u16,
     pub(crate) token: String,
+}
+
+/// What the frontend needs to talk to the sidecar directly: the loopback base
+/// URL plus the bearer token every request must carry. Serialized under
+/// camelCase keys, matching the JS-side field names (Tauri's default argument
+/// and return conversion).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SidecarEndpoint {
+    pub base_url: String,
+    pub token: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -195,6 +206,21 @@ async fn probe_health(runtime_dir: &Path) -> Result<Endpoint, ProbeError> {
     }
 
     Ok(endpoint)
+}
+
+/// Hand the frontend the sidecar's base URL and bearer token, so it can call
+/// the sidecar over HTTP instead of through a Tauri command. `None` until the
+/// startup health probe has resolved an endpoint — or if the sidecar never
+/// started — which is the frontend's signal to keep its default base URL.
+#[tauri::command]
+pub(crate) fn sidecar_get_endpoint(
+    state: tauri::State<'_, SidecarState>,
+) -> Option<SidecarEndpoint> {
+    let endpoint = state.endpoint()?;
+    Some(SidecarEndpoint {
+        base_url: format!("http://127.0.0.1:{}", endpoint.port),
+        token: endpoint.token,
+    })
 }
 
 /// Kills the sidecar on app exit, called from `RunEvent::Exit`. Idempotent:
