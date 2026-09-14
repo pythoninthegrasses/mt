@@ -174,7 +174,7 @@ export const library = {
       tracks: trackData.tracks || [],
       total_tracks: countData.total ?? (trackData.tracks || []).length,
       total_duration: countData.total_duration ?? 0,
-      page: params.offset == null ? null : Math.floor(params.offset / (params.limit || 50)),
+      page: params.offset != null ? Math.floor(params.offset / (params.limit || 50)) : null,
       page_size: params.limit || null,
       has_more: trackData.total > (params.offset || 0) + (trackData.tracks || []).length,
       revision: 0,

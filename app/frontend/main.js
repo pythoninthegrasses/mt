@@ -29,7 +29,7 @@ window._mtInternalDragActive = false;
 window._mtDragJustEnded = false;
 window._mtDraggedTrackIds = null;
 
-window.handleFileDrop = async (event) => {
+window.handleFileDrop = async function (event) {
   console.log('[main] Browser drop event (Tauri handles via native events)');
 };
 
@@ -59,7 +59,7 @@ async function initTauriDragDrop() {
   }
 }
 
-window.testDialog = async () => {
+window.testDialog = async function () {
   console.log('[test] Testing dialog...');
   console.log(
     '[test] window.__TAURI__:',
