@@ -46,6 +46,9 @@ resolution, no turn limit.
 ## What happens after
 
 The skill reports back one of: `DONE` (reviewed, pushed, and merged),
-`BAILED` (blocked, nothing pushed), TTL-expired, or killed for thrashing —
-along with the worktree and log paths for manual review. See
-[SKILL.md](SKILL.md) steps 6-7 for the monitoring and finish protocol.
+`BAILED` (blocked, nothing pushed), `RATE_LIMITED` or `EARLY_EXIT` (the task
+never got a turn — a launch that died on gateway contention or a real
+dispatch failure, not an outcome of the task itself), TTL-expired, or killed
+for thrashing — along with the worktree and log paths for manual review. See
+[SKILL.md](SKILL.md) steps 5-7 for the launch, monitoring, and finish
+protocol.

@@ -15,12 +15,12 @@ argument-hint: "<task-id-or-description> [ttl] [max-turns]"
 
 ## Resolve `SKILL_DIR` (do this before running the bundled script)
 
-`scripts/smoke-test.sh` is a direct sibling of this file in every install
+`scripts/gnhf.py` is a direct sibling of this file in every install
 layout. Set `SKILL_DIR` to the absolute path of the directory containing
 THIS SKILL.md you just Read (your harness told you that path in the Read
 result), e.g.:
 
-```
+```text
 Read ~/.claude/skills/gnhf/SKILL.md → SKILL_DIR=~/.claude/skills/gnhf
 Read .agents/skills/gnhf/SKILL.md   → SKILL_DIR=.agents/skills/gnhf
 ```
@@ -64,9 +64,9 @@ another open-weight model, whatever) without ever asking it.
    `--provider`/`--model` overrides:
 
    ```bash
-   "${SKILL_DIR}/scripts/smoke-test.sh" pi
+   "${SKILL_DIR}/scripts/gnhf.py" -s pi
    # or:
-   "${SKILL_DIR}/scripts/smoke-test.sh" opencode
+   "${SKILL_DIR}/scripts/gnhf.py" -s opencode
    ```
 
    Whatever the CLI does with zero model flags *is* "currently configured"
@@ -76,9 +76,25 @@ another open-weight model, whatever) without ever asking it.
    marks the active default; opencode's model can be read back from
    `opencode.jsonc`/`opencode models` or from the run's own session
    metadata) so you can report a concrete model name, not just "default."
-3. **Only if step 2 fails** (non-zero exit, timeout, or wrong reply — read
+
+   `gnhf.py -s` exits with one of:
+
+   | Exit | Meaning |
+   | --- | --- |
+   | 0 | `PASS:` — this candidate works |
+   | 1 | `FAIL:` — genuinely broken (missing binary, wrong reply, unreachable) |
+   | 3 | `RATE_LIMITED:` — 429s past the retry ceiling; **not** a model failure, see below |
+
+   Exit 3 means the script already retried with backoff and the gateway is
+   still saturated — it is **not** a signal to fall through to step 3 or
+   step 4. Both current Aperture model IDs route through the same llama-swap
+   box, so switching models cannot relieve contention. Treat a persistent
+   exit 3 the same as step 5's bail condition (wait it out or bail), never as
+   a reason to descend the rest of this ladder.
+3. **Only if step 2 exits 1** (non-zero exit, timeout, or wrong reply — read
    the smoke-test's own tail-of-output diagnosis first, this step is not
-   for "it was slow"): inspect the config repos below, each existence-gated
+   for "it was slow", and not for exit 3): inspect the config repos below,
+   each existence-gated
    — a missing path is routine, not an error, just "skip this signal, fall
    through to the next one." These are this user's personal setup, not a
    guaranteed environment; none may exist on a collaborator's machine or a
@@ -102,8 +118,8 @@ another open-weight model, whatever) without ever asking it.
    is a single routable model ID.
 
    ```bash
-   "${SKILL_DIR}/scripts/smoke-test.sh" pi --provider aperture --model "qwen3.8-flash-next-iq4"
-   "${SKILL_DIR}/scripts/smoke-test.sh" opencode --model "aperture/qwen3.8-flash-next-iq4"
+   "${SKILL_DIR}/scripts/gnhf.py" -s pi -P aperture -m "qwen3.8-flash-next-iq4"
+   "${SKILL_DIR}/scripts/gnhf.py" -s opencode -m "aperture/qwen3.8-flash-next-iq4"
    ```
 
    If this passes, resolve to this explicit value for the real run. If it
@@ -119,10 +135,12 @@ easy to catch.
 Each smoke-test invocation sends one prompt, waits up to `--timeout` seconds
 (default 300 — observed cold-start latency on a fresh backend has run into
 minutes; don't treat a slow first response as a functional failure), and
-checks for the expected reply. Exit 0 with `PASS: ...` means that candidate
-works. A non-zero exit means don't use that candidate — read the tail of
-output it prints to understand why (agent not installed, backend
-unreachable, wrong model id) before moving to the next step.
+checks for the expected reply, retrying transient 429s on its own backoff
+before giving up. Exit 0 with `PASS: ...` means that candidate works. Exit 1
+means don't use that candidate — read the tail of output it prints to
+understand why (agent not installed, backend unreachable, wrong model id)
+before moving to the next step. Exit 3 (`RATE_LIMITED:`) is its own case,
+handled above — don't treat it as "don't use that candidate."
 
 ## 2. Pick a task that's actually a good candidate for this
 
@@ -206,21 +224,53 @@ Your diff should touch only what this task's Acceptance Criteria describe.
 <full task description + acceptance criteria, verbatim>
 ```
 
-## 5. Launch, bounded
+## 5. Launch, bounded — with backoff
 
-The wall-clock bound (TTL) is the primary and simplest bound — wrap the
-launch in `timeout`:
+The wall-clock bound (TTL) is the primary and simplest bound. Launch through
+`gnhf.py -l`, not a bare `nohup timeout ... &` — it wraps the same `timeout`
+bound in a probe window and 429 backoff/retry, so a launch that dies on
+gateway contention doesn't get reported as a task outcome:
 
 ```bash
-cd /path/to/worktrees/<TASK-ID>
-nohup timeout <TTL_SECONDS> <agent> <agent-specific-flags> \
-    --session-id <task-id>-run \
-    -p "@/path/to/prompt.md" \
-    > /path/to/logs/<TASK-ID>.log 2>&1 &
+"${SKILL_DIR}/scripts/gnhf.py" -l \
+    -C /path/to/worktrees/<TASK-ID> \
+    -o /path/to/logs/<TASK-ID>.log \
+    -T <TTL_SECONDS> \
+    -- <agent> <agent-specific-flags> --session-id <task-id>-run -p "@/path/to/prompt.md"
 ```
 
 Default `TTL_SECONDS` to 10800 (3h) unless the user gives a different
-budget. Record the PID.
+budget.
+
+`gnhf.py -l` exits with one of:
+
+| Exit | Meaning | What to do |
+| --- | --- | --- |
+| 0 | `LAUNCHED: pid=... attempt=... ttl_expires=...` | move to step 6, monitor this PID |
+| 3 | `RATE_LIMITED:` — 429s past the retry ceiling | see below — never call this BAILED |
+| 4 | `EARLY_EXIT:` — died inside the probe window, not a 429 | a real dispatch failure (bad flag, missing binary, unreadable prompt) — report it, don't retry it |
+
+Exit 3 and exit 4 mean the task never got a turn. Neither is a `BAILED`
+verdict, and neither is a reason to consider the task attempted. Only a
+process that survives the probe window (exit 0) and later produces a
+`MANUAL_RUN: DONE —` / `MANUAL_RUN: BAILED —` marker or an exit via
+`timeout` at the TTL counts as a real outcome.
+
+Before giving up on a persistent exit 3, an optional, strictly non-blocking
+signal — never let this stall a retry that's already scheduled:
+
+```bash
+command -v aperture >/dev/null && aperture logs --range 15m --json || true
+```
+
+`aperture logs` is an **admin-only** surface — a standard user gets a
+permission error, and that's routine, not a blocker. Treat any failure
+(binary absent, non-zero exit, empty output, auth denied) as "no signal
+available" and keep backing off on the schedule already in progress. When
+the signal *is* available: another login mid-session means keep backing
+off; nothing in flight pointing at the backend itself is when step 1's
+rung 3/4 fallback (config-repo inspection, alternate model) is actually the
+right move instead.
 
 A turn/iteration bound (`max-turns`) only applies when the agent is
 literally invoked once per turn with session continuation (e.g. opencode's
@@ -232,6 +282,10 @@ wrapper if the user explicitly wants turn-level granularity (e.g. to
 inspect/steer between turns) rather than a single long-lived process.
 
 ## 6. Monitor with minimal oversight
+
+The TTL clock starts at the `LAUNCHED:` line from step 5, not at the first
+invocation — any attempts killed for rate-limiting don't count against the
+budget.
 
 Use `ScheduleWakeup`, not a blocking sleep, to check back periodically
 (every 15–20 minutes is reasonable for a multi-hour run). Each check
@@ -256,9 +310,11 @@ the TTL), or you've confirmed real thrashing.
 
 ## 7. Finish
 
-On `MANUAL_RUN: BAILED —`, TTL expiry, or a thrashing kill: don't push
-anything. Report the blocker and the worktree + log paths for manual
-review.
+On `MANUAL_RUN: BAILED —`, TTL expiry, a thrashing kill, `RATE_LIMITED`
+(step 5 exit 3), or `EARLY_EXIT` (step 5 exit 4): don't push anything.
+Report the blocker and the worktree + log paths for manual review.
+`RATE_LIMITED` and `EARLY_EXIT` are distinct from `BAILED` — they mean the
+task never got a turn at all, not that the agent tried and gave up.
 
 On `MANUAL_RUN: DONE —`: the launched agent commits locally only (per its
 own FINISH PROTOCOL, step 4 above) and never pushes or opens a PR itself —
@@ -285,12 +341,30 @@ run's own self-report:
 Only skip the push/merge and escalate instead if review turns up a real
 problem (scope violation, an unchecked AC, fabricated evidence) — report
 that plainly rather than merging over it. Always report back:
-DONE/BAILED/TTL-expired/killed-for-thrashing, what actually landed (from
-`git log`/`git diff`, not from the run's own self-report), and the PR/merge
-outcome.
+DONE/BAILED/RATE_LIMITED/EARLY_EXIT/TTL-expired/killed-for-thrashing, what
+actually landed (from `git log`/`git diff`, not from the run's own
+self-report), and the PR/merge outcome.
 
 ## Bundled scripts
 
-`scripts/smoke-test.sh` — verifies `pi` or `opencode` can reach its
-currently configured model and produce a real response (see step 1).
-Review it before first use to verify behavior.
+`scripts/gnhf.py` — a self-contained `uv run --script` (PEP 723) tool with
+two modes:
+
+- `-s`/`--smoke-test <pi|opencode>` — verifies the agent can reach its
+  currently configured model and produce a real response (see step 1),
+  retrying transient 429s on its own backoff before reporting `FAIL:` or
+  `RATE_LIMITED:`.
+- `-l`/`--launch -- <agent command...>` — launches the real task run
+  (see step 5), bounded by `timeout` at the given TTL, with a probe window
+  and exponential backoff/retry on 429 concurrency-limit contention.
+
+Every tunable (TTL, probe window, backoff base/cap, retry ceilings) resolves
+through `python-decouple`: CLI flag > process env > `skills/gnhf/.env` >
+hardcoded default. See `.env.example` for the full list of `GNHF_*` names —
+copy it to `.env` in this same directory to override the defaults for this
+machine. Run `scripts/gnhf.py -h` for the full flag list, and review the
+script before first use to verify behavior.
+
+`scripts/test_gnhf.py` — the accompanying pytest suite, also a
+self-contained `uv run --script`. Run it directly (`./scripts/test_gnhf.py`)
+after changing `gnhf.py`.
