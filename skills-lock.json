@@ -5,7 +5,7 @@
       "source": "pythoninthegrass/ai_skills",
       "sourceType": "github",
       "skillPath": "skills/gnhf/SKILL.md",
-      "computedHash": "fcf958d31253a746a3632793c2531abffe48a8b3ea723226f86b7016eb9931b7"
+      "computedHash": "81d11088b1c71121019c6491988a4ce3949468d9c3693e91a7452087203085b8"
     },
     "ollama-optimizer": {
       "source": "luongnv89/skills",

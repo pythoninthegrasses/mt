@@ -34,6 +34,27 @@ All parameters are optional except the task itself.
   agent CLIs run their own internal tool-call loop, so `ttl` alone already
   bounds those; omit this unless you specifically want turn-level control.
 
+## Configuration
+
+`scripts/gnhf.py`'s defaults below can be overridden per machine without
+editing the script: set the env var directly, or copy `.env.example` to
+`.env` in this same directory and edit values there (the file is resolved
+relative to the script, not the caller's cwd, and is gitignored). A CLI
+flag always wins over either.
+
+| Env var | Default | Mode |
+| --- | --- | --- |
+| `GNHF_PROVIDER` | unset | smoke-test |
+| `GNHF_MODEL` | unset | smoke-test |
+| `GNHF_TIMEOUT` | `300` | smoke-test |
+| `GNHF_MAX_RETRIES` | `2` | smoke-test |
+| `GNHF_TTL` | `10800` | launch |
+| `GNHF_PROBE` | `25` | launch |
+| `GNHF_BASE_BACKOFF` | `75` | launch |
+| `GNHF_MAX_BACKOFF` | `900` | launch |
+| `GNHF_MAX_429` | `6` | launch |
+| `GNHF_TOTAL_BACKOFF_CAP` | `2700` | launch |
+
 ## Example
 
 ```text
