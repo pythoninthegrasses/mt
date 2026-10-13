@@ -9,7 +9,7 @@ mt is a desktop music player designed for large music collections, built with Ta
 ## General Guidelines
 
 - ALWAYS use atomic commits — see [Git Workflow](docs/git-workflow.md) for interactive staging, patch mode, and worktree management
-- NEVER create `*.backup` files. Git history is the backup for every file in this repo
+- NEVER create `*.backup` files. This is a version controlled repo
 
 ## Context7
 
