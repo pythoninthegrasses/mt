@@ -3,7 +3,8 @@ exclude_dirs: [.cache, target, node_modules, .claude, .agents]
 exclude_files: [.mcp.json, CLAUDE.local.md]
 # Formatting-only noise and topic-matcher false positives, not worth chasing
 disabled_rules:
-  - CORE:E:0003	# unformatted terms (backtick-the-product-name noise)
-  - CORE:S:0039	# instruction in heading (false positives on noun headings)
-  - CORE:C:0053	# prohibition with no matching directive (matcher noise)
-  - CORE:D:0003	# prohibition before directive (matcher noise)
+  - CORE:E:0003  # unformatted terms (backtick-the-product-name noise)
+  - CORE:S:0039  # instruction in heading (false positives on noun headings)
+  - CORE:C:0053  # prohibition with no matching directive (matcher noise)
+  - CORE:D:0003  # prohibition before directive (matcher noise)
+  - CORE:E:0006  # italic constraints (house style: no italics)
