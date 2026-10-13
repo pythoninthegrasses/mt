@@ -208,6 +208,18 @@ rm -rf node_modules dist
 - Use browser mode **only for UI/styling work**, not playback testing
 - For playback testing, always use `task tauri:dev`
 
+## Rust Toolchain (mise + rustup)
+
+Three directories are involved. Do not cross-link them:
+
+| Directory | Purpose | Managed by |
+|-----------|---------|------------|
+| `~/.cargo/bin/` | Real rustup binary + multicall symlinks (`cargo -> rustup`) | rustup |
+| `~/.local/share/mise/installs/rust/<version>/` | Relative multicall symlinks (`cargo -> rustup`) + rustup copy | mise |
+| `$CARGO_HOME/bin/` (project-local `.cache/cargo/bin/`) | Symlinks to `~/.cargo/bin/<tool>` | `cargo:_setup-cargo-home` task |
+
+`cargo.yml` adds `~/.cargo/bin` to PATH so rustup tools are always findable. The `_setup-cargo-home` task symlinks project-local `CARGO_HOME/bin/` to `~/.cargo/bin/`, never to the mise install dir, which has its own internal symlink structure.
+
 ## Dependencies
 
 ### Frontend

@@ -57,38 +57,22 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 | Agent script, prompt tuning | [Agent Script](docs/agent.md) |
 | Video/frame extraction for debugging | [Frame Extraction](docs/development.md#frame-extraction-for-debugging) |
 
-## Architecture Overview
+## Tech Stack
 
 MT uses a pure Rust + Tauri architecture:
 
-- **Frontend**: Tauri WebView (Alpine.js + Basecoat/Tailwind CSS)
-- **Backend**: Native Rust (91 Tauri commands)
+- **Frontend**: Tauri WebView (`Alpine.js` + Basecoat/Tailwind CSS), linted and formatted with Deno
+- **Backend**: Native Rust in `crates/mt-tauri/` (91 Tauri commands)
 - **Audio**: Rodio/Symphonia
-- **Database**: SQLite via rusqlite (`mt.db` in Tauri app data dir)
+- **Database**: SQLite via rusqlite (`mt.db` in the Tauri `app_data_dir()` for bundle identifier `com.mt.desktop`)
 - **Build Cache**: sccache (shared across worktrees/workspaces)
+- **Tests**: Vitest and Playwright (frontend), `cargo nextest` and proptest (backend)
 
-### App Data Paths
-
-| Platform | App Data Dir                                         |
-|----------|------------------------------------------------------|
-| macOS    | `~/Library/Application Support/com.mt.desktop/`      |
-| Linux    | `$XDG_DATA_HOME/com.mt.desktop/`                     |
-
-Database: `mt.db`, Logs: see [Observability](docs/observability.md)
-
-See [Tauri Architecture](docs/tauri-architecture.md) for full details.
+See [Tauri Architecture](docs/tauri-architecture.md) for full details and [Observability](docs/observability.md) for database and log paths per platform.
 
 ### Rust Toolchain (mise + rustup)
 
-Three directories are involved — do NOT cross-link them:
-
-| Directory | Purpose | Managed by |
-|-----------|---------|------------|
-| `~/.cargo/bin/` | Real rustup binary + multicall symlinks (`cargo -> rustup`) | rustup |
-| `~/.local/share/mise/installs/rust/<version>/` | Relative multicall symlinks (`cargo -> rustup`) + rustup copy | mise |
-| `$CARGO_HOME/bin/` (project-local `.cache/cargo/bin/`) | Symlinks to `~/.cargo/bin/<tool>` | `cargo:_setup-cargo-home` task |
-
-`cargo.yml` adds `~/.cargo/bin` to PATH so rustup tools are always findable. The `_setup-cargo-home` task symlinks project-local `CARGO_HOME/bin/` to `~/.cargo/bin/` — never to the mise install dir, which has its own internal symlink structure.
+Do not symlink the project-local `.cache/cargo/bin/` to the mise install dir. See [Rust Toolchain](docs/development.md#rust-toolchain-mise--rustup) for the three directories involved.
 
 ### Windows CI Toolchain Constraint
 
