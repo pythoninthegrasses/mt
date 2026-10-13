@@ -1,15 +1,15 @@
 # AGENTS.md
 
-This file provides guidance to LLMs when working with code in this repository.
+You are a full-stack engineer leveraging `Alpine.js`, Basecoat/Tailwind on the frontend and Tauri (Rust) on the backend.
 
 ## Project Overview
 
-mt is a desktop music player designed for large music collections, built with Tauri (Rust backend), basecoat (with Tailwind CSS), and Alpine.js. The backend uses Rust for audio playback and system integration, while the frontend is a modern web-based UI with reactive components.
+mt is a desktop music player designed for large music collections, built with Tauri (Rust backend), basecoat (with Tailwind CSS), and `Alpine.js`. The backend uses Rust for audio playback and system integration, while the frontend is a modern web-based UI with reactive components.
 
 ## General Guidelines
 
 - ALWAYS use atomic commits — see [Git Workflow](docs/git-workflow.md) for interactive staging, patch mode, and worktree management
-- NEVER create *.backup files. This is a version controlled repo
+- NEVER create `*.backup` files. Git history is the backup for every file in this repo
 
 ## Context7
 
@@ -17,27 +17,27 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 
 ### Libraries
 
-- alpinejs/alpine
-- basharovv/musicat
-- dubzzz/fast-check
-- hunvreus/basecoat
-- jdx/mise
-- microsoft/playwright
-- mrlesk/backlog.md
-- nextest-rs/nextest
-- proptest-rs/proptest
-- reporails/cli
-- serial-ata/lofty-rs
-- sharkdp/hyperfine
-- taiko2k/tauon
-- tailwindlabs/tailwindcss
-- tranxuanthang/lrclib
-- useblacksmith/setup-docker-builder
-- websites/deno
-- websites/last_fm_api
-- websites/rs_rig-core
-- websites/rs_tauri_2_9_5
-- websites/taskfile_dev
+- `alpinejs/alpine`
+- `basharovv/musicat`
+- `dubzzz/fast-check`
+- `hunvreus/basecoat`
+- `jdx/mise`
+- `microsoft/playwright`
+- `mrlesk/backlog.md`
+- `nextest-rs/nextest`
+- `proptest-rs/proptest`
+- `reporails/cli`
+- `serial-ata/lofty-rs`
+- `sharkdp/hyperfine`
+- `taiko2k/tauon`
+- `tailwindlabs/tailwindcss`
+- `tranxuanthang/lrclib`
+- `useblacksmith/setup-docker-builder`
+- `websites/deno`
+- `websites/last_fm_api`
+- `websites/rs_rig-core`
+- `websites/rs_tauri_2_9_5`
+- `websites/taskfile_dev`
 
 ## Quick Reference
 
@@ -57,9 +57,11 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 | Agent script, prompt tuning | [Agent Script](docs/agent.md) |
 | Video/frame extraction for debugging | [Frame Extraction](docs/development.md#frame-extraction-for-debugging) |
 
-## Tech Stack
+## Architecture Overview
 
-MT uses a pure Rust + Tauri architecture:
+MT uses a pure Rust + Tauri architecture. See [Tauri Architecture](docs/tauri-architecture.md) for full details and [Observability](docs/observability.md) for database and log paths per platform.
+
+### Tech Stack
 
 - **Frontend**: Tauri WebView (`Alpine.js` + Basecoat/Tailwind CSS), linted and formatted with Deno
 - **Backend**: Native Rust in `crates/mt-tauri/` (91 Tauri commands)
@@ -67,8 +69,6 @@ MT uses a pure Rust + Tauri architecture:
 - **Database**: SQLite via rusqlite (`mt.db` in the Tauri `app_data_dir()` for bundle identifier `com.mt.desktop`)
 - **Build Cache**: sccache (shared across worktrees/workspaces)
 - **Tests**: Vitest and Playwright (frontend), `cargo nextest` and proptest (backend)
-
-See [Tauri Architecture](docs/tauri-architecture.md) for full details and [Observability](docs/observability.md) for database and log paths per platform.
 
 ### Rust Toolchain (mise + rustup)
 
@@ -84,6 +84,18 @@ When modifying `taskfiles/ci.yml` or `.github/actions/setup-tauri-build/action.y
 - Always run `rustup set default-host x86_64-pc-windows-msvc` before toolchain installation
 - Pass `PINNED_RUST` explicitly from the composite action rather than relying on shell extraction in Task
 
+## Domain Terminology
+
+| Term | Meaning |
+|------|---------|
+| Queue | The `items` array in `app/frontend/js/stores/queue.js`, kept in play order |
+| Now Playing view | The view that renders the queue starting with the current track |
+| Shuffle | Fisher-Yates reorder of `items`; the pre-shuffle order is kept in `_originalOrder` |
+| Play Next | Tracks pinned ahead of shuffled tracks via `_playNextTrackIds`; see [Shuffle Implementation](docs/shuffle.md) |
+| Loop mode | Queue `loop` state: `'none'`, `'all'` or `'one'` |
+| Scrobble | A play submitted to Last.fm; see [Last.fm Integration](docs/lastfm.md) |
+| Backlog task | A `TASK-<n>` entry managed through `Backlog.md` MCP under `backlog/tasks/` |
+
 ## Queue and Shuffle Behavior
 
 The queue store (`app/frontend/js/stores/queue.js`) maintains tracks in **play order** — the `items` array always reflects the order tracks will be played.
@@ -95,7 +107,7 @@ The queue store (`app/frontend/js/stores/queue.js`) maintains tracks in **play o
 - **When shuffle is disabled**: Original order is restored from `_originalOrder`
 - **Loop + Shuffle**: When queue ends with loop=all, items are re-shuffled for a new random order
 
-**Now Playing view**: Always displays tracks in the order they will play (current track first, then upcoming).
+**Now Playing view**: Render `$store.queue.items` in order, with the current track first and upcoming tracks after it.
 
 ## Linting, Formatting, and Testing
 
@@ -129,7 +141,7 @@ cd app/frontend && npx playwright test            # E2E tests
 cargo clippy --workspace                          # Lint
 cargo fmt --all                                   # Format
 cargo nextest run --workspace                     # Tests (falls back to cargo test)
-cargo check --manifest-path src-tauri/Cargo.toml  # Fast type check (no binary)
+cargo check --manifest-path crates/mt-tauri/Cargo.toml  # Fast type check (no binary)
 ```
 
 **Dockerfiles**:
@@ -166,17 +178,17 @@ Each test layer has a clear responsibility. Do NOT write a Playwright E2E test f
 
 **Rules:**
 
-- Playwright tests MUST involve real user interactions (clicks, keyboard, drag). If a test only calls `page.evaluate()` to manipulate Alpine stores, it belongs in Vitest.
-- Never duplicate store logic tests between Playwright and Vitest. Vitest is authoritative for store behavior.
+- Playwright tests in `app/frontend/tests/*.spec.js` MUST drive the UI with real interactions such as `page.click()`, `page.keyboard.press()` or `locator.dragTo()`. A test that only calls `page.evaluate()` to manipulate Alpine stores belongs in Vitest under `app/frontend/__tests__/`.
+- NEVER duplicate store logic tests between Playwright and Vitest, because Vitest is authoritative for store behavior.
 - Tag Playwright tests that need the Tauri runtime with `@tauri`. Default CI mode (`fast`) skips these.
 
 ## Implementation Notes
 
-1. **Components**: Modular, single-responsibility. Use Alpine.js for interactivity, basecoat/Tailwind for styling.
-2. **IPC**: All backend operations via Tauri commands. Use async/await. Emit events for real-time updates.
-3. **File Organization**: Frontend in `app/frontend/`, backend in `src-tauri/src/`. Keep files under 500 LOC.
-4. **Testing**: See [Test Boundaries](#test-boundaries) above and [Testing Guide](docs/testing.md) for the full decision framework.
-5. **Code Style**: `deno lint` + `deno fmt` (frontend), `cargo fmt` + `cargo clippy` (backend). Run formatters before committing.
+1. **Components**: Write each component with a single responsibility, using `Alpine.js` for interactivity and Basecoat/Tailwind classes for styling.
+2. **IPC**: Route every backend operation through a Tauri command called with async/await. Emit real-time updates from Rust with `app.emit()` and subscribe in the frontend with `window.__TAURI__.event.listen()`.
+3. **File Organization**: Keep frontend code in `app/frontend/` and backend code in `crates/mt-tauri/src/`. Keep each file under 500 lines.
+4. **Testing**: Place each test in the layer defined by [Test Boundaries](#test-boundaries) above. The [Testing Guide](docs/testing.md) holds the full decision framework.
+5. **Code Style**: Run `deno lint` and `deno fmt` on frontend code before committing. Run `cargo clippy` and `cargo fmt --all` on backend code before committing.
 
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 
@@ -184,12 +196,12 @@ Each test layer has a clear responsibility. Do NOT write a Playwright E2E test f
 
 ## BACKLOG WORKFLOW INSTRUCTIONS
 
-This project uses Backlog.md MCP for all task and project management.
+This project uses `Backlog.md` MCP for all task and project management.
 
 **CRITICAL RESOURCE**: Read `backlog://workflow/overview` to understand when and how to use Backlog for this project.
 
 - **First time working here?** Read the overview resource IMMEDIATELY to learn the workflow
-- **Already familiar?** You should have the overview cached ("## Backlog.md Overview (MCP)")
+- **Already familiar?** Reuse the cached `## Backlog.md Overview (MCP)` content and re-read `backlog://workflow/overview` only if it is missing
 - **When to read it**: BEFORE creating tasks, or when you're unsure whether to track work
 
 ### Key MCP Commands
@@ -197,7 +209,7 @@ This project uses Backlog.md MCP for all task and project management.
 | Command | Purpose |
 |---------|---------|
 | `task_create` | Create a new task (status defaults to "To Do") |
-| `task_edit` | Edit metadata, check ACs, update notes, change status |
+| `task_edit` | Edit a task's metadata, notes, status or acceptance criteria |
 | `task_view` | View full task details |
 | `task_search` | Find tasks by keyword |
 | `task_list` | List tasks with optional filters |
@@ -214,13 +226,13 @@ This project uses Backlog.md MCP for all task and project management.
 
 ### Preventing ID Collisions
 
-Backlog.md does NOT enforce ID uniqueness on the filesystem. If two task files declare the same `id:` in their frontmatter, `task_view`/`task_search` silently resolve to whichever has the newer `updated_date`, hiding the other from the kanban and MCP lookups. This is how TASK-341 ended up with two owners (iOS-sync vs. Plex umbrella) in commit `89ff249`.
+`Backlog.md` does NOT enforce ID uniqueness on the filesystem. If two task files declare the same `id:` in their frontmatter, `task_view`/`task_search` silently resolve to whichever has the newer `updated_date`, hiding the other from the kanban and MCP lookups. This is how TASK-341 ended up with two owners (iOS-sync vs. Plex umbrella) in commit `89ff249`.
 
 **Before creating any task, ALWAYS:**
 
 1. Run `task_list` (or `rg "^id: TASK-" backlog/tasks/ backlog/archive/tasks/ backlog/completed/`) to find the highest existing ID.
 2. Let `task_create` auto-assign the next ID — **never set `id:` manually in frontmatter or filenames**.
-3. For subtasks, pass `parentTaskId` to `task_create` so Backlog.md generates the hierarchical ID (e.g., `TASK-342.1`) for you.
+3. For subtasks, pass `parentTaskId` to `task_create` so `Backlog.md` generates the hierarchical ID (e.g., `TASK-342.1`) for you.
 
 **Detecting a collision:**
 
@@ -233,7 +245,7 @@ rg -N "^id: " backlog/tasks/ backlog/archive/tasks/ backlog/completed/ \
 
 ### Cross-Branch Task Scanning (disabled)
 
-`check_active_branches` and `remote_operations` are both **disabled** in `backlog/config.yml`. With worktrees, these features scan other branches and pull in tasks that were already completed/archived on `main` but still exist in `backlog/tasks/` on older branches — bloating the kanban with ghost tasks. Do not re-enable without accounting for worktree branch divergence.
+`check_active_branches` and `remote_operations` are both disabled in `backlog/config.yml`. With worktrees, these features scan other branches and pull in tasks that were already completed/archived on `main` but still exist in `backlog/tasks/` on older branches — bloating the kanban with ghost tasks. Do not re-enable without accounting for worktree branch divergence.
 
 ### Multiline Field Gotcha
 
@@ -253,7 +265,7 @@ The `finalSummary`, `description`, `implementationNotes`, and `planSet` MCP para
 | Description | `description` | `description` |
 | Acceptance Criteria | `acceptanceCriteria` | **`acceptanceCriteriaSet`** (replaces all), `acceptanceCriteriaAdd`, `acceptanceCriteriaRemove`, `acceptanceCriteriaCheck`, `acceptanceCriteriaUncheck` |
 | Dependencies | `dependencies` | `dependencies` |
-| Parent Task | `parentTaskId` | **not supported — edit `parent_task_id:` in the markdown frontmatter directly** |
+| Parent Task | `parentTaskId` | not supported; edit `parent_task_id:` in the markdown frontmatter directly |
 | Status | `status` | `status` |
 | Notes | — | `notesAppend`, `notesSet`, `notesClear` |
 | Plan | — | `planAppend`, `planSet`, `planClear` |
@@ -261,7 +273,7 @@ The `finalSummary`, `description`, `implementationNotes`, and `planSet` MCP para
 | References | `references` | `references`, `addReferences`, `removeReferences` |
 | Documentation | `documentation` | `documentation`, `addDocumentation`, `removeDocumentation` |
 
-**Common error:** Using `taskId` instead of `id`, or `acceptanceCriteria` instead of `acceptanceCriteriaSet` in `task_edit` calls. Always use `id` and the `acceptanceCriteria*` variant names, and `task_edit` cannot re-parent — edit the file's `parent_task_id:` frontmatter directly when a parent ID changes.
+**Common error:** Using `taskId` instead of `id`, or `acceptanceCriteria` instead of `acceptanceCriteriaSet`, in `task_edit` calls. Always pass `id` to `task_edit`. Always use the `acceptanceCriteria*` variant names. Edit the file's `parent_task_id:` frontmatter directly to re-parent a task, because `task_edit` cannot re-parent.
 
 The overview resource contains additional detail on decision frameworks, search-first workflow, and guides for task creation, execution, and completion.
 
