@@ -10,6 +10,9 @@ use crate::db::{DbError, DbResult};
 
 type TrackVec = Vec<(String, crate::db::TrackMetadata)>;
 
+/// (filepath, content_hash, remote_id) for a library track.
+type TrackRemovalInfo = (String, Option<String>, Option<String>);
+
 /// Record a track removal by filepath, optional content hash, and optional remote_id.
 /// Uses INSERT OR REPLACE so re-removing the same filepath just updates the timestamp.
 pub(crate) fn record_removal(
@@ -149,7 +152,7 @@ pub(crate) fn filter_removed_tracks(
 pub(crate) fn get_track_removal_info_bulk(
     conn: &Connection,
     track_ids: &[i64],
-) -> DbResult<Vec<(String, Option<String>, Option<String>)>> {
+) -> DbResult<Vec<TrackRemovalInfo>> {
     if track_ids.is_empty() {
         return Ok(Vec::new());
     }

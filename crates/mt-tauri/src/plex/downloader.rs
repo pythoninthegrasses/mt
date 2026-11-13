@@ -135,12 +135,12 @@ pub(crate) async fn download_file(
     let total_bytes = resp.content_length();
 
     // Reject before writing if Content-Length exceeds the cap.
-    if let Some(len) = total_bytes {
-        if len > max_bytes {
-            return Err(format!(
-                "Content-Length {len} exceeds max track size {max_bytes}"
-            ));
-        }
+    if let Some(len) = total_bytes
+        && len > max_bytes
+    {
+        return Err(format!(
+            "Content-Length {len} exceeds max track size {max_bytes}"
+        ));
     }
 
     let partial = PathBuf::from(format!("{}.partial", target.to_string_lossy()));
@@ -236,8 +236,7 @@ pub(crate) fn sanitize(s: &str) -> String {
             }
         })
         .collect();
-    out.trim_end_matches(|c: char| c == '.' || c == ' ')
-        .to_string()
+    out.trim_end_matches(['.', ' ']).to_string()
 }
 
 pub(crate) fn build_local_path(track: &crate::db::Track, ext: &str) -> Result<PathBuf, String> {

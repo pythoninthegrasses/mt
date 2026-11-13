@@ -205,7 +205,7 @@ pub(crate) async fn plex_sync(
     db: State<'_, Database>,
     plex_state: State<'_, PlexState>,
 ) -> Result<PlexMergeStats, String> {
-    do_plex_sync(&app, &*db, &*plex_state).await
+    do_plex_sync(&app, &db, &plex_state).await
 }
 
 #[tauri::command]

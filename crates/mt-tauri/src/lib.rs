@@ -688,7 +688,7 @@ pub fn run() {
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     let db = app_handle.state::<db::Database>();
                     let plex_state = app_handle.state::<PlexState>();
-                    match do_plex_sync(&app_handle, &*db, &*plex_state).await {
+                    match do_plex_sync(&app_handle, &db, &plex_state).await {
                         Ok(stats) => info!(?stats, "Startup Plex sync complete"),
                         Err(e) if e.contains("not configured") => {
                             debug!("Startup Plex sync: not configured")
