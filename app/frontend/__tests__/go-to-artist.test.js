@@ -110,6 +110,7 @@ describe('Go to Artist', () => {
       Alpine.store('library', {
         filteredTracks: [createMockTrack(1), createMockTrack(2)],
         refreshIfLikedSongs: vi.fn(),
+        isRemote: () => false,
       });
       Alpine.store('queue', {
         items: [],
@@ -253,6 +254,7 @@ describe('Go to Artist', () => {
         ],
         _dataVersion: 1,
         refreshIfLikedSongs: vi.fn(),
+        isRemote: () => false,
       });
       Alpine.store('queue', {
         items: [],

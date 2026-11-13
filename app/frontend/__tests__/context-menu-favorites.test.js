@@ -110,6 +110,7 @@ describe('Context Menu - Liked Songs Toggle', () => {
       Alpine.store('library', {
         filteredTracks: [createMockTrack(1), createMockTrack(2)],
         refreshIfLikedSongs: vi.fn(),
+        isRemote: () => false,
       });
       Alpine.store('queue', {
         items: [],
@@ -280,6 +281,7 @@ describe('Context Menu - Liked Songs Toggle', () => {
       Alpine.store('library', {
         tracks: [createMockTrack(1)],
         refreshIfLikedSongs: vi.fn(),
+        isRemote: () => false,
       });
       Alpine.store('queue', {
         items: [],
@@ -361,6 +363,7 @@ describe('Context Menu - Liked Songs Toggle', () => {
       Alpine.store('library', {
         tracks: [createMockTrack(1)],
         refreshIfLikedSongs: vi.fn(),
+        isRemote: () => false,
       });
       Alpine.store('queue', {
         items: [],

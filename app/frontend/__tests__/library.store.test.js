@@ -931,7 +931,7 @@ describe('FOUC #1 - init() cache must not cause placeholder rows', () => {
   });
 });
 
-describe('FOUC #2 - visibleTracks must not produce placeholders for unloaded pages', () => {
+describe('FOUC #2 - visibleTracks renders position-correct placeholders for unloaded pages', () => {
   let browserFactory;
 
   beforeEach(async () => {
@@ -983,7 +983,7 @@ describe('FOUC #2 - visibleTracks must not produce placeholders for unloaded pag
     mod.createLibraryBrowser(mockAlpine);
   });
 
-  it('skips indices where page data is not yet loaded instead of showing placeholders', () => {
+  it('shows position-correct placeholders for indices whose page is not yet loaded', () => {
     // Simulate: loadLibraryData completed, page 0 has 50 tracks,
     // but scroll position points to page 2 (indices 100-149)
     const store = createPaginatedStore(50);
@@ -1003,8 +1003,11 @@ describe('FOUC #2 - visibleTracks must not produce placeholders for unloaded pag
     const tracks = browser.visibleTracks;
     const placeholders = tracks.filter((r) => r.track._placeholder);
 
-    // No placeholders should be shown for unloaded pages
-    expect(placeholders).toHaveLength(0);
+    // Unloaded pages render position-correct shimmer rows, never stale content
+    expect(placeholders).toHaveLength(tracks.length);
+    expect(tracks.map((r) => r.globalIndex)).toEqual(
+      [...Array(tracks.length).keys()].map((i) => tracks[0].globalIndex + i),
+    );
 
     // _ensurePage should still be called to trigger async fetch
     expect(store._ensurePage).toHaveBeenCalled();
