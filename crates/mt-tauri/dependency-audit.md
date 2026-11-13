@@ -69,13 +69,9 @@ Most duplicates are **transitive dependencies** (dependencies of dependencies) c
 
 ## 3. Unused Dependencies Check
 
-**Not performed:** Would require `cargo-machete` or `cargo-udeps` installation.
+**Checked 2026-11-13** with Rust 1.100.0: `cargo rustc -p mt-tauri --lib -- -W unused-crate-dependencies` reports no unused regular dependencies on default features. `[dev-dependencies]`, optional-feature crates, and Windows-only crates are not covered.
 
-**Action item:** Consider running periodically during maintenance:
-```bash
-cargo install cargo-machete
-cargo machete src-tauri
-```
+Cargo's own `cargo::unused_dependencies` lint (Rust 1.100) does not report anything for this crate, even for a deliberately injected unused dependency, so it is not enabled. See TASK-361.
 
 ## Summary
 
