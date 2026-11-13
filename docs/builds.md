@@ -572,6 +572,8 @@ plain `cargo check` on `mt-tauri` requires the sidecar to already be staged
 for the host's Rust triple. `ci:build`, `tauri:build`, and `tauri:dev` all
 carry a `zig:stage` dependency for exactly this reason.
 
+Jobs that only compile or test Rust and never execute the sidecar (the `rust` job and `ci:check`, which backs the macOS and Windows `build` matrix legs) stage an empty stand-in with `task zig:stage-placeholder TARGET=<rust-triple>` instead of a real binary. This keeps Zig installation, Zig build time and Zig-side failures off their critical path, and the task never overwrites an existing file, so a real `zig:stage` output survives. The stub is written before any cargo invocation, so a failure there stops the job before the build script can rewrite the tracked `crates/mt-tauri/gen/schemas/*.json`. Tests that spawn the real sidecar (`shadow_diff_parity_test::`) cannot run against the stand-in; the `rust` job excludes them with a nextest filter and the `shadow-diff` job runs them with real Zig.
+
 ### CI Runner Policy
 
 Runner assignment is optimized for developer iteration speed (PR/push), not release throughput.

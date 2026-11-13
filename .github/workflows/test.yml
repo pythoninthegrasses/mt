@@ -43,6 +43,11 @@ jobs:
         with:
           mode: test
 
+      # tauri-build needs the externalBin file to exist; an empty stand-in keeps
+      # Zig off this job's critical path (see docs/builds.md#sidecar-packaging).
+      - name: Stage placeholder sidecar
+        run: task zig:stage-placeholder TARGET=aarch64-apple-darwin
+
       - name: Cargo fmt check
         run: cargo fmt --all -- --check
 
@@ -50,7 +55,8 @@ jobs:
         run: cargo clippy --workspace --all-features -- -D warnings
 
       - name: Run Rust tests
-        run: cargo nextest run --workspace
+        # The parity tests spawn the real sidecar; the shadow-diff job runs them.
+        run: cargo nextest run --workspace -E 'not test(/shadow_diff_parity_test::/)'
 
   deno-lint:
     name: Deno Lint and Format Check

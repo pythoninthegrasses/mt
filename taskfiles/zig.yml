@@ -174,6 +174,26 @@ tasks:
     generates:
       - "{{.BINARIES_DIR}}/mt-zig-core-{{.TARGET}}{{.DEST_EXT}}"
 
+  stage-placeholder:
+    desc: "Stage an empty stand-in sidecar so tauri-build passes without Zig (TARGET required)"
+    summary: |
+      tauri-build requires crates/mt-tauri/binaries/mt-zig-core-<rust-triple>
+      to exist for any cargo check/clippy/test on mt-tauri. Jobs that never
+      execute the sidecar (the rust job, ci:check) stage an empty file instead
+      of installing Zig, so Zig-side failures and build time stay off their
+      critical path. An existing file, e.g. a real zig:stage output, is never
+      overwritten. Tests that spawn the real sidecar must not run against this
+      stand-in; see docs/builds.md#sidecar-packaging.
+
+        task zig:stage-placeholder TARGET=aarch64-apple-darwin
+    vars:
+      DEST_EXT: '{{if eq .TARGET "x86_64-pc-windows-msvc"}}.exe{{else}}{{end}}'
+    requires:
+      vars: [TARGET]
+    cmds:
+      - mkdir -p {{.BINARIES_DIR}}
+      - test -e {{.BINARIES_DIR}}/mt-zig-core-{{.TARGET}}{{.DEST_EXT}} || touch {{.BINARIES_DIR}}/mt-zig-core-{{.TARGET}}{{.DEST_EXT}}
+
   clean:
     desc: "Clean Zig build artifacts"
     cmds:

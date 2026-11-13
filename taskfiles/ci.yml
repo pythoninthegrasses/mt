@@ -176,7 +176,14 @@ tasks:
       vars: [TARGET]
 
   check:
-    desc: "Run cargo check (TARGET optional)"
+    desc: "Run cargo check (TARGET required)"
+    summary: |
+      Stages an empty stand-in sidecar (zig:stage-placeholder) rather than a
+      real one: cargo check never executes it, and this job carries no Zig.
+    deps:
+      - task: :zig:stage-placeholder
+        vars:
+          TARGET: '{{.TARGET}}'
     env:
       RUSTUP_TOOLCHAIN: '{{if and (eq OS "windows") .PINNED_RUST}}{{.PINNED_RUST}}-x86_64-pc-windows-msvc{{else if .PINNED_RUST}}{{.PINNED_RUST}}{{end}}'
     cmds:
