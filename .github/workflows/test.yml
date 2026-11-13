@@ -77,8 +77,8 @@ jobs:
       - name: Run Deno lint
         run: deno lint
 
-  # Independent of the rust job and intentionally absent from build/playwright
-  # needs: so Zig work cannot extend the critical path.
+  # Independent of the rust job, but build/playwright/shadow-diff wait on it so
+  # a Zig lint/test failure stops the expensive jobs from running.
   zig:
     name: Zig Lint, Test, and Build
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -120,14 +120,15 @@ jobs:
         run: task zig:build
 
   # Shadow-diff parity between the Rust library_get_all and its Zig port
-  # (TASK-355.5 AC#6). Deliberately not in any other job's `needs`, and
-  # continue-on-error, so a divergence is reported on the PR without blocking
-  # an unrelated change: the harness compares two implementations of the same
-  # query rather than verifying either against a spec, and it needs both the
-  # Rust and Zig toolchains plus a staged sidecar, which the rust job
-  # intentionally does not carry.
+  # (TASK-355.5 AC#6). Not in any other job's `needs`, and continue-on-error,
+  # so a divergence is reported on the PR without blocking an unrelated
+  # change: the harness compares two implementations of the same query rather
+  # than verifying either against a spec, and it needs both the Rust and Zig
+  # toolchains plus a staged sidecar, which the rust job intentionally does
+  # not carry. Waits on zig so a broken Zig build skips this 25-minute job.
   shadow-diff:
     name: Rust/Zig Shadow-Diff Parity
+    needs: [zig]
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 25
 
@@ -160,9 +161,9 @@ jobs:
 
   build:
     name: Build (${{ matrix.platform }})
-    # Gated on deno-lint and rust so a failed lint/format/test run skips the
+    # Gated on the fast jobs so a failed lint/format/test run skips the
     # build matrix (see docs/builds.md#test-workflow-dependency-graph).
-    needs: [deno-lint, rust]
+    needs: [deno-lint, rust, vitest-tests, zig]
     if: ${{ !failure() && !cancelled() }}
     strategy:
       fail-fast: false
@@ -285,9 +286,9 @@ jobs:
   playwright-tests:
     name: Playwright E2E Tests
     # Runs against a Vite preview build with mocked IPC -- no Tauri/Rust
-    # artifact dependency. Gated on rust so a failed lint/format/test run
-    # skips it, plus deno-lint and the change filter.
-    needs: [changes, deno-lint, rust]
+    # artifact dependency. Gated on the fast jobs so a failed lint/format/test
+    # run skips it, plus the change filter.
+    needs: [changes, deno-lint, rust, vitest-tests, zig]
     if: ${{ !failure() && !cancelled() && (needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch') }}
     runs-on: [macOS, ARM64]
     timeout-minutes: 20
