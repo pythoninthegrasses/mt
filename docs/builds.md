@@ -594,12 +594,13 @@ Runner assignment is optimized for developer iteration speed (PR/push), not rele
 
 #### Test Workflow Dependency Graph
 
-The test workflow (`test.yml`) runs eight jobs. The build matrix gates on `deno-lint` and `rust`, so a failed Rust lint, format or test run skips the builds. Playwright gates only on `deno-lint` and the change filter:
+The test workflow (`test.yml`) runs eight jobs. The build matrix gates on `deno-lint` and `rust`, so a failed Rust lint, format or test run skips the builds. Playwright gates on `deno-lint`, `rust` and the change filter:
 
 ```text
 deno-lint ──► build(macos, linux, windows)
 rust      ──► build(macos, linux, windows)
 deno-lint ──► playwright-tests (also gated on `changes`: frontend-paths filter)
+rust      ──► playwright-tests
 
 vitest-tests (independent)
 zig          (independent)
@@ -607,7 +608,7 @@ shadow-diff  (independent, continue-on-error)
 changes      (independent — feeds playwright-tests' path filter only)
 ```
 
-The `rust` job does not produce artifacts consumed by the build matrix (`cargo check` per platform); `build` waits on it only to avoid spending runner time on a commit that already fails Rust lint, format or tests, which costs up to ~15-20 min of added wall-clock on the build matrix. `playwright-tests` runs against a Vite preview build with mocked IPC rather than any Tauri/Rust artifact, so it starts as soon as `deno-lint` completes (~2-3 min). `zig` and `shadow-diff` are deliberately absent from every other job's `needs:` so Zig-core work never extends the critical path (see the inline comments in `test.yml` for each job's rationale).
+The `rust` job does not produce artifacts consumed by the build matrix (`cargo check` per platform); `build` waits on it only to avoid spending runner time on a commit that already fails Rust lint, format or tests, which costs up to ~15-20 min of added wall-clock on the build matrix. `playwright-tests` runs against a Vite preview build with mocked IPC rather than any Tauri/Rust artifact, but also waits on `rust` for the same reason. `zig` and `shadow-diff` are deliberately absent from every other job's `needs:` so Zig-core work never extends the critical path (see the inline comments in `test.yml` for each job's rationale).
 
 #### CI Setup Modes
 

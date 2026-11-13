@@ -279,8 +279,9 @@ jobs:
   playwright-tests:
     name: Playwright E2E Tests
     # Runs against a Vite preview build with mocked IPC -- no Tauri/Rust
-    # artifact dependency, so it only needs deno-lint plus the change filter.
-    needs: [changes, deno-lint]
+    # artifact dependency. Gated on rust so a failed lint/format/test run
+    # skips it, plus deno-lint and the change filter.
+    needs: [changes, deno-lint, rust]
     if: ${{ !failure() && !cancelled() && (needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch') }}
     runs-on: [macOS, ARM64]
     timeout-minutes: 20
