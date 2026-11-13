@@ -3,9 +3,10 @@ id: TASK-363
 title: >-
   Stage Zig sidecar before cargo clippy/test in the Rust Lint, Format, and Test
   CI job
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-13T19:06:00Z'
+updated_date: '2026-11-13T19:21:00Z'
 labels:
   - ci
   - zig
@@ -33,3 +34,32 @@ The Rust Lint, Format, and Test job fails in the mt-tauri build script with `res
 - [ ] #3 The rust job does not gain a hard dependency on Zig-side failures (Zig work must still not extend the critical path unless intended)
 - [ ] #4 A failed or skipped sidecar step cannot leave modified crates/mt-tauri/gen/schemas/*.json in the working tree
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Research findings:
+- tauri-build resolves externalBin eagerly; any cargo check/clippy/test needs crates/mt-tauri/binaries/mt-zig-core-<rust-triple>[.exe] to exist.
+- The rust job (macOS ARM64) runs `cargo clippy` and `cargo nextest run --workspace` with no Zig. build matrix macOS/Windows runs `task ci:check`, which also has no zig:stage dep (same failure expected); Linux uses Docker that stages the real sidecar.
+- crates/mt-tauri/src/shadow_diff_parity_test.rs (2 tokio tests, not #[ignore]) spawns the REAL sidecar and panics if absent, so a placeholder alone leaves `cargo nextest run --workspace` red. The shadow-diff job (Zig + continue-on-error) already covers these tests.
+
+Proposed approach (placeholder, not real stage):
+1. Add task `zig:stage-placeholder` (TARGET required, same triple handling and .exe suffix as zig:stage): writes an empty stub only if the target file is absent, so a real staged binary is never clobbered. No Zig dependency.
+2. rust job: run the placeholder task before fmt/clippy/nextest; nextest excludes `shadow_diff_parity_test::` via filter expr (covered by shadow-diff job).
+3. ci:check: depend on the placeholder so build-matrix macOS/Windows get past the build script too.
+4. Because the stub step runs before any cargo invocation and is a plain file write, a failure there means cargo never runs, so gen/schemas/*.json cannot be rewritten (AC#4).
+5. Document rationale in docs/builds.md (Sidecar Packaging section) and the taskfile summary.
+
+Real-stage alternative rejected: installs Zig in the rust job, adds Zig build time and Zig-side failure modes to the critical path (AC#3).
+
+Verification: locally remove the staged binary, run the placeholder task + `cargo check`/clippy; run nextest with the exclusion filter; confirm git status shows no gen/schemas changes; actionlint on test.yml.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implemented (uncommitted): taskfiles/zig.yml zig:stage-placeholder; taskfiles/ci.yml ci:check depends on it (TARGET now required); test.yml rust job stages placeholder and nextest excludes shadow_diff_parity_test::; docs/builds.md Sidecar Packaging documents rationale.
+Local verification (macOS arm64): with the staged binary removed, cargo check failed with the reported error; after the placeholder step the build script passes, nextest (excluding parity tests) 890 passed, gen/schemas unchanged, actionlint clean.
+Blocker for a green rust job, out of scope: `cargo clippy --workspace --all-features -- -D warnings` now fails with 7 pre-existing lints in commands/plex.rs:208, db/removed.rs:152, plex/downloader.rs:138,239, lib.rs:691.
+Not verified locally: Windows ci:check leg and Linux; needs a CI run.
+<!-- SECTION:NOTES:END -->
