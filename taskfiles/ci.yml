@@ -51,7 +51,7 @@ tasks:
       - task: _install-cargo-nextest
 
   setup-rust:
-    desc: "Install rustup and nightly toolchain (macOS/Linux)"
+    desc: "Install rustup and the pinned Rust toolchain (macOS/Linux)"
     platforms: [darwin, linux]
     cmds:
       - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs |
@@ -67,7 +67,7 @@ tasks:
       - rustup run {{.PINNED_RUST}} rustc --version
 
   setup-rust-windows:
-    desc: "Configure rustup nightly toolchain (Windows)"
+    desc: "Configure the pinned rustup toolchain (Windows)"
     platforms: [windows]
     cmds:
       - rustup set default-host x86_64-pc-windows-msvc

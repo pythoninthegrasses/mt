@@ -18,9 +18,9 @@ env:
     sh: 'echo "$PATH" | tr ":" "\n" | grep -v "globalStorage" | paste -sd ":" -'
   CARGO_HOME: "{{.ROOT_DIR}}/.cache/cargo"
   CARGO_TARGET_DIR: "{{.ROOT_DIR}}/target"
-  RUSTUP_TOOLCHAIN: nightly
+  RUSTUP_TOOLCHAIN:
+    sh: grep '^rust ' "{{.ROOT_DIR}}/.tool-versions" | awk '{print $2}'
   RUSTC_WRAPPER: sccache
-  RUSTFLAGS: "-Zthreads={{.BUILD_JOBS}}"
   CARGO_BUILD_JOBS: "{{.BUILD_JOBS}}"
 
 includes:

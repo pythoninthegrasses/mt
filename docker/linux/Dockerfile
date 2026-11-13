@@ -7,7 +7,7 @@ RUN true <<'DOCKERFILE'
 Multi-stage Dockerfile for Linux CI builds.
 
 Stages:
-  deps      - system packages, Rust nightly, Zig, Node.js, cargo-chef, tauri-cli
+  deps      - system packages, Rust (pinned), Zig, Node.js, cargo-chef, tauri-cli
   planner   - cargo-chef prepare (generates recipe.json from lock/manifests)
   cook      - cargo-chef cook (compiles all dependencies, cached by Blacksmith)
   check     - stage sidecar, cargo check --workspace (test workflow target)
@@ -56,8 +56,10 @@ ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH="/usr/local/cargo/bin:${PATH}"
 
+# Pinned to .tool-versions' `rust` entry.
+ARG RUST_VERSION=1.100.0
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --default-toolchain nightly --profile minimal \
+    | sh -s -- -y --default-toolchain "${RUST_VERSION}" --profile minimal \
     && rustup target add x86_64-unknown-linux-gnu
 
 RUN cargo install cargo-chef --locked \
@@ -78,9 +80,6 @@ RUN curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${Z
     && tar -xJf /tmp/zig.tar.xz -C /usr/local/zig --strip-components=1 \
     && rm /tmp/zig.tar.xz
 ENV PATH="/usr/local/zig:${PATH}"
-
-ENV RUSTUP_TOOLCHAIN=nightly \
-    RUSTFLAGS="-Zthreads=16"
 
 WORKDIR /build
 

@@ -31,7 +31,7 @@ $script:RepoRoot = (Resolve-Path "$PSScriptRoot\..").Path
 $script:TauriDir = Join-Path $RepoRoot 'crates\mt-tauri'
 $script:FrontendDir = Join-Path $RepoRoot 'app\frontend'
 $script:Target = 'x86_64-pc-windows-msvc'
-$script:RustToolchain = 'nightly-2026-02-09'
+$script:RustToolchain = '1.100.0'
 $script:BuildTemp = Join-Path $env:TEMP "mt-build-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
 $script:SignCommand = $null
 $script:CertPath = $null
@@ -170,29 +170,13 @@ function Install-RustToolchain {
     }
 
     # Set RUSTUP_TOOLCHAIN for the entire process so all cargo/rustc
-    # invocations use the correct nightly, regardless of rustup default
+    # invocations use the pinned toolchain, regardless of rustup default
     $env:RUSTUP_TOOLCHAIN = $script:RustToolchain
 
-    # Parallel compilation targeting ~75 % CPU:
-    # CARGO_BUILD_JOBS  – crates compiled concurrently; use most cores
-    # -Zthreads         – threads per rustc invocation (nightly only); cap at
-    #                     half the cores so the final single-crate link phase
-    #                     doesn't peg the CPU at 100 %
-    $cpus = [Environment]::ProcessorCount
     # CARGO_BUILD_JOBS: how many crates compile concurrently (dep-phase parallelism)
-    $buildJobs   = [Math]::Max(1, $cpus - 2)
-    # -Zthreads: threads per rustc invocation (nightly only).
-    # Applies to every crate but small deps finish too fast to saturate their
-    # budget; the real effect is on large single-crate phases (mt-tauri).
-    # Target ~80 % utilisation during that phase.
-    $rustThreads = [Math]::Max(1, [Math]::Round($cpus * 0.8))
+    $cpus = [Environment]::ProcessorCount
+    $buildJobs = [Math]::Max(1, $cpus - 2)
     $env:CARGO_BUILD_JOBS = "$buildJobs"
-    $env:RUSTFLAGS = "-Zthreads=$rustThreads"
-    # codegen-units=1 is set in Cargo.toml for release (best optimisation) but
-    # it serialises LLVM codegen into one thread, leaving -Zthreads with nothing
-    # to parallelise at the LLVM layer.  Override it here so LLVM can split work
-    # across rustThreads units; LTO at link time preserves optimisation quality.
-    $env:CARGO_PROFILE_RELEASE_CODEGEN_UNITS = "$rustThreads"
 
     # Skip the network round-trip when toolchain + target are already present
     $haveToolchain = (rustup toolchain list 2>$null) -match [regex]::Escape($script:RustToolchain)
@@ -207,7 +191,7 @@ function Install-RustToolchain {
 
     Write-Host "  rustc: $(rustc --version)"
     Write-Host "  cargo: $(cargo --version)"
-    Write-Host "  build jobs: $buildJobs crates / $rustThreads threads per crate  ($cpus logical CPUs)"
+    Write-Host "  build jobs: $buildJobs crates  ($cpus logical CPUs)"
 }
 
 function Build-Frontend {

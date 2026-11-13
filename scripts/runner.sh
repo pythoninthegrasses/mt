@@ -16,7 +16,7 @@ CACHE_DIR="${HOME}/.cache/mt-runner"
 NODE_VERSION="${NODE_VERSION:-24.2.0}"
 DENO_VERSION="${DENO_VERSION:-2.5.1}"
 TASK_VERSION="${TASK_VERSION:-3.49.1}"
-RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-nightly-2026-02-09}"
+RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-1.100.0}"
 RUNNER_VERSION="${RUNNER_VERSION:-2.333.1}"
 
 die() { echo "error: $*" >&2; exit 1; }
@@ -127,7 +127,7 @@ cmd_prepare() {
         echo "  exists: task.tar"
     fi
 
-    # Rust toolchain -- only the pinned nightly + rustup metadata (no registry cache)
+    # Rust toolchain -- only the pinned toolchain + rustup metadata (no registry cache)
     if [ ! -f "${BUILD_CTX}/rust.tar" ]; then
         local toolchain_dir="${HOME}/.rustup/toolchains/${RUST_TOOLCHAIN}-aarch64-apple-darwin"
         [ -d "${toolchain_dir}" ] || die "Rust toolchain ${RUST_TOOLCHAIN} not found in ~/.rustup/toolchains/"
@@ -281,7 +281,7 @@ Environment variables:
   NODE_VERSION                 Node.js version (default: 24.2.0)
   DENO_VERSION                 Deno version (default: 2.5.1)
   TASK_VERSION                 Task version (default: 3.49.1)
-  RUST_TOOLCHAIN               Rust toolchain (default: nightly-2026-02-09)
+  RUST_TOOLCHAIN               Rust toolchain (default: 1.100.0)
   RUNNER_VERSION               GitHub Actions runner version (default: 2.333.1)
 EOF
 }
