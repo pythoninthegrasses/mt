@@ -12,8 +12,8 @@ Build configuration, performance tuning, signing, and distribution for mt.
 
 ## Taskfile Commands
 
-All `task tauri:*` commands default to nightly with parallel codegen and sccache
-(`RUSTUP_TOOLCHAIN=nightly`, `RUSTFLAGS="-Zthreads=16"`, `RUSTC_WRAPPER=sccache`).
+All `task tauri:*` commands use the Rust version pinned in `.tool-versions` and sccache
+(`RUSTUP_TOOLCHAIN` is read from `.tool-versions`, `RUSTC_WRAPPER=sccache`).
 
 | Task | Description |
 | ------ | ------------- |
@@ -31,32 +31,27 @@ All `task tauri:*` commands default to nightly with parallel codegen and sccache
 | `task tauri:clean:rust` | Clean only Rust build artifacts |
 | `task tauri:doctor` | Run Tauri environment check |
 
-### Using Stable Toolchain
+### Toolchain
 
-Override the nightly default if needed:
+The Rust version is pinned to a stable release in `.tool-versions` (`rust 1.100.0`). That file is the single source for the root `taskfile.yml`, `taskfiles/ci.yml`, and the CI composite action. `docker/linux/Dockerfile` (`ARG RUST_VERSION`), `scripts/build.ps1` (`$script:RustToolchain`), and `scripts/runner.sh` (`RUST_TOOLCHAIN`) repeat the value and must be updated by hand.
+
+To try another toolchain for a single command:
 
 ```bash
-# Single command
-RUSTUP_TOOLCHAIN=stable RUSTFLAGS="" task tauri:dev
-
-# Or export in shell
-export RUSTUP_TOOLCHAIN=stable
-export RUSTFLAGS=""
-task tauri:dev
+RUSTUP_TOOLCHAIN=nightly task tauri:dev
 ```
 
-### Updating Nightly
+Note that the mise `cargo` shim ignores `RUSTUP_TOOLCHAIN`; when invoking `cargo` outside `task`, call `~/.cargo/bin/cargo` directly.
+
+### Updating Rust
 
 ```bash
-rustup update nightly
-```
-
-If a nightly update breaks the build, pin to a specific date:
-
-```bash
-rustup install nightly-2026-01-27
-# Then update taskfiles/tauri.yml:
-# RUSTUP_TOOLCHAIN: nightly-2026-01-27
+# 1. Bump the pin
+#    .tool-versions, docker/linux/Dockerfile, scripts/build.ps1, scripts/runner.sh
+# 2. Install it
+mise install rust
+# 3. Verify
+task lint && task test
 ```
 
 ## Performance
@@ -135,29 +130,16 @@ rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 | rust-lld | Recommended | Fast for full builds |
 | link.exe | Alternative | Better for tiny incrementals |
 
-### Nightly Toolchain
+### Stable vs Nightly (`-Zthreads`)
 
-The `-Zthreads=N` flag enables parallel codegen, which significantly improves incremental build times. This is a nightly-only feature.
+mt previously pinned a nightly toolchain only for `-Zthreads=N` (parallel rustc frontend), which has not been stabilized as of Rust 1.100. Measured on Apple M4 Max with sccache disabled (`cargo build -p mt-tauri`, dev profile, 2026-11-13):
 
-### Benchmarks
+| Scenario | Stable 1.100.0 | Nightly 1.102 + `-Zthreads=14` |
+| ---------- | ---------------- | -------------------------------- |
+| Cold build (3 runs) | 50.3s ± 0.2 | 47.8s ± 0.6 (-5%) |
+| Incremental, after touching `src/lib.rs` (5 runs) | 2.17s | 2.17s |
 
-Measured on Apple M4 Max, macOS 15.7.1:
-
-#### Stable (Rust 1.92.0)
-
-| Scenario | Time | Notes |
-| ---------- | ------ | ------- |
-| Cold build | ~50.2s | Full rebuild from clean |
-| Incremental build | ~1.06s | After touching `src/main.rs` |
-
-#### Nightly + `-Zthreads=16` (Rust 1.95.0-nightly)
-
-| Scenario | Time | Improvement | Notes |
-| ---------- | ------ | ------------- | ------- |
-| Cold build | ~50.1s | -0.3% | Negligible difference |
-| Incremental build | ~0.82s | **-23%** | Significant improvement |
-
-**Key finding**: Nightly with `-Zthreads=16` provides **23% faster incremental builds** with 50x better variance (σ=0.012s vs σ=0.588s), while maintaining full test compatibility (596 Rust tests pass).
+The gap was too small to justify nightly's incremental-cache ICE risk and the extra toolchain pinning, so the repo moved to stable. An earlier measurement on Rust 1.92 vs 1.95-nightly showed 23% faster incremental builds when touching only `src/main.rs`; re-measure if build times become a problem.
 
 ### Benchmark Protocol
 
@@ -223,7 +205,7 @@ Per [rustc_codegen_cranelift#171](https://github.com/rust-lang/rustc_codegen_cra
 - `std::arch` (platform-specific SIMD intrinsics) is only partially supported
 - ARM NEON intrinsics like `sqdmulh` are not yet implemented
 
-**Stick with nightly + `-Zthreads=16`** for now. When Cranelift SIMD support matures (or if Tauri plugins stop using raw NEON intrinsics), reconsider.
+**Stick with the stable LLVM backend** for now. When Cranelift SIMD support matures (or if Tauri plugins stop using raw NEON intrinsics), reconsider.
 
 ```bash
 # Testing Cranelift (if revisiting)
@@ -405,7 +387,7 @@ Linux amd64 builds use a multi-stage Dockerfile (`docker/linux/Dockerfile`) for 
 
 | Stage | Purpose | Target |
 | --------- | --------- | -------- |
-| `deps` | System packages, Rust nightly, Node.js, cargo-chef, tauri-cli | (base) |
+| `deps` | System packages, Rust (pinned), Node.js, cargo-chef, tauri-cli | (base) |
 | `planner` | `cargo chef prepare` — generates recipe.json from manifests | (internal) |
 | `cook` | `cargo chef cook` — compiles all dependencies (cached layer) | (internal) |
 | `check` | `cargo check --workspace` | `--target check` (test workflow) |
@@ -513,7 +495,7 @@ Use `scripts/build.ps1` from a **native PowerShell terminal** (not git bash — 
 The script replicates the CI pipeline locally:
 
 1. Installs prerequisites via Chocolatey (cmake, rustup, node, go-task, MSVC build tools) — skipped if already present
-2. Configures the nightly Rust toolchain and `x86_64-pc-windows-msvc` target
+2. Configures the pinned Rust toolchain and `x86_64-pc-windows-msvc` target
 3. Builds the frontend (`npm ci` + `npm run build`) — skips `npm ci` when `node_modules` is already up to date
 4. Generates a self-signed `CodeSigningCert` and exports it to a temporary PFX
 5. Writes a `sign.cmd` batch wrapper that invokes `signtool.exe sign` with the PFX
@@ -564,7 +546,7 @@ The test workflow (`test.yml`) uses the same Dockerfile but targets the `check` 
 
 Runs on a self-hosted `[self-hosted, Windows, X64]` runner:
 
-1. Sets up the Tauri build environment (Chocolatey installs cmake and rustup; `~/.cargo/bin` is prepended to `GITHUB_PATH`; `RUSTUP_TOOLCHAIN` is set to the fully qualified `nightly-2026-02-09-x86_64-pc-windows-msvc` to ensure the MSVC-hosted toolchain is used — see [Windows Toolchain Pinning](#windows-toolchain-pinning) below)
+1. Sets up the Tauri build environment (Chocolatey installs cmake and rustup; `~/.cargo/bin` is prepended to `GITHUB_PATH`; `RUSTUP_TOOLCHAIN` is set to the fully qualified `1.100.0-x86_64-pc-windows-msvc` to ensure the MSVC-hosted toolchain is used — see [Windows Toolchain Pinning](#windows-toolchain-pinning) below)
 2. Installs Windows SDK for `signtool.exe`
 3. Generates a self-signed `CodeSigningCert` and exports to PFX
 4. Writes a config override that disables `beforeBuildCommand` and sets `bundle.windows.signCommand` using structured `{ cmd, args }` format (handles spaces in `signtool.exe` path)
@@ -644,7 +626,7 @@ On Windows, the composite action also bootstraps `git` and `pwsh` via Chocolatey
 
 #### Windows Toolchain Pinning
 
-The self-hosted Windows runner can accumulate stale rustup state across runs. In particular, a system-level settings file (`C:\Windows\system32\config\systemprofile\.rustup\settings.toml`) may set `default_host_triple` to `x86_64-pc-windows-gnu`. When `RUSTUP_TOOLCHAIN` is set to a bare channel name like `nightly-2026-02-09`, rustup resolves it using the default host triple — producing the GNU-hosted toolchain, which requires `dlltool.exe` (not present on MSVC-only runners) and fails with:
+The self-hosted Windows runner can accumulate stale rustup state across runs. In particular, a system-level settings file (`C:\Windows\system32\config\systemprofile\.rustup\settings.toml`) may set `default_host_triple` to `x86_64-pc-windows-gnu`. When `RUSTUP_TOOLCHAIN` is set to a bare toolchain name like `1.100.0`, rustup resolves it using the default host triple — producing the GNU-hosted toolchain, which requires `dlltool.exe` (not present on MSVC-only runners) and fails with:
 
 ```text
 error: error calling dlltool 'dlltool.exe': program not found
@@ -652,7 +634,7 @@ error: error calling dlltool 'dlltool.exe': program not found
 
 To prevent this, the CI configuration uses three layers of defense:
 
-1. **Fully qualified `RUSTUP_TOOLCHAIN`** (`taskfiles/ci.yml`): On Windows, the env var is set to `nightly-2026-02-09-x86_64-pc-windows-msvc` (with the host triple suffix), eliminating any ambiguity in toolchain resolution.
+1. **Fully qualified `RUSTUP_TOOLCHAIN`** (`taskfiles/ci.yml`): On Windows, the env var is set to `1.100.0-x86_64-pc-windows-msvc` (with the host triple suffix), eliminating any ambiguity in toolchain resolution.
 
 2. **`rustup set default-host x86_64-pc-windows-msvc`** (`.github/actions/setup-tauri-build/action.yml` and `taskfiles/ci.yml`): Run before toolchain installation to override any stale GNU default.
 

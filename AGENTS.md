@@ -76,7 +76,7 @@ Do not symlink the project-local `.cache/cargo/bin/` to the mise install dir. Se
 
 ### Windows CI Toolchain Constraint
 
-On Windows CI runners, `RUSTUP_TOOLCHAIN` MUST use the fully qualified name with host triple suffix (e.g. `nightly-2026-02-09-x86_64-pc-windows-msvc`). Bare channel names like `nightly-2026-02-09` resolve using the runner's default host triple, which can be stale GNU — causing `dlltool.exe` not found errors. See [Build Configuration — Windows Toolchain Pinning](docs/builds.md#windows-toolchain-pinning) for details.
+On Windows CI runners, `RUSTUP_TOOLCHAIN` MUST use the fully qualified name with host triple suffix (e.g. `1.100.0-x86_64-pc-windows-msvc`). Bare toolchain names like `1.100.0` resolve using the runner's default host triple, which can be stale GNU — causing `dlltool.exe` not found errors. See [Build Configuration — Windows Toolchain Pinning](docs/builds.md#windows-toolchain-pinning) for details.
 
 When modifying `taskfiles/ci.yml` or `.github/actions/setup-tauri-build/action.yml`:
 
