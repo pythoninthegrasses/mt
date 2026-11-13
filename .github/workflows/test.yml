@@ -154,10 +154,9 @@ jobs:
 
   build:
     name: Build (${{ matrix.platform }})
-    # Gate on deno-lint only -- rust/vitest-tests/playwright-tests run in
-    # parallel and don't produce artifacts the build matrix consumes, so
-    # serializing on them just adds wall-clock (see docs/builds.md#test-workflow-dependency-graph).
-    needs: [deno-lint]
+    # Gated on deno-lint and rust so a failed lint/format/test run skips the
+    # build matrix (see docs/builds.md#test-workflow-dependency-graph).
+    needs: [deno-lint, rust]
     if: ${{ !failure() && !cancelled() }}
     strategy:
       fail-fast: false
