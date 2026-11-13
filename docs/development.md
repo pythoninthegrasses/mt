@@ -263,6 +263,16 @@ cargo add crate-name
 cargo add --dev crate-name
 ```
 
+### Dependency Cooldown
+
+`.cargo/config.toml` sets `registry.global-min-publish-age = "3 days"` (Rust 1.100+), so `cargo update` and fresh resolves skip crate versions published in the last 3 days. Versions already in `Cargo.lock` are unaffected. To pull a newer version immediately:
+
+```bash
+CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow cargo update <crate> --precise <version>
+```
+
+`cargo install` (tauri-cli, nextest) ignores the cooldown; pin with `cargo install <crate>@<version>`.
+
 ## Troubleshooting
 
 ### ffmpeg: `Library not loaded: libx265.*.dylib`
