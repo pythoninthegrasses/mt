@@ -3,9 +3,11 @@ id: TASK-362
 title: >-
   Fix CI cargo-nextest install: binstall self-installs into project CARGO_HOME
   but is looked up in ~/.cargo/bin
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - claude
 created_date: '2026-11-13T19:06:00Z'
+updated_date: '2026-11-13T19:09:00Z'
 labels:
   - ci
 dependencies: []
@@ -31,3 +33,9 @@ The Rust/Zig Shadow-Diff Parity job (and any job using ci:setup-test) fails with
 - [ ] #3 ci:_install-tauri-cli has the same fix or is confirmed unaffected
 - [ ] #4 Rust/Zig Shadow-Diff Parity job gets past setup (it may still fail later for other tracked reasons)
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Set CARGO_HOME="" in ci:_install-cargo-binstall env so the installer (which uses ${CARGO_HOME:-$HOME/.cargo}/bin) installs into {{.CARGO_BIN}}, matching the status check and the _install-cargo-nextest/_install-tauri-cli lookups. 2. Verify locally with task --dry and a sandboxed HOME run of the installer. 3. Push to main and confirm CI.
+<!-- SECTION:PLAN:END -->
