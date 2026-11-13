@@ -886,7 +886,11 @@ test "respond: total against the real mt_fixture.db matches a direct COUNT(*)" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var db = sqlite.Db.openReadOnly("../tests/fixtures/mt_fixture.db") catch return error.SkipZigTest;
+    const fixture_path = "../tests/fixtures/mt_fixture.db";
+    // Probe first: a failed sqlite open logs an error, which fails the build even when the test skips.
+    _ = std.Io.Dir.cwd().statFile(testing.io, fixture_path, .{}) catch return error.SkipZigTest;
+
+    var db = sqlite.Db.openReadOnly(fixture_path) catch return error.SkipZigTest;
     defer db.close();
 
     var out = std.Io.Writer.Allocating.init(allocator);
