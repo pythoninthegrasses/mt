@@ -1,9 +1,10 @@
 ---
 id: TASK-367
 title: Fix 7 cargo clippy -D warnings errors in mt-tauri blocking the Rust CI job
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-13T19:23:00Z'
+updated_date: '2026-11-13T19:24:00Z'
 labels:
   - ci
   - rust
@@ -27,7 +28,19 @@ With the sidecar placeholder from TASK-363, the Rust Lint, Format, and Test job 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `cargo clippy --workspace --all-features -- -D warnings` exits 0
-- [ ] #2 No new `#[allow(clippy::...)]` attributes added to silence the lints
-- [ ] #3 `cargo nextest run --workspace -E 'not test(/shadow_diff_parity_test::/)'` still passes
+- [x] #1 `cargo clippy --workspace --all-features -- -D warnings` exits 0
+- [x] #2 No new `#[allow(clippy::...)]` attributes added to silence the lints
+- [x] #3 `cargo nextest run --workspace -E 'not test(/shadow_diff_parity_test::/)'` still passes
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Drop explicit derefs in do_plex_sync calls (commands/plex.rs, lib.rs). 2. Add TrackRemovalInfo alias in db/removed.rs. 3. Collapse nested if with a let chain and use a char array pattern in plex/downloader.rs. 4. Run cargo fmt, clippy, nextest.
+<!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed all 7 clippy errors without any allow attributes: removed explicit derefs, introduced a TrackRemovalInfo type alias, collapsed the nested if into a let chain, and used a char-array pattern. cargo clippy --workspace --all-features -- -D warnings exits 0; nextest ran 890 tests, all passed (4 skipped).
+<!-- SECTION:FINAL_SUMMARY:END -->
