@@ -367,7 +367,7 @@ pub(crate) async fn scan_paths_to_library(
                 return;
             }
         };
-        match crate::library::commands::run_backfill_and_dedup(&conn, &backfill_app) {
+        match crate::library::reconcile::run_backfill_and_dedup(&conn, &backfill_app) {
             Ok(r) => {
                 if r.backfilled > 0 || r.duplicates_merged > 0 || r.cross_directory_suppressed > 0 {
                     info!(

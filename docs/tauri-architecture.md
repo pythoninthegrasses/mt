@@ -67,11 +67,11 @@ The backend is being split into two crates as part of TASK-353:
 
 | Crate | Current responsibility |
 |-------|------------------------|
-| `crates/mt-core/` | Tauri-independent SQLite database, pure scanner, Last.fm client, Plex client/merge, audio tag reading/writing, network file cache, and platform mount detection |
+| `crates/mt-core/` | Tauri-independent SQLite database, pure scanner, Last.fm client, Plex client/merge, audio tag reading/writing, library view-model layer, network file cache, and platform mount detection |
 | `crates/mt-tauri/` | Desktop application, command/event adapters, audio, scanner artwork, and remaining integration modules |
 
 `mt-tauri` depends on `mt-core` and re-exports its cache, database, scanner, Last.fm, Plex,
-and metadata APIs internally
+metadata, and library APIs internally
 so existing desktop callers retain the same paths. Their implementations and
 unit/property tests live only in `mt-core`; run them without linking the desktop framework
 using `cargo nextest run -p mt-core`.
@@ -106,6 +106,19 @@ The core `metadata` module owns the metadata editor's lofty tag reading and writ
 tag writes that recreate an unreadable tag. The desktop `metadata` module retains the
 three Tauri commands and their `tracing::instrument` spans, so span names and command
 registration are unchanged.
+
+The core `library` module owns what the `library_*` commands wrapped around the SQL layer:
+building a `LibraryQuery` from request arguments, assembling each section view model
+(`all`, `liked`, `top25`, `recent`, `added`, `playlist-*`) with its totals and revision,
+pairing each mutation with the removal records and reconcile totals that must share its
+transaction, and the fingerprint-backfill/dedup pipeline. It returns the same
+`Result<_, String>` the commands returned, so frontend-visible error strings are unchanged.
+The desktop `library` module retains the command adapters — signatures, spans, slow-command
+logs, the artwork LRU cache — the `settings.json` read for
+`library.deduplicateAcrossDirectories`, and all event emission. The pipeline reports its
+phases through the core's `ReconcileProgress` trait, which the desktop bridges to
+`reconcile-progress` events; the response DTOs are core types re-exported for the
+shadow-diff harness.
 
 CI checks the core's transitive normal, build, and test dependencies across all
 targets and features, rejecting Tauri, Tao, Wry, WebKit, and Objective-C 2 crates.
