@@ -89,17 +89,21 @@ exactly the setting that can break something through optimisation while every
 number still looks good. It builds the candidate and the `audio_test` example in a
 target dir of its own (`.cache/bench-369-4/target-smoke`, so it never wipes a dir a
 matrix pass is using), bundles the `.app` so the sidecar lands where `externalBin`
-expects it, then checks five things and writes `results-<date>/smoke-<candidate>.txt`:
+expects it, then checks six things and writes `results-<date>/smoke-<candidate>.txt`:
 
 | Check | Evidence |
 |---|---|
 | `enumerate-devices` | `MT_ENUMERATE_DEVICES=1 <app binary>` exits 0 and prints ≥1 device |
 | `first-launch-db` | the app creates `mt.db` under an isolated `HOME` |
 | `library-scan` | a folder of `crates/mt-tauri/tests/fixtures` registered in `watched_folders` is scanned into the `library` table |
-| `playback-advances` | `audio_test` reports ≥3 increasing positions through the real rodio output device |
-| `app-log` | no `panicked` or `ERROR` line in the app's own log |
+| `playback-advances` | `audio_test` reports ≥3 increasing positions through the real rodio output device, over a generated 6 s tone (every repo fixture is exactly 1 s, so it cannot show the clock moving) |
+| `playback-fixture` | `audio_test` decodes `test_sample.mp3` and reports its real length |
+| `app-log` | no panic and no `ERROR` level line in the app's own log, except the sidecar kill this script itself causes |
 
 Both runs happen under a private `HOME`, so the real library, settings and logs are
 untouched and the two candidates see identical state. Output volume is muted for the
 playback step and restored afterwards, and the app window appears twice for a few
-seconds. AC#3 is met when the two summary files differ only in the candidate label.
+seconds. Only verdict lines go into the summary file — diagnostics that legitimately
+differ run to run (elapsed positions, byte counts) print to the terminal, and a
+failing run keeps its raw transcripts as `smoke-<candidate>-*.log`. AC#3 is met when
+the two summary files differ only in the candidate label.
