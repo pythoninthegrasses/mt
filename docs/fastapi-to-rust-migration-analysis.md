@@ -804,6 +804,63 @@ The migration from FastAPI PEX sidecar to Rust backend is **feasible and highly 
 4. Establish testing framework and CI pipeline
 5. Regular progress reviews at end of each phase
 
+## Measured Outcome (2025-01-23)
+
+The migration shipped. These are the figures recorded on the day it completed,
+measured with `task tauri:build` on the pre-migration hybrid tree and the pure
+Rust tree that followed. They were kept in `benchmarks/baseline-hybrid-2025-01-23.md`
+and `benchmarks/migration-comparison-2025-01-23.md`; both files were removed
+2026-11-14 when dated benchmark output was taken out of the repo, so this section
+is the only live copy.
+
+### Baseline: hybrid (Rust + Python PEX sidecar)
+
+| Metric | Value |
+| ------ | ----- |
+| Build time (`task tauri:build`) | 2m 4.5s |
+| App bundle size | 34 MB |
+| DMG size | 27 MB |
+| Sidecar (PEX) size | 23 MB |
+| Python backend lines | 4,113 |
+| Python backend directory size | 464 KB |
+
+The sidecar was bundled but **unused** — all 87 Tauri commands were already in
+Rust — so its 23 MB was pure overhead.
+
+### After: pure Rust
+
+| Metric | Baseline (Hybrid) | Post-migration (Rust) | Change |
+| ------ | ----------------- | --------------------- | ------ |
+| App bundle size | 34 MB | 11 MB | **-68%** |
+| DMG size | 27 MB | 5.1 MB | **-81%** |
+| Build time¹ | 2m 4.5s | 1m 53s | -8% |
+| Sidecar binary | 23 MB | — | **Removed** |
+| Python backend LOC | 4,113 | 0 | **Removed** |
+
+¹ Includes `npm install`; the Rust compile itself improved by more than the 8%
+this row shows, because the PEX packaging step disappeared.
+
+The 23 MB bundle reduction maps one-to-one onto the removed PEX binary, which is
+what makes the -68% figure trustworthy as a size claim rather than an artifact of
+the comparison.
+
+### Removed with the migration
+
+`backend/` (the FastAPI sidecar), `src-tauri/src/sidecar.rs`, `src-tauri/bin/`
+(PEX binaries), `taskfiles/pex.yml`, `taskfiles/bench.yml`, `taskfiles/uv.yml`,
+`pyproject.toml`, `requirements.txt`, `uv.lock`, and the Python test suite under
+`tests/`. Paths are as they were then; the tree has moved on since
+(`crates/mt-tauri/`, `app/frontend/`).
+
+### Verification at the time
+
+- All 87 Tauri commands implemented in Rust; no HTTP fallback path exercised,
+  because Tauri is always available.
+- Full feature parity with the hybrid architecture.
+- Rust tests: 152 passed, 3 failed — the failures were pre-existing queue
+  property-test issues, not migration regressions.
+- Build succeeded; bundle functional.
+
 ---
 
 **End of Analysis Report**
