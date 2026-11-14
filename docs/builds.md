@@ -103,7 +103,48 @@ Linux dev relink after touching `crates/mt-tauri/src/lib.rs`, measured in the Li
 | mold | 2.74 s |
 | wild | 2.42 s |
 
-Release builds use fat LTO with `codegen-units = 1`, so a relink takes about 100 s with rust-lld, mold or wild alike and the linker choice does not matter. wild supports Linux only and saves about 0.5 s per dev relink, so it was not adopted.
+Release builds use fat LTO with `codegen-units = 1`, so the link/LTO pass dominates: a cold release build measures 103.6 s ± 1.0 on the M4 Max (TASK-369.4), and the linker choice does not matter at that profile. wild supports Linux only and saves about 0.5 s per dev relink, so it was not adopted.
+
+### Release Profile: LTO × codegen-units (TASK-369.4, 2026-11-14)
+
+The committed profile (`lto = true` (fat), `codegen-units = 1`) was benchmarked
+against all eight `lto × codegen-units` alternatives on three platforms, plus a
+decode-CPU pass for the runtime half. Full data:
+`benchmarks/release-profile/results-2026-11-14/SUMMARY.md`.
+
+| | macOS (M4 Max) | Linux x64 (16-core) | Windows x64 (CI runner) |
+|---|---|---|---|
+| baseline (fat, cgus=1) | 103.6 s | 188.1 s | 231.8 s |
+| fastest candidate | thin/16 at 0.47x | false/16 at 0.50x | false/4 at 0.60x |
+| best size-flat option | fat/4: 0.88x, −0.3% DMG | fat/4: 1.01x, +0.1% deb | fat/4: 0.90x, +1.0% NSIS |
+
+**Decision: keep fat LTO with `codegen-units = 1`.** Two independent gates fail
+for every candidate that is meaningfully faster to build:
+
+1. **Artifact size (agreed bound: binary and installer grow ≤ 5%).** Every
+   candidate ≥ 15% faster grows the macOS binary 31–44% and the DMG 6.7–13.6%.
+   Most of the raw-binary growth is `__LINKEDIT` (164 KB at fat cgus=1 → up to
+   2.98 MB), while `__text` grows only 9–19%; compressed installers grow far
+   less (relaxing LTO costs macOS far more than Windows, where `lto=false
+   cgus=1` is +5.2% binary and −2.7% NSIS).
+2. **Decode CPU (measured, not assumed).** Fat LTO's payoff for a player is
+   decode throughput, so the profile knob was measured against decode cost:
+   5 timed decodes each of a sha256-pinned 60 s corpus (mp3/flac/m4a/ogg/wav)
+   through the same `rodio::Decoder` path the engine uses, median of 5
+   process runs. Thin/4 is **15% slower** at decode (0.97x → 1.15x CPU),
+   false/1 is **21% slower** (1.21x). A 44% faster cold build is a bad trade
+   for a 15–21% decode regression on the library-scan and playback hot path.
+
+`lto = thin cgus = 4` — the intuitive "middle" setting — is dominated by
+`lto = false cgus = 1`: smaller binaries and installers on all three platforms,
+and much faster on Windows (157 s vs 244 s); thin/4 wins only 12%/6% of
+build time on macOS/Linux.
+
+Caveats: Windows timings are n=2 on a shared 4-vCPU runner and moved by a third
+between passes (only the groupings are stable); the decode corpus is
+synthesised (seeded noise + tones), so codecs that favour tonal content could
+shift the ratios but not the sign; runtime seek/waveform paths were not
+measured separately.
 
 #### Windows
 
@@ -608,6 +649,42 @@ The script replicates the CI pipeline locally:
 Output is written to `target/x86_64-pc-windows-msvc/release/bundle/nsis/`.
 
 > **Note:** Signing with a self-signed certificate prevents Windows Defender false positives but does **not** eliminate SmartScreen "unrecognized publisher" warnings. That requires an EV certificate with established download reputation.
+
+#### Local Windows Smoke on a VM (pre-CI, TASK-392)
+
+Windows is the only release leg that cannot be built or run on the Mac, so
+Windows-only failures (linker, sidecar placement, NSIS packaging, WebView2
+runtime) historically cost CI minutes to discover. A Windows 11 LTSC guest
+under libvirt on the Fedora host is the pre-CI gate: build with the same
+commands release.yml runs, install the artifact, launch the app.
+
+```bash
+cd scripts
+./win-vm-smoke.sh provision   # one-time: choco toolchain, zig 0.16.0 pin, rustup
+./win-vm-smoke.sh all         # ship the tree, task ci:build + ci:bundle, smoke
+./win-vm-smoke.sh smoke       # re-smoke the newest artifact without rebuilding
+```
+
+The driver reaches the guest as `ssh win11-fedora` (tailnet; override with
+`WIN_VM_SSH`). `smoke` runs `scripts/win-vm-smoke.ps1` on the guest, which
+silent-installs the NSIS `.exe` (`/S`), locates `mt.exe` across the per-machine
+and per-user install roots, launches it through a **scheduled task bound to the
+console session** (`schtasks /ru lance /it` — a GUI app started from an SSH
+session runs in the non-interactive service session and exits at once), and
+verifies: the install exit code, the sidecar `mt-zig-core.exe` next to the
+binary, `mt.exe` plus its sidecar surviving 30 s, and no `ERROR` lines in the
+app's log under AppData (read through a shared-open handle — the app holds the
+file and `Get-Content` reports 0 bytes while it does). It stops the process
+tree, deletes the task, uninstalls, and exits nonzero on any failed check.
+
+Two transfer gotchas the driver handles: macOS tar needs `COPYFILE_DISABLE=1`
+or its AppleDouble entries break the guest's bsdtar, and symlink entries
+(`.claude/skills/*` editor tooling) fail on the guest and are skipped — every
+regular file the build needs extracts, and the driver compares the file count
+against the archive to enforce that.
+
+What this cannot test: CI-only code signing (the cert is generated per CI run),
+and blacksmith runner timings (the guest's 8 vCPUs are not the CI machine).
 
 ## CI/CD
 

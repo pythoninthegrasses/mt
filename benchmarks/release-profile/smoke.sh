@@ -145,6 +145,12 @@ if [ ! -x "$MT_ROOT/$sidecar" ]; then
 fi
 export CARGO_PROFILE_RELEASE_LTO="$lto" CARGO_PROFILE_RELEASE_CODEGEN_UNITS="$cgus"
 unset RUSTC_WRAPPER
+# The tauri CLI re-runs `cargo build` inside `bundle` even when the binary is
+# fresh, and bare `cargo` on this box resolves to mise's shim, which dies
+# installing core:rust before cargo metadata runs (the same failure cli_build_cmd
+# fixes for the CLI-parity column). Prepend the rustup-managed proxies so every
+# cargo in this process tree is the one RUSTUP_TOOLCHAIN points at.
+export PATH="$HOME/.cargo/bin:$PATH"
 eval "$(clean_cmd)"
 # The example links the same mt_lib under the same profile, so the playback step
 # exercises the codegen being tested rather than some other build. --bin mt is
@@ -221,17 +227,26 @@ mkdir -p "$LIB_DIR"
 # never sees files another test added to the checkout.
 cp "$FIXTURES_SRC"/test_sample.* "$LIB_DIR/"
 expected="$(find "$LIB_DIR" -type f \( -name '*.mp3' -o -name '*.flac' -o -name '*.m4a' -o -name '*.ogg' -o -name '*.wav' \) | wc -l | tr -d ' ')"
-db "INSERT OR REPLACE INTO watched_folders (path, mode, enabled) VALUES ('$LIB_DIR', 'startup', 1);"
+# When the app never finished startup (first-launch-db failed), the db either does
+# not exist or has no schema, and the INSERT used to exit 1 -- which under set -e
+# killed the whole smoke before the playback checks could run, hiding exactly the
+# evidence later steps exist to collect. Skip the scan instead; the earlier FAIL
+# already says the app did not start.
+if [ -f "$DB" ]; then
+  db "INSERT OR REPLACE INTO watched_folders (path, mode, enabled) VALUES ('$LIB_DIR', 'startup', 1);" || true
 
-start_app scan
-scanned=0
-for _ in $(seq 1 60); do
-  scanned="$(db 'SELECT COUNT(*) FROM library;' 2>/dev/null || echo 0)"
-  [ "${scanned:-0}" -ge 1 ] && break
-  sleep 0.5
-done
-check "library-scan" "$([ "${scanned:-0}" -ge 1 ] && echo 0 || echo 1)" "$scanned of $expected fixture track(s) in the library table"
-stop_app
+  start_app scan
+  scanned=0
+  for _ in $(seq 1 60); do
+    scanned="$(db 'SELECT COUNT(*) FROM library;' 2>/dev/null || echo 0)"
+    [ "${scanned:-0}" -ge 1 ] && break
+    sleep 0.5
+  done
+  check "library-scan" "$([ "${scanned:-0}" -ge 1 ] && echo 0 || echo 1)" "$scanned of $expected fixture track(s) in the library table"
+  stop_app
+else
+  skip "library-scan" "no mt.db: app startup did not complete, scan not attempted"
+fi
 
 say "4. playback through the real output device"
 # Every repo fixture is exactly one second (they are metadata test samples), and

@@ -1,0 +1,16 @@
+Benchmark 1: cli-lto-fat-cgus1
+  Time (mean ± σ):     105.398 s ±  0.591 s    [User: 306.006 s, System: 22.831 s]
+  Range (min … max):   104.910 s … 106.055 s    3 runs
+ 
+Benchmark 2: cli-lto-thin-cgus4
+  Time (mean ± σ):     54.537 s ±  0.844 s    [User: 396.036 s, System: 27.591 s]
+  Range (min … max):   53.564 s … 55.060 s    3 runs
+ 
+Benchmark 3: cli-lto-off-cgus1
+  Time (mean ± σ):     63.943 s ±  0.591 s    [User: 265.534 s, System: 22.385 s]
+  Range (min … max):   63.578 s … 64.625 s    3 runs
+ 
+Summary
+  cli-lto-thin-cgus4 ran
+    1.17 ± 0.02 times faster than cli-lto-off-cgus1
+    1.93 ± 0.03 times faster than cli-lto-fat-cgus1

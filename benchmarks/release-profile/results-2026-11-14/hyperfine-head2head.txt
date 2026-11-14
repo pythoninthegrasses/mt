@@ -1,0 +1,16 @@
+Benchmark 1: lto-fat-cgus1
+  Time (mean ± σ):     105.329 s ±  0.407 s    [User: 303.910 s, System: 25.754 s]
+  Range (min … max):   104.952 s … 105.761 s    3 runs
+ 
+Benchmark 2: lto-thin-cgus4
+  Time (mean ± σ):     56.370 s ±  1.927 s    [User: 395.674 s, System: 30.895 s]
+  Range (min … max):   55.064 s … 58.583 s    3 runs
+ 
+Benchmark 3: lto-off-cgus1
+  Time (mean ± σ):     64.962 s ±  1.863 s    [User: 271.430 s, System: 25.731 s]
+  Range (min … max):   63.660 s … 67.096 s    3 runs
+ 
+Summary
+  lto-thin-cgus4 ran
+    1.15 ± 0.05 times faster than lto-off-cgus1
+    1.87 ± 0.06 times faster than lto-fat-cgus1

@@ -100,4 +100,63 @@ Deviations from the plan, and why:
 Baseline so far on the M4 Max (rustc/cargo 1.100.0, 14 jobs, sccache off, cold): `lto=true cgus=1` → 103.6 s ± 1.0, binary 10 742 960 B, `__TEXT` 9 469 952 B, DMG 6 101 334 B; `lto=true cgus=4` → 91.2 s ± 0.9, binary 10 942 752 B, DMG 6 082 790 B. First Linux data point (mf, 16 cores, container from `docker/linux` deps stage, Plex/Syncthing/vllm/honcho running concurrently): `linux-lto-fat-cgus1` → 188.1 s ± 16.4.
 
 The Windows column took three attempts to reach the measured step: `GITHUB_PATH` does not apply within the step that writes it (hyperfine now resolves into `$HYPERFINE` via `GITHUB_ENV`), the frontend task is `ci:frontend-build` (namespaced), and `task zig:stage` locates zig through mise, whose Windows path resolution fails its own `[ -x ]` precondition under Git Bash — the workflow now builds the sidecar with the same flags zig:stage uses.
+
+## All three columns are in (2026-11-14)
+
+Windows run `43577910776` is green on all nine candidates (build + NSIS bundle + sizes). Its baseline is 231.8 s ± 9.5, binary 11.16 MiB, installer 4.48 MiB.
+
+**Windows timings are not trustworthy at n=2.** The earlier failed-before-bundling run measured `lto=thin cgus=4` at 176.5 s; the green run measured 244.4 s, i.e. slower than baseline. A 4-vCPU shared runner moves by a third between passes. What agrees across both passes is the shape: `lto=false` is the fast group (138–170 s), `lto=fat` sits at baseline, and `codegen-units` matters far less than `lto`.
+
+**The size story differs by platform, which is the actual finding.** Relaxing LTO costs macOS far more than Windows or Linux. For `lto=false cgus=1` versus each platform's own baseline: host +36.5% binary / +9.6% DMG; Linux +18.6% / +2.8% deb; Windows +5.2% / −2.7% NSIS. On the host most of the raw-binary growth is `__LINKEDIT` (163 840 B at fat cgus=1 → 2.99 MiB at off cgus=16) rather than code: `__text` grows only 9–19%.
+
+**Nothing passes the AC#4 gate.** Every candidate that is ≥15% faster grows the host binary by ≥31% and the DMG by ≥6.7%, both over the agreed 5%. The only size-neutral candidates (`lto=fat cgus=4/16`, −0.3%/0.0% DMG) buy at most 12% of build time.
+
+**If the gate is set aside, `lto=false cgus=1` is the better compromise than `lto=thin cgus=4`**, which is the intuitive pick because thin LTO sounds like a middle setting:
+
+| | mac thin:4 | mac false:1 | linux thin:4 | linux false:1 | win thin:4 | win false:1 |
+| --- | --- | --- | --- | --- | --- | --- |
+| vs baseline | 0.56x | 0.64x | 0.63x | 0.67x | 1.05x | 0.68x |
+| binary Δ | +38.5% | +36.5% | +23.5% | +18.6% | +8.7% | +5.2% |
+| installer Δ | +10.0% | +9.6% | +4.2% | +2.8% | −1.9% | −2.7% |
+
+`false:1` is smaller on all three platforms, and on Windows it is much faster (157.0 s vs 244.4 s); `thin:4` wins only on host/Linux build time, by 12% and 6%. `codegen-units=1` is worth keeping in either case: at `lto=false` it is both faster and smaller than `cgus=16` on Linux and Windows.
+
+**Unmeasured, and it could decide this:** decode CPU was never benchmarked. Fat LTO can buy real runtime performance on the rodio/Symphonia hot path, and a 44% faster cold build is a bad trade for a regression a listener can hear. That belongs in TASK-369.3 if it is to be weighed at all.
+
+## AC#3 is blocked on the host, not on the candidates
+
+`smoke.sh` cannot verify playback on this machine right now: `coreaudiod` has been up 11 days at ~9.6% CPU and **Apple's own `afplay` cannot render a 2 s tone either** (times out at 25 s), and `rodio` opens the device, reports `State: Playing`, and leaves position at 0 ms. The same call path also SIGSEGVs inside `CoreAudio HALDeviceList::GetData` via `MT_ENUMERATE_DEVICES=1`, on both a fat-LTO and an `lto=false` binary — which is the crash the enumeration subprocess exists to absorb, so the app itself is unaffected.
+
+`smoke.sh` now runs an `afplay` control first and reports `SKIP` rather than `FAIL` for the two audio checks when the host cannot render, so the baseline/candidate diff stays meaningful and a wedged daemon cannot masquerade as a codegen regression. Non-audio legs (build, bundle, `mt.db` creation, watched-folder scan, log cleanliness) still pass or fail normally. A real playback verdict needs either a `sudo killall coreaudiod` (it relaunches itself) or the suite run from a session with working audio output.
+
+## Head-to-head and CI-parity numbers (chain 1, 2026-11-14)
+
+One hyperfine run over the three shortlisted candidates, so the ratios are directly comparable: baseline `lto-fat-cgus1` 105.3 s ± 0.4; `lto-thin-cgus4` 56.4 s ± 1.9 (**1.87x faster**); `lto-off-cgus1` 65.0 s ± 1.9 (1.62x). Matches the matrix's ranking. CI-parity (what a warm-sccache CI leg pays): baseline 114.6 s ± 22.7 over 2 runs.
+
+`cli-head2head` (the same candidates through the Tauri CLI, the CI-parity proof) failed on its first run: the tauri CLI shells out to bare `cargo`, which on this box resolves to mise's shim, and the shim dies trying to install `core:rust@1.100.0` into mise's own store. Fixed in `env.sh`'s `cli_build_cmd` by prepending the rustup-managed bin to PATH; re-running.
+
+**The enumeration subprocess segfault is real, not just the wedged daemon**: it also crashed at 11:05 after audio recovered, on an `lto=false` binary, in `CoreAudio HALDeviceList::GetData`. Profile-independent (fat and non-fat builds both crash), and exactly the crash `safe_list_output_devices` spawns a subprocess to absorb — so the app survives it, but the device list it wants may never populate. Filed as TASK-392, together with the startup stall below.
+
+## The runtime gate answered: fat LTO buys decode throughput (2026-11-14)
+
+The decode-CPU pass (TASK-369.9, `sweep.sh decode`) settles the keep-or-switch question. Median of 5 process runs, 5 timed decodes per file across mp3/flac/m4a/ogg/wav, sha256-pinned synthesised corpus, CPU seconds from getrusage; spread within 0.3%:
+
+| candidate | corpus CPU | throughput | vs baseline |
+| --- | --- | --- | --- |
+| lto-fat-cgus1 (committed) | 0.970 s | 111.7 MiB/CPU-s | 1.00x |
+| lto-thin-cgus4 | 1.113 s | 97.3 | 0.87x |
+| lto-off-cgus1 | 1.172 s | 92.4 | 0.83x |
+
+**Every candidate that is 44–50% faster to build is 15–21% slower to decode.** With both gates now measured, the verdict is unambiguous: keep fat LTO with `codegen-units = 1`. Recorded in docs/builds.md `### Release Profile` (replacing the unmeasured "relink takes about 100 s" claim).
+
+## Smoke flakiness and what the AC#3 evidence actually shows
+
+Two pre-existing app behaviours (both profile-independent, filed as TASK-392) make the smoke's startup checks flaky:
+
+- The enumeration subprocess always segfaults (crash absorbed by design), so `enumerate-devices` fails on every candidate — it measures the host, not the codegen.
+- First launch sometimes stalls past the 20 s window right after "Tracing initialized" (no db, no further output), which also starves the scan check. Across six runs it failed for fat:1 (11:52), false:1 (11:56), thin:4 (11:03, audio wedged) and passed for the other three — random, not candidate-correlated.
+
+A smoke-script bug compounded it: when first-launch-db failed, step 3's `INSERT` into a schema-less database exited 1 and `set -e` killed the run before playback could be checked (the baseline's summary file was truncated mid-run). Fixed: the scan is now `SKIP`ped when startup never completed, so the run always reaches the playback and log checks.
+
+What the completed runs show is the part AC#3 exists for: `playback-advances` (real positions through the real device), `playback-fixture` (decoder proof) and `app-log` (no ERROR lines) **pass on every candidate that got that far** — thin:4 and false:1 both played cleanly with audio healthy. The candidates do not break anything the baseline can do.
 <!-- SECTION:NOTES:END -->

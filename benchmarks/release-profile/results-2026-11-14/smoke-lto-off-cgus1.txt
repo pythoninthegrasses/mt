@@ -1,0 +1,9 @@
+candidate: lto=false codegen-units=1, host arm64, macOS 15.8.1
+PASS  audio-path: afplay rendered a 2 s tone
+FAIL  enumerate-devices: exit 139: ./smoke.sh: line 111: 98351 Segmentation fault: 11     gtimeout "$secs" "$@" 
+PASS  first-launch-db: mt.db created under the isolated HOME
+FAIL  library-scan: 0 of 5 fixture track(s) in the library table
+PASS  playback-advances: 5 of 10 one-second sample(s) advanced, state Playing
+PASS  playback-fixture: test_sample.mp3 decoded as 1000ms, 0 load failure(s)
+PASS  app-log: 0 unexpected error line(s) in mt.log.2026-11-14
+RESULT lto-off-cgus1: FAIL (2 check(s))
