@@ -1,0 +1,155 @@
+# Release-profile LTO / codegen-units sweep on the real Windows release runner
+# (TASK-369.4). Dispatch-only, so ordinary PR and release runs pay nothing.
+#
+# The Windows release leg is the slowest in the matrix and cannot be measured on a
+# developer host, so the sweep times it on the actual `blacksmith-4vcpu-windows-2025`
+# runner. Each job reproduces what `task ci:build TARGET=x86_64-pc-windows-msvc`
+# runs -- `cargo tauri build --no-bundle --target ... --config
+# '{"build":{"beforeBuildCommand":""}}'` -- from a cold target dir, with the two
+# profile knobs supplied through Cargo's profile env vars.
+#
+# It calls cargo-tauri directly rather than going through Task on purpose: both
+# `ci:build` and `ci:bundle` declare `sources:` fingerprints, so a second identical
+# invocation inside the timing loop would be reported "up to date" and time nothing.
+# The frontend bundle and the Zig sidecar are prepared once beforehand because they
+# are identical for every candidate; only the Rust build is under test. The Linux
+# column runs in the project's own Docker image on a 16-core host instead
+# (benchmarks/release-profile/linux-on-mf.sh) and the macOS column is
+# benchmarks/release-profile/sweep.sh.
+#
+# See docs/builds.md#release-profile for what was concluded from the results.
+name: Release Profile Bench
+
+on:
+  workflow_dispatch:
+    inputs:
+      combos:
+        description: 'JSON array of {lto, cgus} candidates to time'
+        required: false
+        default: '[{"lto":"true","cgus":1},{"lto":"true","cgus":4},{"lto":"true","cgus":16},{"lto":"thin","cgus":1},{"lto":"thin","cgus":4},{"lto":"thin","cgus":16},{"lto":"false","cgus":1},{"lto":"false","cgus":4},{"lto":"false","cgus":16}]'
+      runs:
+        description: 'hyperfine runs per candidate (cold build each)'
+        required: false
+        default: '2'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  TRIPLE_WINDOWS: x86_64-pc-windows-msvc
+
+jobs:
+  windows:
+    name: Windows lto=${{ matrix.combo.lto }} cgus=${{ matrix.combo.cgus }}
+    runs-on: blacksmith-4vcpu-windows-2025
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        combo: ${{ fromJSON(inputs.combos) }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Tauri build environment
+        uses: ./.github/actions/setup-tauri-build
+        with:
+          mode: full
+
+      - name: Read pinned Zig toolchain from .tool-versions
+        id: zig-version
+        shell: bash
+        run: echo "toolchain=$(grep '^zig ' .tool-versions | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ steps.zig-version.outputs.toolchain }}
+
+      - name: Install hyperfine
+        shell: bash
+        run: |
+          if ! command -v hyperfine >/dev/null 2>&1; then
+            curl -fsSL -o hf.zip https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine-v1.19.0-x86_64-pc-windows-msvc.zip
+            unzip -oq hf.zip -d "$HOME/hf"
+            find "$HOME/hf" -maxdepth 1 -type d -name 'hyperfine-*' -exec sh -c 'echo "$0" >> "$GITHUB_PATH"' {} \;
+          fi
+          hyperfine --version
+
+      - name: Runner spec
+        shell: bash
+        run: |
+          mkdir -p results
+          {
+            echo "runner=blacksmith-4vcpu-windows-2025"
+            echo "cores=$(nproc)"
+            uname -a
+            rustc -Vv
+            cargo --version
+            cargo tauri --version
+          } >results/runner-spec.txt
+          cat results/runner-spec.txt
+
+      # Constant across candidates, so prepare them outside the timing loop: the
+      # bundler packs app/frontend/dist and the build needs the sidecar Tauri's
+      # externalBin entry resolves.
+      - name: Prepare frontend bundle and Zig sidecar
+        shell: bash
+        run: |
+          task frontend-build
+          task zig:stage TARGET=x86_64-pc-windows-msvc
+
+      # The profile under test travels as env vars so the manifest never changes
+      # between candidates. RUSTC_WRAPPER is cleared exactly as taskfiles/ci.yml
+      # does it, i.e. these are sccache-free numbers (TASK-369.6 tracks the caching
+      # bug that makes CI pass an empty wrapper).
+      - name: Bench cold release build
+        env:
+          RUSTC_WRAPPER: ''
+          CARGO_PROFILE_RELEASE_LTO: ${{ matrix.combo.lto }}
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ matrix.combo.cgus }}
+        # The timed command is quoted so hyperfine's own shell expands
+        # $TRIPLE_WINDOWS, not this step's shell.
+        # shellcheck disable=SC2016
+        run: |
+          label="windows-lto-${{ matrix.combo.lto }}-cgus${{ matrix.combo.cgus }}"
+          hyperfine --runs "${{ github.event.inputs.runs }}" --warmup 0 --shell bash \
+            --time-unit second --command-name "$label" \
+            --prepare 'rm -rf target' \
+            --export-json "results/hyperfine-$label.json" \
+            --export-markdown "results/hyperfine-$label.md" \
+            'cargo tauri build --no-bundle --target "$TRIPLE_WINDOWS" --config "{\"build\":{\"beforeBuildCommand\":\"\"}}"' \
+            | tee "results/hyperfine-$label.txt"
+
+      - name: Bundle NSIS installer and record artifact sizes
+        env:
+          RUSTC_WRAPPER: ''
+          CARGO_PROFILE_RELEASE_LTO: ${{ matrix.combo.lto }}
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ matrix.combo.cgus }}
+        run: |
+          label="windows-lto-${{ matrix.combo.lto }}-cgus${{ matrix.combo.cgus }}"
+          # The build above already produced the binary, so this only packages it.
+          cargo tauri bundle --target "$TRIPLE_WINDOWS" --bundles nsis \
+            --config '{"build":{"beforeBuildCommand":""}}'
+          {
+            for f in "target/$TRIPLE_WINDOWS/release/mt.exe"; do
+              [ -f "$f" ] && printf '%s\tbinary-bytes\t%s\n' "$label" "$(wc -c <"$f")"
+            done
+            find "target/$TRIPLE_WINDOWS/release/bundle/nsis" -name '*.exe' 2>/dev/null |
+              while IFS= read -r f; do
+                printf '%s\tnsis-bytes\t%s\n' "$label" "$(wc -c <"$f")"
+              done
+            printf '%s\ttarget-triple-kib\t%s\n' "$label" "$(du -sk "target/$TRIPLE_WINDOWS" | awk '{print $1}')"
+          } >"results/sizes-$label.tsv"
+          cat "results/sizes-$label.tsv"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-lto-${{ matrix.combo.lto }}-cgus${{ matrix.combo.cgus }}
+          path: results/
+          if-no-files-found: warn
+          retention-days: 90

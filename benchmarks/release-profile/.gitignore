@@ -1,0 +1,5 @@
+# Raw output of one sweep date. Everything small is committed as the evidence
+# behind docs/builds.md#release-profile (hyperfine .md/.txt/.json, sizes-*.tsv,
+# SUMMARY.md); the bulky binaries and console transcripts are not.
+results-*/dmg/
+*.log
