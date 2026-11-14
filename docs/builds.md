@@ -270,6 +270,54 @@ RUSTUP_TOOLCHAIN=nightly CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift \
   cargo build -p mt-tauri -Zcodegen-backend
 ```
 
+### Dependency Audit (TASK-369.3)
+
+`cargo::unused_dependencies` never fires on `mt-tauri` — the bin+lib target
+shapes suppress it (TASK-361 verified this with injected unused deps). The
+audit therefore uses the two documented fallbacks, wrapped in one task:
+
+```bash
+task ci:unused-deps TARGET=aarch64-apple-darwin FEATURE=default   # or agent|mcp|devtools
+```
+
+which runs `cargo rustc -p mt-tauri --lib [--features F] -- -W unused-crate-dependencies`
+(rustc-level, lib unit) and `CARGO_LOG=cargo::diagnostics::rules::unused_dependencies=debug
+cargo check --workspace --all-targets` (cargo-level, the only path that inspects
+dev-dependencies and surfaces hidden candidates).
+
+Run the matrix — 3 platforms x 4 feature sets — on native runners via the Test
+workflow's **Dep Audit** job (`gh workflow run test.yml --ref <branch> -f dep-audit=true`).
+Native/clean matters: a warm local `target/` replays stale freshness without
+recompiling, and cfg-gated deps (`windows-sys`, `objc2*`, `libc`) are invisible
+to a lint run on the wrong platform.
+
+**Findings (2026-11-14, cargo 1.100, macOS arm64 local + full matrix in CI):**
+
+| Candidate | Verdict |
+|-----------|---------|
+| `reqwest` | Trimmed: `http2` dropped (no caller uses HTTP/2; ALPN falls back). Kept `default-tls` (HTTPS), `charset` (gates `Response::text()`), `json`, `system-proxy`. The `agent` feature re-enables reqwest defaults via rig-core's `reqwest-tls`, so h2 returns there. |
+| `reqwest` 0.13 in the lock | Target-gated by tauri to android/apple-non-macos; never built on desktop. No action. |
+| `lofty` | Only one optional feature exists (`id3v2_compression_support`), and its `flate2` is shared with `png` — zero-crate win. Kept as-is; format readers are not feature-gated. |
+| `lru` | Sole reverse-dep is mt-tauri, but removal saves one crate (hashbrown and parking_lot are both shared). Kept. |
+| `sha2` + `md5` | Both load-bearing, not redundant: sha2 fingerprints tracks (`scanner/fingerprint.rs`), md5 signs Last.fm API requests (`lastfm/signature.rs`). |
+| `windows-sys`, `raw-window-handle` | Already in a `cfg(target_os = "windows")` table; windows-sys carries one feature (`Win32_Storage_FileSystem`) for `GetDriveTypeW` in `cache/mount_detect.rs`. Kept. |
+| `tokio`, dev-deps | Every declared tokio feature has a source consumer (`fs` in `lib.rs` save paths); `tempfile`/`proptest`/`wiremock` all have real test users. Kept. |
+
+**False-positive classes to expect on a rerun** (don't re-litigate):
+
+1. `DEBUG ... ignoring unused extern`, `package is capped` lines are
+   transitive crates' own quirk (edition-capped packages) — not our manifest.
+2. Deps used only behind `cfg(target_os = ...)`/`cfg(unix)` produce no signal
+   on other platforms — check the platform's matrix cell, not your host.
+3. Feature-activation/version-pinning deps are legitimate lint hits per the
+   [cargo lint docs](https://doc.rust-lang.org/cargo/reference/lints.html#unused_dependencies);
+   if one appears, prefer `target."cfg(false)".dependencies` over removal.
+
+**Counts** (AC#4): `cargo tree --locked -e normal | wc -l` = **1162** after the
+reqwest trim (was 1180; -18 lines, h2 and its h2-only deps left the production
+tree). `Cargo.lock` package count unchanged at 771 — h2 stays for dev builds via
+wiremock's `hyper/full`.
+
 ## rust-analyzer (VS Code)
 
 By default, rust-analyzer runs continuous background diagnostics and `cargo check` on every save. On a large workspace this can saturate the CPU even when you haven't changed anything.
