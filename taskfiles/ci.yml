@@ -159,6 +159,8 @@ tasks:
       # test itself when absent; generating it here too keeps the test's own
       # output readable and fails fast if the dump is broken.
       - task: :zig:fixture
+      # The zig job has no fixture and skips the fixture-backed Zig tests; run them here where it exists.
+      - task: :zig:test
       # MT_SHADOW_DIFF is read by library_get_all, not by these tests (which
       # call the comparison directly), but exporting it here means a future
       # harness that goes through the command path is exercised in CI too.

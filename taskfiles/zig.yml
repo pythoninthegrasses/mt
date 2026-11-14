@@ -78,6 +78,8 @@ tasks:
       rows out of the repo-root mt_20260127.sql dump. Zig tests that need a
       real on-disk mt.db (TASK-355.3/355.5 AC#4) open this file and skip if
       it's absent — run this task first to exercise those tests for real.
+      The zig CI job has no Rust toolchain, so it skips them; ci:shadow-diff
+      runs this task and then zig:test so they are still exercised in CI.
     cmds:
       - cargo test -p mt-tauri --lib db::fixture_gen::tests::generate_mt_fixture -- --ignored --exact --nocapture
     sources:
