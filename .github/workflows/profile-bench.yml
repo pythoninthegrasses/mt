@@ -153,6 +153,7 @@ jobs:
       # does it, i.e. these are sccache-free numbers (TASK-369.6 tracks the caching
       # bug that makes CI pass an empty wrapper).
       - name: Bench cold release build
+        shell: bash
         env:
           RUSTC_WRAPPER: ''
           CARGO_PROFILE_RELEASE_LTO: ${{ matrix.combo.lto }}
