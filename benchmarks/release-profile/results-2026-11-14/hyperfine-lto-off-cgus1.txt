@@ -1,0 +1,4 @@
+Benchmark 1: lto-off-cgus1
+  Time (mean ± σ):     65.957 s ±  3.196 s    [User: 281.848 s, System: 24.497 s]
+  Range (min … max):   63.697 s … 68.217 s    2 runs
+ 

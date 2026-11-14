@@ -1,0 +1,6 @@
+linux-lto-fat-cgus1	binary-bytes	14229416
+linux-lto-fat-cgus1	text-bytes	9494837
+linux-lto-fat-cgus1	rodata-bytes	1697529
+linux-lto-fat-cgus1	target-triple-kib	1667676
+linux-lto-fat-cgus1	target-host-kib	630312
+linux-lto-fat-cgus1	deb-bytes	9502214

@@ -1,0 +1,29 @@
+Segment __PAGEZERO: 4294967296 (zero fill) 
+Segment __TEXT: 11206656
+	Section __text: 9190388
+	Section __stubs: 4656
+	Section __stub_helper: 4680
+	Section __cstring: 259440
+	Section __const: 1548244
+	Section __gcc_except_tab: 18532
+	Section __info_plist: 348
+	Section __unwind_info: 76488
+	Section __eh_frame: 86176
+	total 11188952
+Segment __DATA_CONST: 671744
+	Section __got: 400
+	Section __mod_init_func: 8
+	Section __const: 670320
+	Section __objc_imageinfo: 8
+	total 670736
+Segment __DATA: 655360
+	Section __la_symbol_ptr: 3104
+	Section __data: 626792
+	Section __thread_vars: 768
+	Section __thread_data: 320
+	Section __thread_bss: 656 (zerofill)
+	Section __common: 13072 (zerofill)
+	Section __bss: 3804 (zerofill)
+	total 648516
+Segment __LINKEDIT: 2686976
+total 4310188032

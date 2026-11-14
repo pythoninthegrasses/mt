@@ -207,9 +207,11 @@ def label_of(path, prefix):
 
 rows, sizes = {}, {}
 for f in sorted(glob.glob(os.path.join(d, "**", "hyperfine-*.json"), recursive=True)):
-    if "head2head" in f:
-        continue                       # separate comparisons, not the matrix
     label = label_of(f, "hyperfine")
+    # Only matrix candidates belong in the tables. head2head exports its own file,
+    # and ci-parity / launch prefix their labels, so those are excluded by shape.
+    if not re.search(r"lto-(fat|thin|false|off)-cgus\d+$", label):
+        continue
     try:
         results = json.load(open(f))["results"]
     except (ValueError, KeyError, OSError):

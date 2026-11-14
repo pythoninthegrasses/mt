@@ -1,0 +1,4 @@
+Benchmark 1: linux-lto-fat-cgus4
+  Time (mean ± σ):     190.028 s ±  2.500 s    [User: 866.330 s, System: 53.911 s]
+  Range (min … max):   188.260 s … 191.796 s    2 runs
+ 

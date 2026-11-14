@@ -1,6 +1,8 @@
 lto-fat-cgus1	binary-bytes	10742960
 lto-fat-cgus1	binary-kib	10492
 lto-fat-cgus1	__TEXT-bytes	9469952
+lto-fat-cgus1	libmt_lib.a-bytes	323232264
+lto-fat-cgus1	libmt_lib.a-bytes	323232264
 lto-fat-cgus1	target-triple-kib	1975044
 lto-fat-cgus1	target-host-kib	503512
-lto-fat-cgus1	dmg-bytes	6101334
+lto-fat-cgus1	dmg-bytes	6101332
