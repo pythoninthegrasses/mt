@@ -229,9 +229,8 @@ test.describe('Last.fm Integration', () => {
 
       // Should still show pending state (or return to not connected depending on implementation)
       // The important thing is it doesn't crash
-      const awaitingText = page.locator('text=Awaiting Authorization').first();
-      const notConnectedText = page.locator('text=Not Connected').first();
-      await expect(awaitingText.or(notConnectedText)).toBeVisible({ timeout: 5000 });
+      const lastfmStatus = page.locator('[x-text="lastfmStatusText()"]');
+      await expect(lastfmStatus).toHaveText(/Awaiting Authorization|Not Connected/, { timeout: 5000 });
     });
 
     test('should show disconnect button when authenticated', async ({ page }) => {

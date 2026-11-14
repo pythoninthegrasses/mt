@@ -7,7 +7,7 @@ import { createLibraryState, setupLibraryMocks } from './fixtures/mock-library.j
  *
  * When in library view, typing characters jumps to the first artist
  * matching the typed prefix. Ignore words (e.g., "The", "La") are
- * stripped before matching. Characters accumulate within a 500ms
+ * stripped before matching. Characters accumulate within a 1500ms
  * debounce window.
  */
 test.describe('Type-to-jump artist navigation (task-255)', () => {
@@ -189,8 +189,8 @@ test.describe('Type-to-jump artist navigation (task-255)', () => {
     await page.keyboard.type('d');
     await page.waitForTimeout(100);
 
-    // Wait for debounce timeout (600ms to be safe, buffer clears at 500ms)
-    await page.waitForTimeout(600);
+    // Wait for debounce timeout (1600ms to be safe, buffer clears at 1500ms)
+    await page.waitForTimeout(1600);
 
     // Type "q" - should search "q" not "dq", so should match Queen
     await page.keyboard.type('q');
