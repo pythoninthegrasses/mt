@@ -14,23 +14,10 @@ pub struct LastFmClient {
 }
 
 impl LastFmClient {
-    /// Create a new Last.fm API client
-    pub(crate) fn new() -> Self {
+    /// Create a Last.fm API client with application-supplied credentials.
+    pub fn new(config: ApiKeyConfig) -> Self {
         Self {
-            config: ApiKeyConfig::load(),
-            rate_limiter: Arc::new(RateLimiter::new()),
-            http_client: reqwest::Client::new(),
-            base_url: "https://ws.audioscrobbler.com/2.0/".to_string(),
-        }
-    }
-
-    #[cfg(all(test, feature = "agent"))]
-    pub(crate) fn new_unconfigured() -> Self {
-        Self {
-            config: ApiKeyConfig {
-                api_key: None,
-                api_secret: None,
-            },
+            config,
             rate_limiter: Arc::new(RateLimiter::new()),
             http_client: reqwest::Client::new(),
             base_url: "https://ws.audioscrobbler.com/2.0/".to_string(),
@@ -38,7 +25,7 @@ impl LastFmClient {
     }
 
     /// Check if API is properly configured
-    pub(crate) fn is_configured(&self) -> bool {
+    pub fn is_configured(&self) -> bool {
         self.config.is_configured()
     }
 
@@ -49,7 +36,7 @@ impl LastFmClient {
     /// * `params` - Parameters to send (excluding method, api_key, format, sk, api_sig)
     /// * `session_key` - Optional session key for authenticated calls
     /// * `use_post` - Whether to use POST instead of GET (required for write operations)
-    pub(crate) async fn api_call(
+    pub async fn api_call(
         &self,
         method: &str,
         params: BTreeMap<String, String>,
@@ -142,7 +129,7 @@ impl LastFmClient {
     }
 
     /// Get authentication token and URL
-    pub(crate) async fn get_auth_url(&self) -> Result<(String, String), LastFmError> {
+    pub async fn get_auth_url(&self) -> Result<(String, String), LastFmError> {
         let params = BTreeMap::new();
         let response = self.api_call("auth.getToken", params, None, false).await?;
 
@@ -162,7 +149,7 @@ impl LastFmClient {
     }
 
     /// Exchange token for session key
-    pub(crate) async fn get_session(&self, token: &str) -> Result<SessionInfo, LastFmError> {
+    pub async fn get_session(&self, token: &str) -> Result<SessionInfo, LastFmError> {
         let mut params = BTreeMap::new();
         params.insert("token".to_string(), token.to_string());
 
@@ -198,7 +185,7 @@ impl LastFmClient {
     }
 
     /// Get user's loved tracks (paginated)
-    pub(crate) async fn get_loved_tracks(
+    pub async fn get_loved_tracks(
         &self,
         user: &str,
         limit: u32,
@@ -220,7 +207,7 @@ impl LastFmClient {
     }
 
     /// Update "Now Playing" status
-    pub(crate) async fn update_now_playing(
+    pub async fn update_now_playing(
         &self,
         session_key: &str,
         artist: &str,
@@ -250,7 +237,7 @@ impl LastFmClient {
     ///
     /// Calls `track.getInfo` (unauthenticated GET). Used for disambiguation
     /// when multiple library tracks match the same artist+title.
-    pub(crate) async fn get_track_info(
+    pub async fn get_track_info(
         &self,
         artist: &str,
         track: &str,
@@ -273,7 +260,7 @@ impl LastFmClient {
     }
 
     /// Love a track on Last.fm
-    pub(crate) async fn love_track(
+    pub async fn love_track(
         &self,
         session_key: &str,
         artist: &str,
@@ -290,7 +277,7 @@ impl LastFmClient {
     }
 
     /// Unlove a track on Last.fm
-    pub(crate) async fn unlove_track(
+    pub async fn unlove_track(
         &self,
         session_key: &str,
         artist: &str,
@@ -307,7 +294,7 @@ impl LastFmClient {
     }
 
     /// Scrobble a track
-    pub(crate) async fn scrobble(
+    pub async fn scrobble(
         &self,
         session_key: &str,
         artist: &str,
@@ -335,7 +322,7 @@ impl LastFmClient {
     }
 
     #[cfg(feature = "agent")]
-    pub(crate) async fn get_similar_tracks(
+    pub async fn get_similar_tracks(
         &self,
         artist: &str,
         track: &str,
@@ -358,7 +345,7 @@ impl LastFmClient {
     }
 
     #[cfg(feature = "agent")]
-    pub(crate) async fn get_similar_artists(
+    pub async fn get_similar_artists(
         &self,
         artist: &str,
         limit: u32,
@@ -379,7 +366,7 @@ impl LastFmClient {
     }
 
     #[cfg(feature = "agent")]
-    pub(crate) async fn get_track_top_tags(
+    pub async fn get_track_top_tags(
         &self,
         artist: &str,
         track: &str,
@@ -400,7 +387,7 @@ impl LastFmClient {
     }
 
     #[cfg(feature = "agent")]
-    pub(crate) async fn get_top_artists_by_tag(
+    pub async fn get_top_artists_by_tag(
         &self,
         tag: &str,
         limit: u32,
@@ -420,7 +407,7 @@ impl LastFmClient {
     }
 
     #[cfg(feature = "agent")]
-    pub(crate) async fn get_top_tracks_by_country(
+    pub async fn get_top_tracks_by_country(
         &self,
         country: &str,
         limit: u32,
@@ -437,12 +424,6 @@ impl LastFmClient {
             serde_json::from_value(response).map_err(|e| LastFmError::ParseError(e.to_string()))?;
 
         Ok(parsed.tracks.track)
-    }
-}
-
-impl Default for LastFmClient {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -481,212 +462,5 @@ pub enum LastFmError {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_client_creation() {
-        let client = LastFmClient::new();
-        // Client should be created successfully even without API keys
-        assert!(!client.base_url.is_empty());
-    }
-
-    #[test]
-    fn test_is_configured() {
-        let client = LastFmClient::new();
-        // In test environment, keys may or may not be set
-        let _ = client.is_configured();
-    }
-
-    #[test]
-    fn test_parse_track_info_with_album() {
-        let json: serde_json::Value = serde_json::from_str(
-            r#"{
-                "track": {
-                    "name": "Everlong",
-                    "artist": { "name": "Foo Fighters" },
-                    "album": { "title": "The Colour and the Shape", "artist": "Foo Fighters" }
-                }
-            }"#,
-        )
-        .unwrap();
-
-        let album = json
-            .get("track")
-            .and_then(|t| t.get("album"))
-            .and_then(|a| a.get("title"))
-            .and_then(|t| t.as_str())
-            .map(|s| s.to_string());
-
-        assert_eq!(album, Some("The Colour and the Shape".to_string()));
-    }
-
-    #[test]
-    fn test_parse_track_info_without_album() {
-        let json: serde_json::Value = serde_json::from_str(
-            r#"{
-                "track": {
-                    "name": "Some Track",
-                    "artist": { "name": "Some Artist" }
-                }
-            }"#,
-        )
-        .unwrap();
-
-        let album = json
-            .get("track")
-            .and_then(|t| t.get("album"))
-            .and_then(|a| a.get("title"))
-            .and_then(|t| t.as_str())
-            .map(|s| s.to_string());
-
-        assert_eq!(album, None);
-    }
-
-    #[tokio::test]
-    async fn test_love_track_not_configured() {
-        let client = LastFmClient {
-            config: ApiKeyConfig::load(), // No keys in test env
-            rate_limiter: Arc::new(RateLimiter::new()),
-            http_client: reqwest::Client::new(),
-            base_url: "https://ws.audioscrobbler.com/2.0/".to_string(),
-        };
-
-        if !client.is_configured() {
-            let result = client.love_track("fake_key", "Artist", "Track").await;
-            assert!(matches!(result, Err(LastFmError::NotConfigured)));
-        }
-    }
-
-    #[tokio::test]
-    async fn test_unlove_track_not_configured() {
-        let client = LastFmClient {
-            config: ApiKeyConfig::load(),
-            rate_limiter: Arc::new(RateLimiter::new()),
-            http_client: reqwest::Client::new(),
-            base_url: "https://ws.audioscrobbler.com/2.0/".to_string(),
-        };
-
-        if !client.is_configured() {
-            let result = client.unlove_track("fake_key", "Artist", "Track").await;
-            assert!(matches!(result, Err(LastFmError::NotConfigured)));
-        }
-    }
-
-    #[cfg(feature = "agent")]
-    #[test]
-    fn test_parse_similar_tracks_response() {
-        let json: serde_json::Value = serde_json::from_str(
-            r#"{
-                "similartracks": {
-                    "track": [
-                        {"name": "Track A", "artist": {"name": "Artist A"}, "match": "0.95"},
-                        {"name": "Track B", "artist": {"name": "Artist B"}, "match": "0.80"}
-                    ]
-                }
-            }"#,
-        )
-        .unwrap();
-
-        let parsed: SimilarTracksResponse = serde_json::from_value(json).unwrap();
-        assert_eq!(parsed.similartracks.track.len(), 2);
-        assert_eq!(parsed.similartracks.track[0].name, "Track A");
-        assert_eq!(parsed.similartracks.track[0].artist.name(), "Artist A");
-        assert_eq!(
-            parsed.similartracks.track[0].match_score.as_deref(),
-            Some("0.95")
-        );
-    }
-
-    #[cfg(feature = "agent")]
-    #[test]
-    fn test_parse_similar_artists_response() {
-        let json: serde_json::Value = serde_json::from_str(
-            r#"{
-                "similarartists": {
-                    "artist": [
-                        {"name": "Artist X", "match": "0.90"},
-                        {"name": "Artist Y", "match": "0.75"}
-                    ]
-                }
-            }"#,
-        )
-        .unwrap();
-
-        let parsed: SimilarArtistsResponse = serde_json::from_value(json).unwrap();
-        assert_eq!(parsed.similarartists.artist.len(), 2);
-        assert_eq!(parsed.similarartists.artist[0].name, "Artist X");
-    }
-
-    #[cfg(feature = "agent")]
-    #[test]
-    fn test_parse_top_tags_response() {
-        let json: serde_json::Value = serde_json::from_str(
-            r#"{
-                "toptags": {
-                    "tag": [
-                        {"name": "rock", "count": 100},
-                        {"name": "alternative", "count": 80}
-                    ]
-                }
-            }"#,
-        )
-        .unwrap();
-
-        let parsed: TopTagsResponse = serde_json::from_value(json).unwrap();
-        assert_eq!(parsed.toptags.tag.len(), 2);
-        assert_eq!(parsed.toptags.tag[0].name, "rock");
-        assert_eq!(parsed.toptags.tag[0].count, Some(100));
-    }
-
-    #[cfg(feature = "agent")]
-    #[test]
-    fn test_parse_tag_top_artists_response() {
-        let json: serde_json::Value = serde_json::from_str(
-            r#"{
-                "topartists": {
-                    "artist": [
-                        {"name": "Radiohead"},
-                        {"name": "Muse"}
-                    ]
-                }
-            }"#,
-        )
-        .unwrap();
-
-        let parsed: TagTopArtistsResponse = serde_json::from_value(json).unwrap();
-        assert_eq!(parsed.topartists.artist.len(), 2);
-        assert_eq!(parsed.topartists.artist[0].name, "Radiohead");
-    }
-
-    #[cfg(feature = "agent")]
-    #[test]
-    fn test_parse_geo_top_tracks_response() {
-        let json: serde_json::Value = serde_json::from_str(
-            r#"{
-                "tracks": {
-                    "track": [
-                        {"name": "Bohemian Rhapsody", "artist": {"name": "Queen"}},
-                        {"name": "Imagine", "artist": {"name": "John Lennon"}}
-                    ]
-                }
-            }"#,
-        )
-        .unwrap();
-
-        let parsed: GeoTopTracksResponse = serde_json::from_value(json).unwrap();
-        assert_eq!(parsed.tracks.track.len(), 2);
-        assert_eq!(parsed.tracks.track[0].name, "Bohemian Rhapsody");
-        assert_eq!(parsed.tracks.track[0].artist.name(), "Queen");
-    }
-
-    #[cfg(feature = "agent")]
-    #[test]
-    fn test_parse_similar_tracks_empty() {
-        let json: serde_json::Value =
-            serde_json::from_str(r#"{"similartracks": {"track": []}}"#).unwrap();
-
-        let parsed: SimilarTracksResponse = serde_json::from_value(json).unwrap();
-        assert!(parsed.similartracks.track.is_empty());
-    }
-}
+#[path = "client_tests.rs"]
+mod tests;

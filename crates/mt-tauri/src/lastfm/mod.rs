@@ -1,9 +1,10 @@
-pub(crate) mod client;
-pub(crate) mod config;
-pub(crate) mod rate_limiter;
-pub(crate) mod signature;
-pub(crate) mod types;
+mod config;
 
-// Re-export commonly used types
-pub(crate) use client::LastFmClient;
-pub(crate) use types::*;
+#[cfg(feature = "agent")]
+pub(crate) use mt_core::lastfm::client;
+pub(crate) use mt_core::lastfm::{LastFmClient, types::*};
+
+/// Construct a core client with credentials loaded by the desktop application.
+pub(crate) fn new_client() -> LastFmClient {
+    LastFmClient::new(config::load())
+}

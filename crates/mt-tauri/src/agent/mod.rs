@@ -26,6 +26,7 @@ use types::{AgentContext, AgentError, AgentResponse, AgentStatusResponse, Parsed
 
 use crate::db::{Database, playlists};
 use crate::events::{EventEmitter, PlaylistsUpdatedEvent};
+#[cfg(test)]
 use crate::lastfm::LastFmClient;
 
 /// Generate a unique playlist name by appending a number if needed.
@@ -288,7 +289,7 @@ pub async fn agent_generate_playlist(
     info!(prompt = %prompt, "Starting agent playlist generation");
 
     // 3. Build agent with tools
-    let lastfm = LastFmClient::new();
+    let lastfm = crate::lastfm::new_client();
     let ctx = Arc::new(AgentContext {
         db: db.inner().clone(),
         lastfm,
@@ -544,7 +545,7 @@ mod tests {
     #[tokio::test]
     async fn build_agent_constructs_successfully() {
         let db = Database::new_in_memory().expect("in-memory db");
-        let lastfm = LastFmClient::new_unconfigured();
+        let lastfm = LastFmClient::new(Default::default());
         let ctx = Arc::new(AgentContext { db, lastfm });
         let _agent = build_agent(ctx, OLLAMA_BASE_URL);
     }

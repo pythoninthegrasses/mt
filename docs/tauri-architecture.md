@@ -67,10 +67,10 @@ The backend is being split into two crates as part of TASK-353:
 
 | Crate | Current responsibility |
 |-------|------------------------|
-| `crates/mt-core/` | Tauri-independent SQLite database, pure scanner, Plex client/merge, network file cache, and platform mount detection |
+| `crates/mt-core/` | Tauri-independent SQLite database, pure scanner, Last.fm client, Plex client/merge, network file cache, and platform mount detection |
 | `crates/mt-tauri/` | Desktop application, command/event adapters, audio, scanner artwork, and remaining integration modules |
 
-`mt-tauri` depends on `mt-core` and re-exports its cache, database, scanner, and Plex APIs internally
+`mt-tauri` depends on `mt-core` and re-exports its cache, database, scanner, Last.fm, and Plex APIs internally
 so existing desktop callers retain the same paths. Their implementations and
 unit/property tests live only in `mt-core`; run them without linking the desktop framework
 using `cargo nextest run -p mt-core`.
@@ -92,9 +92,17 @@ The desktop Plex module retains downloads; commands retain settings and event em
 Shared mock-server fixtures live in `crates/mt-core/tests/fixtures/plex/`;
 desktop command tests reference those same fixtures.
 
+The core Last.fm module owns the HTTP client, signing, rate limiting, DTOs, and
+their tests. Client construction takes explicit `ApiKeyConfig` credentials.
+The desktop `lastfm::new_client()` factory still loads runtime environment values
+before falling back to `option_env!` values embedded by `mt-tauri/build.rs`;
+the core never loads or embeds credentials. Desktop commands retain settings,
+scrobble orchestration, and event emission. The desktop `agent` feature forwards
+to the core's dependency-free `agent` feature for Last.fm discovery APIs.
+
 CI checks the core's transitive normal, build, and test dependencies across all
 targets and features, rejecting Tauri, Tao, Wry, WebKit, and Objective-C 2 crates.
-Last.fm, Plex download orchestration, standalone metadata command logic, and library/queue command orchestration remain pending;
+Plex download orchestration, standalone metadata command logic, and library/queue command orchestration remain pending;
 this initial split does not yet isolate all backend tests from Tauri.
 
 ### Tauri Core (Rust)
@@ -277,6 +285,7 @@ mt/
 │   │   └── src/
 │   │       ├── cache/      # Network file cache and mount detection
 │   │       ├── db/         # Database operations and tests
+│   │       ├── lastfm/     # Last.fm client, signing, rate limiting, DTOs, and tests
 │   │       ├── plex/       # Plex HTTP client, DTOs, library merge, and tests
 │   │       ├── scanner/    # Pure scanning, metadata parsing, and tests
 │   │       └── lib.rs
@@ -286,7 +295,7 @@ mt/
 │       │   ├── audio/      # Audio engine module
 │       │   ├── commands/   # Tauri command handlers
 │       │   ├── db.rs       # Core database re-export; desktop test fixture hook
-│       │   ├── lastfm/     # Last.fm integration
+│       │   ├── lastfm/     # Core re-exports and desktop credential loading
 │       │   ├── plex/       # Core re-exports and desktop downloads
 │       │   ├── scanner/    # Core re-exports, artwork, and scan commands
 │       │   └── watcher/    # File system monitoring

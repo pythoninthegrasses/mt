@@ -1,49 +1,24 @@
+use mt_core::lastfm::ApiKeyConfig;
 use std::env;
 
-/// Last.fm API configuration
-///
-/// Keys are embedded at compile time via `build.rs` and `option_env!()`.
-/// Runtime environment variables override embedded values (useful for development).
-pub struct ApiKeyConfig {
-    pub api_key: Option<String>,
-    pub api_secret: Option<String>,
+/// Load credentials in the crate whose build script embeds them.
+pub(super) fn load() -> ApiKeyConfig {
+    resolve(
+        |name| env::var(name).ok(),
+        option_env!("LASTFM_API_KEY"),
+        option_env!("LASTFM_API_SECRET"),
+    )
 }
 
-impl ApiKeyConfig {
-    /// Load API configuration
-    ///
-    /// Priority: runtime env var > compile-time embedded value > None
-    pub(crate) fn load() -> Self {
-        let api_key = env::var("LASTFM_API_KEY")
-            .ok()
-            .or_else(|| option_env!("LASTFM_API_KEY").map(String::from));
-        let api_secret = env::var("LASTFM_API_SECRET")
-            .ok()
-            .or_else(|| option_env!("LASTFM_API_SECRET").map(String::from));
-
-        Self {
-            api_key,
-            api_secret,
-        }
-    }
-
-    /// Check if API is properly configured
-    pub(crate) fn is_configured(&self) -> bool {
-        self.api_key.is_some() && self.api_secret.is_some()
-    }
-
-    /// Get API key (panics if not configured)
-    pub(crate) fn api_key(&self) -> &str {
-        self.api_key
-            .as_ref()
-            .expect("LASTFM_API_KEY not configured")
-    }
-
-    /// Get API secret (panics if not configured)
-    pub(crate) fn api_secret(&self) -> &str {
-        self.api_secret
-            .as_ref()
-            .expect("LASTFM_API_SECRET not configured")
+/// Runtime values override embedded values independently for each credential.
+fn resolve(
+    runtime: impl Fn(&str) -> Option<String>,
+    embedded_key: Option<&str>,
+    embedded_secret: Option<&str>,
+) -> ApiKeyConfig {
+    ApiKeyConfig {
+        api_key: runtime("LASTFM_API_KEY").or_else(|| embedded_key.map(String::from)),
+        api_secret: runtime("LASTFM_API_SECRET").or_else(|| embedded_secret.map(String::from)),
     }
 }
 
@@ -53,49 +28,52 @@ mod tests {
 
     #[test]
     fn test_config_load() {
-        // Keys may come from compile-time embedding or runtime env vars.
-        // Just verify the structure is created without panicking.
-        let _config = ApiKeyConfig::load();
+        let _config = load();
     }
 
     #[test]
-    fn test_is_configured() {
-        let config_none = ApiKeyConfig {
-            api_key: None,
-            api_secret: None,
-        };
-        assert!(!config_none.is_configured());
-
-        let config_partial = ApiKeyConfig {
-            api_key: Some("key".to_string()),
-            api_secret: None,
-        };
-        assert!(!config_partial.is_configured());
-
-        let config_full = ApiKeyConfig {
-            api_key: Some("key".to_string()),
-            api_secret: Some("secret".to_string()),
-        };
-        assert!(config_full.is_configured());
+    fn runtime_credentials_override_embedded_values() {
+        let config = resolve(
+            |name| Some(format!("runtime-{name}")),
+            Some("embedded-key"),
+            Some("embedded-secret"),
+        );
+        assert_eq!(config.api_key.as_deref(), Some("runtime-LASTFM_API_KEY"));
+        assert_eq!(
+            config.api_secret.as_deref(),
+            Some("runtime-LASTFM_API_SECRET")
+        );
     }
 
     #[test]
-    #[should_panic(expected = "LASTFM_API_KEY not configured")]
-    fn test_api_key_panics_when_missing() {
-        let config = ApiKeyConfig {
-            api_key: None,
-            api_secret: Some("secret".to_string()),
-        };
-        let _ = config.api_key();
+    fn missing_runtime_credentials_fall_back_independently() {
+        let config = resolve(
+            |name| (name == "LASTFM_API_KEY").then(|| "runtime-key".to_string()),
+            Some("embedded-key"),
+            Some("embedded-secret"),
+        );
+        assert_eq!(config.api_key.as_deref(), Some("runtime-key"));
+        assert_eq!(config.api_secret.as_deref(), Some("embedded-secret"));
     }
 
     #[test]
-    #[should_panic(expected = "LASTFM_API_SECRET not configured")]
-    fn test_api_secret_panics_when_missing() {
-        let config = ApiKeyConfig {
-            api_key: Some("key".to_string()),
-            api_secret: None,
-        };
-        let _ = config.api_secret();
+    fn embedded_credentials_are_used_without_runtime_values() {
+        let config = resolve(|_| None, Some("embedded-key"), Some("embedded-secret"));
+        assert_eq!(config.api_key.as_deref(), Some("embedded-key"));
+        assert_eq!(config.api_secret.as_deref(), Some("embedded-secret"));
+    }
+
+    #[test]
+    fn absent_credentials_stay_absent() {
+        let config = resolve(|_| None, None, None);
+        assert!(config.api_key.is_none());
+        assert!(config.api_secret.is_none());
+    }
+
+    #[test]
+    fn empty_runtime_values_still_override_embedded_values() {
+        let config = resolve(|_| Some(String::new()), Some("key"), Some("secret"));
+        assert_eq!(config.api_key.as_deref(), Some(""));
+        assert_eq!(config.api_secret.as_deref(), Some(""));
     }
 }

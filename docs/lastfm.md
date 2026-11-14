@@ -22,16 +22,22 @@ Rust implementation of Last.fm API integration for mt desktop music player, prov
 The Last.fm integration is implemented as a modular Rust backend with the following components:
 
 ```text
-crates/mt-tauri/src/
-├── lastfm/
-│   ├── mod.rs              # Module exports
-│   ├── client.rs           # HTTP client with reqwest
-│   ├── config.rs           # API key configuration
+crates/
+├── mt-core/src/lastfm/
+│   ├── mod.rs              # Core module exports
+│   ├── client.rs           # HTTP client with explicit credential injection
+│   ├── config.rs           # API credential value type
 │   ├── signature.rs        # MD5 signature generation
 │   ├── rate_limiter.rs     # Request rate limiting
-│   └── types.rs            # Request/response types
-└── commands/
-    └── lastfm.rs           # Tauri commands exposed to frontend
+│   ├── types.rs            # Request/response types
+│   ├── client_tests.rs     # HTTP client and discovery response tests
+│   └── types_tests.rs      # Serialization tests
+└── mt-tauri/src/
+    ├── lastfm/
+    │   ├── mod.rs          # Core re-exports and new_client() factory
+    │   └── config.rs       # Runtime and embedded credential loading
+    └── commands/
+        └── lastfm.rs       # Tauri commands exposed to frontend
 ```
 
 **Key Design Decisions:**
@@ -46,7 +52,7 @@ crates/mt-tauri/src/
 
 ### `lastfm/client.rs` - HTTP Client
 
-The `LastFmClient` provides the core HTTP interface to Last.fm API:
+The `mt-core` `LastFmClient` provides the core HTTP interface to Last.fm API:
 
 ```rust
 pub struct LastFmClient {
@@ -59,6 +65,7 @@ pub struct LastFmClient {
 
 **Key Methods:**
 
+- `new(config)` - Create a client with explicit credentials; desktop callers use `crate::lastfm::new_client()`
 - `api_call()` - Generic authenticated API call with signature generation
 - `get_auth_url()` - Get OAuth token and authorization URL
 - `get_session()` - Exchange token for session key
@@ -68,7 +75,7 @@ pub struct LastFmClient {
 
 ### `lastfm/config.rs` - API Key Management
 
-Handles API key configuration with environment-based loading:
+The core holds credentials without loading them:
 
 ```rust
 pub struct ApiKeyConfig {
@@ -77,9 +84,11 @@ pub struct ApiKeyConfig {
 }
 ```
 
-**Development builds**: Reads from `LASTFM_API_KEY` and `LASTFM_API_SECRET` env vars
-
-**Release builds**: TODO - Currently uses env vars, future implementation will use HMAC-SHA256 obfuscation to embed keys in binary
+The desktop `lastfm/config.rs` loads `LASTFM_API_KEY` and `LASTFM_API_SECRET`
+independently: runtime environment values override compile-time `option_env!`
+values embedded by `mt-tauri/build.rs`, falling back to `None`. Both development
+and release builds use this precedence. Credential loading stays in `mt-tauri`
+so the crate split does not change where build-time environment values are evaluated.
 
 ### `lastfm/signature.rs` - OAuth Signature
 

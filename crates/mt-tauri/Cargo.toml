@@ -77,9 +77,6 @@ notify-debouncer-full = "0.5"
 rayon = "1.10"
 base64 = "0.22"
 
-# Hashing
-md5 = "0.7"
-
 # LRU cache for artwork
 lru = "0.12"
 
@@ -114,7 +111,7 @@ schemars = { version = "1", optional = true }
 default = []
 devtools = ["dep:tauri-plugin-devtools", "tauri/devtools"]
 mcp = ["dep:tauri-plugin-mcp-bridge"]
-agent = ["dep:rig-core", "dep:schemars"]
+agent = ["dep:rig-core", "dep:schemars", "mt-core/agent"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

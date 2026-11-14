@@ -8,7 +8,6 @@ use tracing::{debug, warn};
 
 use crate::db::{Database, FavoriteTrack, Track, favorites, library, revision, settings};
 use crate::events::{EventEmitter, FavoritesUpdatedEvent, LibraryReconcileEvent};
-use crate::lastfm::LastFmClient;
 
 /// Response for favorites get operations with pagination
 #[derive(Clone, serde::Serialize)]
@@ -64,7 +63,7 @@ fn sync_lastfm_love(db: &Database, artist: String, title: String, love: bool) {
         _ => return,
     };
 
-    let client = LastFmClient::new();
+    let client = crate::lastfm::new_client();
     if !client.is_configured() {
         return;
     }

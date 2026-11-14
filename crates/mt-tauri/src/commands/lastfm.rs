@@ -6,9 +6,9 @@ use crate::db::{Database, favorites, lastfm_loved, library, scrobble, settings};
 use crate::events::{LastfmAuthEvent, ScrobbleStatusEvent};
 use crate::lastfm::{
     AuthCallbackResponse, AuthUrlResponse, CacheLovedTracksResponse, DisconnectResponse,
-    ImportLovedTracksResponse, LastFmClient, LastfmSettings, LastfmSettingsUpdate,
-    LovedTracksStatsResponse, MatchLovedTracksResponse, NowPlayingRequest, QueueRetryResponse,
-    QueueStatusResponse, ResetLovedCacheResponse, ScrobbleRequest, ScrobbleResponse,
+    ImportLovedTracksResponse, LastfmSettings, LastfmSettingsUpdate, LovedTracksStatsResponse,
+    MatchLovedTracksResponse, NowPlayingRequest, QueueRetryResponse, QueueStatusResponse,
+    ResetLovedCacheResponse, ScrobbleRequest, ScrobbleResponse,
 };
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
@@ -34,7 +34,7 @@ fn parse_threshold(value: Option<String>, default: u8) -> u8 {
 #[tracing::instrument(skip(db))]
 #[tauri::command]
 pub(crate) fn lastfm_get_settings(db: State<Database>) -> Result<LastfmSettings, String> {
-    let client = LastFmClient::new();
+    let client = crate::lastfm::new_client();
 
     db.with_conn(|conn| {
         let enabled = is_setting_truthy(settings::get_setting(conn, "lastfm_scrobbling_enabled")?);
@@ -93,7 +93,7 @@ pub(crate) fn lastfm_update_settings(
 #[tracing::instrument(skip(app))]
 #[tauri::command]
 pub(crate) async fn lastfm_get_auth_url(app: AppHandle) -> Result<AuthUrlResponse, String> {
-    let client = LastFmClient::new();
+    let client = crate::lastfm::new_client();
 
     if !client.is_configured() {
         return Err(
@@ -122,7 +122,7 @@ pub(crate) async fn lastfm_auth_callback(
     db: State<'_, Database>,
     token: String,
 ) -> Result<AuthCallbackResponse, String> {
-    let client = LastFmClient::new();
+    let client = crate::lastfm::new_client();
 
     if !client.is_configured() {
         return Err("Last.fm API not configured".to_string());
@@ -245,7 +245,7 @@ pub(crate) async fn lastfm_now_playing(
     }
 
     let session_key = session_key.unwrap();
-    let client = LastFmClient::new();
+    let client = crate::lastfm::new_client();
 
     // Update now playing (non-critical - silent errors)
     let result = client
@@ -328,7 +328,7 @@ pub(crate) async fn lastfm_scrobble(
     }
 
     let session_key = session_key.unwrap();
-    let client = LastFmClient::new();
+    let client = crate::lastfm::new_client();
 
     // Attempt to scrobble
     let result = client
@@ -499,7 +499,7 @@ pub(crate) async fn lastfm_queue_retry(
     }
 
     let session_key = session_key.unwrap();
-    let client = LastFmClient::new();
+    let client = crate::lastfm::new_client();
 
     // Get queued scrobbles (limit to 100 per retry batch)
     let queued = db
@@ -628,7 +628,7 @@ pub(crate) async fn lastfm_import_loved_tracks(
     }
 
     let username = username.unwrap();
-    let client = LastFmClient::new();
+    let client = crate::lastfm::new_client();
 
     if !client.is_configured() {
         return Err("Last.fm API not configured".to_string());
@@ -795,7 +795,7 @@ pub(crate) async fn lastfm_cache_loved_tracks(
     }
 
     let username = username.unwrap();
-    let client = LastFmClient::new();
+    let client = crate::lastfm::new_client();
 
     if !client.is_configured() {
         return Err("Last.fm API not configured".to_string());
@@ -920,7 +920,7 @@ pub(crate) async fn match_loved_tracks_impl(
     let total_unmatched = unmatched.len();
     info!(count = total_unmatched, "Matching unmatched loved tracks");
 
-    let client = LastFmClient::new();
+    let client = crate::lastfm::new_client();
     let mut matched: usize = 0;
     let mut already_matched: usize = 0;
     let mut no_match: usize = 0;

@@ -29,7 +29,7 @@ use crate::lastfm::client::LastFmClient;
 /// Last.fm client.
 fn test_context() -> Arc<AgentContext> {
     let db = Database::new_in_memory().expect("in-memory db");
-    let lastfm = LastFmClient::new_unconfigured();
+    let lastfm = LastFmClient::new(Default::default());
     Arc::new(AgentContext { db, lastfm })
 }
 
