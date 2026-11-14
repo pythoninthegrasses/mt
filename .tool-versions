@@ -1,12 +1,12 @@
 act            0.2.84
 actionlint     1.7.12
-task           3.49.1
 cargo-binstall 1.14.4
 deno           2.5.1
-rust           1.100.0
+hadolint       2.14.0
 nodejs         24.12.0
+rust           1.100.0
 prek           0.3.2
 ruff           0.12.11
+task           3.49.1
 uv             0.9.24
-hadolint       2.14.0
 zig            0.16.0
