@@ -9,7 +9,7 @@ use crate::plex::client::PlexClient;
 use crate::plex::types::{PlexAlbum, PlexTrack};
 
 #[derive(Debug, Clone, Serialize)]
-pub(crate) struct PlexMergeStats {
+pub struct PlexMergeStats {
     pub inserted: u64,
     pub linked: u64,
     pub skipped: u64,
@@ -121,7 +121,7 @@ fn link_local_track(conn: &Connection, local_id: i64, remote_id: &str) -> DbResu
 /// `albums_with_tracks`: albums (in section-order then album-order) paired with
 /// their pre-fetched track lists. The caller is responsible for ensuring cache
 /// is populated before calling this.
-pub(crate) fn merge_plex_library(
+pub fn merge_plex_library(
     conn: &Connection,
     albums_with_tracks: &[(PlexAlbum, Vec<PlexTrack>)],
     client: &PlexClient,

@@ -557,8 +557,8 @@ mod tests {
 
     use super::*;
 
-    const IDENTITY: &str = include_str!("../../tests/fixtures/plex/identity.json");
-    const SECTIONS: &str = include_str!("../../tests/fixtures/plex/sections.json");
+    const IDENTITY: &str = include_str!("../../../mt-core/tests/fixtures/plex/identity.json");
+    const SECTIONS: &str = include_str!("../../../mt-core/tests/fixtures/plex/sections.json");
 
     // ── mask_token ────────────────────────────────────────────────────────────
 

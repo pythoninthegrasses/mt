@@ -4,4 +4,5 @@
 
 pub mod cache;
 pub mod db;
+pub mod plex;
 pub mod scanner;

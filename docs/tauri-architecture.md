@@ -67,10 +67,10 @@ The backend is being split into two crates as part of TASK-353:
 
 | Crate | Current responsibility |
 |-------|------------------------|
-| `crates/mt-core/` | Tauri-independent SQLite database, pure scanner, network file cache, and platform mount detection |
+| `crates/mt-core/` | Tauri-independent SQLite database, pure scanner, Plex client/merge, network file cache, and platform mount detection |
 | `crates/mt-tauri/` | Desktop application, command/event adapters, audio, scanner artwork, and remaining integration modules |
 
-`mt-tauri` depends on `mt-core` and re-exports its cache, database, and scanner APIs internally
+`mt-tauri` depends on `mt-core` and re-exports its cache, database, scanner, and Plex APIs internally
 so existing desktop callers retain the same paths. Their implementations and
 unit/property tests live only in `mt-core`; run them without linking the desktop framework
 using `cargo nextest run -p mt-core`.
@@ -86,9 +86,15 @@ unit tests and performance tests run in the core. The desktop scanner retains
 artwork extraction/caching and Tauri commands; progress callbacks cross the boundary
 without introducing desktop handles or events into the core.
 
+The core Plex module owns the HTTP client, response DTOs, track matching, and
+transactional library merging, including their existing mock-server tests.
+The desktop Plex module retains downloads; commands retain settings and event emission.
+Shared mock-server fixtures live in `crates/mt-core/tests/fixtures/plex/`;
+desktop command tests reference those same fixtures.
+
 CI checks the core's transitive normal, build, and test dependencies across all
 targets and features, rejecting Tauri, Tao, Wry, WebKit, and Objective-C 2 crates.
-Last.fm, Plex, standalone metadata command logic, and library/queue command orchestration remain pending;
+Last.fm, Plex download orchestration, standalone metadata command logic, and library/queue command orchestration remain pending;
 this initial split does not yet isolate all backend tests from Tauri.
 
 ### Tauri Core (Rust)
@@ -271,6 +277,7 @@ mt/
 │   │   └── src/
 │   │       ├── cache/      # Network file cache and mount detection
 │   │       ├── db/         # Database operations and tests
+│   │       ├── plex/       # Plex HTTP client, DTOs, library merge, and tests
 │   │       ├── scanner/    # Pure scanning, metadata parsing, and tests
 │   │       └── lib.rs
 │   └── mt-tauri/           # Desktop app and remaining backend modules
@@ -280,6 +287,7 @@ mt/
 │       │   ├── commands/   # Tauri command handlers
 │       │   ├── db.rs       # Core database re-export; desktop test fixture hook
 │       │   ├── lastfm/     # Last.fm integration
+│       │   ├── plex/       # Core re-exports and desktop downloads
 │       │   ├── scanner/    # Core re-exports, artwork, and scan commands
 │       │   └── watcher/    # File system monitoring
 │       ├── Cargo.toml

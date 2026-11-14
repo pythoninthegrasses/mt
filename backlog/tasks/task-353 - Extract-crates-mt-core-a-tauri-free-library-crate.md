@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@opencode'
 created_date: '2026-09-11 00:38'
-updated_date: '2026-11-14T19:14:00Z'
+updated_date: '2026-11-14T19:21:00Z'
 labels: []
 dependencies:
   - TASK-352
@@ -37,6 +37,8 @@ Core logic and its roughly 910 tests should compile and run without linking taur
 Continuation milestone: move the self-contained db implementation and tests into mt-core; expose the database APIs consumed by desktop modules, keep a tiny mt-tauri db re-export adapter and desktop-only Zig fixture generator so parity tests and task zig:fixture retain their existing paths. Move pool dependencies into core; preserve SQL/schema/behavior. Validate both nextest suites, desktop compilation, core dependency guard, lint/format, update partial-state architecture docs and record an atomic commit.
 
 Scanner continuation milestone: move scanner shared types, fingerprint, inventory, metadata parsing, scan orchestration and existing tests/benchmarks into mt-core without changing behavior; expose only desktop-consumed APIs, keep artwork/artwork_cache/commands and a re-export adapter in mt-tauri. Move scanner-only dependencies, update partial architecture docs, validate both nextest suites and desktop type checking plus lint/format and the CI dependency guard, and commit this bounded milestone. Last.fm/Plex, standalone metadata command wrappers, library/queue orchestration and final benchmark/Playwright evidence remain subsequent work.
+
+Plex continuation milestone: relocate pure Plex client, DTOs and database merge logic with existing tests into mt-core. Keep downloader, Tauri settings and command/event adapters in mt-tauri using internal re-exports. Preserve HTTP/SQL behavior and dependency versions/features; move unicode-normalization and add matching reqwest/tokio/wiremock dependencies to core. Validate both nextest suites, desktop test compilation, dependency guard and lint/format; update partial architecture docs and commit atomically. Last.fm credential embedding requires a dedicated subsequent adapter seam; final Playwright and controlled benchmark evidence remain pending.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -61,4 +63,10 @@ Next: move pure scanner/Last.fm/Plex logic into core and split Tauri-bound metad
 Validation: cargo nextest run -p mt-core: 414 passed, 1 skipped (reported compile 4.47s; tests 2.030s); cargo nextest run -p mt-tauri: 481 passed, 1 skipped (reported compile 1m24s; tests 1.748s), including unchanged sidecar parity tests. Total remains 895 passed/2 ignored, with 37 additional scanner tests isolated from desktop linkage. cargo check -p mt-tauri --tests, task lint, task format, cargo test -p mt-core --doc, exact CI locked all-target/all-feature normal/build/dev dependency guard, and git diff --check passed. These are opportunistic macOS timings with existing caches and concurrent lint activity, not controlled benchmarks or comparable speedups against TASK-352's Linux baseline. Full Playwright suite not run for this intermediate milestone.
 
 Next: extract Last.fm and pure Plex logic, split standalone metadata and Plex download/settings adapters; then library/queue orchestration, full unmodified Playwright validation and controlled final per-crate timing/footprint comparison. Task remains In Progress; no final acceptance criteria checked.
+
+2026-11-14 pure Plex extraction milestone: relocated Plex HTTP client, DTOs and transactional database merge logic with all 25 existing tests into mt-core/src/plex. Desktop plex/mod.rs re-exports the consumed APIs while downloader and command/settings/event adapters remain desktop-only. Exposed only desktop-consumed DTOs and merge APIs; normalization and internal album/track DTOs remain crate-private. Moved unicode-normalization to core; added same-version/feature reqwest and test-only tokio/wiremock dependencies, without updating resolved package versions. Shared Plex mock-server fixtures now live under mt-core/tests/fixtures/plex; desktop command tests reference the same files. Source comparison confirmed relocated implementation/test bodies are unchanged apart from visibility. Updated partial-state architecture docs.
+
+Validation: cargo nextest run -p mt-core: 439 passed, 1 skipped (reported compile 59.22s; tests 3.343s); cargo nextest run -p mt-tauri: 456 passed, 1 skipped (reported compile 1m31s; tests 1.562s), including real sidecar parity and sabotage detection. Total remains 895 passed/2 skipped; 25 more tests now run without desktop linkage. cargo check -p mt-tauri --tests, cargo test -p mt-core --doc, task lint, task format, cargo fmt --all -- --check, exact CI locked all-target/all-feature normal/build/dev dependency guard and git diff --check passed. Initial core compile exposed missing relocated include_str fixtures, fixed by moving the fixtures and adjusting only desktop fixture references before successful rerun. These are opportunistic macOS timings with existing caches, feature rebuilds and concurrent lint/lock contention, not controlled benchmarks or comparable speedups against TASK-352's Linux baseline. Full Playwright suite not run for this intermediate milestone.
+
+Next: extract Last.fm with an explicit desktop credential-loading/embedding seam (mt-tauri/build.rs currently embeds LASTFM_API_KEY/SECRET); do not silently move option_env! evaluation to another crate. Split standalone metadata and remaining Plex download orchestration as appropriate, then library/queue orchestration, unmodified full Playwright validation and controlled final timing/footprint comparison. Task remains In Progress; no final acceptance criteria checked.
 <!-- SECTION:NOTES:END -->

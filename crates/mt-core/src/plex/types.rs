@@ -40,23 +40,23 @@ pub struct PlexTrack {
 // ── Internal Plex JSON DTOs ───────────────────────────────────────────────────
 
 #[derive(Deserialize)]
-pub(crate) struct SectionsRoot {
+pub struct SectionsRoot {
     #[serde(rename = "MediaContainer")]
-    pub(crate) media_container: SectionsContainer,
+    pub media_container: SectionsContainer,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct SectionsContainer {
+pub struct SectionsContainer {
     #[serde(rename = "Directory", default)]
-    pub(crate) directories: Vec<DirectoryDto>,
+    pub directories: Vec<DirectoryDto>,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct DirectoryDto {
+pub struct DirectoryDto {
     #[serde(rename = "type")]
-    pub(crate) dir_type: String,
-    pub(crate) key: String,
-    pub(crate) title: String,
+    pub dir_type: String,
+    pub key: String,
+    pub title: String,
 }
 
 #[derive(Deserialize)]
@@ -128,17 +128,17 @@ pub(crate) struct PartDto {
 // ── Identity endpoint DTOs ────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
-pub(crate) struct IdentityRoot {
+pub struct IdentityRoot {
     #[serde(rename = "MediaContainer")]
-    pub(crate) media_container: IdentityContainer,
+    pub media_container: IdentityContainer,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct IdentityContainer {
+pub struct IdentityContainer {
     #[serde(rename = "machineIdentifier", default)]
-    pub(crate) machine_identifier: String,
+    pub machine_identifier: String,
     #[serde(rename = "friendlyName", default)]
-    pub(crate) friendly_name: String,
+    pub friendly_name: String,
     #[serde(rename = "version", default)]
-    pub(crate) version: String,
+    pub version: String,
 }
