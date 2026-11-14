@@ -4,7 +4,7 @@ title: Show remote toggle does not hide remote tracks in the paginated library v
 status: Done
 assignee: []
 created_date: '2026-11-14T03:15:00Z'
-updated_date: '2026-11-14T20:24:00Z'
+updated_date: '2026-11-14T20:25:00Z'
 labels:
   - plex
   - library
@@ -62,3 +62,9 @@ Evidence: new __tests__/library-visible-rows.test.js (29 tests: raw↔row conver
 
 AC mapping: #1 and #2 are the plex.spec.js toggle test (off → the remote row is gone, on → it returns, no section reload). #3 is pinned in Vitest, per the test-boundaries rule that Vitest owns store logic: row count and scroll height in the row-space invariants, shift-click selection ranges in library-multi-select.test.js, and the library-browser.swr.test.js stub getters now mirror the production getters. Selection stores track IDs, which are space-agnostic; lastSelectedIndex and item.globalIndex are row indices, consistent with the render path.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed in 62ded50. The library list now renders from a row mirror (app/frontend/js/utils/library-visible-rows.js) instead of raw backend indices, so showRemote=false compacts the rows the virtualized list scrolls, renders and selects by, while raw indices stay untouched for pages, _pageSize math, library_find_offset and the page cache. The map is null while remote tracks are shown, so the unfiltered path is the identity and re-enabling the filter costs no refetch; a filtered view measures loaded pages synchronously then converges on every page so scroll height and row addressing agree. Verified: plex.spec.js toggle test 16/16 with --repeat-each=16 --workers=8 in webkit (baseline 6 failed / 10 passed), task test:e2e 509 passed / 2 skipped / 0 failed, Vitest 672 passed / 35 files including 29 new row-space tests, deno lint and deno fmt --check clean. No backend, Cargo or Zig changes: server-side filtering was rejected because deep pages never reach Tauri.
+<!-- SECTION:FINAL_SUMMARY:END -->
