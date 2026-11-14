@@ -1,5 +1,5 @@
 ---
-id: task-047
+id: TASK-384
 title: Implement inline metadata editing
 status: Done
 assignee: []

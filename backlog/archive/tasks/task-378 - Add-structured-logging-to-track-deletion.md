@@ -1,5 +1,5 @@
 ---
-id: task-041
+id: TASK-378
 title: Add structured logging to track deletion
 status: Done
 assignee:

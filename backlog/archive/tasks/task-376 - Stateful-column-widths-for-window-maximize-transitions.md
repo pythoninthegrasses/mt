@@ -1,5 +1,5 @@
 ---
-id: task-039
+id: TASK-376
 title: Stateful column widths for window maximize transitions
 status: Done
 assignee: []

@@ -1,5 +1,5 @@
 ---
-id: task-045
+id: TASK-382
 title: Implement Queue Next functionality
 status: Done
 assignee: []

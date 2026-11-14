@@ -1,5 +1,5 @@
 ---
-id: task-042
+id: TASK-379
 title: Stop Playbook Logging
 status: Done
 assignee:

@@ -1,5 +1,5 @@
 ---
-id: task-036
+id: TASK-373
 title: Implement status bar with library statistics
 status: Done
 assignee: []

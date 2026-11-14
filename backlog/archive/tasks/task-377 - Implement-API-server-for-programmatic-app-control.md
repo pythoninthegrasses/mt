@@ -1,5 +1,5 @@
 ---
-id: task-040
+id: TASK-377
 title: Implement API server for programmatic app control
 status: Done
 assignee:

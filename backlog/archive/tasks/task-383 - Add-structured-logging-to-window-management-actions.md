@@ -1,5 +1,5 @@
 ---
-id: task-046
+id: TASK-383
 title: Add structured logging to window management actions
 status: Done
 assignee:

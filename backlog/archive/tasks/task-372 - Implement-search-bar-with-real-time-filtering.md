@@ -1,5 +1,5 @@
 ---
-id: task-035
+id: TASK-372
 title: Implement search bar with real-time filtering
 status: Done
 assignee: []

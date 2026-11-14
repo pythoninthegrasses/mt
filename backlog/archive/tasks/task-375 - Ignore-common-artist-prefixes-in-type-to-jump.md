@@ -1,5 +1,5 @@
 ---
-id: task-038
+id: TASK-375
 title: Ignore common artist prefixes in type-to-jump
 status: Done
 assignee: []

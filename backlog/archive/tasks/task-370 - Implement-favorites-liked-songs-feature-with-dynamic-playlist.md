@@ -1,5 +1,5 @@
 ---
-id: task-034
+id: TASK-370
 title: Implement favorites/liked songs feature with dynamic playlist
 status: Done
 assignee: []

@@ -1,5 +1,5 @@
 ---
-id: task-034
+id: TASK-371
 title: Install and configure CustomTkinter framework
 status: Done
 assignee: []

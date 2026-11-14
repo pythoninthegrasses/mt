@@ -1,5 +1,5 @@
 ---
-id: task-058
+id: TASK-387
 title: Fix property-based test for path normalization with double slashes
 status: Done
 assignee:
