@@ -4,6 +4,7 @@ title: 'Extract crates/mt-core, a tauri-free library crate'
 status: To Do
 assignee: []
 created_date: '2026-09-11 00:38'
+updated_date: '2026-11-14T18:46:00Z'
 labels: []
 dependencies:
   - TASK-352
@@ -26,3 +27,9 @@ Core logic and its roughly 910 tests should compile and run without linking taur
 - [ ] #5 No behavior change: the full Playwright suite passes unmodified
 - [ ] #6 docs/tauri-architecture.md updated to describe the new crate layout
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-14 (sequencing after POC closeout): verified via task_view that TASK-352 is completed and this task is unblocked. This is the next implementation priority before TASK-369.5's Rust-versus-Zig decision. Keep behavior unchanged and retain Tauri command/event adapters in mt-tauri; establish the split-Rust timing/test/footprint baseline before attributing savings to a language change. Status stays To Do: this reconciliation did not start the extraction, validate the historical module boundaries against current code, or perform new benchmarks.
+<!-- SECTION:NOTES:END -->
