@@ -56,6 +56,11 @@ APP_PID=""
 VOL=""
 
 note() { printf '%s\n' "$*" | tee -a "$OUT"; }
+# Diagnostics go to the terminal only. The two summary files are what AC#3 diffs, so
+# anything that legitimately varies run to run (elapsed positions, byte counts that
+# the size tables already record) stays out of them; otherwise the diff says nothing
+# about whether the two candidates behaved the same.
+detail() { printf '      %s\n' "$*"; }
 # check <name> <status: 0 = pass> <detail>
 check() {
   if [ "$2" = "0" ]; then note "PASS  $1: $3"; else note "FAIL  $1: $3"; FAILURES=$((FAILURES + 1)); fi
@@ -63,6 +68,15 @@ check() {
 cleanup() {
   [ -n "$APP_PID" ] && kill "$APP_PID" 2>/dev/null || true
   [ -n "$VOL" ] && osascript -e "set volume output volume $VOL" >/dev/null 2>&1 || true
+  # On a failure the raw transcripts are the only explanation, and $WORK is a
+  # temp dir. They are kept in the results dir, where .gitignore already excludes
+  # *.log, so a passing run leaves nothing behind.
+  if [ "$FAILURES" -gt 0 ]; then
+    for f in "$WORK"/*.log "$WORK"/devices.err; do
+      [ -f "$f" ] && cp "$f" "$RESULTS_DIR/smoke-$label-$(basename "$f")" 2>/dev/null || true
+    done
+    echo "diagnostics kept in $RESULTS_DIR/smoke-$label-*.log"
+  fi
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -73,7 +87,13 @@ start_app() {
 }
 stop_app() {
   [ -n "$APP_PID" ] || return 0
+  # The app spawns the sidecar and the device-enumeration subprocess, so take the
+  # process group's children too; then escalate, because a GUI app that ignores
+  # SIGTERM would otherwise hang the smoke run on `wait`.
+  pkill -P "$APP_PID" 2>/dev/null || true
   kill "$APP_PID" 2>/dev/null || true
+  for _ in {1..20}; do kill -0 "$APP_PID" 2>/dev/null || break; sleep 0.25; done
+  kill -9 "$APP_PID" 2>/dev/null || true
   wait "$APP_PID" 2>/dev/null || true
   APP_PID=""
 }
@@ -85,14 +105,23 @@ wait_for_file() {
 db() { /usr/bin/sqlite3 -cmd ".timeout 8000" "$DB" "$1"; }
 
 say "build and bundle [$label] (lto=$lto codegen-units=$cgus)"
+# Tauri resolves externalBin eagerly, so bundling fails outright without the sidecar.
+# It is not built here because it is identical for every candidate.
+sidecar="crates/mt-tauri/binaries/mt-zig-core-$TRIPLE"
+if [ ! -x "$MT_ROOT/$sidecar" ]; then
+  note "FAIL  sidecar: $sidecar is missing. Run: task zig:stage TARGET=$TRIPLE"
+  exit 1
+fi
 export CARGO_PROFILE_RELEASE_LTO="$lto" CARGO_PROFILE_RELEASE_CODEGEN_UNITS="$cgus"
 unset RUSTC_WRAPPER
 eval "$(clean_cmd)"
-# The example links the same mt_lib under the same profile, so step 5 exercises the
-# codegen being tested rather than some other build.
+# The example links the same mt_lib under the same profile, so the playback step
+# exercises the codegen being tested rather than some other build. --bin mt is
+# explicit because naming --example alone selects only that target, and the bundler
+# needs the app binary to already exist.
 if ! env RUSTUP_TOOLCHAIN="$RUSTUP_TOOLCHAIN" CARGO_HOME="$CARGO_HOME" \
     CARGO_TARGET_DIR="$CARGO_TARGET_DIR" CARGO_BUILD_JOBS="$CARGO_BUILD_JOBS" \
-    "$CARGO" build --release --target "$TRIPLE" -p mt-tauri --example audio_test \
+    "$CARGO" build --release --target "$TRIPLE" -p mt-tauri --bin mt --example audio_test \
     >"$WORK/build.log" 2>&1; then
   note "FAIL  build: see $WORK/build.log"
   tail -20 "$WORK/build.log" | tee -a "$OUT"
@@ -109,7 +138,7 @@ if [ ! -x "$APP_BIN" ] || [ ! -x "$AUDIO_TEST" ]; then
   exit 1
 fi
 note "candidate: lto=$lto codegen-units=$cgus, host $(uname -m), macOS $(sw_vers -productVersion)"
-note "app      : $APP_BIN ($(stat -f%z "$APP_BIN") bytes)"
+detail "app: $APP_BIN ($(stat -f%z "$APP_BIN") bytes)"
 
 say "1. device enumeration subprocess"
 if HOME="$SMOKE_HOME" MT_ENUMERATE_DEVICES=1 "$APP_BIN" >"$WORK/devices.json" 2>"$WORK/devices.err"; then
@@ -174,22 +203,31 @@ osascript -e 'set volume output volume 0' >/dev/null 2>&1 || true
 VOL=""
 # audio_test prints "[Ns] Position: <ms>ms / <ms>ms | State: Playing" once a second.
 positions="$(awk '{ for (i = 1; i < NF; i++) if ($i == "Position:") { v = $(i + 1); gsub(/[^0-9].*/, "", v); print v } }' "$WORK/playback.log")"
+n_positions="$(printf '%s\n' "$positions" | grep -c . || true)"
 advanced="$(printf '%s\n' "$positions" | awk 'NR > 1 && $1 > prev { c++ } { prev = $1 } END { print c + 0 }')"
+detail "tone positions: $(printf '%s' "$positions" | tr '\n' ' ')"
+detail "$(grep -m1 'Duration:' "$WORK/playback.log" || echo 'no Duration line')"
 check "playback-advances" "$([ "${advanced:-0}" -ge 3 ] && echo 0 || echo 1)" \
-  "positions: $(printf '%s' "$positions" | tr '\n' ' ')"
-grep -m1 "Duration:" "$WORK/playback.log" | tee -a "$OUT" || true
-played="$(grep -c "State: Playing" "$WORK/playback-fixture.log" || true)"
-fixdur="$(awk '/Duration:/ {print $2; exit}' "$WORK/playback-fixture.log")"
-check "playback-fixture" "$( [ "${played:-0}" -ge 1 ] && [ -n "${fixdur:-}" ] && echo 0 || echo 1)" \
-  "test_sample.mp3 duration ${fixdur:-?}, ${played:-0} sample(s) in Playing state"
+  "${advanced:-0} of ${n_positions:-0} one-second sample(s) advanced, state Playing"
+played="$(grep -c "Failed to" "$WORK/playback-fixture.log" || true)"
+fixdur="$(awk '/Duration:/ {gsub(/[^0-9]/,"",$2); print $2; exit}' "$WORK/playback-fixture.log")"
+# A one-second track is usually Stopped by the first sample, so the fixture proves
+# the decoder path (it loaded, and reported its real length), not the clock.
+check "playback-fixture" "$( [ "${played:-1}" -eq 0 ] && [ "${fixdur:-0}" -gt 0 ] && echo 0 || echo 1)" \
+  "test_sample.mp3 decoded as ${fixdur:-?}ms, ${played:-0} load failure(s)"
 
 say "5. app log cleanliness"
 log_file="$(find "$APP_LOG_DIR" -name 'mt.log*' -type f 2>/dev/null | head -1)"
 if [ -n "$log_file" ]; then
-  bad="$(grep -icE 'panicked|ERROR' "$log_file" || true)"
-  check "app-log" "$([ "${bad:-0}" -eq 0 ] && echo 0 || echo 1)" "$bad error line(s) in $(basename "$log_file")"
+  # Match the level column, not the word: WARN lines carry `error=...` field names
+  # and would otherwise count as failures. The sidecar-termination ERROR is the one
+  # this script causes itself, by killing the app between steps, so it is excluded.
+  bad="$(awk '$2 == "ERROR"' "$log_file" |
+          grep -v 'sidecar process terminated' | grep -icE 'panicked|ERROR' || true)"
+  check "app-log" "$([ "${bad:-0}" -eq 0 ] && echo 0 || echo 1)" "$bad unexpected error line(s) in $(basename "$log_file")"
   if [ "${bad:-0}" -gt 0 ]; then
-    grep -iE 'panicked|ERROR' "$log_file" | head -5 | tee -a "$OUT" || true
+    awk '$2 == "ERROR"' "$log_file" | grep -v 'sidecar process terminated' |
+      head -5 | tee -a "$OUT" || true
   fi
 else
   check "app-log" 1 "no log file under $APP_LOG_DIR"
