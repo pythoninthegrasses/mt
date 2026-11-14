@@ -113,7 +113,9 @@ note "app      : $APP_BIN ($(stat -f%z "$APP_BIN") bytes)"
 
 say "1. device enumeration subprocess"
 if HOME="$SMOKE_HOME" MT_ENUMERATE_DEVICES=1 "$APP_BIN" >"$WORK/devices.json" 2>"$WORK/devices.err"; then
-  devices="$(grep -c '"name"' "$WORK/devices.json" || true)"
+  # The subprocess prints the JSON form of Vec<String> -- a bare array of names.
+  devices="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' \
+    "$WORK/devices.json" 2>/dev/null || echo 0)"
   check "enumerate-devices" "$([ "${devices:-0}" -ge 1 ] && echo 0 || echo 1)" "${devices:-0} device(s), exit 0"
 else
   status=$?
@@ -149,9 +151,25 @@ check "library-scan" "$([ "${scanned:-0}" -ge 1 ] && echo 0 || echo 1)" "$scanne
 stop_app
 
 say "4. playback through the real output device"
+# Every repo fixture is exactly one second (they are metadata test samples), and
+# audio_test samples its position once a second, so a fixture alone can never show
+# the clock advancing three times. Generate a six-second tone for the advance check;
+# the mp3 fixture is still played, for what it proves about decoding.
+TONE="$WORK/tone.wav"
+python3 - "$TONE" <<'PY' || { note "FAIL  tone: could not generate a test file"; exit 1; }
+import math, struct, sys, wave
+path = sys.argv[1]
+rate, secs = 44100, 6
+with wave.open(path, "wb") as w:
+    w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate)
+    w.writeframes(b"".join(
+        struct.pack("<h", int(0.25 * 32767 * math.sin(2 * math.pi * 220 * i / rate)))
+        for i in range(rate * secs)))
+PY
 VOL="$(osascript -e 'output volume of (get volume settings)' 2>/dev/null || echo '')"
 osascript -e 'set volume output volume 0' >/dev/null 2>&1 || true
-"$AUDIO_TEST" "$LIB_DIR/test_sample.mp3" >"$WORK/playback.log" 2>&1 || true
+"$AUDIO_TEST" "$TONE" >"$WORK/playback.log" 2>&1 || true
+"$AUDIO_TEST" "$LIB_DIR/test_sample.mp3" >"$WORK/playback-fixture.log" 2>&1 || true
 [ -n "$VOL" ] && osascript -e "set volume output volume $VOL" >/dev/null 2>&1 || true
 VOL=""
 # audio_test prints "[Ns] Position: <ms>ms / <ms>ms | State: Playing" once a second.
@@ -160,6 +178,10 @@ advanced="$(printf '%s\n' "$positions" | awk 'NR > 1 && $1 > prev { c++ } { prev
 check "playback-advances" "$([ "${advanced:-0}" -ge 3 ] && echo 0 || echo 1)" \
   "positions: $(printf '%s' "$positions" | tr '\n' ' ')"
 grep -m1 "Duration:" "$WORK/playback.log" | tee -a "$OUT" || true
+played="$(grep -c "State: Playing" "$WORK/playback-fixture.log" || true)"
+fixdur="$(awk '/Duration:/ {print $2; exit}' "$WORK/playback-fixture.log")"
+check "playback-fixture" "$( [ "${played:-0}" -ge 1 ] && [ -n "${fixdur:-}" ] && echo 0 || echo 1)" \
+  "test_sample.mp3 duration ${fixdur:-?}, ${played:-0} sample(s) in Playing state"
 
 say "5. app log cleanliness"
 log_file="$(find "$APP_LOG_DIR" -name 'mt.log*' -type f 2>/dev/null | head -1)"
