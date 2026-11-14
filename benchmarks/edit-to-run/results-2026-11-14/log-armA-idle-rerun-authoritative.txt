@@ -1,0 +1,99 @@
+# NOTE: this is the authoritative arm A latency pass (idle machine, busy procs 0). dev/code/lib 2.149s and frontend 0.170s here replace the inflated 3.332s/0.259s of the first pass.
+# PROVENANCE log-armA-idle-rerun-authoritative.txt: raw command output captured in worktree ~/git/mt.zig-engine-adr (branch zig-engine-adr, HEAD d5cd25b), arm64 macOS, rustc 1.100.0, zig 0.16.0, machine on AC.
+# arm A re-run at idle 2026-11-14T23:08:05Z
+busy procs: 0  load: { 3.77 6.92 6.70 }
+
+##### latency code (rerun)
+== dev [code] (/Users/lance/.cargo/bin/cargo build -p mt-tauri )
+==   engine -> code crates/mt-core/src/db/library.rs (3 runs)
+  Time (mean ± σ):      2.647 s ±  0.016 s    [User: 2.781 s, System: 2.880 s]
+  Range (min … max):    2.633 s …  2.665 s    3 runs
+==   command -> code crates/mt-tauri/src/commands/queue.rs (3 runs)
+  Time (mean ± σ):      1.810 s ±  0.015 s    [User: 2.180 s, System: 1.774 s]
+  Range (min … max):    1.795 s …  1.824 s    3 runs
+==   main -> code crates/mt-tauri/src/main.rs (3 runs)
+  Time (mean ± σ):      0.560 s ±  0.001 s    [User: 0.923 s, System: 0.308 s]
+  Range (min … max):    0.558 s …  0.561 s    3 runs
+==   lib -> code crates/mt-tauri/src/lib.rs (3 runs)
+  Time (mean ± σ):      2.149 s ±  0.016 s    [User: 2.848 s, System: 1.496 s]
+  Range (min … max):    2.130 s …  2.162 s    3 runs
+==   frontend -> code app/frontend/js/stores/queue.js (10 runs)
+  Time (mean ± σ):      0.170 s ±  0.003 s    [User: 0.098 s, System: 0.069 s]
+  Range (min … max):    0.166 s …  0.175 s    10 runs
+== dev-agent [code] (/Users/lance/.cargo/bin/cargo build -p mt-tauri --features agent)
+==   engine -> code crates/mt-core/src/db/library.rs (3 runs)
+  Time (mean ± σ):      2.854 s ±  0.026 s    [User: 2.999 s, System: 3.062 s]
+  Range (min … max):    2.826 s …  2.876 s    3 runs
+==   command -> code crates/mt-tauri/src/commands/queue.rs (3 runs)
+  Time (mean ± σ):      1.942 s ±  0.019 s    [User: 2.354 s, System: 1.868 s]
+  Range (min … max):    1.921 s …  1.957 s    3 runs
+==   main -> code crates/mt-tauri/src/main.rs (3 runs)
+  Time (mean ± σ):      0.590 s ±  0.003 s    [User: 0.979 s, System: 0.324 s]
+  Range (min … max):    0.587 s …  0.591 s    3 runs
+==   lib -> code crates/mt-tauri/src/lib.rs (3 runs)
+  Time (mean ± σ):      2.311 s ±  0.023 s    [User: 3.072 s, System: 1.560 s]
+  Range (min … max):    2.291 s …  2.336 s    3 runs
+==   frontend -> code app/frontend/js/stores/queue.js (10 runs)
+  Time (mean ± σ):      0.174 s ±  0.001 s    [User: 0.101 s, System: 0.071 s]
+  Range (min … max):    0.172 s …  0.177 s    10 runs
+
+##### latency edit (rerun)
+== dev [edit] (/Users/lance/.cargo/bin/cargo build -p mt-tauri )
+==   engine -> edit crates/mt-core/src/db/library.rs (3 runs)
+  Time (mean ± σ):      2.285 s ±  0.005 s    [User: 2.440 s, System: 3.020 s]
+  Range (min … max):    2.280 s …  2.290 s    3 runs
+==   command -> edit crates/mt-tauri/src/commands/queue.rs (3 runs)
+  Time (mean ± σ):      1.781 s ±  0.025 s    [User: 2.152 s, System: 1.809 s]
+  Range (min … max):    1.761 s …  1.809 s    3 runs
+==   main -> edit crates/mt-tauri/src/main.rs (3 runs)
+  Time (mean ± σ):      0.571 s ±  0.008 s    [User: 0.930 s, System: 0.319 s]
+  Range (min … max):    0.565 s …  0.580 s    3 runs
+==   lib -> edit crates/mt-tauri/src/lib.rs (3 runs)
+  Time (mean ± σ):      1.791 s ±  0.022 s    [User: 2.158 s, System: 1.780 s]
+  Range (min … max):    1.765 s …  1.808 s    3 runs
+==   frontend -> edit app/frontend/js/stores/queue.js (10 runs)
+  Time (mean ± σ):      0.171 s ±  0.001 s    [User: 0.098 s, System: 0.070 s]
+  Range (min … max):    0.169 s …  0.173 s    10 runs
+== dev-agent [edit] (/Users/lance/.cargo/bin/cargo build -p mt-tauri --features agent)
+==   engine -> edit crates/mt-core/src/db/library.rs (3 runs)
+  Time (mean ± σ):      2.434 s ±  0.025 s    [User: 2.626 s, System: 3.031 s]
+  Range (min … max):    2.408 s …  2.459 s    3 runs
+==   command -> edit crates/mt-tauri/src/commands/queue.rs (3 runs)
+  Time (mean ± σ):      1.913 s ±  0.010 s    [User: 2.317 s, System: 1.811 s]
+  Range (min … max):    1.902 s …  1.920 s    3 runs
+==   main -> edit crates/mt-tauri/src/main.rs (3 runs)
+  Time (mean ± σ):      0.599 s ±  0.007 s    [User: 0.988 s, System: 0.331 s]
+  Range (min … max):    0.594 s …  0.607 s    3 runs
+==   lib -> edit crates/mt-tauri/src/lib.rs (3 runs)
+  Time (mean ± σ):      1.950 s ±  0.053 s    [User: 2.327 s, System: 1.801 s]
+  Range (min … max):    1.896 s …  2.003 s    3 runs
+==   frontend -> edit app/frontend/js/stores/queue.js (10 runs)
+  Time (mean ± σ):      0.183 s ±  0.006 s    [User: 0.103 s, System: 0.076 s]
+  Range (min … max):    0.174 s …  0.196 s    10 runs
+
+##### engine-test turnaround: cargo nextest run -p mt-core (3 runs, report steady-state)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.93s
+        PASS [   0.022s] (437/692) mt-core library::mutations::tests::test_delete_tracks_counts_only_real_deletions
+     Summary [   2.205s] 692 tests run: 692 passed, 1 skipped
+real 19.88
+--- run 1 done, load { 15.55 8.47 7.22 }
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+        PASS [   0.012s] (426/692) mt-core library::mutations::tests::test_delete_tracks_counts_only_real_deletions
+     Summary [   2.107s] 692 tests run: 692 passed, 1 skipped
+real 2.57
+--- run 2 done, load { 15.55 8.47 7.22 }
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+        PASS [   0.013s] (427/692) mt-core library::mutations::tests::test_delete_tracks_counts_only_real_deletions
+     Summary [   2.084s] 692 tests run: 692 passed, 1 skipped
+real 2.53
+--- run 3 done, load { 15.02 8.48 7.23 }
+
+##### engine-test turnaround: mt-core --all-features (agent)
+        PASS [   0.013s] (433/698) mt-core library::mutations::tests::test_delete_tracks_counts_only_real_deletions
+     Summary [   2.075s] 698 tests run: 698 passed, 1 skipped
+real 6.46
+
+##### desktop-side turnaround: cargo nextest run -p mt-tauri (excludes shadow_diff_parity per CI filter)
+     Summary [   0.502s] 331 tests run: 331 passed, 4 skipped
+real 47.35
+##### DONE 2026-11-14T23:11:38Z

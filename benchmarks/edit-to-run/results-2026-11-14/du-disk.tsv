@@ -1,0 +1,12 @@
+disk	target	6547592
+disk	target/debug	6547580
+disk	target/debug/build	5650252
+disk	target/debug/incremental	406672
+disk	target/debug/examples	0
+disk	zig-core/.zig-cache	36660
+disk	zig-core/zig-out	8456
+disk	crates/mt-tauri/binaries	1788
+disk	.cache/cargo	391772
+disk	app/frontend/node_modules	125292
+disk	app/frontend/dist	892
+disk	.worktree-total	7144920

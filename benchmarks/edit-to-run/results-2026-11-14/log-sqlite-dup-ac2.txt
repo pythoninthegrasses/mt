@@ -1,0 +1,71 @@
+# PROVENANCE log-sqlite-dup-ac2.txt: raw command output captured in worktree ~/git/mt.zig-engine-adr (branch zig-engine-adr, HEAD d5cd25b), arm64 macOS, rustc 1.100.0, zig 0.16.0, machine on AC.
+# SQLite duplication measurement 2026-11-14T21:54:19Z
+host: arm64 macos, rustc 1.100.0, zig 0.16.0
+sccache: 
+RUSTC_WRAPPER=<unset>
+
+## RUST: libsqlite3-sys (bundled amalgamation) cold
+   Compiling libsqlite3-sys v0.36.0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.09s
+real 3.14
+user 6.36
+sys 0.47
+
+## RUST: same, warm no-op
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+real 0.15
+user 0.08
+sys 0.05
+
+## ZIG: vendored sqlite3.c (9.0 MB, 265908 lines) cold, cache wiped
+ 36M	.zig-cache
+real 16.48
+user 15.91
+sys 1.21
+
+## ZIG: same, warm no-op
+real 0.10
+user 0.05
+sys 0.04
+
+## ZIG: cache and artifact bytes after cold+warm
+ 36M	.zig-cache
+total 1788
+-rwxr-xr-x@ 1 lance  staff  1826824 Nov 14 15:54 mt-zig-core
+
+## ZIG: per-step summary, cold (isolates the sqlite3.c compile)
+Build Summary: 6/6 steps succeeded
++- install sqlite3 success
+|  +- compile lib sqlite3 ReleaseSafe aarch64-macos success 8s MaxRSS:674M
+   +- compile exe mt-zig-core ReleaseSafe aarch64-macos success 4s MaxRSS:453M
+      +- WriteFile sqlite3.h success
+      +- compile lib sqlite3 ReleaseSafe aarch64-macos (reused)
+      +- compile lib sqlite3 ReleaseSafe aarch64-macos (reused)
+real 16.21
+user 15.63
+
+## RUST: bundled amalgamation static artifact bytes
+
+## RUST: bundled amalgamation artifacts on disk
+ 28K  target/debug/build/libsqlite3-sys/757a36d00ab6aa9b/out/libsqlite3_sys-757a36d00ab6aa9b.libsqlite3_sys.2c8a3b01ce67e004-cgu.0.rcgu.o
+3.9M  target/debug/build/libsqlite3-sys/246657912ed894a8/out/libsqlite3.a
+
+## DELETION DELTA: crates pulled in by the Rust SQLite path (unique to it)
+-- rusqlite reverse deps (workspace):
+rusqlite v0.38.0
+├── mt-core v1.6.0 (/Users/lance/git/mt.zig-engine-adr/crates/mt-core)
+│   └── mt-tauri v1.6.0 (/Users/lance/git/mt.zig-engine-adr/crates/mt-tauri)
+├── mt-tauri v1.6.0 (/Users/lance/git/mt.zig-engine-adr/crates/mt-tauri)
+└── r2d2_sqlite v0.32.0
+    └── mt-core v1.6.0 (/Users/lance/git/mt.zig-engine-adr/crates/mt-core) (*)
+-- libsqlite3-sys reverse deps:
+libsqlite3-sys v0.36.0
+└── rusqlite v0.38.0
+    ├── mt-core v1.6.0 (/Users/lance/git/mt.zig-engine-adr/crates/mt-core)
+    │   └── mt-tauri v1.6.0 (/Users/lance/git/mt.zig-engine-adr/crates/mt-tauri)
+    ├── mt-tauri v1.6.0 (/Users/lance/git/mt.zig-engine-adr/crates/mt-tauri)
+    └── r2d2_sqlite v0.32.0
+-- r2d2 / r2d2_sqlite:
+r2d2_sqlite v0.32.0
+└── mt-core v1.6.0 (/Users/lance/git/mt.zig-engine-adr/crates/mt-core)
+    └── mt-tauri v1.6.0 (/Users/lance/git/mt.zig-engine-adr/crates/mt-tauri)
