@@ -78,4 +78,28 @@ The AC-by-AC tables live in the task notes (`backlog/tasks/task-369.4 - *.md`)
 and the accepted trade-off is written up in `docs/builds.md#release-profile`.
 This README keeps only the protocol so a re-run is unambiguous. Re-measure
 here, in this order, before re-tuning the profile: `doctor`, `probe`, `matrix 2`,
-`head2head` on the shortlist, then `launch` and a smoke run on whatever wins.
+`head2head` on the shortlist, `cli-head2head` on the winner, then `smoke.sh` on
+baseline and winner and a diff of the two `smoke-*.txt` files.
+
+## Playback smoke (AC#3)
+
+`./smoke.sh <lto> <cgus>` answers "does the shipped artifact still work" for one
+candidate, and it is the AC that build time and sizes cannot answer: fat LTO is
+exactly the setting that can break something through optimisation while every
+number still looks good. It builds the candidate and the `audio_test` example in a
+target dir of its own (`.cache/bench-369-4/target-smoke`, so it never wipes a dir a
+matrix pass is using), bundles the `.app` so the sidecar lands where `externalBin`
+expects it, then checks five things and writes `results-<date>/smoke-<candidate>.txt`:
+
+| Check | Evidence |
+|---|---|
+| `enumerate-devices` | `MT_ENUMERATE_DEVICES=1 <app binary>` exits 0 and prints ≥1 device |
+| `first-launch-db` | the app creates `mt.db` under an isolated `HOME` |
+| `library-scan` | a folder of `crates/mt-tauri/tests/fixtures` registered in `watched_folders` is scanned into the `library` table |
+| `playback-advances` | `audio_test` reports ≥3 increasing positions through the real rodio output device |
+| `app-log` | no `panicked` or `ERROR` line in the app's own log |
+
+Both runs happen under a private `HOME`, so the real library, settings and logs are
+untouched and the two candidates see identical state. Output volume is muted for the
+playback step and restored afterwards, and the app window appears twice for a few
+seconds. AC#3 is met when the two summary files differ only in the candidate label.
