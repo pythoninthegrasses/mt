@@ -33,7 +33,7 @@ All `task tauri:*` commands use the Rust version pinned in `.tool-versions` and 
 
 ### Toolchain
 
-The Rust version is pinned to a stable release in `.tool-versions` (`rust 1.100.0`). That file is the single source for the root `taskfile.yml`, `taskfiles/ci.yml`, and the CI composite action. `docker/linux/Dockerfile` (`ARG RUST_VERSION`), `scripts/build.ps1` (`$script:RustToolchain`), and `scripts/runner.sh` (`RUST_TOOLCHAIN`) repeat the value and must be updated by hand.
+The Rust version is pinned to a stable release in `.tool-versions` (`rust 1.100.0`). That file is the single source for the root `taskfile.yml`, `taskfiles/ci.yml`, and the CI composite action. `docker/linux/Dockerfile` (`ARG RUST_VERSION`) and `scripts/runner.sh` (`RUST_TOOLCHAIN`) repeat the value and must be updated by hand (`scripts/driver.ps1` reads it, as does CI).
 
 To try another toolchain for a single command:
 
@@ -47,7 +47,7 @@ Note that the mise `cargo` shim ignores `RUSTUP_TOOLCHAIN`; when invoking `cargo
 
 ```bash
 # 1. Bump the pin
-#    .tool-versions, docker/linux/Dockerfile, scripts/build.ps1, scripts/runner.sh
+#    .tool-versions, docker/linux/Dockerfile, scripts/runner.sh
 # 2. Install it
 mise install rust
 # 3. Verify
@@ -617,40 +617,41 @@ The signing flow:
 
 #### Local Build
 
-Use `scripts/build.ps1` from a **native PowerShell terminal** (not git bash — the `Cert:\` drive and certificate cmdlets require the PowerShell Security module, which fails to auto-load under git bash):
+Use `scripts/driver.ps1 -Command release` from a **native PowerShell terminal** (not git bash — the `Cert:\` drive and certificate cmdlets require the PowerShell Security module, which fails to auto-load under git bash). The same script is the pre-CI VM driver (see the next section); `release` is the mode that folds the old `scripts/build.ps1`:
 
 ```powershell
 # Full build with self-signed code signing (recommended)
-.\scripts\build.ps1
+.\scripts\driver.ps1 release
 
 # Skip dependency installation (faster on subsequent runs)
-.\scripts\build.ps1 -SkipDeps
+.\scripts\driver.ps1 release -SkipDeps
 
 # Build without code signing
-.\scripts\build.ps1 -SkipSign
+.\scripts\driver.ps1 release -SkipSign
 
 # Clean Rust artifacts before building
-.\scripts\build.ps1 -Clean
+.\scripts\driver.ps1 release -Clean
 
 # Provide your own certificate password
-.\scripts\build.ps1 -CertPassword 'my-secret-password'
+.\scripts\driver.ps1 release -CertPassword 'my-secret-password'
 ```
 
-The script replicates the CI pipeline locally:
+The release mode replicates the CI pipeline locally, plus the zig sidecar step that build.ps1 predated:
 
 1. Installs prerequisites via Chocolatey (cmake, rustup, node, go-task, MSVC build tools) — skipped if already present
-2. Configures the pinned Rust toolchain and `x86_64-pc-windows-msvc` target
+2. Configures the pinned Rust toolchain (read from `.tool-versions`) and `x86_64-pc-windows-msvc` target
 3. Builds the frontend (`npm ci` + `npm run build`) — skips `npm ci` when `node_modules` is already up to date
-4. Generates a self-signed `CodeSigningCert` and exports it to a temporary PFX
-5. Writes a `sign.cmd` batch wrapper that invokes `signtool.exe sign` with the PFX
-6. Calls `npx @tauri-apps/cli build --bundles nsis` with a JSON config override that sets `bundle.windows.signCommand` to `cmd /C sign.cmd %1` (`.cmd` files require `cmd.exe` to execute — they cannot be launched directly via `CreateProcess`)
-7. Cleans up the certificate and temp files
+4. Builds and stages the zig sidecar (same flags as `zig:stage`)
+5. Generates a self-signed `CodeSigningCert` and exports it to a temporary PFX
+6. Writes a `sign.cmd` batch wrapper that invokes `signtool.exe sign` with the PFX
+7. Calls `npx @tauri-apps/cli build --bundles nsis` with a JSON config override that sets `bundle.windows.signCommand` to `cmd /C sign.cmd %1` (`.cmd` files require `cmd.exe` to execute — they cannot be launched directly via `CreateProcess`)
+8. Cleans up the certificate and temp files
 
 Output is written to `target/x86_64-pc-windows-msvc/release/bundle/nsis/`.
 
 > **Note:** Signing with a self-signed certificate prevents Windows Defender false positives but does **not** eliminate SmartScreen "unrecognized publisher" warnings. That requires an EV certificate with established download reputation.
 
-#### Local Windows Smoke on a VM (pre-CI, TASK-392)
+#### Local Windows Smoke on a VM (pre-CI, TASK-369.10)
 
 Windows is the only release leg that cannot be built or run on the Mac, so
 Windows-only failures (linker, sidecar placement, NSIS packaging, WebView2
@@ -658,30 +659,47 @@ runtime) historically cost CI minutes to discover. A Windows 11 LTSC guest
 under libvirt on the Fedora host is the pre-CI gate: build with the same
 commands release.yml runs, install the artifact, launch the app.
 
+One script, two modes — `scripts/driver.ps1`. On the Mac (pwsh) it is the
+driver; shipped to the guest, the same file is the build and the smoke, so the
+logic lives in exactly one place:
+
 ```bash
-cd scripts
-./win-vm-smoke.sh provision   # one-time: choco toolchain, zig 0.16.0 pin, rustup
-./win-vm-smoke.sh all         # ship the tree, task ci:build + ci:bundle, smoke
-./win-vm-smoke.sh smoke       # re-smoke the newest artifact without rebuilding
+pwsh scripts/driver.ps1 provision   # one-time: choco toolchain, zig pin, rustup, PATH
+pwsh scripts/driver.ps1 all         # ship the tree, guest build, install + launch + verify
+pwsh scripts/driver.ps1 smoke       # re-smoke the newest artifact without rebuilding
+pwsh scripts/driver.ps1 status      # reachability + guest spec
 ```
 
-The driver reaches the guest as `ssh win11-fedora` (tailnet; override with
-`WIN_VM_SSH`). `smoke` runs `scripts/win-vm-smoke.ps1` on the guest, which
-silent-installs the NSIS `.exe` (`/S`), locates `mt.exe` across the per-machine
-and per-user install roots, launches it through a **scheduled task bound to the
-console session** (`schtasks /ru lance /it` — a GUI app started from an SSH
-session runs in the non-interactive service session and exits at once), and
-verifies: the install exit code, the sidecar `mt-zig-core.exe` next to the
-binary, `mt.exe` plus its sidecar surviving 30 s, and no `ERROR` lines in the
-app's log under AppData (read through a shared-open handle — the app holds the
-file and `Get-Content` reports 0 bytes while it does). It stops the process
-tree, deletes the task, uninstalls, and exits nonzero on any failed check.
+Connectivity needs no ssh-config entry: the guest is reached by its tailnet IP
+(`-VmHost`, default `100.98.43.12`) and its host key is pinned into a
+project-local `.cache/win-vm/known_hosts`, whose fingerprint is printed on
+first pin so it can be checked against the host's own known_hosts.
+
+The build (`-Command build` on the guest) is the CI-proven sequence de-tasked:
+`npm ci` + `npm run build`, the zig sidecar at the pinned version with the same
+flags `zig:stage` uses, then `cargo tauri build --no-bundle` and `bundle nsis`
+through `benchmarks/release-profile/tauri-build.sh` — the shared definition of
+the build command every platform column times. go-task itself is bypassed on
+Windows on purpose: its simple cmds are direct-exec'd through Go's `LookPath`
+(which does not resolve `npm` here), and its embedded shell hands `zig` a `C:\`
+path its own exec then cannot run. The smoke (`-Command smoke`) silent-installs
+the NSIS `.exe` (`/S`), locates `mt.exe` across the per-machine and per-user
+install roots, launches it through a **scheduled task bound to the console
+session** (a GUI app started from an SSH session runs in the non-interactive
+service session and exits at once), and verifies: the install exit code, the
+sidecar `mt-zig-core.exe` next to the binary, `mt.exe` plus its sidecar
+surviving 30 s, and no `ERROR` lines in the app's log under AppData (read
+through a shared-open handle — the app holds the file and `Get-Content`
+reports 0 bytes while it does). It stops the process tree, deletes the task,
+uninstalls, and exits nonzero on any failed check.
 
 Two transfer gotchas the driver handles: macOS tar needs `COPYFILE_DISABLE=1`
 or its AppleDouble entries break the guest's bsdtar, and symlink entries
 (`.claude/skills/*` editor tooling) fail on the guest and are skipped — every
 regular file the build needs extracts, and the driver compares the file count
-against the archive to enforce that.
+against the archive to enforce that. The driver also re-tars with retries,
+because a measurement chain writing into `results-<date>/` can race the archive
+("file changed as we read it").
 
 What this cannot test: CI-only code signing (the cert is generated per CI run),
 and blacksmith runner timings (the guest's 8 vCPUs are not the CI machine).
