@@ -1,8 +1,8 @@
 mf
 Linux mf 6.12.0-211.74.1.el10_2.x86_64 #1 SMP PREEMPT_DYNAMIC Thu Nov  5 06:50:12 EST 2026 x86_64 GNU/Linux
 16
-2.38 1.87 1.27 15/2584 1236773
+2.04 3.78 2.63 4/4224 1271587
 model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
-Mem:              91          44          23           0          31          46
+Mem:              91          37          20           0          42          53
 Docker version 29.6.2, build dfc4efb
-/dev/mapper/almalinux_mf--um780--xtx-home  845G  611G  235G  73% /home
+/dev/mapper/almalinux_mf--um780--xtx-home  845G  619G  227G  74% /home

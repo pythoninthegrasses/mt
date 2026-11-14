@@ -38,7 +38,8 @@ uname -a
 head -2 /etc/os-release
 echo "cores: $(nproc)  load: $(cat /proc/loadavg)"
 cargo --version
-rustc -Vv | head -3
+# `| head` would SIGPIPE rustc and pipefail would turn that into a failure.
+rustc -Vv | awk 'NR<=3'
 cargo tauri --version
 
 say "hyperfine"
