@@ -124,16 +124,29 @@ jobs:
 
       # Constant across candidates, so prepare them outside the timing loop: the
       # bundler packs app/frontend/dist and the build resolves the sidecar named by
-      # tauri.conf.json's externalBin entry. The setup action already ran `npm ci`,
-      # and these are the two prerequisites `task ci:build` declares as deps.
+      # tauri.conf.json's externalBin entry. The setup action already ran `npm ci`.
+      #
+      # The sidecar is built with zig directly rather than with `task zig:stage`
+      # because that task locates zig through mise, whose resolution returns a
+      # backslashed Windows path under Git Bash that its own `[ -x ]` precondition
+      # rejects. Same zig version (pinned), same flags and same output name as
+      # zig:stage, so the bundled artifact still holds what the release ships.
       - name: Prepare frontend bundle and Zig sidecar
         shell: bash
         run: |
           task ci:frontend-build
-          task zig:stage TARGET=x86_64-pc-windows-msvc
           test -d app/frontend/dist || { echo "app/frontend/dist missing" >&2; exit 1; }
-          test -f crates/mt-tauri/binaries/mt-zig-core-x86_64-pc-windows-msvc.exe \
-            || { echo "zig sidecar missing" >&2; exit 1; }
+
+          zig_bin="$(command -v zig || command -v zig.exe || true)"
+          [ -n "$zig_bin" ] || { echo "zig not on PATH (the Install Zig step puts it there)" >&2; exit 1; }
+          case "$zig_bin" in *\\*) zig_bin="$(cygpath -u "$zig_bin")" ;; esac
+          echo "zig $("$zig_bin" version) -> $zig_bin"
+          mkdir -p crates/mt-tauri/binaries
+          ( cd zig-core && "$zig_bin" build -Dtarget=x86_64-windows -Doptimize=ReleaseSafe \
+              -p zig-out/stage-x86_64-pc-windows-msvc )
+          cp zig-core/zig-out/stage-x86_64-pc-windows-msvc/bin/mt-zig-core.exe \
+             crates/mt-tauri/binaries/mt-zig-core-x86_64-pc-windows-msvc.exe
+          ls -l crates/mt-tauri/binaries/
 
       # The profile under test travels as env vars so the manifest never changes
       # between candidates. RUSTC_WRAPPER is cleared exactly as taskfiles/ci.yml
