@@ -66,8 +66,8 @@ repos:
         args: ['--autofix', '--indent=2', '--no-sort-keys']
         files: \.(json|jsonc)$
         # Editor configs and generated/vendored JSON: Tauri regenerates
-        # crates/mt-tauri/gen/, coverage.json is benchmark output, and the rest
-        # is tool-written or recorded data we keep as-is.
+        # crates/mt-tauri/gen/, and the rest is tool-written or recorded data
+        # we keep as-is.
         exclude: |
             (?x)^(
                 .devcontainer/devcontainer.json|
@@ -75,7 +75,6 @@ repos:
                 .vscode/settings.json|
                 .vscode/extensions.json|
                 app/frontend/package-lock.json|
-                coverage.json|
                 crates/mt-tauri/gen/.*|
                 .agents/.*\.json|
                 benchmarks/.*\.json
