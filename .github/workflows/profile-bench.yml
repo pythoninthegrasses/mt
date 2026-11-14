@@ -1,5 +1,7 @@
 # Release-profile LTO / codegen-units sweep on the real Windows release runner
-# (TASK-369.4). Dispatch-only, so ordinary PR and release runs pay nothing.
+# (TASK-369.4). Rarely run, so it is triggered by hand: either dispatch it, or push
+# a `bench-profile-*` tag (GitHub only lists dispatchable workflows that exist on
+# the default branch, so the tag is how a spike branch gets a run).
 #
 # The Windows release leg is the slowest in the matrix and cannot be measured on a
 # developer host, so the sweep times it on the actual `blacksmith-4vcpu-windows-2025`
@@ -17,20 +19,21 @@
 # (benchmarks/release-profile/linux-on-mf.sh) and the macOS column is
 # benchmarks/release-profile/sweep.sh.
 #
+# Narrowing the candidate set means editing the matrix below: an input would be
+# empty on a tag push, and `fromJSON('')` fails the matrix before any job starts.
+#
 # See docs/builds.md#release-profile for what was concluded from the results.
 name: Release Profile Bench
 
 on:
   workflow_dispatch:
     inputs:
-      combos:
-        description: 'JSON array of {lto, cgus} candidates to time'
-        required: false
-        default: '[{"lto":"true","cgus":1},{"lto":"true","cgus":4},{"lto":"true","cgus":16},{"lto":"thin","cgus":1},{"lto":"thin","cgus":4},{"lto":"thin","cgus":16},{"lto":"false","cgus":1},{"lto":"false","cgus":4},{"lto":"false","cgus":16}]'
       runs:
         description: 'hyperfine runs per candidate (cold build each)'
         required: false
         default: '2'
+  push:
+    tags: ['bench-profile-*']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -39,6 +42,8 @@ concurrency:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   TRIPLE_WINDOWS: x86_64-pc-windows-msvc
+  # Empty for a tag push, where no inputs exist.
+  BENCH_RUNS: ${{ github.event.inputs.runs || '2' }}
 
 jobs:
   windows:
@@ -48,7 +53,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        combo: ${{ fromJSON(inputs.combos) }}
+        combo:
+          - { lto: 'true', cgus: 1 }
+          - { lto: 'true', cgus: 4 }
+          - { lto: 'true', cgus: 16 }
+          - { lto: 'thin', cgus: 1 }
+          - { lto: 'thin', cgus: 4 }
+          - { lto: 'thin', cgus: 16 }
+          - { lto: 'false', cgus: 1 }
+          - { lto: 'false', cgus: 4 }
+          - { lto: 'false', cgus: 16 }
 
     steps:
       - uses: actions/checkout@v6
@@ -93,8 +107,8 @@ jobs:
           cat results/runner-spec.txt
 
       # Constant across candidates, so prepare them outside the timing loop: the
-      # bundler packs app/frontend/dist and the build needs the sidecar Tauri's
-      # externalBin entry resolves.
+      # bundler packs app/frontend/dist and the build resolves the sidecar named by
+      # tauri.conf.json's externalBin entry.
       - name: Prepare frontend bundle and Zig sidecar
         shell: bash
         run: |
@@ -115,7 +129,7 @@ jobs:
         # shellcheck disable=SC2016
         run: |
           label="windows-lto-${{ matrix.combo.lto }}-cgus${{ matrix.combo.cgus }}"
-          hyperfine --runs "${{ github.event.inputs.runs }}" --warmup 0 --shell bash \
+          hyperfine --runs "$BENCH_RUNS" --warmup 0 --shell bash \
             --time-unit second --command-name "$label" \
             --prepare 'rm -rf target' \
             --export-json "results/hyperfine-$label.json" \
