@@ -112,7 +112,7 @@ impl Drop for Sidecar {
 /// `--sabotage` support makes that case report itself as what it is.
 fn sidecar_binary() -> PathBuf {
     let host = host_triple();
-    let name = format!("mt-zig-core{host}");
+    let name = staged_sidecar_name(&host);
     let staged = fixture_gen::repo_root()
         .join("crates/mt-tauri/binaries")
         .join(&name);
@@ -170,6 +170,19 @@ fn host_triple() -> String {
         ("windows", "x86_64") => "x86_64-pc-windows-msvc".to_string(),
         (os, arch) => panic!("unmapped host triple for {os}/{arch}"),
     }
+}
+
+/// File name `task zig:stage` gives the sidecar under `crates/mt-tauri/binaries`.
+fn staged_sidecar_name(host: &str) -> String {
+    format!("mt-zig-core-{host}")
+}
+
+#[test]
+fn staged_sidecar_name_matches_tauri_external_bin_convention() {
+    assert_eq!(
+        staged_sidecar_name("x86_64-unknown-linux-gnu"),
+        "mt-zig-core-x86_64-unknown-linux-gnu"
+    );
 }
 
 /// Serializes generation across this binary's test threads: both parity tests
