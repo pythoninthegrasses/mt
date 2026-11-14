@@ -74,6 +74,17 @@ clean_cmd() {
   printf "rm -rf '%s/release' '%s/%s'" "$CARGO_TARGET_DIR" "$CARGO_TARGET_DIR" "$TRIPLE"
 }
 
+# The same candidate measured through the command the release legs run, i.e. with
+# the Tauri CLI in front of cargo (benchmarks/release-profile/tauri-build.sh). Used
+# to show that a ratio measured on the bare cargo invocation also holds for what
+# CI actually executes.
+cli_build_cmd() {
+  local lto cgus
+  lto="$(lto_param "$1")"; cgus="$2"
+  printf "env RUSTUP_TOOLCHAIN=%s CARGO_HOME='%s' CARGO_TARGET_DIR='%s' CARGO_BUILD_JOBS=%s CARGO_PROFILE_RELEASE_LTO=%s CARGO_PROFILE_RELEASE_CODEGEN_UNITS=%s TRIPLE=%s TAURI_CLI='%s' bash '%s/tauri-build.sh' build" \
+    "$RUSTUP_TOOLCHAIN" "$CARGO_HOME" "$CARGO_TARGET_DIR" "$CARGO_BUILD_JOBS" "$lto" "$cgus" "$TRIPLE" "$TAURI" "$BENCH_DIR"
+}
+
 bin_path() { echo "$CARGO_TARGET_DIR/$TRIPLE/release/mt"; }
 
 # Record binary + artifact sizes for the current contents of the target dir.
@@ -91,11 +102,15 @@ record_sizes() {
   else
     printf '%s\tbinary-bytes\tmissing\n' "$label" >>"$out"
   fi
-  # The staticlib/cdylib byproducts TASK-369.1 found in every build-script out
-  # dir: LTO cost scales with them, so record what they weigh per candidate.
+  # The staticlib/cdylib byproducts TASK-369.1 found in every build: LTO cost
+  # scales with them, so record what they weigh per candidate. Cargo 1.100 nests
+  # build-script output as build/<pkg>/<hash>/out, and also links the byproducts
+  # into the release dir itself.
   local a
-  for a in "$CARGO_TARGET_DIR"/release/build/mt-tauri-*/out/libmt_lib.a \
-           "$CARGO_TARGET_DIR/$TRIPLE"/release/build/mt-tauri-*/out/libmt_lib.a; do
+  for a in "$CARGO_TARGET_DIR/$TRIPLE"/release/libmt_lib.a \
+           "$CARGO_TARGET_DIR"/release/libmt_lib.a \
+           "$CARGO_TARGET_DIR"/release/build/mt-tauri/*/out/libmt_lib.a \
+           "$CARGO_TARGET_DIR/$TRIPLE"/release/build/mt-tauri/*/out/libmt_lib.a; do
     [ -f "$a" ] && printf '%s\tlibmt_lib.a-bytes\t%s\n' "$label" "$(stat -f%z "$a")" >>"$out"
   done
   printf '%s\ttarget-triple-kib\t%s\n' "$label" "$(du_kb "$CARGO_TARGET_DIR/$TRIPLE")" >>"$out"
@@ -122,17 +137,30 @@ record_dmg() {
 }
 
 # One candidate end to end: measured cold builds, then sizes and DMG from the
-# artifacts the last build left behind.
+# artifacts the last build left behind. A matrix takes ~40 min, so an interrupted
+# one resumes instead of re-measuring: set FORCE=1 to re-measure a candidate that
+# already has a results file.
 run_candidate() {
   local lto="$1" cgus="$2" runs="${3:-2}" label cmd
   label="$(combo_label "$lto" "$cgus")"
   cmd="$(build_cmd "$lto" "$cgus")"
   say "$label  (lto=$lto codegen-units=$cgus, $runs cold runs)"
-  "$HYPERFINE" --runs "$runs" --warmup 0 --time-unit second \
-    --command-name "$label" --prepare "$(clean_cmd)" \
-    --export-json "$RESULTS_DIR/hyperfine-$label.json" \
-    --export-markdown "$RESULTS_DIR/hyperfine-$label.md" \
-    "$cmd" | tee "$RESULTS_DIR/hyperfine-$label.txt"
+  if [ -s "$RESULTS_DIR/hyperfine-$label.json" ] && [ -s "$RESULTS_DIR/sizes-$label.tsv" ] \
+     && [ -f "$RESULTS_DIR/dmg/$label.dmg" ] && [ -z "${FORCE:-}" ]; then
+    echo "skip: $label already measured (FORCE=1 to re-measure)"
+    return 0
+  fi
+  if ! "$HYPERFINE" --runs "$runs" --warmup 0 --time-unit second \
+     --command-name "$label" --prepare "$(clean_cmd)" \
+     --export-json "$RESULTS_DIR/hyperfine-$label.json" \
+     --export-markdown "$RESULTS_DIR/hyperfine-$label.md" \
+     "$cmd" | tee "$RESULTS_DIR/hyperfine-$label.txt"; then
+    # A candidate that did not finish has no sizes worth recording, and the matrix
+    # must not lose the remaining candidates to it: the caller decides what to do.
+    echo "!! $label: build failed or hyperfine died; see $RESULTS_DIR/hyperfine-$label.txt" >&2
+    rm -f "$RESULTS_DIR/hyperfine-$label.json"   # so a resume re-measures it
+    return 1
+  fi
   record_sizes "$label"
   record_dmg "$label"
 }

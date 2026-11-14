@@ -67,7 +67,7 @@ case "$cmd" in
       exit 2
     fi
     say "size tooling"
-    size -m "$MT_ROOT/crates/mt-tauri/binaries/mt-zig-core-$TRIPLE" | head -4
+    size -m "$MT_ROOT/crates/mt-tauri/binaries/mt-zig-core-$TRIPLE" | awk 'NR<=4'
     say "ready: ./sweep.sh probe"
     ;;
 
@@ -82,12 +82,19 @@ case "$cmd" in
 
   matrix)
     runs="${1:-2}"
+    failed=()
     for lto in "${LTO_VALUES[@]}"; do
       for cgus in "${CGUS_VALUES[@]}"; do
-        run_candidate "$lto" "$cgus" "$runs"
+        # One candidate blowing up (OOM in the LTO linker, a build error) must not
+        # cost the rest of the ~40 min pass; summary flags what is missing.
+        run_candidate "$lto" "$cgus" "$runs" || failed+=("$(combo_label "$lto" "$cgus")")
       done
     done
     "$HERE/sweep.sh" summary
+    if [ "${#failed[@]}" -gt 0 ]; then
+      echo "incomplete candidates: ${failed[*]}" >&2
+      exit 1
+    fi
     ;;
 
   head2head)
@@ -105,6 +112,27 @@ case "$cmd" in
       --export-json "$RESULTS_DIR/hyperfine-head2head.json" \
       --export-markdown "$RESULTS_DIR/hyperfine-head2head.md" \
       "${cmds[@]}" | tee "$RESULTS_DIR/hyperfine-head2head.txt"
+    ;;
+
+  cli-head2head)
+    [ $# -ge 1 ] || { echo "usage: cli-head2head <lto:cgus> [<lto:cgus>...]" >&2; exit 2; }
+    # Same candidates through the command the release legs run (cargo-tauri in
+    # front of cargo). If the ranking from the bare cargo build does not survive
+    # this, the CI-parity claim would be wrong, so it is checked rather than
+    # assumed. One hyperfine run => directly comparable ratios.
+    args=(); names=(); cmds=()
+    for spec in "$@"; do
+      lto="${spec%%:*}"; cgus="${spec##*:}"
+      cmds+=("$(cli_build_cmd "$lto" "$cgus")")
+      names+=("cli-$(combo_label "$lto" "$cgus")")
+    done
+    for n in "${names[@]}"; do args+=(--command-name "$n"); done
+    say "head-to-head through the tauri CLI: ${names[*]}"
+    "$HYPERFINE" --runs 3 --warmup 0 --time-unit second \
+      --prepare "$(clean_cmd)" "${args[@]}" \
+      --export-json "$RESULTS_DIR/hyperfine-cli-head2head.json" \
+      --export-markdown "$RESULTS_DIR/hyperfine-cli-head2head.md" \
+      "${cmds[@]}" | tee "$RESULTS_DIR/hyperfine-cli-head2head.txt"
     ;;
 
   ci-parity)
