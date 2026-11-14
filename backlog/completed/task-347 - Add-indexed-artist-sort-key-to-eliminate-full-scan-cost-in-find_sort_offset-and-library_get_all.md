@@ -3,10 +3,10 @@ id: TASK-347
 title: >-
   Add indexed artist sort key to eliminate full-scan cost in find_sort_offset
   and library_get_all
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-05-24 20:10'
-updated_date: '2026-05-25 03:35'
+updated_date: '2026-11-14T05:36:00Z'
 labels:
   - backend
   - performance
@@ -39,7 +39,13 @@ Option 3 is most practical: drop strip_sort_prefix from the index and apply it o
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 library_get_all artist-sort queries do not perform a full filesort on libraries >= 10k tracks (verify via EXPLAIN QUERY PLAN)
-- [ ] #2 find_sort_offset resolves in < 50ms on 40k-track library
-- [ ] #3 Existing sort order and type-to-jump correctness unchanged
+- [x] #1 library_get_all artist-sort queries do not perform a full filesort on libraries >= 10k tracks (verify via EXPLAIN QUERY PLAN)
+- [x] #2 find_sort_offset resolves in < 50ms on 40k-track library
+- [x] #3 Existing sort order and type-to-jump correctness unchanged
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-14 (backlog tidy): closed after verifying the tree and the recorded measurements. AC#1: db/sort_key_test.rs::test_indexed_query_plan_uses_covering_index asserts via EXPLAIN QUERY PLAN that the artist-sort prefix lookup uses the covering index; db/benchmarks.rs is the 40k-row harness. AC#2: the same harness's test_prefix_lookup_p95_under_100ms_on_40k_library records indexed p95 6.07ms vs legacy 141.4ms on 40k rows (release build), i.e. well under the 50ms budget for the offset lookup. AC#3: correctness is pinned by test_indexed_prefix_lookup_offsets_match_sample_library and test_ignore_words_semantics_match_the_legacy_path, which prove the indexed path returns the same offsets as the legacy ROW_NUMBER() path. Landed as TASK-350.2.
+<!-- SECTION:NOTES:END -->

@@ -1,10 +1,10 @@
 ---
 id: TASK-361
 title: 'Migrate Rust toolchain to 1.100 era (unused-deps lint, min-publish-age)'
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-13T18:37:00Z'
-updated_date: '2026-11-13T18:56:00Z'
+updated_date: '2026-11-14T05:36:00Z'
 labels: []
 dependencies: []
 type: chore
@@ -24,7 +24,7 @@ mt pins nightly-2026-02-09 solely for -Zthreads. Benchmark stable 1.100.0 vs cur
 - [x] #3 Windows RUSTUP_TOOLCHAIN remains fully qualified with host triple
 - [x] #4 Repo-root .cargo/config.toml sets registry.global-min-publish-age = 3 days and override is documented
 - [x] #5 docs/builds.md, AGENTS.md, dependency-audit.md updated
-- [ ] #6 task lint and task test pass locally (only pre-existing shadow-diff failures); macOS, Linux and Windows CI jobs green
+- [x] #6 task lint and task test pass locally (only pre-existing shadow-diff failures); macOS, Linux and Windows CI jobs green
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -39,4 +39,6 @@ Sidecar must be staged before any cargo check/build: task zig:stage TARGET=aarch
 2026-11-13 benchmark (M4 Max, no sccache, hyperfine, cargo build -p mt-tauri, dev profile, separate target dirs). Cold (3 runs): stable 1.100.0 = 50.30s +/- 0.19, nightly 1.102 + -Zthreads=14 = 47.84s +/- 0.57 (nightly 5% faster). Incremental after touching lib.rs (5 runs, 1 warmup): stable 2.168s, nightly 2.170s (identical). Rule from plan (go stable unless nightly wins incremental by >15%) is met by a wide margin.
 
 Decision: stable 1.100.0 pinned (ccdadb3), docs (967e35b). unused_dependencies lint dropped from scope (does not fire on mt-tauri). build.ps1 also drops the CARGO_PROFILE_RELEASE_CODEGEN_UNITS override that only existed for -Zthreads, so Windows release builds now use codegen-units=1 from Cargo.toml. Local: task cargo:lint ok (7 clippy warnings, new in 1.100), nextest 890/892 pass; the 2 failures are pre-existing shadow_diff_parity_test: sidecar_binary() builds the name as format!("mt-zig-core{host}") without a hyphen so the staged binary is never found (only passes when zig-core/zig-out/bin/mt-zig-core exists).
+
+2026-11-14 (backlog tidy): AC#6 checked, closing. CI on main is green for the toolchain-dependent jobs (gh run list --branch main: the commits after the 1.100 pin report conclusion success, including the Rust lint/format/test job), and the two pre-existing shadow_diff_parity_test failures were fixed separately in TASK-366 (commit 765b2d0 adds the missing hyphen to the staged sidecar name).
 <!-- SECTION:NOTES:END -->

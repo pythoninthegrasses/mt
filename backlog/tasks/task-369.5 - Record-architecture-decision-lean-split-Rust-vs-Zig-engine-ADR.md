@@ -4,7 +4,7 @@ title: 'Record architecture decision: lean-split Rust vs Zig engine (ADR)'
 status: To Do
 assignee: []
 created_date: '2026-11-14T04:24:00Z'
-updated_date: '2026-11-14T04:24:00Z'
+updated_date: '2026-11-14T05:37:00Z'
 labels: []
 dependencies:
   - TASK-369.1
@@ -34,3 +34,9 @@ TASK-355 proves the mechanics of a Zig sidecar but deliberately answers only the
 - [ ] #4 Recommendation names concrete next actions (e.g. which subsystem ports, which crates still split) and creates follow-up tasks for them via Backlog
 - [ ] #5 TASK-355.6 POC report and TASK-353 results cited as inputs, with divergences explained
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-14 (backlog tidy): TASK-355's AC#2 (written recommendation with measured numbers: build times, CI delta, dependency-count delta) was handed here when the POC was closed, so treat it as part of this ADR's scope. Measured inputs already recorded: TASK-369.1 baseline in benchmarks/edit-to-run/results-2026-11-13/ (2.2s build / 1.0s check warm, 0.6s main.rs, 6.9s with incremental wiped, 35.2s cold; target/ 12.3 GiB with 10.03 GiB in target/debug/build; crate-type = ["rlib"] what-if: -17s debug, -81s release, -1.75 GiB per worktree; 1270 cargo-tree lines / 421 unique crates normal-deps) and TASK-355's Zig POC results (read-only /api/library endpoint with bearer-token auth and a shadow-diff parity harness against the Rust path).
+<!-- SECTION:NOTES:END -->

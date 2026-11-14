@@ -4,7 +4,7 @@ title: Refactor library scroll behavior to preview upcoming cursor batches
 status: In Progress
 assignee: []
 created_date: '2026-04-15 03:21'
-updated_date: '2026-05-25 06:24'
+updated_date: '2026-11-14T05:36:00Z'
 labels:
   - frontend
   - backend
@@ -150,4 +150,6 @@ TASK-333 (commit f8f2e1c) fixed the FOUC but exposed this blank-during-scroll pr
 <!-- NOTES:END -->
 
 **2026-05-03**: Implemented Option A (SWR). Added `_swrSnapshot` and `_swrGeneration` to `library-browser` component. `visibleTracks` now caches the last successful render result and returns it when the current viewport page is unloaded. Snapshot clears on `_loadGeneration` change (section switch, search, sort). Tests added in `__tests__/library-browser.swr.test.js` (9 tests). AC#1 addressed by keeping stale rows visible; AC#5 partially addressed.
+
+2026-11-14 (backlog tidy): left In Progress, but the status needs your read. Option A (SWR snapshot) is implemented — _swrSnapshot/_swrGeneration in the library-browser component, 9 tests in __tests__/library-browser.swr.test.js — while AC#5 is only partial and Option B (cursor/cache layer) is not started. Since this was written, the blank-row family was closed elsewhere: TASK-344, TASK-346, TASK-348 and TASK-349 (type-to-jump blank viewport/flash) are Done and archived, and TASK-350.1/.2 shipped. Recommend deciding whether the remaining ACs are still wanted or are now covered by that chain, then closing or re-scoping rather than leaving it open by default.
 <!-- SECTION:NOTES:END -->

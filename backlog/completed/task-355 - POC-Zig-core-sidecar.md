@@ -1,9 +1,10 @@
 ---
 id: TASK-355
 title: 'POC: Zig core sidecar'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-11 00:38'
+updated_date: '2026-11-14T05:36:00Z'
 labels: []
 dependencies:
   - TASK-352
@@ -22,3 +23,9 @@ The goal is an evidence-based go/no-go decision on migrating the core engine (da
 - [ ] #1 All six subtasks are complete
 - [ ] #2 A written recommendation with measured numbers (build times, CI delta, dependency-count delta) is recorded on this task
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-14 (backlog tidy): closing the POC. AC#1 met — all six subtasks are complete (355.1 toolchain/Taskfile/CI, 355.2 vendored SQLite binding with strip_sort_prefix parity, 355.3 read-only HTTP endpoint, 355.4 packaged/signed sidecar, 355.5 shadow-diff parity harness, 355.6 frontend flip with the injection verified against the live sidecar: GET /api/library with the bearer token -> 200 total=301, without -> 401). AC#2 deliberately NOT checked: the written recommendation with measured numbers (build times, CI delta, dependency-count delta) is the deliverable of TASK-369.5, and the edit-to-run / disk baseline it needs now exists in TASK-369.1 (benchmarks/edit-to-run/results-2026-11-13/): 2.2s build / 1.0s check warm, 35.2s cold, 12.3 GiB target with 10 GiB in target/debug/build, and the crate-type what-if (-17s debug, -81s release, -1.75 GiB). Marking the POC Done so the board reflects reality; the ADR in TASK-369.5 carries the decision.
+<!-- SECTION:NOTES:END -->
