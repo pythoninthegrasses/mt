@@ -46,7 +46,7 @@ uv run pytest -v
 task test
 
 # Run pre-commit hooks
-pre-commit run --all-files
+prek run --all-files
 # or
 task pre-commit
 

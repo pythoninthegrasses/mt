@@ -68,7 +68,7 @@ uv run scripts/agent.py --batch --prompts-file prompts.txt
 Batch mode shares a single DB connection and Ollama client across all prompts,
 prints per-prompt results as they complete, and outputs a summary table:
 
-```
+```text
 ================================================================================
 BATCH SUMMARY — qwen3.5:9b
 ================================================================================
@@ -207,7 +207,7 @@ Exhausted 5 turns. Produced a 2-track playlist of keyword matches.
 **Artist variety after shuffling** — The final playlist order spreads same-artist
 tracks apart via greedy algorithm:
 
-```
+```text
 SHUFFLED order (artists spread out):
   [70060] Massive Attack - Angel
   [68658] Beach House - Sparks

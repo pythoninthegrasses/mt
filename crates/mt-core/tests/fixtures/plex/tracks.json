@@ -10,7 +10,15 @@
         "year": 1969,
         "index": 1,
         "duration": 259000,
-        "Media": [{"Part": [{"key": "/library/parts/200/1234/file.flac"}]}]
+        "Media": [
+          {
+            "Part": [
+              {
+                "key": "/library/parts/200/1234/file.flac"
+              }
+            ]
+          }
+        ]
       },
       {
         "ratingKey": "201",
@@ -30,7 +38,15 @@
         "year": 1969,
         "index": 3,
         "duration": 207000,
-        "Media": [{"Part": [{"key": "/library/parts/202/5678/file.mp3"}]}]
+        "Media": [
+          {
+            "Part": [
+              {
+                "key": "/library/parts/202/5678/file.mp3"
+              }
+            ]
+          }
+        ]
       }
     ]
   }

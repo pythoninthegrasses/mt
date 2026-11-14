@@ -1,2 +1,6 @@
 .claude/**
+.agents/**
+.serena/**
 backlog/**
+benchmarks/**
+CHANGELOG.md

@@ -44,9 +44,9 @@ tasks:
       - task --list
 
   pre-commit:
-    desc: "Run pre-commit hooks"
+    desc: "Run pre-commit hooks (prek reads .pre-commit-config.yml)"
     cmds:
-      - pre-commit run --all-files
+      - prek run --all-files
 
   lint:
     desc: "Run linters"

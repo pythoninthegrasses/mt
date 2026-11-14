@@ -27,7 +27,7 @@ When completing coding tasks in the mt project, ensure these steps are followed:
 - **Rust backend**: Write `#[test]` unit tests in the relevant module
 
 ## Pre-commit Hooks
-1. **Run Hooks**: Execute `pre-commit run --all-files` to run all configured hooks
+1. **Run Hooks**: Execute `prek run --all-files` to run all configured hooks
 2. **Address Issues**: Fix any issues identified by the hooks
 
 ## Manual Testing

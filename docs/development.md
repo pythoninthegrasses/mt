@@ -185,7 +185,8 @@ cd app/frontend && npx vitest run               # Vitest unit/property tests
 cd app/frontend && npx playwright test          # Playwright E2E
 
 # Pre-commit hooks
-pre-commit run --all-files
+prek run --all-files                  # pinned in .tool-versions; reads .pre-commit-config.yml
+pre-commit run --all-files --config .pre-commit-config.yml   # if using pre-commit itself
 
 # Clean build artifacts
 cargo clean

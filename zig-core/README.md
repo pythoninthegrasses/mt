@@ -170,7 +170,7 @@ concerns in the Rust crate and are deliberately not ported — this sidecar is r
 
 `src/server.zig` binds `127.0.0.1` on an OS-assigned port (never hardcoded) and serves one route:
 
-```
+```http
 GET /api/library?search=&artist=&album=&source_filter=&limit=&offset=&sort_by=&sort_order=&ignore_words=
 ```
 

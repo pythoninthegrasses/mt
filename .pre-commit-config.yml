@@ -22,12 +22,6 @@ repos:
         files: \.(ts|tsx|js|jsx|json|jsonc)$
       - id: deno-lint
         files: \.(ts|tsx|js|jsx)$
-  - repo: https://github.com/thibaudcolas/pre-commit-stylelint
-    rev: v17.5.0
-    hooks:
-      - id: stylelint
-        args: [--fix]
-        files: \.(css|scss|sass|less|html|js|jsx|ts|tsx)$
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.48.0
     hooks:
@@ -36,9 +30,17 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # Vendored third-party sources are never reformatted. Mirrors the
+      # "Vendor libraries" exclude in deno.jsonc and the -text attribute for
+      # zig-core/vendor/ in .gitattributes. Anchored here and aliased by the
+      # text-mutating hooks below; overrides the hook's own exclude when used.
       - id: check-added-large-files
         args: ['--maxkb=1024']
-        exclude: ^zig-core/vendor/
+        exclude: &vendored |
+            (?x)^(
+                app/frontend/public/js/basecoat/.*|
+                zig-core/vendor/.*
+            )$
       - id: check-executables-have-shebangs
         files: \.(sh)$
       - id: check-merge-conflict
@@ -49,9 +51,12 @@ repos:
       - id: detect-private-key
       - id: end-of-file-fixer
         files: \.(sh|rs|js|ts|css|html)$
+        exclude: *vendored
       - id: fix-byte-order-marker
+        exclude: *vendored
       - id: mixed-line-ending
         files: \.(sh|rs|js|ts|css|html)$
+        exclude: *vendored
       - id: check-toml
         files: \.toml$
       - id: check-yaml
@@ -60,10 +65,18 @@ repos:
       - id: pretty-format-json
         args: ['--autofix', '--indent=2', '--no-sort-keys']
         files: \.(json|jsonc)$
+        # Editor configs and generated/vendored JSON: Tauri regenerates
+        # crates/mt-tauri/gen/, coverage.json is benchmark output, and the rest
+        # is tool-written or recorded data we keep as-is.
         exclude: |
             (?x)^(
                 .devcontainer/devcontainer.json|
                 .vscode/launch.json|
                 .vscode/settings.json|
                 .vscode/extensions.json|
+                app/frontend/package-lock.json|
+                coverage.json|
+                crates/mt-tauri/gen/.*|
+                .agents/.*\.json|
+                benchmarks/.*\.json
             )$

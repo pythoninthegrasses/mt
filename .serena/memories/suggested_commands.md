@@ -62,7 +62,7 @@ cd app/frontend && npx playwright test --debug tests/sidebar.spec.js       # Deb
 
 ### Pre-commit
 ```bash
-pre-commit run --all-files
+prek run --all-files
 ```
 
 ## Task Runner Commands (Taskfile)

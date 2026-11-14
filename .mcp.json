@@ -2,7 +2,9 @@
   "mcpServers": {
     "playwright": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest"]
+      "args": [
+        "@playwright/mcp@latest"
+      ]
     },
     "serena": {
       "command": "uvx",
@@ -18,7 +20,10 @@
     },
     "tauri-mcp": {
       "command": "npx",
-      "args": ["-y", "@hypothesi/tauri-mcp-server"]
+      "args": [
+        "-y",
+        "@hypothesi/tauri-mcp-server"
+      ]
     }
   }
 }

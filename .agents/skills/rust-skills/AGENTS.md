@@ -1,1 +1,1 @@
-/var/folders/_w/dg_ksnnj3w3fmg28znbkxltc0000gp/T/skills-dReYXE/SKILL.md
+SKILL.md

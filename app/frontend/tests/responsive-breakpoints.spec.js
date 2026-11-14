@@ -574,4 +574,3 @@ test.describe('Responsive Breakpoints', () => {
     });
   });
 });
-
