@@ -63,9 +63,11 @@ MT uses a modern pure-Rust architecture:
 
 ### Rust Workspace
 
-The backend is being split into two crates as part of TASK-353:
+The backend is split into two crates (TASK-353). The split is behavior-preserving: command
+names, registration, and the `Result<_, String>` error strings the frontend reads are the
+same as they were in the single crate.
 
-| Crate | Current responsibility |
+| Crate | Responsibility |
 |-------|------------------------|
 | `crates/mt-core/` | Tauri-independent SQLite database, pure scanner, Last.fm client, Plex client/merge, audio tag reading/writing, library view-model layer, queue orchestration, network file cache, and platform mount detection |
 | `crates/mt-tauri/` | Desktop application, command/event adapters, audio, scanner artwork, and remaining integration modules |
@@ -74,7 +76,9 @@ The backend is being split into two crates as part of TASK-353:
 metadata, and library APIs internally
 so existing desktop callers retain the same paths. Their implementations and
 unit/property tests live only in `mt-core`; run them without linking the desktop framework
-using `cargo nextest run -p mt-core`.
+using `cargo nextest run -p mt-core`. The queue adapter is the exception: it calls
+`mt_core::queue` under an alias, because a bare `queue::` in the desktop module has always
+meant the SQL layer (`crate::db::queue`).
 
 The desktop `db` adapter retains only the test-only Zig database fixture generator,
 preserving its existing `db::fixture_gen` test filter and sidecar parity harness.
@@ -122,8 +126,9 @@ shadow-diff harness.
 
 The core `queue` module owns what the `queue_*` commands wrapped around the queue's SQL
 layer: the response shapes the frontend reads, which positions a write landed on, and the
-order a request's announcements go out in — a reorder is a `shuffled` followed by a state
-change, a play context is `cleared` followed by a state change. It also owns the four
+order a request's announcements go out in — enabling shuffle announces a `shuffled` update
+and then a state change, adding to play-next announces `added` and then a state change, a
+play context announces `cleared` and then a state change. It also owns the four
 navigation commands, which differ only in how they enter the state machine, and the two
 play-context commands. Functions take a `Database` and return the same `Result<_, String>`
 the commands returned, so frontend-visible error strings are unchanged. The desktop
@@ -135,8 +140,12 @@ re-exported through the adapter.
 
 CI checks the core's transitive normal, build, and test dependencies across all
 targets and features, rejecting Tauri, Tao, Wry, WebKit, and Objective-C 2 crates.
-Plex download orchestration remains pending; this initial split does not yet isolate
-all backend tests from Tauri.
+The Plex downloader is the one orchestration module that stays in the desktop crate by
+design: it streams to disk with `tokio`'s `fs` and `io-util` features, resolves the music
+directory through `dirs`, reads the size cap from `settings.json`, and emits its own
+progress events — desktop concerns the core has no reason to carry, and pulling them in
+would mean adding dependencies the core does not otherwise need. The audio engine,
+artwork, watcher, and download tests therefore still link the desktop framework.
 
 ### Tauri Core (Rust)
 
@@ -315,27 +324,31 @@ mt/
 ├── crates/
 │   ├── mt-core/            # Tauri-independent library
 │   │   ├── Cargo.toml
-│   │   └── src/
-│   │       ├── cache/      # Network file cache and mount detection
-│   │       ├── db/         # Database operations and tests
-│   │       ├── lastfm/     # Last.fm client, signing, rate limiting, DTOs, and tests
-│   │       ├── library/    # Library queries, sections, mutations, reconcile pipeline
-│   │       ├── metadata/   # Audio tag reading/writing and tests
-│   │       ├── plex/       # Plex HTTP client, DTOs, library merge, and tests
-│   │       ├── queue/      # Queue orchestration, announcements, playback seam
-│   │       ├── scanner/    # Pure scanning, metadata parsing, and tests
-│   │       └── lib.rs
+│   │   ├── src/
+│   │   │   ├── cache/      # Network file cache and mount detection
+│   │   │   ├── db/         # Database operations and tests
+│   │   │   ├── lastfm/     # Last.fm client, signing, rate limiting, DTOs, and tests
+│   │   │   ├── library/    # Library queries, sections, mutations, reconcile pipeline
+│   │   │   ├── metadata/   # Audio tag reading/writing and tests
+│   │   │   ├── plex/       # Plex HTTP client, DTOs, library merge, and tests
+│   │   │   ├── queue/      # Queue orchestration, announcements, playback seam
+│   │   │   ├── scanner/    # Pure scanning, metadata parsing, and tests
+│   │   │   └── lib.rs
+│   │   └── tests/fixtures/ # Shared Plex mock-server fixtures
 │   └── mt-tauri/           # Desktop app and remaining backend modules
 │       ├── src/
 │       │   ├── main.rs     # Entry point
+│       │   ├── lib.rs      # Module registration and command dispatch
 │       │   ├── audio/      # Audio engine module
-│       │   ├── commands/   # Tauri command handlers
+│       │   ├── commands/   # Tauri command handlers (queue, audio, plex, …)
 │       │   ├── db.rs       # Core database re-export; desktop test fixture hook
+│       │   ├── events.rs   # EventEmitter abstraction over the desktop events
 │       │   ├── lastfm/     # Core re-exports and desktop credential loading
+│       │   ├── library/    # Library command adapters over the core view models
 │       │   ├── metadata.rs # Core re-exports and metadata editor commands
 │       │   ├── plex/       # Core re-exports and desktop downloads
 │       │   ├── scanner/    # Core re-exports, artwork, and scan commands
-│       │   └── watcher/    # File system monitoring
+│       │   └── watcher.rs  # File system monitoring
 │       ├── Cargo.toml
 │       └── tauri.conf.json
 ├── app/frontend/           # Frontend source
