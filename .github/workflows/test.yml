@@ -11,6 +11,11 @@ on:
         options:
           - blacksmith-4vcpu-ubuntu-2404
           - blacksmith-4vcpu-ubuntu-2404-mt
+      dep-audit:
+        description: 'Run the per-platform dependency audit matrix (TASK-369.3)'
+        required: false
+        default: false
+        type: boolean
   pull_request:
     paths:
       - 'crates/**'
@@ -158,6 +163,52 @@ jobs:
       - name: Run shadow-diff parity harness
         continue-on-error: true
         run: task ci:shadow-diff TARGET=x86_64-unknown-linux-gnu
+
+  # On-demand dependency audit (TASK-369.3): runs the unused-deps fallback
+  # lints (task ci:unused-deps) per platform x feature on native runners.
+  # cargo::unused_dependencies does not fire on mt-tauri's target shapes, and
+  # a dep unused on one platform or feature set can be load-bearing elsewhere,
+  # so trustworthy results need the full matrix on clean checkouts (a warm
+  # local target/ replays stale freshness). Dispatch-only: keeps ordinary PR
+  # runs free, rerun it whenever deps change or before a re-audit.
+  # See docs/builds.md#dependency-audit.
+  dep-audit:
+    name: Dep Audit (${{ matrix.platform }}/${{ matrix.feature }})
+    if: ${{ github.event.inputs.dep-audit == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos
+            os: [macOS, ARM64]
+            target: aarch64-apple-darwin
+          - platform: linux
+            os: ${{ inputs.linux-runner || 'blacksmith-4vcpu-ubuntu-2404' }}
+            target: x86_64-unknown-linux-gnu
+          - platform: windows
+            os: blacksmith-4vcpu-windows-2025
+            target: x86_64-pc-windows-msvc
+        feature: [default, agent, mcp, devtools]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Tauri build environment
+        uses: ./.github/actions/setup-tauri-build
+        with:
+          mode: check
+
+      - name: Audit (${{ matrix.feature }})
+        if: runner.os != 'Windows'
+        shell: bash
+        run: task ci:unused-deps TARGET=${{ matrix.target }} FEATURE=${{ matrix.feature }}
+
+      - name: Audit (${{ matrix.feature }}) (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: task ci:unused-deps TARGET=${{ matrix.target }} FEATURE=${{ matrix.feature }}
 
   build:
     name: Build (${{ matrix.platform }})

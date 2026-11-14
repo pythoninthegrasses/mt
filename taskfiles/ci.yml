@@ -177,6 +177,34 @@ tasks:
     requires:
       vars: [TARGET]
 
+  unused-deps:
+    desc: "Dependency audit: unused-deps fallback lints for one feature set (FEATURE=default|agent|mcp|devtools)"
+    summary: |
+      TASK-369.3 audit entry point. cargo::unused_dependencies never fires on
+      mt-tauri's bin+lib target shapes (TASK-361), so this runs the two
+      documented fallbacks: rustc's -W unused-crate-dependencies on the lib
+      unit, and cargo's hidden diagnostics (CARGO_LOG debug rule) over all
+      targets, which is the only path that inspects dev-dependencies and
+      surfaces feature-activation/version-pinning false positives.
+
+      Run per platform x feature on a clean runner for trustworthy output:
+        task ci:unused-deps TARGET=aarch64-apple-darwin FEATURE=agent
+      The Test workflow's dep-audit job runs the full matrix on demand
+      (workflow_dispatch input). See docs/builds.md#dependency-audit.
+    deps:
+      - task: :zig:stage-placeholder
+        vars:
+          TARGET: '{{.TARGET}}'
+    env:
+      RUSTUP_TOOLCHAIN: '{{if and (eq OS "windows") .PINNED_RUST}}{{.PINNED_RUST}}-x86_64-pc-windows-msvc{{else if .PINNED_RUST}}{{.PINNED_RUST}}{{end}}'
+      CARGO_LOG: cargo::diagnostics::rules::unused_dependencies=debug
+    vars:
+      FEATURE: '{{.FEATURE | default "default"}}'
+      FEATURE_FLAG: '{{if ne .FEATURE "default"}}--features {{.FEATURE}}{{end}}'
+    cmds:
+      - cargo rustc -p mt-tauri --lib {{.FEATURE_FLAG}} -- -W unused-crate-dependencies
+      - cargo check --workspace --all-targets {{.TARGET_FLAG}} {{.FEATURE_FLAG}}
+
   check:
     desc: "Run cargo check (TARGET required)"
     summary: |
