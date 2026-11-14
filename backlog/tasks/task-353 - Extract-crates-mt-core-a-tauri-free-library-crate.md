@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@opencode'
 created_date: '2026-09-11 00:38'
-updated_date: '2026-11-14T19:08:00Z'
+updated_date: '2026-11-14T19:14:00Z'
 labels: []
 dependencies:
   - TASK-352
@@ -35,6 +35,8 @@ Core logic and its roughly 910 tests should compile and run without linking taur
 1. Audit current module dependencies and TASK-352 measurements; preserve command names and event behavior. 2. Establish mt-core as a workspace library with an initial behavior-preserving cache extraction and mt-tauri re-export; validate isolated tests and native adapter compilation as the first atomic milestone. 3. Move db, pure scanner, Last.fm and Plex modules into mt-core, exposing only cross-crate APIs; keep artwork, Tauri settings/download adapters and metadata command wrappers in mt-tauri. 4. Push library/queue database orchestration into the core while retaining event emission in adapters. 5. Enforce the no-Tauri transitive dependency boundary in CI; run both nextest suites and the unmodified Playwright suite. 6. Record per-crate build/test timings and dependency footprint with platform/cache caveats against TASK-352; update docs/tauri-architecture.md. Keep this task In Progress until all acceptance criteria have evidence.
 
 Continuation milestone: move the self-contained db implementation and tests into mt-core; expose the database APIs consumed by desktop modules, keep a tiny mt-tauri db re-export adapter and desktop-only Zig fixture generator so parity tests and task zig:fixture retain their existing paths. Move pool dependencies into core; preserve SQL/schema/behavior. Validate both nextest suites, desktop compilation, core dependency guard, lint/format, update partial-state architecture docs and record an atomic commit.
+
+Scanner continuation milestone: move scanner shared types, fingerprint, inventory, metadata parsing, scan orchestration and existing tests/benchmarks into mt-core without changing behavior; expose only desktop-consumed APIs, keep artwork/artwork_cache/commands and a re-export adapter in mt-tauri. Move scanner-only dependencies, update partial architecture docs, validate both nextest suites and desktop type checking plus lint/format and the CI dependency guard, and commit this bounded milestone. Last.fm/Plex, standalone metadata command wrappers, library/queue orchestration and final benchmark/Playwright evidence remain subsequent work.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -53,4 +55,10 @@ Next milestone: extract db and pure scanner/Last.fm/Plex modules, adjusting only
 Validation: cargo nextest run -p mt-core: 377 passed, 1 skipped (reported compile 7.03s; test 2.279s); cargo nextest run -p mt-tauri: 518 passed, 1 skipped (reported compile 1m11s; test 2.111s), including real Rust/Zig fixture parity and sabotage detection. Total remains 895 passed/2 ignored, with 362 database tests now isolated from desktop linkage. cargo check -p mt-tauri --tests, task lint, task format, cargo fmt --all -- --check, cargo test -p mt-core --doc, exact CI all-target/all-feature dependency guard, bash -n benchmarks/edit-to-run/bench.sh and git diff --check passed. Timing values are opportunistic macOS runs with existing caches and concurrent lint activity, NOT controlled measurements or comparable speedups against TASK-352's Linux baseline.
 
 Next: move pure scanner/Last.fm/Plex logic into core and split Tauri-bound metadata/download/settings adapters; then extract remaining library/queue orchestration, run the unmodified full Playwright suite, and record controlled final timing/footprint comparisons. No final acceptance criteria checked and status remains In Progress.
+
+2026-11-14 scanner extraction milestone: moved shared scan types, fingerprint/content hashing, filesystem inventory, metadata parsing, two-phase scan orchestration, and existing scanner tests/benchmarks into mt-core/src/scanner. Desktop scanner/mod.rs re-exports the core APIs while retaining artwork, artwork_cache, and commands unchanged. Exposed only desktop-consumed functions/modules; internal inventory/batch helpers remain crate-private. Added same-version lofty/rayon/walkdir core dependencies, removed desktop-only direct walkdir/sha2 dependencies now unused there; lofty/rayon remain desktop dependencies for existing consumers. Updated partial-state architecture documentation. Compared each relocated source against HEAD after normalizing visibility and module declarations: implementation/test bodies unchanged (benchmark invocation now selects mt-core).
+
+Validation: cargo nextest run -p mt-core: 414 passed, 1 skipped (reported compile 4.47s; tests 2.030s); cargo nextest run -p mt-tauri: 481 passed, 1 skipped (reported compile 1m24s; tests 1.748s), including unchanged sidecar parity tests. Total remains 895 passed/2 ignored, with 37 additional scanner tests isolated from desktop linkage. cargo check -p mt-tauri --tests, task lint, task format, cargo test -p mt-core --doc, exact CI locked all-target/all-feature normal/build/dev dependency guard, and git diff --check passed. These are opportunistic macOS timings with existing caches and concurrent lint activity, not controlled benchmarks or comparable speedups against TASK-352's Linux baseline. Full Playwright suite not run for this intermediate milestone.
+
+Next: extract Last.fm and pure Plex logic, split standalone metadata and Plex download/settings adapters; then library/queue orchestration, full unmodified Playwright validation and controlled final per-crate timing/footprint comparison. Task remains In Progress; no final acceptance criteria checked.
 <!-- SECTION:NOTES:END -->

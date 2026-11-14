@@ -1,6 +1,6 @@
 //! Performance benchmarks for the scanner module.
 //!
-//! Run with: cargo test --release scanner::benchmarks -- --nocapture --test-threads=1
+//! Run with: cargo test -p mt-core --release scanner::benchmarks -- --nocapture --test-threads=1
 
 #[cfg(test)]
 mod tests {

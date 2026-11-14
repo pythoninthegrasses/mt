@@ -76,13 +76,11 @@ unicode-normalization = "0.1"
 # Filesystem watching with debouncing
 notify-debouncer-full = "0.5"
 
-# Scanner (filesystem traversal, parallel processing)
-walkdir = "2"
+# Parallel processing and artwork encoding
 rayon = "1.10"
 base64 = "0.22"
 
 # Hashing
-sha2 = "0.10.9"
 md5 = "0.7"
 
 # LRU cache for artwork

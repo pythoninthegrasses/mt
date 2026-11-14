@@ -31,7 +31,7 @@ pub struct FileFingerprint {
 
 impl FileFingerprint {
     /// Create a new fingerprint from file metadata
-    pub(crate) fn from_path(path: &Path) -> ScanResult<Self> {
+    pub fn from_path(path: &Path) -> ScanResult<Self> {
         let metadata = fs::metadata(path)?;
 
         let mtime_ns = metadata
@@ -63,7 +63,7 @@ impl FileFingerprint {
     }
 
     /// Create a fingerprint from database values
-    pub(crate) fn from_db(mtime_ns: Option<i64>, size: i64) -> Self {
+    pub fn from_db(mtime_ns: Option<i64>, size: i64) -> Self {
         FileFingerprint {
             mtime_ns,
             ctime_ns: None,
@@ -103,7 +103,7 @@ const HASH_CHUNK_SIZE: u64 = 64 * 1024;
 /// to be different files.
 ///
 /// Returns a hex-encoded SHA256 hash prefixed with "sha256:".
-pub(crate) fn compute_content_hash(path: &Path) -> std::io::Result<String> {
+pub fn compute_content_hash(path: &Path) -> std::io::Result<String> {
     let mut file = File::open(path)?;
     let file_size = file.metadata()?.len();
 

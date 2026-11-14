@@ -15,7 +15,7 @@ use crate::scanner::fingerprint::FileFingerprint;
 use crate::scanner::{ExtractedMetadata, ScanResult};
 
 /// Extract metadata from a single audio file
-pub(crate) fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> {
+pub fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> {
     let path = Path::new(filepath);
 
     // Get file fingerprint
@@ -127,7 +127,7 @@ pub(crate) fn extract_metadata(filepath: &str) -> ScanResult<ExtractedMetadata> 
 }
 
 /// Extract metadata from a file, returning default metadata on error
-pub(crate) fn extract_metadata_or_default(filepath: &str) -> ExtractedMetadata {
+pub fn extract_metadata_or_default(filepath: &str) -> ExtractedMetadata {
     match extract_metadata(filepath) {
         Ok(metadata) => metadata,
         Err(_) => {

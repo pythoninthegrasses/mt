@@ -67,10 +67,10 @@ The backend is being split into two crates as part of TASK-353:
 
 | Crate | Current responsibility |
 |-------|------------------------|
-| `crates/mt-core/` | Tauri-independent SQLite database, network file cache, and platform mount detection |
-| `crates/mt-tauri/` | Desktop application, command/event adapters, audio, and the remaining scanner/integration modules |
+| `crates/mt-core/` | Tauri-independent SQLite database, pure scanner, network file cache, and platform mount detection |
+| `crates/mt-tauri/` | Desktop application, command/event adapters, audio, scanner artwork, and remaining integration modules |
 
-`mt-tauri` depends on `mt-core` and re-exports its cache and database APIs internally
+`mt-tauri` depends on `mt-core` and re-exports its cache, database, and scanner APIs internally
 so existing desktop callers retain the same paths. Their implementations and
 unit/property tests live only in `mt-core`; run them without linking the desktop framework
 using `cargo nextest run -p mt-core`.
@@ -80,9 +80,15 @@ preserving its existing `db::fixture_gen` test filter and sidecar parity harness
 Database pooling, schema migrations, SQL queries, and queue persistence/navigation
 belong to the core; desktop commands still own event emission.
 
+The core scanner owns shared scan types, filesystem fingerprints/content hashing,
+inventory, parallel metadata parsing, and two-phase scan orchestration. Its existing
+unit tests and performance tests run in the core. The desktop scanner retains
+artwork extraction/caching and Tauri commands; progress callbacks cross the boundary
+without introducing desktop handles or events into the core.
+
 CI checks the core's transitive normal, build, and test dependencies across all
 targets and features, rejecting Tauri, Tao, Wry, WebKit, and Objective-C 2 crates.
-The pure scanner, Last.fm, Plex, and metadata extraction remain pending;
+Last.fm, Plex, standalone metadata command logic, and library/queue command orchestration remain pending;
 this initial split does not yet isolate all backend tests from Tauri.
 
 ### Tauri Core (Rust)
@@ -265,6 +271,7 @@ mt/
 │   │   └── src/
 │   │       ├── cache/      # Network file cache and mount detection
 │   │       ├── db/         # Database operations and tests
+│   │       ├── scanner/    # Pure scanning, metadata parsing, and tests
 │   │       └── lib.rs
 │   └── mt-tauri/           # Desktop app and remaining backend modules
 │       ├── src/
@@ -273,7 +280,7 @@ mt/
 │       │   ├── commands/   # Tauri command handlers
 │       │   ├── db.rs       # Core database re-export; desktop test fixture hook
 │       │   ├── lastfm/     # Last.fm integration
-│       │   ├── scanner/    # Library scanning
+│       │   ├── scanner/    # Core re-exports, artwork, and scan commands
 │       │   └── watcher/    # File system monitoring
 │       ├── Cargo.toml
 │       └── tauri.conf.json

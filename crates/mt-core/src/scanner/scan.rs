@@ -38,7 +38,7 @@ pub type ProgressCallback = Box<dyn Fn(ScanProgress) + Send + Sync>;
 ///
 /// # Returns
 /// Scan result with categorized files and extracted metadata
-pub(crate) fn scan_2phase(
+pub fn scan_2phase(
     paths: &[String],
     db_fingerprints: &HashMap<String, FileFingerprint>,
     recursive: bool,
