@@ -191,11 +191,16 @@ d = os.environ["MT_RESULTS_DIR"]
 # baseline: a Blacksmith runner's seconds are not an M4 Max's seconds.
 def platform(path):
     # Files straight in the results dir are the host column; anything in a
-    # subdirectory belongs to that column's platform.
+    # subdirectory belongs to that column's platform. GitHub's artifact download
+    # nests one directory per job, so match on a prefix rather than a name.
     top = os.path.dirname(os.path.relpath(path, d))
     if top in ("", "."):
         return "macos"
-    return top.split(os.sep)[0].lower()
+    name = top.split(os.sep)[0].lower()
+    for known in ("windows", "linux", "macos"):
+        if name.startswith(known):
+            return known
+    return name
 
 def label_of(path, prefix):
     return re.sub(r"^%s-|\.json$|\.tsv$" % prefix, "", os.path.basename(path))
