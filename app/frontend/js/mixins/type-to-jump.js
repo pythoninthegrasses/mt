@@ -256,8 +256,13 @@ export function typeToJumpMixin() {
 
         const track = this.library.getTrackAtIndex(offset);
         if (track) {
-          this.selectedTracks.clear();
-          this.selectedTracks.add(track.id);
+          // The raw offset may point at a track the remote-track filter hides;
+          // selecting a row that cannot be rendered would be misleading.
+          const row = this.library.rowIndexForRawIndex(offset);
+          if (row >= 0) {
+            this.selectedTracks.clear();
+            this.selectedTracks.add(track.id);
+          }
         }
       } finally {
         // Defer the flag clear to $nextTick so the shimmer branch in visibleTracks

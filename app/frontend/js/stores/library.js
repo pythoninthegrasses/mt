@@ -17,6 +17,15 @@ import {
 } from '../utils/library-cache.js';
 import { LibraryPageCache } from '../utils/library-page-cache.js';
 import {
+  buildRowMap,
+  clearRowMap,
+  loadRowRange,
+  rawIndexForRowIndex,
+  rebuildVisibleRows,
+  rowIndexForRawIndex,
+  visibleTotalOf,
+} from '../utils/library-visible-rows.js';
+import {
   applySectionData,
   backgroundRefreshLibrary,
   backgroundRefreshSection,
@@ -74,6 +83,12 @@ export function createLibraryStore(Alpine) {
 
     // Non-paginated track storage (used by non-"all" sections: favorites, recent, playlists)
     _sectionTracks: null,
+
+    // Mirror of the rows the library list renders while remote tracks are
+    // hidden. See `_buildRowMap()` for what it is and why it exists.
+    // null means "no filtering": the row space is the raw backend order.
+    _visibleRowMap: null,
+    _visibleRowBuilding: null,
 
     // Plex
     showRemote: true,
@@ -243,6 +258,8 @@ export function createLibraryStore(Alpine) {
           if (idx >= 0) {
             this._sectionTracks[idx] = updated;
             this._dataVersion++;
+            // A finished download turns a remote track local: re-measure rows.
+            this._rebuildVisibleRows();
           }
         } else {
           for (const page of Object.values(this._trackPages)) {
@@ -250,6 +267,7 @@ export function createLibraryStore(Alpine) {
             if (idx >= 0) {
               page[idx] = updated;
               this._dataVersion++;
+              this._rebuildVisibleRows();
               break;
             }
           }
@@ -268,6 +286,8 @@ export function createLibraryStore(Alpine) {
 
     setShowRemote(value) {
       this.showRemote = value;
+      // Rows compact or expand immediately: no section reload, no refetch.
+      this._rebuildVisibleRows();
       window.settings.set('library:showRemote', value).catch((err) =>
         console.error('[library] Failed to save showRemote:', err)
       );
@@ -347,6 +367,8 @@ export function createLibraryStore(Alpine) {
       this._loadingPages = {};
       this._allPagesLoaded = false;
       this._sectionTracks = null;
+      // Raw indices from the previous query no longer address anything.
+      this._clearRowMap();
     },
 
     /**
@@ -360,6 +382,8 @@ export function createLibraryStore(Alpine) {
         this._trackPages = restored;
         this._currentPageCacheKey = key;
         this._dataVersion++;
+        // Cached pages are raw: re-measure the rows they can show.
+        this._rebuildVisibleRows();
         return true;
       }
       this._currentPageCacheKey = key;
@@ -377,6 +401,7 @@ export function createLibraryStore(Alpine) {
       this._trackPages = {};
       this._loadingPages = {};
       this._allPagesLoaded = true;
+      this._rebuildVisibleRows();
     },
 
     _fetchPage(pageIndex) {
@@ -430,6 +455,10 @@ export function createLibraryStore(Alpine) {
 
         // Trigger Alpine reactivity by incrementing version
         this._dataVersion++;
+
+        // A new page changes the row space when remote tracks are hidden
+        // (no-op otherwise). Suppressed while a rebuild is already measuring.
+        this._rebuildVisibleRows();
 
         console.log('[library] page loaded:', {
           pageIndex,
@@ -493,6 +522,93 @@ export function createLibraryStore(Alpine) {
         await Promise.all(batch.map((p) => this._fetchPage(p)));
       }
       this._allPagesLoaded = true;
+    },
+
+    // -----------------------------------------------------------------------
+    // Row space
+    //
+    // Raw indices are backend positions: the order pages arrive in, the units
+    // of `_pageSize` arithmetic, `library_find_offset` results and the page
+    // cache. Row indices are what the virtualized list scrolls, renders and
+    // selects by. They are the same numbers until remote tracks are hidden —
+    // then rows compact, and every consumer has to convert.
+    // -----------------------------------------------------------------------
+
+    /** Number of rows the library list should render. */
+    get visibleTotal() {
+      void this._dataVersion;
+      return visibleTotalOf(this);
+    },
+
+    /** True when hidden remote tracks make rows differ from raw indices. */
+    isFilteringRows() {
+      return this._visibleRowMap !== null;
+    },
+
+    /**
+     * Track rendered at `row`, or null when its page has not loaded yet.
+     * @param {number} row
+     */
+    getTrackAtRowIndex(row) {
+      void this._dataVersion;
+      const map = this._visibleRowMap;
+      // Strict: a row the mirror does not cover has no track. The prefetch
+      // helper deliberately falls back to the raw number instead.
+      if (map && (row < 0 || row >= map.length)) return null;
+      return this.getTrackAtIndex(map ? map[row] : row);
+    },
+
+    /**
+     * Raw index rendered at `row`.
+     * @param {number} row
+     */
+    rawIndexForRowIndex(row) {
+      return rawIndexForRowIndex(this._visibleRowMap, row);
+    },
+
+    /**
+     * Row that shows `rawIndex`, or -1 when that track is hidden.
+     * @param {number} rawIndex
+     */
+    rowIndexForRawIndex(rawIndex) {
+      return rowIndexForRawIndex(this._visibleRowMap, rawIndex);
+    },
+
+    /**
+     * Recompute `_visibleRowMap` from the pages in hand. See
+     * `utils/library-visible-rows.js` for what the map is and why hiding
+     * remote tracks needs one. No-op while remote tracks are shown: the raw
+     * path costs nothing.
+     */
+    _buildRowMap() {
+      buildRowMap(this);
+    },
+
+    /**
+     * Drop the mirror so rows fall back to raw indices until the next
+     * `_buildRowMap()`. Callers that clear or replace page data must do this:
+     * raw indices from a previous query would address the wrong tracks.
+     */
+    _clearRowMap() {
+      clearRowMap(this);
+    },
+
+    /**
+     * Recompute the row mirror and converge the row count on the whole
+     * library. Fire-and-forget: the first pass is synchronous, so call sites
+     * that bump `_dataVersion` right after get an already-filtered render.
+     */
+    _rebuildVisibleRows() {
+      return rebuildVisibleRows(this);
+    },
+
+    /**
+     * Load the pages covering a range of *rows* (not raw indices).
+     * @param {number} startRow
+     * @param {number} endRow
+     */
+    _loadRowRange(startRow, endRow) {
+      return loadRowRange(this, startRow, endRow);
     },
 
     // -----------------------------------------------------------------------
@@ -773,6 +889,7 @@ export function createLibraryStore(Alpine) {
           this._trackPages[pageIdx] = page.filter((t) => !idSet.has(t.id));
         }
         this._dataVersion++;
+        this._rebuildVisibleRows();
       }
       this._clearCache();
     },
@@ -898,6 +1015,7 @@ export function createLibraryStore(Alpine) {
             if (index >= 0) {
               this._sectionTracks[index] = updatedTrack;
               this._dataVersion++;
+              this._rebuildVisibleRows();
             }
           } else {
             for (const page of Object.values(this._trackPages)) {
@@ -905,6 +1023,7 @@ export function createLibraryStore(Alpine) {
               if (index >= 0) {
                 page[index] = updatedTrack;
                 this._dataVersion++;
+                this._rebuildVisibleRows();
                 break;
               }
             }

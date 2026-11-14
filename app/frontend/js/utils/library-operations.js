@@ -339,6 +339,9 @@ export async function loadLibraryData(store, { forceReload = false } = {}) {
       store.totalDuration = sectionData.total_duration;
       store.totalFileSize = sectionData.total_size ?? 0;
       store._lastLoadedSection = loadSection;
+      // Measure rows before the render this bump triggers, so a filtered view
+      // never paints the raw page (with its remote tracks) for one frame.
+      store._rebuildVisibleRows();
       store._dataVersion++;
     });
 
@@ -431,6 +434,7 @@ export async function backgroundRefreshLibrary(store, section) {
         store.localFileCount = sectionData.local_file_count ?? sectionData.total_tracks;
         store.totalDuration = sectionData.total_duration;
         store.totalFileSize = sectionData.total_size ?? 0;
+        store._rebuildVisibleRows();
         store._dataVersion++;
       });
 
@@ -664,6 +668,7 @@ export function removeTracksLocallyOp(store, Alpine, trackIds) {
       }
       store.totalDuration = duration;
       store.totalFileSize = fileSize;
+      store._rebuildVisibleRows();
       store._dataVersion++;
     });
   }

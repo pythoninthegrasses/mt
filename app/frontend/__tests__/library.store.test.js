@@ -7,6 +7,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fc, test } from '@fast-check/vitest';
+import { withRowSpace } from './helpers/library-row-space.js';
 
 // -----------------------------------------------------------------------------
 // Test Helpers: Create isolated library store instances for testing
@@ -384,7 +385,7 @@ describe('Library Store - Sort Settings', () => {
  * Create a page-map-aware store for pagination testing
  */
 function createPaginatedStore(pageSize = 5) {
-  return {
+  return withRowSpace({
     _trackPages: {},
     _loadingPages: {},
     _pageSize: pageSize,
@@ -405,6 +406,7 @@ function createPaginatedStore(pageSize = 5) {
       this._loadingPages = {};
       this._allPagesLoaded = false;
       this._sectionTracks = null;
+      this._clearRowMap();
     },
 
     _setSectionTracks(tracks) {
@@ -412,6 +414,7 @@ function createPaginatedStore(pageSize = 5) {
       this._trackPages = {};
       this._loadingPages = {};
       this._allPagesLoaded = true;
+      this._rebuildVisibleRows();
     },
 
     getTrackAtIndex(i) {
@@ -446,7 +449,7 @@ function createPaginatedStore(pageSize = 5) {
       }
       return result;
     },
-  };
+  });
 }
 
 function makeTracks(count, startId = 1) {
@@ -555,7 +558,7 @@ describe('Paginated Store - _resetPages', () => {
 
 describe('Paginated Store - _fetchPage deduplication', () => {
   function createFetchableStore(mockGetTracks) {
-    const store = {
+    const store = withRowSpace({
       ...createPaginatedStore(500),
       _dataVersion: 0,
       searchQuery: '',
@@ -578,13 +581,14 @@ describe('Paginated Store - _fetchPage deduplication', () => {
           const tracks = data.tracks || [];
           this._trackPages[pageIndex] = tracks;
           this._dataVersion++;
+          this._rebuildVisibleRows();
         } finally {
           if (this._loadGeneration === gen) {
             delete this._loadingPages[pageIndex];
           }
         }
       },
-    };
+    });
     store.totalTracks = 1000;
     return store;
   }

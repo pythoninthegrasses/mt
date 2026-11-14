@@ -111,7 +111,7 @@
         <span>Jumping to "<span x-text="_jumpingPrefix"></span>"…</span>
       </div>
       <!-- Loading state (shown during library fetch OR active scan with empty library) -->
-      <template x-if="(library.loading || library.scanning) && library.totalTracks === 0">
+      <template x-if="(library.loading || library.scanning) && library.visibleTotal === 0">
         <div
           class="flex items-center justify-center py-12"
         >
@@ -148,11 +148,11 @@
 
       <!-- Empty state -->
       <div
-        x-show="!library.loading && !library.scanning && library.totalTracks === 0"
+        x-show="!library.loading && !library.scanning && library.visibleTotal === 0"
         class="absolute inset-0 flex items-center justify-center"
       >
         <!-- Liked Songs empty state -->
-        <template x-if="library.currentSection === 'liked' && !library.searchQuery">
+        <template x-if="library.currentSection === 'liked' && !library.searchQuery && (library.showRemote || library.totalTracks === 0)">
           <div class="text-center">
             <svg
               class="w-24 h-24 mx-auto mb-6 text-muted-foreground/50"
@@ -193,8 +193,31 @@
             <p class="text-sm text-muted-foreground mt-1">Try a different search term</p>
           </div>
         </template>
+        <!-- Remote tracks hidden empty state -->
+        <template x-if="!library.showRemote && library.totalTracks > 0 && !library.searchQuery">
+          <div class="text-center">
+            <svg
+              class="w-24 h-24 mx-auto mb-6 text-muted-foreground/50"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.5"
+                d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999A5.002 5.002 0 007.5 5.5 4.001 4.001 0 003 9.5"
+              ></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4l16 16"></path>
+            </svg>
+            <p class="text-lg font-medium">Only remote tracks</p>
+            <p class="text-sm text-muted-foreground mt-1">
+              Turn on Show remote tracks in Settings &gt; Plex to see tracks that have not been downloaded.
+            </p>
+          </div>
+        </template>
         <!-- Library empty state -->
-        <template x-if="library.currentSection !== 'liked' && !library.searchQuery">
+        <template x-if="library.currentSection !== 'liked' && !library.searchQuery && (library.showRemote || library.totalTracks === 0)">
           <div class="text-center">
             <svg
               class="w-24 h-24 mx-auto mb-6 text-muted-foreground/50"
@@ -220,7 +243,7 @@
 
       <!-- Track rows (CSS Grid matching header) - Virtual scroll -->
       <div
-        x-show="library.totalTracks > 0 || _isJumping"
+        x-show="library.visibleTotal > 0 || _isJumping"
         :style="`height: ${totalContentHeight}px; position: relative;`"
       >
         <div :style="`transform: translateY(${offsetY}px); will-change: transform;`">

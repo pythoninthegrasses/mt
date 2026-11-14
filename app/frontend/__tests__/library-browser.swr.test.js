@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { withRowSpace } from './helpers/library-row-space.js';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -26,7 +27,7 @@ function createLibStub({
   loadGeneration = 0,
   sectionTracks = null,
 } = {}) {
-  return {
+  return withRowSpace({
     _dataVersion: 0,
     _loadGeneration: loadGeneration,
     totalTracks,
@@ -38,6 +39,9 @@ function createLibStub({
       return this._sectionTracks === null;
     },
     _ensurePage() {},
+    isRemote(track) {
+      return !!track.plex_guid;
+    },
     getTrackAtIndex(i) {
       if (this._sectionTracks) return this._sectionTracks[i] || null;
       const pageIndex = Math.floor(i / this._pageSize);
@@ -45,7 +49,7 @@ function createLibStub({
       if (!page) return null;
       return page[i % this._pageSize] || null;
     },
-  };
+  }, { showRemote: true });
 }
 
 /**
@@ -70,14 +74,14 @@ function createBrowserStub(
     },
 
     get startIndex() {
-      const trackCount = lib.totalTracks;
+      const trackCount = lib.visibleTotal;
       if (trackCount === 0) return 0;
       const clampedScroll = Math.min(this._scrollTop, trackCount * this._rowHeight);
       return Math.max(0, Math.floor(clampedScroll / this._rowHeight) - this._bufferRows);
     },
 
     get endIndex() {
-      const trackCount = lib.totalTracks;
+      const trackCount = lib.visibleTotal;
       if (trackCount === 0) return 0;
       const clampedScroll = Math.min(this._scrollTop, trackCount * this._rowHeight);
       const visibleRows = Math.ceil(this._containerHeight / this._rowHeight);
@@ -88,17 +92,17 @@ function createBrowserStub(
     },
 
     get totalContentHeight() {
-      if (this._isJumping && lib.totalTracks === 0) {
+      if (this._isJumping && lib.visibleTotal === 0) {
         const rowHeight = this._rowHeight;
         const visibleRows = Math.max(1, Math.ceil(this._containerHeight / rowHeight));
         const rawRow = Math.floor(this._scrollTop / rowHeight);
         return (rawRow + visibleRows + this._bufferRows) * rowHeight;
       }
-      return lib.totalTracks * this._rowHeight;
+      return lib.visibleTotal * this._rowHeight;
     },
 
     get offsetY() {
-      if (this._isJumping && lib.totalTracks === 0) {
+      if (this._isJumping && lib.visibleTotal === 0) {
         const rowHeight = this._rowHeight;
         const rawRow = Math.floor(this._scrollTop / rowHeight);
         const shimmerStart = Math.max(0, rawRow - this._bufferRows);
@@ -109,7 +113,7 @@ function createBrowserStub(
 
     get visibleTracks() {
       void lib._dataVersion;
-      const end = Math.min(this.endIndex, lib.totalTracks);
+      const end = Math.min(this.endIndex, lib.visibleTotal);
       const result = [];
 
       if (lib._loadGeneration !== this._swrGeneration) {
@@ -119,15 +123,15 @@ function createBrowserStub(
 
       if (lib._isPaginated()) {
         const pageSize = lib._pageSize;
-        const firstPage = Math.floor(this.startIndex / pageSize);
-        const lastPage = Math.floor(Math.max(0, end - 1) / pageSize);
+        const firstPage = Math.floor(lib.rawIndexForRowIndex(this.startIndex) / pageSize);
+        const lastPage = Math.floor(lib.rawIndexForRowIndex(Math.max(0, end - 1)) / pageSize);
         for (let p = firstPage; p <= lastPage + 1; p++) {
           lib._ensurePage(p);
         }
       }
 
       for (let i = this.startIndex; i < end; i++) {
-        const track = lib.getTrackAtIndex(i);
+        const track = lib.getTrackAtRowIndex(i);
         if (track) result.push({ track, globalIndex: i });
       }
 
@@ -141,8 +145,8 @@ function createBrowserStub(
         const visibleRows = Math.max(1, Math.ceil(this._containerHeight / rowHeight));
         const rawRow = Math.floor(this._scrollTop / rowHeight);
         const shimmerStart = Math.max(0, rawRow - this._bufferRows);
-        const shimmerEnd = lib.totalTracks > 0
-          ? Math.min(lib.totalTracks, rawRow + visibleRows + this._bufferRows)
+        const shimmerEnd = lib.visibleTotal > 0
+          ? Math.min(lib.visibleTotal, rawRow + visibleRows + this._bufferRows)
           : rawRow + visibleRows;
         const placeholders = [];
         for (let i = shimmerStart; i < shimmerEnd; i++) {

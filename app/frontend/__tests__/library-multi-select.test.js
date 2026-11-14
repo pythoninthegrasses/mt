@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { withRowSpace } from './helpers/library-row-space.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,6 +41,9 @@ function createLibStub({
     _trackPages: { ...loadedPages },
     _loadingPages: {},
     _sectionTracks: sectionTracks,
+    _dataVersion: 0,
+    _loadGeneration: 0,
+    _allPagesLoaded: sectionTracks !== null,
     showRemote,
     _fetchPageCalls: [],
 
@@ -64,7 +68,9 @@ function createLibStub({
       if (!this._trackPages[pageIndex]) {
         this._trackPages[pageIndex] = makePage(pageIndex * this._pageSize, this._pageSize);
       }
-      return Promise.resolve();
+      // Mirrors _doFetchPage: a new page changes the row space when remote
+      // tracks are hidden (no-op otherwise).
+      return this._rebuildVisibleRows();
     },
 
     async _loadPageRange(startIndex, endIndex) {
@@ -85,14 +91,16 @@ function createLibStub({
         if (!this._trackPages[p]) pending.push(this._fetchPage(p));
       }
       if (pending.length) await Promise.all(pending);
+      this._allPagesLoaded = true;
     },
   };
-  return stub;
+  return withRowSpace(stub, { showRemote });
 }
 
 /**
- * Minimal library-browser component stub that mirrors the fixed
- * handleRowClick and selectAll methods.
+ * Minimal library-browser component stub that mirrors the current
+ * handleRowClick and selectAll methods: they work in row indices, so they go
+ * through _loadRowRange / getTrackAtRowIndex / visibleTotal.
  */
 function createBrowserStub(lib) {
   return {
@@ -109,10 +117,10 @@ function createBrowserStub(lib) {
           this.selectedTracks.clear();
         }
 
-        await this.library._loadPageRange(start, end);
+        await this.library._loadRowRange(start, end);
 
         for (let i = start; i <= end; i++) {
-          const t = this.library.getTrackAtIndex(i);
+          const t = this.library.getTrackAtRowIndex(i);
           if (!t) continue;
           if (!this.library.showRemote && this.library.isRemote(t)) continue;
           this.selectedTracks.add(t.id);
@@ -135,9 +143,11 @@ function createBrowserStub(lib) {
       if (this.library._isPaginated()) {
         await this.library._loadAllPages();
       }
-      const total = this.library.totalTracks;
+      // Rows may have changed with the pages that just arrived.
+      await this.library._rebuildVisibleRows();
+      const total = this.library.visibleTotal;
       for (let i = 0; i < total; i++) {
-        const t = this.library.getTrackAtIndex(i);
+        const t = this.library.getTrackAtRowIndex(i);
         if (!t) continue;
         if (!this.library.showRemote && this.library.isRemote(t)) continue;
         this.selectedTracks.add(t.id);
@@ -241,8 +251,9 @@ describe('handleRowClick – shift+click range', () => {
     const lib = createLibStub({ totalTracks: 5, pageSize, loadedPages: { 0: page0 }, showRemote: false });
 
     const browser = createBrowserStub(lib);
+    // Rows are the 4 non-remote tracks: 0,1,3,4 → rows 0..3.
     await browser.handleRowClick({ shiftKey: false, ctrlKey: false, metaKey: false }, page0[0], 0);
-    await browser.handleRowClick({ shiftKey: true, ctrlKey: false, metaKey: false }, page0[4], 4);
+    await browser.handleRowClick({ shiftKey: true, ctrlKey: false, metaKey: false }, page0[4], 3);
 
     expect(browser.selectedTracks.has('track-2')).toBe(false);
     expect(browser.selectedTracks.size).toBe(4);

@@ -414,7 +414,7 @@ export function createLibraryBrowser(Alpine) {
     },
 
     get startIndex() {
-      const trackCount = this.library.totalTracks;
+      const trackCount = this.library.visibleTotal;
       if (trackCount === 0) return 0;
       const scrollTop = Math.min(this._scrollTop, trackCount * this._rowHeight);
       return Math.max(
@@ -424,7 +424,7 @@ export function createLibraryBrowser(Alpine) {
     },
 
     get endIndex() {
-      const trackCount = this.library.totalTracks;
+      const trackCount = this.library.visibleTotal;
       if (trackCount === 0) return 0;
       const scrollTop = Math.min(this._scrollTop, trackCount * this._rowHeight);
       const visibleRows = Math.ceil(this._containerHeight / this._rowHeight);
@@ -440,7 +440,7 @@ export function createLibraryBrowser(Alpine) {
       const lib = this.library;
       // Access _dataVersion to create Alpine reactive dependency on page loads
       void lib._dataVersion;
-      const end = Math.min(this.endIndex, lib.totalTracks);
+      const end = Math.min(this.endIndex, lib.visibleTotal);
       const result = [];
 
       // Clear SWR snapshot when load generation changes (section switch, search, sort)
@@ -449,11 +449,15 @@ export function createLibraryBrowser(Alpine) {
         this._swrGeneration = lib._loadGeneration;
       }
 
-      // Trigger page prefetch for visible range + 1 page ahead
+      // Trigger page prefetch for visible range + 1 page ahead. Prefetch works
+      // in raw indices, so translate out of the row space first (identity when
+      // no remote tracks are hidden).
       if (lib._isPaginated()) {
         const pageSize = lib._pageSize;
-        const firstPage = Math.floor(this.startIndex / pageSize);
-        const lastPage = Math.floor(Math.max(0, end - 1) / pageSize);
+        const firstPage = Math.floor(lib.rawIndexForRowIndex(this.startIndex) / pageSize);
+        const lastPage = Math.floor(
+          lib.rawIndexForRowIndex(Math.max(0, end - 1)) / pageSize,
+        );
         // Prefetch 1 page ahead in scroll direction
         for (let p = firstPage; p <= lastPage + 1; p++) {
           lib._ensurePage(p);
@@ -461,7 +465,7 @@ export function createLibraryBrowser(Alpine) {
       }
 
       for (let i = this.startIndex; i < end; i++) {
-        const track = lib.getTrackAtIndex(i);
+        const track = lib.getTrackAtRowIndex(i);
         if (track) {
           result.push({ track, globalIndex: i });
         }
@@ -471,7 +475,7 @@ export function createLibraryBrowser(Alpine) {
         this._swrSnapshot = result;
         // Self-extinguish: clear jump flag once real data has arrived at the
         // target viewport. The $nextTick fallback in _jumpViaBackend also clears
-        // it, but may fire before data is ready when totalTracks is transiently 0.
+        // it, but may fire before data is ready when the row count is transiently 0.
         this._finishJumpRender();
         return result;
       }
@@ -506,7 +510,7 @@ export function createLibraryBrowser(Alpine) {
 
       // During a backend jump with no overlapping stale rows, shimmer the
       // target region. Use raw _scrollTop-based bounds rather than
-      // startIndex/end because both collapse to 0 when totalTracks is
+      // startIndex/end because both collapse to 0 when the row count is
       // transiently 0 during a concurrent library reload, which would otherwise
       // cause a blank viewport for the full reload duration.
       if (this._isJumping) {
@@ -517,8 +521,8 @@ export function createLibraryBrowser(Alpine) {
         );
         const rawRow = Math.floor(this._scrollTop / rowHeight);
         const shimmerStart = Math.max(0, rawRow - this._bufferRows);
-        const shimmerEnd = lib.totalTracks > 0
-          ? Math.min(lib.totalTracks, rawRow + visibleRows + this._bufferRows)
+        const shimmerEnd = lib.visibleTotal > 0
+          ? Math.min(lib.visibleTotal, rawRow + visibleRows + this._bufferRows)
           : rawRow + visibleRows;
         const placeholders = [];
         for (let i = shimmerStart; i < shimmerEnd; i++) {
@@ -559,10 +563,10 @@ export function createLibraryBrowser(Alpine) {
     },
 
     get totalContentHeight() {
-      // During a jump while the library is transiently reporting totalTracks=0
+      // During a jump while the library is transiently reporting no rows
       // (concurrent loadLibraryData reset), fall back to a viewport-sized height
       // so the row container does not collapse and hide shimmer placeholders.
-      if (this._isJumping && this.library.totalTracks === 0) {
+      if (this._isJumping && this.library.visibleTotal === 0) {
         const rowHeight = this._rowHeight;
         const visibleRows = Math.max(
           1,
@@ -571,14 +575,14 @@ export function createLibraryBrowser(Alpine) {
         const rawRow = Math.floor(this._scrollTop / rowHeight);
         return (rawRow + visibleRows + this._bufferRows) * rowHeight;
       }
-      return this.library.totalTracks * this._rowHeight;
+      return this.library.visibleTotal * this._rowHeight;
     },
 
     get offsetY() {
-      // Match the shimmer branch in visibleTracks: when totalTracks=0 during a
+      // Match the shimmer branch in visibleTracks: when there are no rows during a
       // jump, anchor offsetY to the raw scroll row so placeholders render at the
       // correct viewport position instead of collapsing to 0.
-      if (this._isJumping && this.library.totalTracks === 0) {
+      if (this._isJumping && this.library.visibleTotal === 0) {
         const rowHeight = this._rowHeight;
         const rawRow = Math.floor(this._scrollTop / rowHeight);
         const shimmerStart = Math.max(0, rawRow - this._bufferRows);
@@ -646,10 +650,10 @@ export function createLibraryBrowser(Alpine) {
           this.selectedTracks.clear();
         }
 
-        await this.library._loadPageRange(start, end);
+        await this.library._loadRowRange(start, end);
 
         for (let i = start; i <= end; i++) {
-          const t = this.library.getTrackAtIndex(i);
+          const t = this.library.getTrackAtRowIndex(i);
           if (!t) continue;
           if (!this.library.showRemote && this.library.isRemote(t)) continue;
           this.selectedTracks.add(t.id);
@@ -741,9 +745,12 @@ export function createLibraryBrowser(Alpine) {
       if (this.library._isPaginated()) {
         await this.library._loadAllPages();
       }
-      const total = this.library.totalTracks;
+      // Rows may have just changed with the pages that arrived; measure before
+      // iterating so the selection covers exactly the rows the list shows.
+      await this.library._rebuildVisibleRows();
+      const total = this.library.visibleTotal;
       for (let i = 0; i < total; i++) {
-        const t = this.library.getTrackAtIndex(i);
+        const t = this.library.getTrackAtRowIndex(i);
         if (!t) continue;
         if (!this.library.showRemote && this.library.isRemote(t)) continue;
         this.selectedTracks.add(t.id);

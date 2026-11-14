@@ -12,6 +12,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { typeToJumpMixin } from '../js/mixins/type-to-jump.js';
 import { virtualScrollMixin } from '../js/mixins/virtual-scroll.js';
+import { withRowSpace } from './helpers/library-row-space.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -35,7 +36,7 @@ function makeKey(char) {
 }
 
 function createStub(tracks = TRACKS) {
-  const libraryStub = {
+  const libraryStub = withRowSpace({
     filteredTracks: tracks,
     _isPaginated: () => false,
     _allPagesLoaded: true,
@@ -43,7 +44,7 @@ function createStub(tracks = TRACKS) {
     _jumpToPrefix: vi.fn(),
     _fetchPage: vi.fn().mockResolvedValue(undefined),
     getTrackAtIndex: vi.fn(),
-  };
+  });
 
   const stub = Object.assign(typeToJumpMixin(), {
     // Alpine provides $nextTick on real components; microtask delivery matches

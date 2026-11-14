@@ -44,7 +44,9 @@ export function virtualScrollMixin() {
         const localIdx = page.findIndex((t) => t.id === trackId);
         if (localIdx !== -1) {
           const globalIdx = parseInt(pageIdx, 10) * lib._pageSize + localIdx;
-          this._scrollToRowIndex(globalIdx, false);
+          const row = lib.rowIndexForRawIndex(globalIdx);
+          if (row < 0) return; // hidden by the remote-track filter
+          this._scrollToRowIndex(row, false);
           return;
         }
       }
@@ -77,17 +79,26 @@ export function virtualScrollMixin() {
 
         const pageIndex = Math.floor(offset / lib._pageSize);
         await lib._fetchPage(pageIndex);
-        this._scrollToRowIndex(offset, false);
+        const row = lib.rowIndexForRawIndex(offset);
+        if (row < 0) return; // hidden by the remote-track filter
+        this._scrollToRowIndex(row, false);
       } catch (err) {
         console.error('[virtual-scroll] scrollToTrack failed:', err);
       }
     },
 
+    /**
+     * Scroll to a *raw* backend offset (what `library_find_offset` and
+     * `library_find_track_offset` report). The row space may compact raw
+     * indices when remote tracks are hidden, so convert before scrolling.
+     */
     scrollToOffset(offset, gen) {
       if (offset < 0 || offset >= this.library.totalTracks) return;
+      const row = this.library.rowIndexForRawIndex(offset);
+      if (row < 0) return;
       // Instant scroll: page data is loaded before this is called, so smooth
       // animation through unloaded rows is unnecessary and causes blank flashes.
-      this._scrollToRowIndex(offset, false, gen);
+      this._scrollToRowIndex(row, false, gen);
     },
 
     _scrollToRowIndex(idx, _smooth = false, gen) {
