@@ -88,40 +88,22 @@ For full debugging (variable inspection in debuggers), temporarily change to:
 debug = true  # or debug = 2 for maximum info
 ```
 
-### Linker (`crates/mt-tauri/.cargo/config.toml`)
+### Linker
 
-Per-target linker configuration:
+The repo configures no linker, so every platform links with the Rust toolchain default. Stable Rust 1.100 links `x86_64-unknown-linux-gnu` through its bundled `rust-lld` (target spec `linker-flavor: gnu-lld-cc`).
 
-```toml
-[target.aarch64-apple-darwin]
-rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+Cargo reads `.cargo/config.toml` relative to the directory it runs from, not the manifest location. Taskfile and Docker run cargo from the repo root, so any linker setting must live in the root `.cargo/config.toml` or an environment variable to take effect. A per-crate `crates/mt-tauri/.cargo/config.toml` was removed because it was never applied.
 
-[target.x86_64-apple-darwin]
-rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+Linux dev relink after touching `crates/mt-tauri/src/lib.rs`, measured in the Linux Docker image on a 16-core x86_64 host (see TASK-369.7):
 
-[target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+| Linker | Relink (mean of 8) |
+| -------- | -------- |
+| GNU ld | 14.04 s |
+| rust-lld (default) | 2.93 s |
+| mold | 2.74 s |
+| wild | 2.42 s |
 
-[target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "link-arg=-fuse-ld=lld"]
-```
-
-### Linker Options by Platform
-
-#### macOS (ARM64)
-
-| Linker | Status | Notes |
-| -------- | -------- | ------- |
-| **lld** | Recommended | Currently configured, fast and stable |
-| ld-prime | Alternative | Apple's default, similar performance |
-| sold | Avoid | Fastest but has codesign issues |
-
-#### Linux
-
-| Linker | Status | Notes |
-| -------- | -------- | ------- |
-| **mold** | Recommended | Currently configured, fastest option |
-| lld | Alternative | Good fallback |
+Release builds use fat LTO with `codegen-units = 1`, so a relink takes about 100 s with rust-lld, mold or wild alike and the linker choice does not matter. wild supports Linux only and saves about 0.5 s per dev relink, so it was not adopted.
 
 #### Windows
 
@@ -657,11 +639,8 @@ sudo apt install -y \
   libssl-dev \
   pkg-config \
   cmake \
-  build-essential \
-  mold
+  build-essential
 ```
-
-The `mold` linker is configured in `.cargo/config.toml` for Linux targets. Install it or switch to `lld` if unavailable.
 
 ## Linux Runtime Dependencies
 

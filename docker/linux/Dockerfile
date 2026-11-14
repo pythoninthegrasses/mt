@@ -93,7 +93,6 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM deps AS cook
 
 COPY --from=planner /build/recipe.json recipe.json
-COPY crates/mt-tauri/.cargo crates/mt-tauri/.cargo/
 
 RUN cargo chef cook --recipe-path recipe.json \
     --target x86_64-unknown-linux-gnu
