@@ -4,7 +4,7 @@ title: Measure edit-to-run latency and target/cache disk baseline
 status: Done
 assignee: []
 created_date: '2026-11-14T04:24:00Z'
-updated_date: '2026-11-14T05:14:00Z'
+updated_date: '2026-11-14T23:28:00Z'
 labels: []
 dependencies: []
 references:
@@ -33,6 +33,7 @@ TASK-352 measured CI wall-clock and a single cold/warm pair (cold 1m35s, warm 3.
 
 ## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
 Harness: `benchmarks/edit-to-run/` (`bench.sh`, `env.sh`, `worktree-matrix.sh`,
 `README.md`). Raw outputs (hyperfine JSON/MD, `du-*.tsv`, `sccache-*.txt`,
 `--timings` HTML) are committed under `benchmarks/edit-to-run/results-2026-11-13/`.
@@ -310,3 +311,8 @@ should re-run this harness on the runners and record the runner spec alongside.
 7. **Zig staging is a real dev-loop cost in fresh worktrees**: 16.9 s cold,
    0.12 s warm, and it must run before any Rust compile because `externalBin`
    resolves eagerly.
+
+RAW EVIDENCE DIR REMOVED 2026-11-14 by maintainer decision: benchmark harness output is not kept in the source tree, so the `benchmarks/edit-to-run/results-2026-11-13/` paths cited above no longer exist (line "are committed under ..." above is superseded; the tables in this record are the durable source). Everything deleted is regenerable and still readable in git history before the removal commit: cd benchmarks/edit-to-run && ./bench.sh "latency touch"|"latency edit"|"latency code"|"latency noincr"|"check code"|frontend|sidecar|disk|timings, plus ./worktree-matrix.sh 369-1-{plain,agent,rlib} 1. results-*/ is now gitignored so future runs stay out of git status.
+
+FINDING PRESERVED FROM THE DELETED sccache-*.txt CAPTURES (it existed nowhere else, and it matters for how the latency numbers above should be read): the host dev loop gets essentially no sccache benefit. dev-code 3628 compile requests / 4 hits, dev-agent-code 3656/4, dev-edit 541/0, dev-agent-edit 569/0, dev-noincr 597/0, dev-agent-noincr 625/0, dev-touch 34/0, dev-agent-touch 62/0, check-touch 458/0, check-edit 653/0, check-agent 513/0, check-agent-edit 681/0. Across 22 captures on 2026-11-13 and 2026-11-14 (the later set recorded in TASK-369.5) RUSTC_WRAPPER=sccache returns 0-4 hits on 34-3656 requests, so the edit-to-run figures above are true incremental-compile costs with no cache assistance. Direct evidence for TASK-369.6 (CI compilation caching, sccache bypass); surfaced to the maintainer rather than written into TASK-369.6, which another agent is actively editing.
+<!-- SECTION:NOTES:END -->

@@ -4,7 +4,7 @@ title: Fix startup rendering flash - hide UI scaffolding until ready
 status: Done
 assignee: []
 created_date: '2026-02-03 07:16'
-updated_date: '2026-02-04 08:18'
+updated_date: '2026-11-14T23:29:00Z'
 labels:
   - frontend
   - ux
@@ -90,4 +90,6 @@ Implemented a two-part fix to prevent startup flash:
 ### Test results
 - Manual testing: Window reveals correctly after Alpine initialization
 - E2E tests: 596/597 passed (1 unrelated failure about column reset)
+
+EVIDENCE IMAGES REMOVED 2026-11-14 by maintainer decision (harness/screenshot output is not kept in the source tree): the four PNGs under `docs/evidence/startup-flash/` cited above are deleted. This record is self-contained without them -- the captions already state what each frame shows (Frame 1 empty olive background, Frame 61 sidebar only, Frame 62 column headers without rows, Frame 74 populated track list), and that is the evidence for the defect and for the fix. To re-capture: build with the pre-fix revision, run `task tauri:dev` and grab frames at the same numbers with the Playwright frame-extraction flow in docs/development.md#frame-extraction-for-debugging.
 <!-- SECTION:NOTES:END -->
