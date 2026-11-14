@@ -67,10 +67,11 @@ The backend is being split into two crates as part of TASK-353:
 
 | Crate | Current responsibility |
 |-------|------------------------|
-| `crates/mt-core/` | Tauri-independent SQLite database, pure scanner, Last.fm client, Plex client/merge, network file cache, and platform mount detection |
+| `crates/mt-core/` | Tauri-independent SQLite database, pure scanner, Last.fm client, Plex client/merge, audio tag reading/writing, network file cache, and platform mount detection |
 | `crates/mt-tauri/` | Desktop application, command/event adapters, audio, scanner artwork, and remaining integration modules |
 
-`mt-tauri` depends on `mt-core` and re-exports its cache, database, scanner, Last.fm, and Plex APIs internally
+`mt-tauri` depends on `mt-core` and re-exports its cache, database, scanner, Last.fm, Plex,
+and metadata APIs internally
 so existing desktop callers retain the same paths. Their implementations and
 unit/property tests live only in `mt-core`; run them without linking the desktop framework
 using `cargo nextest run -p mt-core`.
@@ -100,9 +101,15 @@ the core never loads or embeds credentials. Desktop commands retain settings,
 scrobble orchestration, and event emission. The desktop `agent` feature forwards
 to the core's dependency-free `agent` feature for Last.fm discovery APIs.
 
+The core `metadata` module owns the metadata editor's lofty tag reading and writing:
+`TrackMetadata`/`MetadataUpdate` DTOs, single-file and rayon-parallel batch reads, and
+tag writes that recreate an unreadable tag. The desktop `metadata` module retains the
+three Tauri commands and their `tracing::instrument` spans, so span names and command
+registration are unchanged.
+
 CI checks the core's transitive normal, build, and test dependencies across all
 targets and features, rejecting Tauri, Tao, Wry, WebKit, and Objective-C 2 crates.
-Plex download orchestration, standalone metadata command logic, and library/queue command orchestration remain pending;
+Plex download orchestration and library/queue command orchestration remain pending;
 this initial split does not yet isolate all backend tests from Tauri.
 
 ### Tauri Core (Rust)
@@ -286,6 +293,7 @@ mt/
 │   │       ├── cache/      # Network file cache and mount detection
 │   │       ├── db/         # Database operations and tests
 │   │       ├── lastfm/     # Last.fm client, signing, rate limiting, DTOs, and tests
+│   │       ├── metadata/   # Audio tag reading/writing and tests
 │   │       ├── plex/       # Plex HTTP client, DTOs, library merge, and tests
 │   │       ├── scanner/    # Pure scanning, metadata parsing, and tests
 │   │       └── lib.rs
@@ -296,6 +304,7 @@ mt/
 │       │   ├── commands/   # Tauri command handlers
 │       │   ├── db.rs       # Core database re-export; desktop test fixture hook
 │       │   ├── lastfm/     # Core re-exports and desktop credential loading
+│       │   ├── metadata.rs # Core re-exports and metadata editor commands
 │       │   ├── plex/       # Core re-exports and desktop downloads
 │       │   ├── scanner/    # Core re-exports, artwork, and scan commands
 │       │   └── watcher/    # File system monitoring

@@ -5,5 +5,6 @@
 pub mod cache;
 pub mod db;
 pub mod lastfm;
+pub mod metadata;
 pub mod plex;
 pub mod scanner;
