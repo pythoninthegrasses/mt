@@ -1,0 +1,52 @@
+{
+ "label": "lto-off-cgus1",
+ "reps_per_run": 5,
+ "process_runs": 5,
+ "cpu_seconds_runs": [
+  1.171788,
+  1.171981,
+  1.173243,
+  1.171154,
+  1.17407
+ ],
+ "median_total_cpu_seconds": 1.171981,
+ "min_total_cpu_seconds": 1.171154,
+ "aggregate_mib_per_cpu_second": 92.424,
+ "files": {
+  "corpus.flac": {
+   "bytes": 7168506,
+   "samples": 5760000,
+   "median_cpu_per_decode": 0.038731,
+   "median_mib_per_cpu_second": 176.51,
+   "median_realtime_factor": 1549.1
+  },
+  "corpus.m4a": {
+   "bytes": 1454567,
+   "samples": 5763072,
+   "median_cpu_per_decode": 0.043902,
+   "median_mib_per_cpu_second": 31.597,
+   "median_realtime_factor": 1367.2
+  },
+  "corpus.mp3": {
+   "bytes": 1441196,
+   "samples": 5760000,
+   "median_cpu_per_decode": 0.070803,
+   "median_mib_per_cpu_second": 19.412,
+   "median_realtime_factor": 847.4
+  },
+  "corpus.ogg": {
+   "bytes": 1140806,
+   "samples": 5760000,
+   "median_cpu_per_decode": 0.05339,
+   "median_mib_per_cpu_second": 20.378,
+   "median_realtime_factor": 1123.8
+  },
+  "corpus.wav": {
+   "bytes": 11520078,
+   "samples": 5760000,
+   "median_cpu_per_decode": 0.027671,
+   "median_mib_per_cpu_second": 397.037,
+   "median_realtime_factor": 2168.3
+  }
+ }
+}

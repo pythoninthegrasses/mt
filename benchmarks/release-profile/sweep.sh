@@ -185,6 +185,82 @@ case "$cmd" in
       "env MT_ENUMERATE_DEVICES=1 '$bin'" | tee "$RESULTS_DIR/hyperfine-$label.txt"
     ;;
 
+  decode)
+    [ $# -ge 2 ] || { echo "usage: decode <lto> <cgus> [reps] [runs]" >&2; exit 2; }
+    lto="$1"; cgus="$2"; reps="${3:-5}"; runs="${4:-5}"
+    label="$(combo_label "$lto" "$cgus")"
+    # Build the example under the candidate's profile: the point is the codegen the
+    # shipped binary gets, so the measurement must link the same graph. Only the
+    # example target is named, which keeps the build to the lib plus this target.
+    say "build decode_bench [$label] (lto=$lto codegen-units=$cgus)"
+    eval "$(build_cmd "$lto" "$cgus") --example decode_bench"
+    exe="$CARGO_TARGET_DIR/$TRIPLE/release/examples/decode_bench"
+    [ -x "$exe" ] || { echo "missing $exe" >&2; exit 2; }
+    corpus="$("$HERE/corpus.sh")"
+    files=("$corpus"/corpus.mp3 "$corpus"/corpus.flac "$corpus"/corpus.m4a \
+           "$corpus"/corpus.ogg "$corpus"/corpus.wav)
+    say "decode [$label] ($reps timed decodes per file, $runs process runs)"
+    # Repeat whole processes and take the median of the totals: one run cannot tell
+    # a 3% profile difference from a scheduler hiccup, and the median of an odd count
+    # is a real sample rather than an average dragged by a page-in spike.
+    jsonl="$RESULTS_DIR/decode-$label.jsonl"; : >"$jsonl"
+    for _ in $(seq 1 "$runs"); do
+      "$exe" --reps "$reps" --json "${files[@]}" >>"$jsonl"
+    done
+    MT_LABEL="$label" MT_REPS="$reps" MT_RUNS="$runs" MT_JSONL="$jsonl" \
+    MT_OUT="$RESULTS_DIR/decode-$label.json" python3 - <<'PY'
+import json, os, statistics
+
+rows = [json.loads(l) for l in open(os.environ["MT_JSONL"]) if l.strip()]
+if not rows:
+    raise SystemExit("decode_bench produced no JSON")
+runs = [r["total_cpu_seconds"] for r in rows]
+median_total = statistics.median(runs)
+
+per_file = {}
+for r in rows:
+    for f in r["files"]:
+        name = f["path"].rsplit("/", 1)[-1]
+        d = per_file.setdefault(name, {"bytes": f["bytes"], "samples": f["samples"],
+                                       "cpu": [], "mib_s": [], "rtf": []})
+        d["cpu"].append(f["cpu_per_decode"])
+        d["mib_s"].append(f["mib_per_cpu_second"])
+        d["rtf"].append(f["realtime_factor"])
+
+out = {
+    "label": os.environ["MT_LABEL"],
+    "reps_per_run": int(os.environ["MT_REPS"]),
+    "process_runs": int(os.environ["MT_RUNS"]),
+    "cpu_seconds_runs": [round(v, 6) for v in runs],
+    "median_total_cpu_seconds": round(median_total, 6),
+    "min_total_cpu_seconds": round(min(runs), 6),
+    "aggregate_mib_per_cpu_second": round(
+        sum(f["bytes"] for f in rows[0]["files"]) * int(os.environ["MT_REPS"])
+        * int(os.environ["MT_RUNS"]) / sum(r["total_cpu_seconds"] for r in rows)
+        / 1048576.0, 3),
+    "files": {
+        name: {
+            "bytes": d["bytes"],
+            "samples": d["samples"],
+            "median_cpu_per_decode": round(statistics.median(d["cpu"]), 6),
+            "median_mib_per_cpu_second": round(statistics.median(d["mib_s"]), 3),
+            "median_realtime_factor": round(statistics.median(d["rtf"]), 1),
+        }
+        for name, d in sorted(per_file.items())
+    },
+}
+json.dump(out, open(os.environ["MT_OUT"], "w"), indent=1)
+
+print(f"[{out['label']}] median total CPU {median_total:.3f} s over "
+      f"{out['process_runs']} runs (min {out['min_total_cpu_seconds']:.3f}), "
+      f"{out['aggregate_mib_per_cpu_second']} MiB/CPU-s")
+print(f"  {'file':<16}{'MiB':>7}{'cpu s':>9}{'MiB/cpu s':>11}{'RT factor':>11}")
+for name, d in out["files"].items():
+    print(f"  {name:<16}{d['bytes'] / 1048576.0:>7.2}{d['median_cpu_per_decode']:>9.3}"
+          f"{d['median_mib_per_cpu_second']:>11.1}{d['median_realtime_factor']:>11.0f}")
+PY
+    ;;
+
   summary)
     say "summary -> $RESULTS_DIR/SUMMARY.md"
     MT_RESULTS_DIR="$RESULTS_DIR" python3 - <<'PY'
@@ -297,6 +373,40 @@ for plat in [p for p in ("macos", "linux", "windows") if p in rows or p in sizes
     missing = [k for k, v in r_.items() if k not in s_]
     if missing:
         out += ["", f"_No size data for: {', '.join(sorted(missing))}_"]
+
+# The runtime half (sweep.sh decode): CPU seconds to decode a fixed corpus under the
+# same profile knobs. Build time is only half the decision -- fat LTO is slow to link
+# precisely because it can inline across crates, and if the decode hot path does not
+# get faster for it, the link cost buys nothing.
+dec = {}
+for f in sorted(glob.glob(os.path.join(d, "decode-*.json"))):
+    try:
+        j = json.load(open(f))
+    except (ValueError, OSError):
+        continue
+    if isinstance(j, dict) and "median_total_cpu_seconds" in j:
+        dec[j["label"]] = j
+if dec:
+    first = next(iter(dec.values()))
+    base = dec.get("lto-fat-cgus1")
+    bt = base["median_total_cpu_seconds"] if base else None
+    bm = base["aggregate_mib_per_cpu_second"] if base else None
+    out += ["", "## runtime: decode CPU (host)", "",
+            f"{first['reps_per_run']} timed decodes per file across mp3/flac/m4a/ogg/wav, "
+            f"median of {first['process_runs']} process runs of a sha256-pinned "
+            "ffmpeg-synthesised corpus (`corpus.sh`). CPU seconds from `getrusage`, so "
+            "this is work done, not wall time; `x` columns are ratios to the committed "
+            "profile, where < 1.00x is faster.", "",
+            "| candidate | median CPU s | CPU vs baseline | MiB/CPU-s | throughput vs baseline |",
+            "|---|---|---|---|---|"]
+    for label in sorted(dec, key=lambda k: dec[k]["median_total_cpu_seconds"]):
+        j = dec[label]
+        out.append("| {l} | {t:.3f} | {rt} | {m} | {rm} |".format(
+            l=label, t=j["median_total_cpu_seconds"],
+            rt="—" if not bt else f"{j['median_total_cpu_seconds'] / bt:.2f}x",
+            m=j["aggregate_mib_per_cpu_second"],
+            rm="—" if not bm else f"{j['aggregate_mib_per_cpu_second'] / bm:.2f}x"))
+
 open(os.path.join(d, "SUMMARY.md"), "w").write("\n".join(out) + "\n")
 print("\n".join(out))
 PY

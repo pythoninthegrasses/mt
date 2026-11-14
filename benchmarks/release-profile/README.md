@@ -28,7 +28,8 @@ cd benchmarks/release-profile
 ./sweep.sh head2head true:1 thin:16 false:16   # ONE hyperfine run => comparable ratios
 ./sweep.sh ci-parity true 1 2          # same build with RUSTC_WRAPPER=sccache
 ./sweep.sh timings true 1              # cargo --timings HTML for one cold build
-./sweep.sh launch false 16 10          # MT_ENUMERATE_DEVICES=1 launch proxy
+./sweep.sh launch false 16 10          # MT_ENUMERATE_DEVICES=1 launch proxy (needs working audio)
+./sweep.sh decode false 1 5 5          # runtime: decode CPU for one candidate (TASK-369.9)
 ./sweep.sh summary                     # aggregate everything into SUMMARY.md
 
 RUNS=2 ./linux-on-mf.sh                # Linux column on mf (see the script header)
@@ -107,3 +108,43 @@ seconds. Only verdict lines go into the summary file — diagnostics that legiti
 differ run to run (elapsed positions, byte counts) print to the terminal, and a
 failing run keeps its raw transcripts as `smoke-<candidate>-*.log`. AC#3 is met when
 the two summary files differ only in the candidate label.
+
+Step 0 is an `afplay` control, and it is what makes the two other audio checks
+trustworthy. A wedged `coreaudiod` (observed here: up 11 days at 9.6% CPU) makes
+`rodio` open a device, report `State: Playing`, and leave the position at 0 ms while
+`afplay` hangs outright — a host fault that would otherwise fail every candidate
+identically and make the diff prove nothing. When the control cannot render, the two
+audio checks are recorded as `SKIP` rather than `FAIL`, so they still appear in both
+summary files and the comparison stays honest. Every `audio_test` call is also
+time-bounded: the sample loop in that example never returns when the device stops
+delivering callbacks, and an unbounded call once held a smoke run open for eight
+hours.
+
+## Runtime: decode CPU (TASK-369.9)
+
+Build time and bytes are only half the decision. Fat LTO is expensive to link
+*because* it can inline across crates, and the decode hot path is where that work
+should pay off — so `./sweep.sh decode <lto> <cgus> [reps] [runs]` measures CPU
+seconds per candidate, and `summary` prints the runtime table beside the build-time
+ones.
+
+It measures decode, not playback, on purpose. Opening an output device measures
+CoreAudio and the wall clock rather than the decoder, and fails wholesale on a host
+whose audio daemon is wedged. `crates/mt-tauri/examples/decode_bench.rs` drains
+samples into a `black_box` checksum, so the optimiser cannot delete the work being
+measured — which matters most for the most aggressive profile, the one that would
+otherwise "win" by doing nothing — and reports CPU seconds from `getrusage(2)`
+(macOS has no `clock_gettime(CLOCK_PROCESS_CPUTIME_ID)`).
+
+`./corpus.sh` generates the input: 60 s of seeded pink noise mixed with three tones,
+encoded with fixed flags to mp3/flac/m4a/ogg/wav — the formats mt's rodio features
+enable, one per container, because symphonia's per-format decoders are separate code
+paths and LTO inlines across them differently. It lives in
+`.cache/bench-369-4/corpus`, never in the checkout, and is sha256-verified against a
+manifest before use: content decides decode cost, so a candidate timed against
+different audio is not being timed at all. The repo fixtures cannot carry this — all
+five are exactly one second.
+
+The driver repeats whole processes (default 5) and takes the **median** of the totals,
+because a single run cannot separate a 3% profile difference from a page-in spike.
+

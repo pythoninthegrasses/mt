@@ -81,8 +81,12 @@ clean_cmd() {
 cli_build_cmd() {
   local lto cgus
   lto="$(lto_param "$1")"; cgus="$2"
-  printf "env RUSTUP_TOOLCHAIN=%s CARGO_HOME='%s' CARGO_TARGET_DIR='%s' CARGO_BUILD_JOBS=%s CARGO_PROFILE_RELEASE_LTO=%s CARGO_PROFILE_RELEASE_CODEGEN_UNITS=%s TRIPLE=%s TAURI_CLI='%s' bash '%s/tauri-build.sh' build" \
-    "$RUSTUP_TOOLCHAIN" "$CARGO_HOME" "$CARGO_TARGET_DIR" "$CARGO_BUILD_JOBS" "$lto" "$cgus" "$TRIPLE" "$TAURI" "$BENCH_DIR"
+  # The tauri CLI shells out to bare `cargo`, which on this box resolves to mise's
+  # shim; the shim then tries to install core:rust into mise's own store and dies
+  # before cargo metadata runs. Prepend the rustup-managed proxies so the CLI finds
+  # the same cargo the bare-build column uses.
+  printf "env PATH='%s:%s' RUSTUP_TOOLCHAIN=%s CARGO_HOME='%s' CARGO_TARGET_DIR='%s' CARGO_BUILD_JOBS=%s CARGO_PROFILE_RELEASE_LTO=%s CARGO_PROFILE_RELEASE_CODEGEN_UNITS=%s TRIPLE=%s TAURI_CLI='%s' bash '%s/tauri-build.sh' build" \
+    "$HOME/.cargo/bin" "$PATH" "$RUSTUP_TOOLCHAIN" "$CARGO_HOME" "$CARGO_TARGET_DIR" "$CARGO_BUILD_JOBS" "$lto" "$cgus" "$TRIPLE" "$TAURI" "$BENCH_DIR"
 }
 
 bin_path() { echo "$CARGO_TARGET_DIR/$TRIPLE/release/mt"; }
