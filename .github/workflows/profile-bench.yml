@@ -10,9 +10,10 @@
 # '{"build":{"beforeBuildCommand":""}}'` -- from a cold target dir, with the two
 # profile knobs supplied through Cargo's profile env vars.
 #
-# It calls cargo-tauri directly rather than going through Task on purpose: both
-# `ci:build` and `ci:bundle` declare `sources:` fingerprints, so a second identical
-# invocation inside the timing loop would be reported "up to date" and time nothing.
+# It calls cargo-tauri (through benchmarks/release-profile/tauri-build.sh, which
+# every column uses) rather than going through Task on purpose: both `ci:build` and
+# `ci:bundle` declare `sources:` fingerprints, so a second identical invocation
+# inside the timing loop would be reported "up to date" and time nothing.
 # The frontend bundle and the Zig sidecar are prepared once beforehand because they
 # are identical for every candidate; only the Rust build is under test. The Linux
 # column runs in the project's own Docker image on a 16-core host instead
@@ -85,24 +86,39 @@ jobs:
       - name: Install hyperfine
         shell: bash
         run: |
-          if ! command -v hyperfine >/dev/null 2>&1; then
-            curl -fsSL -o hf.zip https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine-v1.19.0-x86_64-pc-windows-msvc.zip
-            unzip -oq hf.zip -d "$HOME/hf"
-            find "$HOME/hf" -maxdepth 1 -type d -name 'hyperfine-*' -exec sh -c 'echo "$0" >> "$GITHUB_PATH"' {} \;
+          # GITHUB_PATH only affects later steps, so the version check has to use
+          # the path resolved in this step and later steps use $HYPERFINE.
+          if command -v hyperfine >/dev/null 2>&1; then
+            echo 'HYPERFINE=hyperfine' >>"$GITHUB_ENV"
+            hyperfine --version
+          else
+            curl -fsSL -o "$RUNNER_TEMP/hyperfine.zip" \
+              https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine-v1.19.0-x86_64-pc-windows-msvc.zip
+            unzip -oq "$RUNNER_TEMP/hyperfine.zip" -d "$RUNNER_TEMP/hyperfine"
+            bin="$(find "$RUNNER_TEMP/hyperfine" -maxdepth 2 -type f -name 'hyperfine.exe' | head -1)"
+            test -n "$bin" || { echo "hyperfine.exe not found in the archive" >&2; exit 1; }
+            printf 'HYPERFINE=%s\n' "$bin" >>"$GITHUB_ENV"
+            "$bin" --version
           fi
-          hyperfine --version
 
       - name: Runner spec
         shell: bash
         run: |
           mkdir -p results
+          # Resolve the CLI here rather than inside tauri-build.sh: that script is
+          # the timed region, and a probe would be paid on every run. Later steps
+          # get the answer through TAURI_CLI.
+          if cargo tauri --version >/dev/null 2>&1; then tauri_cli="cargo tauri"
+          elif command -v tauri >/dev/null 2>&1; then tauri_cli="tauri"
+          else echo "no tauri CLI on PATH (task ci:setup installs tauri-cli)" >&2; exit 1; fi
+          printf 'TAURI_CLI=%s\n' "$tauri_cli" >>"$GITHUB_ENV"
           {
             echo "runner=blacksmith-4vcpu-windows-2025"
             echo "cores=$(nproc)"
             uname -a
             rustc -Vv
             cargo --version
-            cargo tauri --version
+            $tauri_cli --version
           } >results/runner-spec.txt
           cat results/runner-spec.txt
 
@@ -126,12 +142,13 @@ jobs:
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ matrix.combo.cgus }}
         run: |
           label="windows-lto-${{ matrix.combo.lto }}-cgus${{ matrix.combo.cgus }}"
-          hyperfine --runs "$BENCH_RUNS" --warmup 0 --shell bash \
+          export TRIPLE="$TRIPLE_WINDOWS"
+          "$HYPERFINE" --runs "$BENCH_RUNS" --warmup 0 --shell bash \
             --time-unit second --command-name "$label" \
             --prepare 'rm -rf target' \
             --export-json "results/hyperfine-$label.json" \
             --export-markdown "results/hyperfine-$label.md" \
-            'bash benchmarks/release-profile/win-build.sh build' \
+            'bash benchmarks/release-profile/tauri-build.sh build' \
             | tee "results/hyperfine-$label.txt"
 
       - name: Bundle NSIS installer and record artifact sizes
@@ -142,7 +159,8 @@ jobs:
         run: |
           label="windows-lto-${{ matrix.combo.lto }}-cgus${{ matrix.combo.cgus }}"
           # The build above already produced the binary, so this only packages it.
-          bash benchmarks/release-profile/win-build.sh bundle
+          export TRIPLE="$TRIPLE_WINDOWS"
+          bash benchmarks/release-profile/tauri-build.sh bundle nsis
           {
             bin="target/$TRIPLE_WINDOWS/release/mt.exe"
             if [ -f "$bin" ]; then

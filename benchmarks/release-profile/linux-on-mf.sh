@@ -33,6 +33,10 @@ mkdir -p "$RESULTS"
 
 say() { printf '\n== %s\n' "$*"; }
 
+# Every ssh command below is a double-quoted string whose $WT/$BRANCH/$IMAGE
+# placeholders are meant to expand here on the mac; only \$HOME is left for mf.
+# shellcheck disable=SC2029
+
 say "runner spec"
 ssh "$MF" "hostname; uname -a; nproc; cat /proc/loadavg; grep -m1 'model name' /proc/cpuinfo; free -g | sed -n 2p; docker --version; df -h ~/git | tail -1" \
   >"$RESULTS/runner-spec.txt" 2>&1
@@ -61,13 +65,14 @@ rsync -a --delete "$MT_ROOT/app/frontend/dist/" "$MF:~/git/$WT/app/frontend/dist
 say "docker image from docker/linux (deps stage)"
 ssh "$MF" "docker build -q --target deps -t $IMAGE ~/git/$WT/docker/linux"
 
-# Run as the host user so the ~14 GiB of build output in the worktree stays
-# deletable by the account that owns it; cargo/npm caches go to the /out mount.
+# Run as root: the image's CARGO_HOME (/usr/local/cargo) holds tauri-cli and a warm
+# crates.io cache, and the container needs apt for hyperfine. linux-sweep.sh chowns
+# what it creates back to the owner of the mounted worktree so it stays deletable
+# without sudo.
 say "sweep (RUNS=$RUNS)"
 ssh "$MF" "set -e
   rm -rf ~/${WT}-out && mkdir -p ~/${WT}-out
-  docker run --rm --user \$(id -u):\$(id -g) \
-    -e HOME=/out -e CARGO_HOME=/out/cargo-home \
+  docker run --rm \
     -v \$HOME/git/$WT:/build -v \$HOME/${WT}-out:/out \
     -e RUNS='$RUNS' -e LTO_VALUES='${LTO_VALUES:-true thin false}' -e CGUS_VALUES='${CGUS_VALUES:-1 4 16}' \
     $IMAGE bash /build/benchmarks/release-profile/linux-sweep.sh"
