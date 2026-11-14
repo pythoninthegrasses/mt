@@ -1,0 +1,27 @@
+wt1	git worktree add	1
+wt1	crate-type override	["rlib"]
+wt1	npm ci	1
+wt1	vite build (dist)	1
+wt1	task zig:stage (cold)	18
+wt1	cargo build -p mt-tauri --features agent	42
+wt1	crates compiled (debug)	496
+wt1	target	2600532
+wt1	target/debug	2600520
+wt1	target/debug/build	2229236
+wt1	target/debug/build/mt-tauri	266496
+wt1	target/debug/incremental	280748
+wt1	mt_lib.*.rcgu.o files (count)	0
+wt1	mt_lib.*.rcgu.o files (KiB)	0
+wt1	artifact debug/mt	82454736
+wt1	cargo build -p mt-tauri --release --features agent	69
+wt1	crates compiled (extra)	496
+wt1	target	4671504
+wt1	target/release	2070972
+wt1	target/release/build/mt-tauri	159560
+wt1	release mt_lib.*.rcgu.o files (count)	0
+wt1	release mt_lib.*.rcgu.o files (KiB)	0
+wt1	artifact release/mt	16217856
+wt1	.cache/cargo	371444
+wt1	app/frontend/node_modules	124820
+wt1	crates/mt-tauri/binaries	1788
+wt1	.worktree-total	5244536

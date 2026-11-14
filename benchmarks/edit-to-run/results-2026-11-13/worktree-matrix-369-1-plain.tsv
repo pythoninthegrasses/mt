@@ -1,0 +1,20 @@
+wt1	git worktree add	1
+wt1	npm ci	1
+wt1	vite build (dist)	2
+wt1	task zig:stage (cold)	17
+wt1	cargo build -p mt-tauri (no features)	42
+wt1	crates compiled (debug)	474
+wt1	target	3422348
+wt1	target/debug	3422336
+wt1	target/debug/build	2593084
+wt1	target/debug/build/mt-tauri	719808
+wt1	target/debug/incremental	252748
+wt1	mt_lib.*.rcgu.o files (count)	256
+wt1	mt_lib.*.rcgu.o files (KiB)	67092
+wt1	artifact target/debug/libmt_lib.a	490479072
+wt1	artifact target/debug/libmt_lib.dylib	468912
+wt1	artifact debug/mt	79370160
+wt1	.cache/cargo	359820
+wt1	app/frontend/node_modules	124820
+wt1	crates/mt-tauri/binaries	1788
+wt1	.worktree-total	3983760

@@ -1,0 +1,13 @@
+release-host	target	9751676
+release-host	target/debug	7012884
+release-host	target/debug/build	5620884
+release-host	target/debug/incremental	875264
+release-host	target/debug/examples	0
+release-host	target/release	2738780
+release-host	zig-core/.zig-cache	36660
+release-host	zig-core/zig-out	8456
+release-host	crates/mt-tauri/binaries	1788
+release-host	.cache/cargo	398896
+release-host	app/frontend/node_modules	124820
+release-host	app/frontend/dist	888
+release-host	.worktree-total	10352164

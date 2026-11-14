@@ -1,0 +1,16 @@
+final	target	16940232
+final	target/debug	8107400
+final	target/debug/build	6714764
+final	target/debug/incremental	875952
+final	target/debug/examples	0
+final	target/release	3366256
+final	target/aarch64-apple-darwin	5466560
+final	target/aarch64-apple-darwin/debug	3200176
+final	target/aarch64-apple-darwin/release	2266380
+final	zig-core/.zig-cache	36660
+final	zig-core/zig-out	8456
+final	crates/mt-tauri/binaries	1788
+final	.cache/cargo	398896
+final	app/frontend/node_modules	124820
+final	app/frontend/dist	888
+final	.worktree-total	17540720
