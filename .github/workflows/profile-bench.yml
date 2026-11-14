@@ -124,9 +124,6 @@ jobs:
           RUSTC_WRAPPER: ''
           CARGO_PROFILE_RELEASE_LTO: ${{ matrix.combo.lto }}
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ matrix.combo.cgus }}
-        # The timed command is quoted so hyperfine's own shell expands
-        # $TRIPLE_WINDOWS, not this step's shell.
-        # shellcheck disable=SC2016
         run: |
           label="windows-lto-${{ matrix.combo.lto }}-cgus${{ matrix.combo.cgus }}"
           hyperfine --runs "$BENCH_RUNS" --warmup 0 --shell bash \
@@ -134,7 +131,7 @@ jobs:
             --prepare 'rm -rf target' \
             --export-json "results/hyperfine-$label.json" \
             --export-markdown "results/hyperfine-$label.md" \
-            'cargo tauri build --no-bundle --target "$TRIPLE_WINDOWS" --config "{\"build\":{\"beforeBuildCommand\":\"\"}}"' \
+            'bash benchmarks/release-profile/win-build.sh build' \
             | tee "results/hyperfine-$label.txt"
 
       - name: Bundle NSIS installer and record artifact sizes
@@ -145,12 +142,12 @@ jobs:
         run: |
           label="windows-lto-${{ matrix.combo.lto }}-cgus${{ matrix.combo.cgus }}"
           # The build above already produced the binary, so this only packages it.
-          cargo tauri bundle --target "$TRIPLE_WINDOWS" --bundles nsis \
-            --config '{"build":{"beforeBuildCommand":""}}'
+          bash benchmarks/release-profile/win-build.sh bundle
           {
-            for f in "target/$TRIPLE_WINDOWS/release/mt.exe"; do
-              [ -f "$f" ] && printf '%s\tbinary-bytes\t%s\n' "$label" "$(wc -c <"$f")"
-            done
+            bin="target/$TRIPLE_WINDOWS/release/mt.exe"
+            if [ -f "$bin" ]; then
+              printf '%s\tbinary-bytes\t%s\n' "$label" "$(wc -c <"$bin")"
+            fi
             find "target/$TRIPLE_WINDOWS/release/bundle/nsis" -name '*.exe' 2>/dev/null |
               while IFS= read -r f; do
                 printf '%s\tnsis-bytes\t%s\n' "$label" "$(wc -c <"$f")"
