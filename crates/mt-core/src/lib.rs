@@ -8,4 +8,5 @@ pub mod lastfm;
 pub mod library;
 pub mod metadata;
 pub mod plex;
+pub mod queue;
 pub mod scanner;

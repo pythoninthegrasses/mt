@@ -67,7 +67,7 @@ The backend is being split into two crates as part of TASK-353:
 
 | Crate | Current responsibility |
 |-------|------------------------|
-| `crates/mt-core/` | Tauri-independent SQLite database, pure scanner, Last.fm client, Plex client/merge, audio tag reading/writing, library view-model layer, network file cache, and platform mount detection |
+| `crates/mt-core/` | Tauri-independent SQLite database, pure scanner, Last.fm client, Plex client/merge, audio tag reading/writing, library view-model layer, queue orchestration, network file cache, and platform mount detection |
 | `crates/mt-tauri/` | Desktop application, command/event adapters, audio, scanner artwork, and remaining integration modules |
 
 `mt-tauri` depends on `mt-core` and re-exports its cache, database, scanner, Last.fm, Plex,
@@ -120,10 +120,23 @@ phases through the core's `ReconcileProgress` trait, which the desktop bridges t
 `reconcile-progress` events; the response DTOs are core types re-exported for the
 shadow-diff harness.
 
+The core `queue` module owns what the `queue_*` commands wrapped around the queue's SQL
+layer: the response shapes the frontend reads, which positions a write landed on, and the
+order a request's announcements go out in — a reorder is a `shuffled` followed by a state
+change, a play context is `cleared` followed by a state change. It also owns the four
+navigation commands, which differ only in how they enter the state machine, and the two
+play-context commands. Functions take a `Database` and return the same `Result<_, String>`
+the commands returned, so frontend-visible error strings are unchanged. The desktop
+`commands::queue` module retains the command adapters — signatures and spans — plus two
+seams the core asks the desktop for: `QueueReporter`, bridged onto the `queue:updated` and
+`queue:state_changed` events, and `navigation::PlaybackSink`, implemented over the audio
+engine so a navigation request can start a file. The response DTOs are core types
+re-exported through the adapter.
+
 CI checks the core's transitive normal, build, and test dependencies across all
 targets and features, rejecting Tauri, Tao, Wry, WebKit, and Objective-C 2 crates.
-Plex download orchestration and library/queue command orchestration remain pending;
-this initial split does not yet isolate all backend tests from Tauri.
+Plex download orchestration remains pending; this initial split does not yet isolate
+all backend tests from Tauri.
 
 ### Tauri Core (Rust)
 
@@ -306,8 +319,10 @@ mt/
 │   │       ├── cache/      # Network file cache and mount detection
 │   │       ├── db/         # Database operations and tests
 │   │       ├── lastfm/     # Last.fm client, signing, rate limiting, DTOs, and tests
+│   │       ├── library/    # Library queries, sections, mutations, reconcile pipeline
 │   │       ├── metadata/   # Audio tag reading/writing and tests
 │   │       ├── plex/       # Plex HTTP client, DTOs, library merge, and tests
+│   │       ├── queue/      # Queue orchestration, announcements, playback seam
 │   │       ├── scanner/    # Pure scanning, metadata parsing, and tests
 │   │       └── lib.rs
 │   └── mt-tauri/           # Desktop app and remaining backend modules
