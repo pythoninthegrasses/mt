@@ -19,7 +19,7 @@
 // that spends CPU somewhere else is visible. The decode loop is single-threaded, so
 // the two should track each other; `rayon` is not involved in this path.
 
-use libc::{getrusage, rusage, RUSAGE_SELF};
+use libc::{RUSAGE_SELF, getrusage, rusage};
 use rodio::{Decoder, Source};
 use std::fs::File;
 use std::hint::black_box;
@@ -63,14 +63,22 @@ impl Outcome {
     /// same units across candidates and formats, so the summary can divide them.
     fn mib_per_cpu_second(&self) -> f64 {
         let mib = self.bytes as f64 / 1_048_576.0 * f64::from(self.reps);
-        if self.cpu_seconds > 0.0 { mib / self.cpu_seconds } else { 0.0 }
+        if self.cpu_seconds > 0.0 {
+            mib / self.cpu_seconds
+        } else {
+            0.0
+        }
     }
 
     /// How many seconds of audio one CPU second buys. Above 1.0 means the machine
     /// can decode faster than real time, which is the floor a player needs.
     fn realtime_factor(&self) -> f64 {
         let audio = self.audio_seconds * f64::from(self.reps);
-        if self.cpu_seconds > 0.0 { audio / self.cpu_seconds } else { 0.0 }
+        if self.cpu_seconds > 0.0 {
+            audio / self.cpu_seconds
+        } else {
+            0.0
+        }
     }
 }
 
@@ -96,7 +104,9 @@ fn decode_once(path: &str) -> Result<(u64, f32, u16, u32, Option<Duration>), Str
 }
 
 fn bench(path: &str, reps: u32) -> Result<Outcome, String> {
-    let bytes = std::fs::metadata(path).map_err(|e| format!("stat {path}: {e}"))?.len();
+    let bytes = std::fs::metadata(path)
+        .map_err(|e| format!("stat {path}: {e}"))?
+        .len();
     // One untimed pass: pays the first-touch page faults and any lazy decoder
     // setup so the measured loop measures decode, not cold I/O.
     let (samples, _, channels, sample_rate, duration) = decode_once(path)?;
@@ -104,7 +114,9 @@ fn bench(path: &str, reps: u32) -> Result<Outcome, String> {
         .map(|d| d.as_secs_f64())
         // Some containers report no duration; derive it from the frames actually
         // decoded so the real-time factor still means something.
-        .unwrap_or_else(|| samples as f64 / f64::from(channels.max(1)) / f64::from(sample_rate.max(1)));
+        .unwrap_or_else(|| {
+            samples as f64 / f64::from(channels.max(1)) / f64::from(sample_rate.max(1))
+        });
 
     let cpu0 = cpu_time();
     let wall0 = Instant::now();
@@ -173,7 +185,11 @@ fn main() {
     }
 
     let cpu: f64 = outcomes.iter().map(|o| o.cpu_seconds).sum();
-    let mib: f64 = outcomes.iter().map(|o| o.bytes as f64 * f64::from(o.reps)).sum::<f64>() / 1_048_576.0;
+    let mib: f64 = outcomes
+        .iter()
+        .map(|o| o.bytes as f64 * f64::from(o.reps))
+        .sum::<f64>()
+        / 1_048_576.0;
 
     if json {
         let rows: Vec<String> = outcomes
