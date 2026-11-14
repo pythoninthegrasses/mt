@@ -1,10 +1,11 @@
 ---
 id: TASK-369.3
 title: Audit unused and over-scoped dependencies across platforms and features
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@lance'
 created_date: '2026-11-14T04:24:00Z'
-updated_date: '2026-11-14T05:59:00Z'
+updated_date: '2026-11-14T06:45:00Z'
 labels: []
 dependencies:
   - TASK-361
@@ -32,6 +33,37 @@ mt-tauri declares ~50 direct dependencies plus dev-dependencies (tempfile, propt
 - [ ] #5 task lint, task test, and CI green after removals
 <!-- AC:END -->
 
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Approach
+
+Audit mt-tauri's declared dependencies with the documented fallback lints (cargo::unused_dependencies does not fire on this crate's target shapes — TASK-361), triage every flag, and land removals/feature trims that survive the platform x feature matrix. macOS arm64 runs locally; Linux via the Docker build image; Windows via CI (no local MSVC). No crate upgrades, no renderer/cache/profile/sccache work (sibling tasks own those).
+
+### Stale premises in the task description (verified 2026-11-14)
+
+- raw-window-handle and windows-sys are ALREADY windows-scoped ([target.'cfg(target_os = "windows")'.dependencies]); windows-sys feeds GetDriveTypeW in cache/mount_detect.rs as well as the souvlaki HWND path.
+- sha2 and md5 are both load-bearing: sha2 = scanner/fingerprint.rs content hashes; md5 = lastfm/signature.rs API signatures. Not redundant; annotate per AC#2.
+- tempfile/proptest/wiremock all have real test consumers.
+
+### Steps
+
+1. Baseline on macOS aarch64, cargo 1.100: `cargo tree --locked -e normal | wc -l` (1180), unique package count, `grep -c '^\[\[package\]\]' Cargo.lock` (771). Re-measure after changes; do NOT reuse the 1443 figure from TASK-352.
+2. Stage zig sidecar (`task zig:stage-placeholder` per test.yml lint job) before any cargo run; `git checkout crates/mt-tauri/gen/schemas` if build.rs rewrites them.
+3. Per feature set (default, agent, mcp, devtools, and --all-features for unification): `~/.cargo/bin/cargo rustc -p mt-tauri --lib -- -W unused-crate-dependencies`, then `CARGO_LOG=cargo::diagnostics::rules::unused_dependencies=debug cargo check --workspace --all-targets` for dev-deps and hidden candidates. Use ~/.cargo/bin/cargo (mise shim ignores RUSTUP_TOOLCHAIN).
+4. Linux: same two commands inside docker/linux image via docker run. Windows: cargo rustc --lib lint cannot run locally (needs MSVC); run via CI on the Windows runner or annotate as CI-deferred with source-level cfg evidence for every windows-only dep.
+5. Triage each flag: removable / required-by-platform-or-feature / feature-activation or version-pinning dep (documented false positive) / inconclusive.
+6. Feature-scope survey (AC#2 "over-scoped"): reqwest (default features incl. TLS/json/cookies vs. actual use in lastfm, lyrics, plex, sidecar, shadow_diff, agent setup), lofty (which container format features are reachable), tokio. Verify reqwest feature list for 0.12 against docs before trimming; confirm savings with cargo tree, and with/without `agent` because feature unification can erase them.
+7. Land changes as atomic commits (each removal/trim self-contained with its lockfile), then re-run audit + `task lint`, `task test`, targeted nextest groups.
+8. Record findings, before/after counts, and false-positive classes in notes; docs/builds.md gets the reproducible command block and final count; CI green on the branch revision before marking Done.
+
+### Risks
+
+- cfg-gated deps (objc2*, dispatch2, libc, windows-sys) can be invisible to --lib lint on the wrong host: never remove one on the evidence of a single platform.
+- reqwest trimming TLS breaks HTTPS silently — mock/HTTP tests won't catch it; needs a live HTTPS check (Plex ping or Last.fm handshake) after the change.
+- Lofty feature names/format gating unverified until checked against 0.22 docs; don't guess feature names.
+<!-- SECTION:PLAN:END -->
+
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
@@ -48,4 +80,10 @@ lru 0.12 with parking_lot: backs a 100-entry artwork LRU in scanner/artwork_cach
 lofty: largest single tag-reader dependency and it covers every container format. Check which formats the scanner can actually reach and whether lofty's format features can be narrowed.
 
 sha2 0.10.9 and md5 0.7 are declared side by side in the Cargo.toml Hashing block. If both only feed cache keys one may be redundant; if both stay, record which subsystem needs each so the audit does not remove a load-bearing one.
+
+2026-11-14 macOS arm64 audit (cargo 1.100, ~/.cargo/bin/cargo, placeholder sidecar staged): lib-lint `cargo rustc -p mt-tauri --lib -- -W unused-crate-dependencies` and CARGO_LOG=cargo::diagnostics::rules::unused_dependencies=debug `cargo check --workspace --all-targets` run per feature set default/agent/mcp/devtools: ZERO warnings and ZERO mt-tauri debug candidates in all four. Transitive `ignoring unused extern ... package is capped` debug lines are upstream crates' edition-cap quirks, not our manifest. Caveat found: a warm local target/ can replay mt-tauri freshness without recompiling under --all-targets, so the CI dep-audit matrix (clean checkouts, native runners) is the authoritative per-platform record.
+
+AC#2 annotations — every candidate resolved: reqwest default-features=false with default-tls (HTTPS), charset (gates Response::text() used by shadow_diff + agent/setup), json, system-proxy; http2 dropped (commit 7842778). sha2 -> scanner/fingerprint.rs track hashes; md5 -> lastfm/signature.rs API signatures (both load-bearing, NOT redundant). windows-sys (single feature Win32_Storage_FileSystem) -> GetDriveTypeW in cache/mount_detect.rs; raw-window-handle -> souvlaki HWND in media_keys.rs; both already windows-scoped (task description premise stale). libc -> statfs in mount_detect (cfg(unix), lint-clean on macOS). tokio features all have source consumers (fs in lib.rs save paths). Dev-deps tempfile/proptest/wiremock all used by tests. lru kept: sole reverse-dep but removal saves 1 crate; parking_lot shared with r2d2/scheduled-thread-pool. lofty kept: its only optional feature is id3v2_compression_support (default) whose flate2 is shared with png -> zero-crate win. reqwest 0.13.2 in Cargo.lock is tauri's MOBILE-target dep (cfg android/apple-non-macos), never built on desktop.
+
+AC#4 counts: cargo tree --locked -e normal | wc -l = 1180 before, 1162 after the reqwest trim (h2 + its h2-only deps left the production tree; wiremock keeps h2 in dev). Cargo.lock package count 771 unchanged (dev users keep h2). docs/builds.md#dependency-audit records the final count, the rerun commands, and the false-positive classes (AC#3).
 <!-- SECTION:NOTES:END -->
