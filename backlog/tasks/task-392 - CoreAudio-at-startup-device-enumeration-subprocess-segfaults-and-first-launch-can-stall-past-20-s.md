@@ -12,7 +12,7 @@ dependencies: []
 references:
   - crates/mt-tauri/src/audio/device_isolation.rs
   - benchmarks/release-profile/smoke.sh
-  - benchmarks/release-profile/results-2026-11-14/
+  - docs/builds.md
 priority: medium
 ordinal: 78500
 ---

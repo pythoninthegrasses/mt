@@ -109,8 +109,11 @@ Release builds now use thin LTO with `codegen-units = 4` (TASK-369.4). The forme
 
 The former profile (`lto = true` (fat), `codegen-units = 1`) was benchmarked
 against all eight `lto × codegen-units` alternatives on three platforms, plus a
-decode-CPU pass for the runtime half. Full data:
-`benchmarks/release-profile/results-2026-11-14/SUMMARY.md`.
+decode-CPU pass for the runtime half. Full per-candidate data (build seconds,
+binary/text/staticlib/installer/target sizes per platform) lives in this section
+and in the TASK-369.4 and TASK-369.9 records; raw harness output is not
+committed, so regenerate with `cd benchmarks/release-profile && ./sweep.sh
+summary`, which writes a gitignored `results-<date>/SUMMARY.md`.
 
 | | macOS (M4 Max) | Linux x64 (16-core) | Windows x64 (CI runner) |
 |---|---|---|---|
@@ -224,8 +227,9 @@ Ensure consistent power state (AC power, low power mode off).
 #### Measured Baseline (TASK-369.1, 2026-11-13)
 
 M4 Max (12P + 4E), 64 GB, macOS 15.8.1, rustc/cargo 1.100.0, sccache warm,
-`CARGO_BUILD_JOBS=14`. Means from `benchmarks/edit-to-run/results-2026-11-13/`;
-full tables in the TASK-369.1 notes.
+`CARGO_BUILD_JOBS=14`. Means from the TASK-369.1 notes, which hold the full
+tables; raw harness output is not committed (see
+`benchmarks/edit-to-run/README.md`).
 
 | Scenario | `cargo build` | `cargo check` |
 | -------- | ------------- | ------------- |

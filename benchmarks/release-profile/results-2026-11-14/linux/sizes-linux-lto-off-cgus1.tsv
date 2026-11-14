@@ -1,6 +1,0 @@
-linux-lto-off-cgus1	binary-bytes	16874920
-linux-lto-off-cgus1	text-bytes	10133621
-linux-lto-off-cgus1	rodata-bytes	1771292
-linux-lto-off-cgus1	target-triple-kib	1238280
-linux-lto-off-cgus1	target-host-kib	630524
-linux-lto-off-cgus1	deb-bytes	9763632

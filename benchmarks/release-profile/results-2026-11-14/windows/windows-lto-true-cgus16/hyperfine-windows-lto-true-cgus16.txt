@@ -1,4 +1,0 @@
-Benchmark 1: windows-lto-true-cgus16
-  Time (mean ± σ):     219.134 s ±  5.879 s    [User: 505.453 s, System: 83.041 s]
-  Range (min … max):   214.977 s … 223.291 s    2 runs
- 

@@ -1,9 +1,0 @@
-candidate: lto=thin codegen-units=4, host arm64, macOS 15.8.1
-PASS  audio-path: afplay rendered a 2 s tone
-FAIL  enumerate-devices: exit 139: ./smoke.sh: line 111: 75135 Segmentation fault: 11     gtimeout "$secs" "$@" 
-FAIL  first-launch-db: no mt.db after 20 s: [2m2026-11-14T18:02:04.586272Z[0m [32m INFO[0m [2mmt_lib[0m[2m:[0m Tracing initialized [3mlog_dir[0m[2m=[0m/var/folders/d9/hll1wqjj58s73bcqwtgh2sgr0000gn/T//mt-smoke-lto-thin-cgus4.rZOsm8/home/Library/Logs/com.mt.desktop 
-SKIP  library-scan: no mt.db: app startup did not complete, scan not attempted
-PASS  playback-advances: 5 of 10 one-second sample(s) advanced, state Playing
-PASS  playback-fixture: test_sample.mp3 decoded as 1000ms, 0 load failure(s)
-PASS  app-log: 0 unexpected error line(s) in mt.log.2026-11-14
-RESULT lto-thin-cgus4: FAIL (2 check(s))

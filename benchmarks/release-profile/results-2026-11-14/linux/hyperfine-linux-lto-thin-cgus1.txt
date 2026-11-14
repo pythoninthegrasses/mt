@@ -1,4 +1,0 @@
-Benchmark 1: linux-lto-thin-cgus1
-  Time (mean ± σ):     154.321 s ±  5.191 s    [User: 778.477 s, System: 49.914 s]
-  Range (min … max):   150.650 s … 157.991 s    2 runs
- 

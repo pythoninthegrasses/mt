@@ -1,6 +1,0 @@
-# NOTE: this chain was SIGTERM-killed on user request while still in the worktree-matrix stage; no worktree-matrix TSV and no cold/warm full-build timings were produced. The three missing AC#1 cells are recorded in TASK-369.5 notes.
-# PROVENANCE log-armA-matrix-killed-incomplete.txt: raw command output captured in worktree ~/git/mt.zig-engine-adr (branch zig-engine-adr, HEAD d5cd25b), arm64 macOS, rustc 1.100.0, zig 0.16.0, machine on AC.
-# arm A matrix+timings 2026-11-14T23:12:46Z
-busy: 0 load: { 10.97 10.88 8.48 }
-
-##### worktree-matrix 369-5-armA 1

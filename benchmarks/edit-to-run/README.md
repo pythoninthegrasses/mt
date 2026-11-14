@@ -4,8 +4,15 @@ Reproducible harness behind the baseline recorded in `TASK-369.1`. It measures t
 two dimensions TASK-352 did not cover: **edit-to-run latency per change type** and
 **build-directory disk growth** (per profile, per feature, per target triple, per
 worktree). TASK-369.4 (release profile benchmark), TASK-369.5 (the Rust-vs-Zig ADR)
-and TASK-353 (mt-core extraction) should re-run this harness and diff against
-`results-2026-11-13/`.
+and TASK-353 (mt-core extraction) should re-run this harness and diff against the
+recorded baselines in the **TASK-369.1** and **TASK-369.5** backlog records.
+
+Raw output is deliberately **not committed**: `bench.sh` and `worktree-matrix.sh`
+write to `results-<date>/`, which `.gitignore` excludes. The task records hold the
+tables, so a re-run is compared against those numbers, not against files in the
+tree. (The two baseline dirs this README used to point at, `results-2026-11-13/`
+and `results-2026-11-14/`, were removed on 2026-11-14; they remain readable in git
+history if a byte-for-byte re-baseline is ever needed.)
 
 ## Protocol
 
@@ -39,13 +46,14 @@ cd benchmarks/edit-to-run
 #   ./worktree-matrix.sh 369-2-devtools 1 "--features agent,devtools"
 ```
 
-Change classes (`CLASSES` in `bench.sh`) — every Rust class recompiles the whole
-`mt_lib` crate, because engine code, `#[tauri::command]` wrappers and the crate
-roots are all in the single `mt-tauri` crate:
+Change classes (`CLASSES` in `bench.sh`) — every Rust class invalidates a big
+compile unit. Since TASK-353 the engine lives in `mt-core`, so an `engine` edit
+rebuilds that crate and then relinks `mt-tauri`; the `command`, `main` and `lib`
+classes still recompile the whole `mt_lib` crate in `mt-tauri`:
 
 | Class | File | Why this file |
 |-------|------|---------------|
-| `engine` | `crates/mt-tauri/src/db/library.rs` | largest pure-logic file, no `tauri` import |
+| `engine` | `crates/mt-core/src/db/library.rs` | largest pure-logic file, no `tauri` import |
 | `command` | `crates/mt-tauri/src/commands/queue.rs` | `#[tauri::command]` wrapper layer |
 | `main` | `crates/mt-tauri/src/main.rs` | bin target only → link-only cost |
 | `lib` | `crates/mt-tauri/src/lib.rs` | crate root → maximal downstream invalidation |

@@ -1,4 +1,0 @@
-Benchmark 1: windows-lto-false-cgus4
-  Time (mean ± σ):     138.092 s ±  6.518 s    [User: 412.417 s, System: 60.737 s]
-  Range (min … max):   133.483 s … 142.702 s    2 runs
- 

@@ -1,5 +1,7 @@
-# Raw output of one sweep date. Everything small is committed as the evidence
-# behind docs/builds.md#release-profile (hyperfine .md/.txt/.json, sizes-*.tsv,
-# SUMMARY.md); the bulky binaries and console transcripts are not.
-results-*/dmg/
-*.log
+# Raw output of one sweep date stays out of the repo (maintainer decision,
+# 2026-11-14). The durable summaries are the TASK-369.4 / TASK-369.9 records and
+# docs/builds.md#release-profile; the accepted decision is what ships in
+# Cargo.toml. Re-run ./sweep.sh and ./linux-on-mf.sh to regenerate any number
+# quoted there -- everything they write lands under results-*/ and is ignored,
+# including the bulky binaries, console transcripts and runner specs.
+results-*/

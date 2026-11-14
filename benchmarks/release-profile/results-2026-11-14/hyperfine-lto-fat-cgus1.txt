@@ -1,4 +1,0 @@
-Benchmark 1: lto-fat-cgus1
-  Time (mean ± σ):     103.576 s ±  0.962 s    [User: 302.433 s, System: 24.943 s]
-  Range (min … max):   102.896 s … 104.256 s    2 runs
- 

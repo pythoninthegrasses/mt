@@ -1,6 +1,0 @@
-after-setup	zig-core/.zig-cache	36660
-after-setup	zig-core/zig-out	8456
-after-setup	crates/mt-tauri/binaries	1788
-after-setup	app/frontend/node_modules	124820
-after-setup	app/frontend/dist	888
-after-setup	.worktree-total	201592

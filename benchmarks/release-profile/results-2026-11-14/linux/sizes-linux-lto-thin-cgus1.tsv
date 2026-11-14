@@ -1,6 +1,0 @@
-linux-lto-thin-cgus1	binary-bytes	16374120
-linux-lto-thin-cgus1	text-bytes	9972245
-linux-lto-thin-cgus1	rodata-bytes	1763449
-linux-lto-thin-cgus1	target-triple-kib	1672052
-linux-lto-thin-cgus1	target-host-kib	630612
-linux-lto-thin-cgus1	deb-bytes	9581514

@@ -1,0 +1,6 @@
+# Raw harness output stays out of the repo (maintainer decision, 2026-11-14):
+# hyperfine .json/.md exports, du-*.tsv, worktree-matrix-*.tsv, sccache-*.txt,
+# cargo --timings HTML and the console captures. The durable summaries are the
+# TASK-369.1 and TASK-369.5 backlog records, which carry the tables these files
+# were evidence for. Re-run ./bench.sh or ./worktree-matrix.sh to regenerate.
+results-*/
