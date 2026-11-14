@@ -1,11 +1,11 @@
 ---
 id: TASK-353
 title: 'Extract crates/mt-core, a tauri-free library crate'
-status: In Progress
+status: Done
 assignee:
   - '@opencode'
 created_date: '2026-09-11 00:38'
-updated_date: '2026-11-14T21:35:00Z'
+updated_date: '2026-11-14T21:11:00Z'
 labels: []
 dependencies:
   - TASK-352
@@ -21,12 +21,12 @@ Core logic and its roughly 910 tests should compile and run without linking taur
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 crates/mt-core has no tauri dependency, enforced by a CI check
-- [ ] #2 cargo nextest run -p mt-core passes
-- [ ] #3 cargo nextest run -p mt-tauri passes
-- [ ] #4 Both crates' wall-clock build/test times are recorded and compared against the TASK-352 baseline
-- [ ] #5 No behavior change: the full Playwright suite passes unmodified
-- [ ] #6 docs/tauri-architecture.md updated to describe the new crate layout
+- [x] #1 crates/mt-core has no tauri dependency, enforced by a CI check
+- [x] #2 cargo nextest run -p mt-core passes
+- [x] #3 cargo nextest run -p mt-tauri passes
+- [x] #4 Both crates' wall-clock build/test times are recorded and compared against the TASK-352 baseline
+- [x] #5 No behavior change: the full Playwright suite passes unmodified
+- [x] #6 docs/tauri-architecture.md updated to describe the new crate layout
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -110,3 +110,15 @@ Validation for the library milestone: cargo nextest run -p mt-core 609 passed/1 
 
 2026-11-14 closeout: all six acceptance criteria now have evidence in these notes. AC #1 is the CI step in .github/workflows/test.yml (Check mt-core desktop dependency boundary), reproduced locally as GUARD PASS on its exact locked all-target/all-feature command, with no tauri/tao/wry/webkit/objc2 crate anywhere in mt-core's graph. AC #2 is cargo nextest run -p mt-core at 692 passed, 1 skipped; AC #3 is cargo nextest run -p mt-tauri at 334 passed, 1 skipped, including the real Zig sidecar shadow-diff parity and sabotage tests. AC #4 is the controlled timing pair above. AC #5 is the Playwright run. AC #6 is docs/tauri-architecture.md at commit a4c809f. Every module the task scoped is extracted: cache, db, scanner (minus artwork), lastfm, plex (minus the desktop download adapter, assessed above), metadata, library, and queue, each in its own refactor(core) commit (379994e, 82fa894, dfd15b5, bd04c50, 7e38486, f3c1586/d833a4c, 394553b, b685a9e). cargo clippy --workspace --all-features -- -D warnings, cargo fmt --all -- --check, and task lint are clean, and no Cargo.toml or Cargo.lock line changed in any extraction commit. Suggested follow-up, not part of this task's acceptance criteria: a CI job that runs cargo nextest run -p mt-core without the setup-tauri-build step, which is where the 326-crate core graph should pay off, measured in CI rather than estimated here.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Extracted a Tauri-free crates/mt-core library crate, one module per atomic commit: cache (379994e), db (82fa894), scanner (dfd15b5), plex (bd04c50), lastfm (7e38486), metadata (f3c1586), library (394553b), queue (b685a9e), plus the docs pass (a4c809f). Every Tauri command keeps its name, registration, tracing spans, and Result<_, String> error strings; the desktop's half of each seam is an injected trait (ReconcileProgress for reconcile phases, QueueReporter for queue announcements, navigation::PlaybackSink for starting a file) implemented by a thin adapter in mt-tauri, so the announcement sequence and the response shapes are decided in core next to the rows that produced them and are covered by core tests.
+
+Evidence per acceptance criterion: -p mt-core 692 passed / 1 skipped; -p mt-tauri 334 passed / 1 skipped including the real Zig sidecar shadow-diff parity and sabotage tests; workspace 1023 passed / 5 skipped excluding the shadow_diff_parity_test filter; the CI dependency guard run on its exact locked all-target/all-feature command reports GUARD PASS with no tauri, tao, wry, webkit, or objc2 crate in the core's graph; cargo clippy --workspace --all-features -- -D warnings, cargo fmt --all -- --check, and task lint are clean; and the unmodified full Playwright suite passes at 509 passed / 2 skipped, matching the pre-extraction green run. No Cargo.toml or Cargo.lock line changed in any extraction commit.
+
+What the split actually bought, measured rather than estimated: crates/mt-core is 326 crates on cargo tree -e normal where the single pre-split crate was 1,162, and 686 of the workspace's 1,071 test functions now compile and run against those 326 without linking the desktop framework. Wall clock did not move meaningfully -- against the pre-split commit on this machine, cold build 44.53s versus 48.81s and cold tests 48.76s versus 47.00s, single runs of a ~45s build and inside noise -- so this task claims no speedup. The CI lever is a follow-up job that runs cargo nextest run -p mt-core without the setup-tauri-build step, measured in CI.
+
+Out of scope by assessment, documented in docs/tauri-architecture.md: plex/downloader.rs stays desktop-side because its progress events, settings.json size cap, music-directory lookup, and streaming write need AppHandle/Emitter, tauri-plugin-store, dirs, and tokio's fs and io-util features -- desktop concerns the core should not acquire for one caller.
+<!-- SECTION:FINAL_SUMMARY:END -->
