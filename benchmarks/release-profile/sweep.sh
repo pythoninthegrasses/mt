@@ -183,43 +183,102 @@ case "$cmd" in
     say "summary -> $RESULTS_DIR/SUMMARY.md"
     MT_RESULTS_DIR="$RESULTS_DIR" python3 - <<'PY'
 import glob, json, os, re
+
 d = os.environ["MT_RESULTS_DIR"]
-rows = {}
-for f in sorted(glob.glob(os.path.join(d, "hyperfine-*.json"))):
-    label = re.sub(r"^hyperfine-|\.json$", "", os.path.basename(f))
-    for r in json.load(open(f))["results"]:
-        name = r.get("command") or label
-        s = r["stats"]
-        rows.setdefault(label, {"mean": s["mean"], "min": s["min"], "max": s["max"],
-                                "sdev": s["stddev"], "n": s["n"]})
-sizes = {}
-for f in sorted(glob.glob(os.path.join(d, "sizes-*.tsv"))):
-    label = re.sub(r"^sizes-|\.tsv$", "", os.path.basename(f))
+
+# The three columns land in different places and prefix their labels differently
+# (lto-*, linux-lto-*, windows-lto-*), and each is only comparable to its own
+# baseline: a Blacksmith runner's seconds are not an M4 Max's seconds.
+def platform(path):
+    # Files straight in the results dir are the host column; anything in a
+    # subdirectory belongs to that column's platform.
+    top = os.path.dirname(os.path.relpath(path, d))
+    if top in ("", "."):
+        return "macos"
+    return top.split(os.sep)[0].lower()
+
+def label_of(path, prefix):
+    return re.sub(r"^%s-|\.json$|\.tsv$" % prefix, "", os.path.basename(path))
+
+rows, sizes = {}, {}
+for f in sorted(glob.glob(os.path.join(d, "**", "hyperfine-*.json"), recursive=True)):
+    if "head2head" in f:
+        continue                       # separate comparisons, not the matrix
+    label = label_of(f, "hyperfine")
+    try:
+        results = json.load(open(f))["results"]
+    except (ValueError, KeyError, OSError):
+        continue                       # an aborted candidate leaves an empty file
+    if not results:
+        continue
+    # Hyperfine puts the statistics on the result object itself; there is no
+    # nested "stats" key, and the sample count is the length of `times`.
+    s = results[0]
+    times = s.get("times") or []
+    rows.setdefault(platform(f), {})[label] = {
+        "mean": s["mean"], "min": s["min"], "max": s["max"],
+        # hyperfine leaves stddev null for a single run.
+        "sdev": s.get("stddev") or 0.0, "n": len(times) or s.get("num_runs", "—")}
+for f in sorted(glob.glob(os.path.join(d, "**", "sizes-*.tsv"), recursive=True)):
+    label = label_of(f, "sizes")
     for line in open(f):
         parts = line.rstrip("\n").split("\t")
-        if len(parts) == 3:
-            sizes.setdefault(label, {})[parts[1]] = parts[2]
-base = rows.get("lto-fat-cgus1", {}).get("mean")
+        if len(parts) == 3 and parts[2].isdigit():
+            sizes.setdefault(platform(f), {}).setdefault(label, {})[parts[1]] = int(parts[2])
+
+# Keys differ per platform because each ships a different artifact.
+TEXT_KEYS = ("__TEXT-bytes", "text-bytes")
+INST_KEYS = ("dmg-bytes", "deb-bytes", "nsis-bytes")
+
+def pick(s, keys):
+    for k in keys:
+        if k in s:
+            return s[k]
+    return None
+
+def mib(v):
+    return "—" if v is None else f"{v / 1048576:.2f}"
+
+def delta(v, base):
+    if v is None or not base:
+        return "—"
+    return f"{(v / base - 1) * 100:+.1f}%"
+
 out = ["# TASK-369.4 release-profile matrix", "",
-       "| candidate | mean s | min | max | sdev | n | binary MiB | __TEXT MiB | libmt_lib.a MiB | dmg MiB | vs baseline |",
-       "|---|---|---|---|---|---|---|---|---|---|---|"]
-for label in sorted(set(list(rows) + list(sizes))):
-    r = rows.get(label, {})
-    s = sizes.get(label, {})
-    def mib(k):
-        v = s.get(k, "")
-        try: return f"{int(v)/1048576:.2f}"
-        except ValueError: return "—"
-    rel = "—" if not r or not base else f"{r['mean']/base:.2f}x"
-    out.append("| {l} | {mean} | {min} | {max} | {sd} | {n} | {b} | {t} | {a} | {d} | {rel} |".format(
-        l=label,
-        mean="—" if not r else f"{r['mean']:.1f}",
-        min="—" if not r else f"{r['min']:.1f}",
-        max="—" if not r else f"{r['max']:.1f}",
-        sd="—" if not r else f"{r['sdev']:.2f}",
-        n=r.get("n", "—"),
-        b=mib("binary-bytes"), t=mib("__TEXT-bytes"),
-        a=mib("libmt_lib.a-bytes"), d=mib("dmg-bytes"), rel=rel))
+       "Cold release build of `mt-tauri` per candidate, sccache off: the host column",
+       "times the bare `cargo build --release --target <triple> -p mt-tauri`, the",
+       "Linux and Windows columns time `tauri-build.sh build` (what their release legs",
+       "run). Ratios are relative to each platform's own `lto-fat-cgus1` baseline, i.e.",
+       "the committed profile; absolute seconds are only comparable within a column.", ""]
+for plat in [p for p in ("macos", "linux", "windows") if p in rows or p in sizes] + \
+            [p for p in sorted(set(rows) | set(sizes)) if p not in ("macos", "linux", "windows")]:
+    r_, s_ = rows.get(plat, {}), sizes.get(plat, {})
+    base_label = next((k for k in r_ if k.endswith("lto-fat-cgus1")), None)
+    base_time = r_[base_label]["mean"] if base_label else None
+    base_size = s_.get(base_label, {})
+    out += ["", f"## {plat}", "",
+            "| candidate | mean s | vs baseline | n | binary MiB | Δ | text MiB | staticlib MiB | installer MiB | Δ | target MiB |",
+            "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for label in sorted(set(r_) | set(s_)):
+        r, s = r_.get(label, {}), s_.get(label, {})
+        text = pick(s, TEXT_KEYS)
+        inst = pick(s, INST_KEYS)
+        tgt = s.get("target-triple-kib")
+        out.append("| {l} | {mean} | {rel} | {n} | {b} | {bd} | {t} | {a} | {i} | {id} | {tg} |".format(
+            l=label,
+            mean="—" if not r else f"{r['mean']:.1f}",
+            rel="—" if not r or not base_time else f"{r['mean'] / base_time:.2f}x",
+            n=r.get("n", "—"),
+            b=mib(s.get("binary-bytes")),
+            bd=delta(s.get("binary-bytes"), base_size.get("binary-bytes")),
+            t=mib(text),
+            a=mib(s.get("libmt_lib.a-bytes")),
+            i=mib(inst),
+            id=delta(inst, base_size.get(next((k for k in INST_KEYS if k in base_size), ""))),
+            tg="—" if tgt is None else mib(tgt * 1024)))
+    missing = [k for k, v in r_.items() if k not in s_]
+    if missing:
+        out += ["", f"_No size data for: {', '.join(sorted(missing))}_"]
 open(os.path.join(d, "SUMMARY.md"), "w").write("\n".join(out) + "\n")
 print("\n".join(out))
 PY
