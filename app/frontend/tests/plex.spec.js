@@ -50,7 +50,7 @@ test.describe('Plex — Cloud badges and remote tracks', () => {
   test('cloud badge appears in library view for remote track', async ({ page }) => {
     await setupWithRemoteTrack(page);
 
-    const badge = page.locator('[aria-label="Available from Plex (not downloaded)"]').first();
+    const badge = page.locator('[data-testid="remote-track-icon"]').first();
     await expect(badge).toBeVisible();
   });
 
@@ -63,7 +63,7 @@ test.describe('Plex — Cloud badges and remote tracks', () => {
     await page.waitForSelector('[data-track-id]', { state: 'attached' });
 
     // Confirm badge present
-    const badge = page.locator('[aria-label="Available from Plex (not downloaded)"]').first();
+    const badge = page.locator('[data-testid="remote-track-icon"]').first();
     await expect(badge).toBeVisible();
 
     // Simulate download completion: update the track filepath to a local path
@@ -78,7 +78,7 @@ test.describe('Plex — Cloud badges and remote tracks', () => {
         }
       }
       // Replace in _trackPages
-      for (const page of lib._trackPages || []) {
+      for (const page of Object.values(lib._trackPages || {})) {
         const idx = page.findIndex((t) => t.id === trackId);
         if (idx >= 0) {
           page[idx] = { ...page[idx], filepath: '/local/file.flac' };
@@ -96,14 +96,21 @@ test.describe('Plex — Cloud badges and remote tracks', () => {
     const row = page.locator(`[data-track-id="${9001}"]`);
     await expect(row).toBeVisible();
 
-    // Uncheck "Show remote"
-    const toggle = page.locator('[data-testid="show-remote-toggle"] input[type="checkbox"]');
-    await toggle.uncheck();
+    // The toggle lives in Settings > Plex
+    const openToggle = async () => {
+      await page.click('[data-testid="sidebar-settings"]');
+      await page.click('[data-testid="settings-nav-plex"]');
+      return page.locator('[data-testid="show-remote-toggle"] input[type="checkbox"]');
+    };
+    const backToMusic = () => page.click('[data-testid="sidebar-section-all"]');
 
+    await (await openToggle()).uncheck();
+    await backToMusic();
     await expect(row).not.toBeVisible({ timeout: 2000 });
 
     // Re-enabling makes it visible again
-    await toggle.check();
+    await (await openToggle()).check();
+    await backToMusic();
     await expect(row).toBeVisible({ timeout: 2000 });
   });
 
