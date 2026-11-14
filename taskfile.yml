@@ -133,29 +133,3 @@ tasks:
           }
         '
     silent: true
-
-  repomix:
-    desc: "Create llm snapshot of repo"
-    preconditions:
-      - sh: command -v repomix 2>/dev/null
-        msg: "repomix is not installed. Install with: npm install -g repomix"
-    cmds:
-      - |
-        repomix \
-          --style markdown \
-          --compress \
-          --remove-comments \
-          --remove-empty-lines \
-          --truncate-base64
-    sources:
-      - "**/*.rs"
-      - "**/*.js"
-      - "**/*.ts"
-      - "**/*.toml"
-      - "**/*.yml"
-      - "**/*.yaml"
-      - "**/*.md"
-      - "**/*.json"
-      - ".repomix*"
-    generates:
-      - repomix-output.md
