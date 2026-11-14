@@ -53,10 +53,10 @@ The Backlog MCP resolves `backlog/tasks/` against the current working directory,
 
 ## Existing evidence (do not re-measure)
 
-- TASK-369.1 baseline: `benchmarks/edit-to-run/results-2026-11-13/` — 2.2s build / 1.0s check warm, 0.6s main.rs touch, 6.9s with incremental wiped, 35.2s cold; target/ 12.3 GiB with 10.03 GiB in target/debug/build; crate-type rlib what-if: -17s debug, -81s release, -1.75 GiB per worktree; 1270 cargo-tree lines / 421 unique crates.
+- TASK-369.1 baseline (read it from that task's record; the `benchmarks/edit-to-run/results-2026-11-13/` dir was removed from the repo 2026-11-14): 2.2s build / 1.0s check warm, 0.6s main.rs touch, 6.9s with incremental wiped, 35.2s cold; target/ 12.3 GiB with 10.03 GiB in target/debug/build; crate-type rlib what-if: -17s debug, -81s release, -1.75 GiB per worktree; 1270 cargo-tree lines / 421 unique crates.
 - TASK-353 AC#4 controlled pair, HEAD b685a9e vs pre-split 2aca72f on this machine: cold build 44.53s (437 crates) vs 48.81s (436); warm no-op 1.83 vs 2.12; warm rebuild on main.rs 0.56 vs 0.56; warm rebuild on moved db/queue.rs 2.37 (2 crates) vs 2.12; first --tests 24.19 (361) vs 25.21 (360); clean -p mt-tauri --tests 7.59 (2) vs 7.72 (1); cold --tests 48.76 (459) vs 47.00 (458); mt-core-only --tests 14.34 (84 crates). Conclusion recorded: no wall-clock claim; the lever is footprint (core 326 crates vs 1,162 pre-split, 686 of 1,071 tests).
 - TASK-355.x Zig POC: read-only `GET /api/library` with bearer auth, vendored sqlite3.c, shadow-diff parity harness. TASK-355.6 holds the factual POC report.
-- TASK-369.4 / .9: release-profile LTO and codegen-units measurements in `benchmarks/release-profile/results-2026-11-14/`.
+- TASK-369.4 / .9: release-profile LTO and codegen-units measurements in those two records and `docs/builds.md#release-profile` (the `benchmarks/release-profile/results-2026-11-14/` dir was removed 2026-11-14; per-candidate numbers regenerate with `cd benchmarks/release-profile && ./sweep.sh summary`).
 
 ## Approach
 
