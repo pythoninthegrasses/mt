@@ -202,6 +202,45 @@ of stray `mt_lib.*.rcgu.o` per fingerprint. Building with
 `crate-type = ["rlib"]` only cut 17s off the debug build, 81s off the release
 build, and 1.75 GiB off a worktree. See TASK-369.1 AC#3/AC#4b.
 
+#### Chart-Grid Image Stack Trim (TASK-369.2, 2026-11-13)
+
+`commands/stats.rs` is the only consumer of `image`, `imageproc` and `ab_glyph`.
+`imageproc` 0.25 declares `default = ["rayon", "image/default"]`, so feature
+unification overrode our `image` codec list and pulled image's whole default
+decoder set — the AV1 encoder chain (`rav1e`, `ravif`, `av-scenechange`,
+`avif_serialize`), `exr`, `image-webp`, `qoi` — into every build. Setting
+`imageproc = { default-features = false }` removes 33 crates, 238 MiB of
+artifacts and 27.7s of compile CPU for a four-line `Cargo.toml` change.
+
+Measured with cargo 1.100 on M4 Max, sccache off, one scratch
+`CARGO_TARGET_DIR` per scenario, per-unit timings from a `RUSTC_WRAPPER` log
+(`--timings=json` is unstable-only). Variance is ~2% CPU / ~2s wall.
+
+| Scenario | crates | compile CPU | wall | `debug/` |
+| -------- | ------ | ----------- | ---- | -------- |
+| Baseline | 448 | 468.8s | 50.5s | 3655 MiB |
+| Feature trim (landed) | 415 | 441.1s | 49.4s | 3417 MiB |
+| Also drop `imageproc` | 400 | 443.0s | 49.4s | 3313 MiB |
+| Drop all three (canvas renderer) | 381 | 402.1s | 47.5s | 3075 MiB |
+
+Whole-build context: the stack was 7.2% of compile CPU and ~16% of the artifact
+tree, but only ~3s of wall time — `syn` (14s), `objc2_app_kit` (13s) and
+`darling_core` (11s) own the critical path. This is a disk and crate-count win,
+not a latency win. Dropping `imageproc` alone buys 104 MiB and a sub-noise CPU
+delta while keeping `image`/`moxcms`/`pxfm`, so it was rejected; dropping all
+three requires a canvas renderer plus full-resolution artwork over IPC and stays
+on the table as a larger, separate change.
+
+**Do not narrow `image`'s feature list.** `scanner::artwork` reports embedded or
+folder art as `image/jpeg|png|gif|bmp|tiff`, and `load_from_memory` decides by
+sniffing the bytes, so a missing codec silently degrades that grid cell to its
+text placeholder (`stats_generate_chart_grid` logs
+`stats.chart_grid` when it happens).
+`commands::stats::tests::chart_grid_decodes_every_artwork_mime_type` fails if a
+codec is dropped; `chart_grid_golden_image` (run with `GOLDEN_PNG=<path>`)
+renders the same 3×3 grid through decode → `resize_exact`/Lanczos3 → overlay →
+placeholder → PNG for before/after comparison.
+
 ### Cranelift Backend (Not Supported)
 
 [Cranelift](https://github.com/rust-lang/rustc_codegen_cranelift) is an experimental codegen backend for Rust that can dramatically improve debug build times. However, it is **not compatible with mt** due to SIMD limitations.

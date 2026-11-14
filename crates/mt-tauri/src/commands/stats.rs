@@ -257,19 +257,39 @@ pub(crate) fn stats_generate_chart_grid(
         let x_offset = col as u32 * (cell_size + padding);
         let y_offset = row as u32 * (cell_size + padding);
 
-        // Load artwork from cache
-        let has_artwork = if let Some(artwork) = cache.get_or_load(album.track_id, &album.filepath)
-            && let Ok(decoded) =
+        // Load artwork from cache. An undecodable image falls back to the placeholder,
+        // so log it — the failure is otherwise invisible. image's codec features must
+        // cover every mime type scanner::artwork can emit (jpeg, png, gif, bmp, tiff);
+        // formats outside that set (webp, avif, ...) reach the placeholder branch here.
+        let decoded = cache
+            .get_or_load(album.track_id, &album.filepath)
+            .and_then(|artwork| {
                 base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &artwork.data)
-            && let Ok(img) = image::load_from_memory(&decoded)
-        {
-            let resized =
-                img.resize_exact(cell_size, cell_size, image::imageops::FilterType::Lanczos3);
-            let rgba = resized.to_rgba8();
-            image::imageops::overlay(&mut canvas, &rgba, x_offset as i64, y_offset as i64);
-            true
-        } else {
-            false
+                    .ok()
+            });
+        let has_artwork = match decoded.as_deref() {
+            Some(bytes) => match image::load_from_memory(bytes) {
+                Ok(img) => {
+                    let resized = img.resize_exact(
+                        cell_size,
+                        cell_size,
+                        image::imageops::FilterType::Lanczos3,
+                    );
+                    let rgba = resized.to_rgba8();
+                    image::imageops::overlay(&mut canvas, &rgba, x_offset as i64, y_offset as i64);
+                    true
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        target: "stats.chart_grid",
+                        track_id = album.track_id,
+                        error = %err,
+                        "chart grid: artwork decode failed, drawing placeholder"
+                    );
+                    false
+                }
+            },
+            None => false,
         };
 
         if !has_artwork && let Some(ref font) = font {
@@ -299,4 +319,132 @@ pub(crate) fn stats_generate_chart_grid(
 
     let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &png_bytes);
     Ok(format!("data:image/png;base64,{b64}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{DynamicImage, ImageFormat};
+
+    /// A deterministic colour gradient so encoders produce stable bytes.
+    fn synthetic_image(w: u32, h: u32, seed: u8) -> DynamicImage {
+        let img = image::RgbImage::from_fn(w, h, |x, y| {
+            let r = (x as u8).wrapping_mul(3).wrapping_add(seed);
+            let g = (y as u8).wrapping_mul(5).wrapping_add(seed / 2);
+            let b = ((x + y) as u8).wrapping_mul(2).wrapping_add(seed);
+            image::Rgb([r, g, b])
+        });
+        DynamicImage::ImageRgb8(img)
+    }
+
+    fn encode(img: &DynamicImage, format: ImageFormat) -> Vec<u8> {
+        let mut out = Vec::new();
+        img.write_to(std::io::Cursor::new(&mut out), format)
+            .unwrap_or_else(|e| panic!("failed to encode {format:?}: {e}"));
+        out
+    }
+
+    /// The chart grid decodes embedded artwork with `image::load_from_memory`, so every
+    /// mime type `scanner::artwork` can report (jpeg, png, gif, bmp, tiff) needs its
+    /// decoder enabled in Cargo.toml. Losing one is otherwise silent: the cell just
+    /// falls back to the text placeholder.
+    #[test]
+    fn chart_grid_decodes_every_artwork_mime_type() {
+        let source = synthetic_image(64, 48, 7);
+        for format in [
+            ImageFormat::Jpeg,
+            ImageFormat::Png,
+            ImageFormat::Gif,
+            ImageFormat::Bmp,
+            ImageFormat::Tiff,
+        ] {
+            let bytes = encode(&source, format);
+            let decoded = image::load_from_memory(&bytes)
+                .unwrap_or_else(|e| panic!("{format:?} artwork did not decode: {e}"));
+            assert_eq!((decoded.width(), decoded.height()), (64, 48), "{format:?}");
+        }
+    }
+
+    /// Renders a chart grid through the same drawing pipeline as
+    /// `stats_generate_chart_grid` (decode → resize_exact/Lanczos3 → overlay →
+    /// placeholder text → PNG) so output can be compared before and after a
+    /// dependency change. Runs only when `GOLDEN_PNG` names the file to write.
+    #[test]
+    fn chart_grid_golden_image() {
+        let Some(path) = std::env::var("GOLDEN_PNG").ok() else {
+            return;
+        };
+
+        const ROWS: usize = 3;
+        const COLS: usize = 3;
+        const CELL: u32 = 120;
+        const PAD: u32 = 8;
+
+        // Mix every supported codec with cells that have no artwork at all.
+        let cells: [Option<ImageFormat>; ROWS * COLS] = [
+            Some(ImageFormat::Jpeg),
+            None,
+            Some(ImageFormat::Png),
+            Some(ImageFormat::Gif),
+            Some(ImageFormat::Bmp),
+            None,
+            Some(ImageFormat::Tiff),
+            Some(ImageFormat::Jpeg),
+            None,
+        ];
+
+        let canvas_width = COLS as u32 * CELL + (COLS as u32 - 1) * PAD;
+        let canvas_height = ROWS as u32 * CELL + (ROWS as u32 - 1) * PAD;
+        let mut canvas = image::RgbaImage::new(canvas_width, canvas_height);
+        for pixel in canvas.pixels_mut() {
+            *pixel = image::Rgba([24, 24, 27, 255]);
+        }
+
+        let font = load_system_font().expect("no system font available for golden image");
+
+        for (idx, format) in cells.into_iter().enumerate() {
+            let x_offset = (idx % COLS) as u32 * (CELL + PAD);
+            let y_offset = (idx / COLS) as u32 * (CELL + PAD);
+
+            if let Some(format) = format {
+                let source = synthetic_image(
+                    300 - idx as u32 * 17,
+                    260 - idx as u32 * 9,
+                    (idx * 37 + 11) as u8,
+                );
+                let bytes = encode(&source, format);
+                let decoded = image::load_from_memory(&bytes).expect("synthetic artwork decodes");
+                let resized =
+                    decoded.resize_exact(CELL, CELL, image::imageops::FilterType::Lanczos3);
+                image::imageops::overlay(
+                    &mut canvas,
+                    &resized.to_rgba8(),
+                    x_offset as i64,
+                    y_offset as i64,
+                );
+            } else {
+                draw_placeholder(
+                    &mut canvas,
+                    x_offset,
+                    y_offset,
+                    CELL,
+                    &format!("Artist {idx} — an unusually long name for wrapping"),
+                    &format!("Album {idx}"),
+                    &font,
+                );
+            }
+        }
+
+        let mut png_bytes = Vec::new();
+        let encoder = image::codecs::png::PngEncoder::new(&mut png_bytes);
+        encoder
+            .write_image(
+                canvas.as_raw(),
+                canvas_width,
+                canvas_height,
+                image::ExtendedColorType::Rgba8,
+            )
+            .expect("encode golden PNG");
+        std::fs::write(&path, &png_bytes).expect("write golden PNG");
+    }
 }

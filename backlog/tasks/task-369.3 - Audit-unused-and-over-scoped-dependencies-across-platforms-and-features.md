@@ -4,7 +4,7 @@ title: Audit unused and over-scoped dependencies across platforms and features
 status: To Do
 assignee: []
 created_date: '2026-11-14T04:24:00Z'
-updated_date: '2026-11-14T04:24:00Z'
+updated_date: '2026-11-14T05:59:00Z'
 labels: []
 dependencies:
   - TASK-361
@@ -31,3 +31,21 @@ mt-tauri declares ~50 direct dependencies plus dev-dependencies (tempfile, propt
 - [ ] #4 cargo tree -e normal | wc -l recorded before and after; docs/builds.md notes the final count
 - [ ] #5 task lint, task test, and CI green after removals
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Heavy-but-narrow candidates found during TASK-369.2 (2026-11-13, untriaged)
+
+Counts come from cargo tree -e normal reachability diffs plus a RUSTC_WRAPPER timing log on macOS aarch64, cargo 1.100. A count is the crates that exist only for that dependency.
+
+reqwest: 39 unique crates / 14.3 MiB of vendored source. Check whether all default features (TLS stack, json, cookies, reconnect) are needed; default-features=false plus an explicit feature list is the same class of win TASK-369.2 got for imageproc.
+
+imageproc after the TASK-369.2 trim: still drags a non-optional linear-algebra stack (nalgebra, simba, wide, safe_arch, matrixmultiply, num and its sub-crates, itertools, libm, rand_distr, approx) — 15 crates, 7.9s of compile CPU, 104 MiB — while we use exactly one function, imageproc drawing draw_text_mut. Dropping imageproc alone was measured and rejected because image plus moxcms and pxfm are kept anyway; revisit if the renderer goes away entirely.
+
+lru 0.12 with parking_lot: backs a 100-entry artwork LRU in scanner/artwork_cache.rs. Compare against a hand-rolled HashMap plus VecDeque or direct hashbrown use; parking_lot is probably shared with other crates, lru may not be.
+
+lofty: largest single tag-reader dependency and it covers every container format. Check which formats the scanner can actually reach and whether lofty's format features can be narrowed.
+
+sha2 0.10.9 and md5 0.7 are declared side by side in the Cargo.toml Hashing block. If both only feed cache keys one may be redundant; if both stay, record which subsystem needs each so the audit does not remove a load-bearing one.
+<!-- SECTION:NOTES:END -->

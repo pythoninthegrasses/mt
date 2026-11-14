@@ -76,9 +76,21 @@ md5 = "0.7"
 # LRU cache for artwork
 lru = "0.12"
 
-# Image processing for chart grid generation
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
-imageproc = "0.25"
+# Image processing for chart grid generation (crates/mt-tauri/src/commands/stats.rs).
+# imageproc 0.25 declares `default = ["rayon", "image/default"]`, which used to drag
+# image's whole default codec set — including the AV1 encoder rav1e/ravif, exr and webp
+# — into every build (TASK-369.2: 33 crates, 238 MiB of artifacts, 27s of compile CPU).
+# Keep imageproc default-features off, and keep image's codec list covering every mime
+# type scanner::artwork can emit (jpeg, png, gif, bmp, tiff); dropping one silently
+# turns that artwork into a text placeholder in the chart grid.
+image = { version = "0.25", default-features = false, features = [
+    "jpeg",
+    "png",
+    "gif",
+    "bmp",
+    "tiff",
+] }
+imageproc = { version = "0.25", default-features = false }
 ab_glyph = "0.2"
 
 # Structured logging
