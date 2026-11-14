@@ -1,3 +1,3 @@
 | Command | Mean [s] | Min [s] | Max [s] | Relative |
 |:---|---:|---:|---:|---:|
-| `windows-lto-true-cgus4` | 224.207 ± 4.661 | 220.911 | 227.502 | 1.00 |
+| `windows-lto-true-cgus4` | 208.222 ± 5.885 | 204.061 | 212.383 | 1.00 |

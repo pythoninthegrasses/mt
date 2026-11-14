@@ -39,11 +39,12 @@ the committed profile; absolute seconds are only comparable within a column.
 
 | candidate | mean s | vs baseline | n | binary MiB | Δ | text MiB | staticlib MiB | installer MiB | Δ | target MiB |
 |---|---|---|---|---|---|---|---|---|---|---|
-| windows-lto-false-cgus1 | 168.7 | — | 2 | — | — | — | — | — | — | — |
-| windows-lto-false-cgus16 | 144.2 | — | 2 | — | — | — | — | — | — | — |
-| windows-lto-false-cgus4 | 141.8 | — | 2 | — | — | — | — | — | — | — |
-| windows-lto-thin-cgus1 | 274.1 | — | 2 | — | — | — | — | — | — | — |
-| windows-lto-thin-cgus16 | 179.5 | — | 2 | — | — | — | — | — | — | — |
-| windows-lto-thin-cgus4 | 176.5 | — | 2 | — | — | — | — | — | — | — |
-
-_No size data for: windows-lto-false-cgus1, windows-lto-false-cgus16, windows-lto-false-cgus4, windows-lto-thin-cgus1, windows-lto-thin-cgus16, windows-lto-thin-cgus4_
+| windows-lto-false-cgus1 | 157.0 | 0.68x | 2 | 11.74 | +5.2% | — | — | 4.36 | -2.7% | 1226.64 |
+| windows-lto-false-cgus16 | 146.3 | 0.63x | 2 | 12.31 | +10.3% | — | — | 4.46 | -0.4% | 1275.30 |
+| windows-lto-false-cgus4 | 138.1 | 0.60x | 2 | 12.10 | +8.5% | — | — | 4.44 | -0.8% | 1253.92 |
+| windows-lto-fat-cgus1 | 231.8 | 1.00x | 2 | 11.16 | +0.0% | — | — | 4.48 | +0.0% | 1561.15 |
+| windows-lto-fat-cgus16 | 219.1 | 0.95x | 2 | 11.43 | +2.5% | — | — | 4.53 | +1.0% | 1670.95 |
+| windows-lto-fat-cgus4 | 208.2 | 0.90x | 2 | 11.39 | +2.1% | — | — | 4.52 | +1.0% | 1623.30 |
+| windows-lto-thin-cgus1 | 208.4 | 0.90x | 2 | 11.63 | +4.2% | — | — | 4.31 | -3.8% | 1569.90 |
+| windows-lto-thin-cgus16 | 183.2 | 0.79x | 2 | 12.33 | +10.5% | — | — | 4.42 | -1.5% | 1687.66 |
+| windows-lto-thin-cgus4 | 244.4 | 1.05x | 2 | 12.13 | +8.7% | — | — | 4.40 | -1.9% | 1635.62 |
