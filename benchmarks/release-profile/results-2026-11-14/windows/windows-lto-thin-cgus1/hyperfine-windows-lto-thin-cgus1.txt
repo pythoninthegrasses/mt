@@ -1,0 +1,4 @@
+Benchmark 1: windows-lto-thin-cgus1
+  Time (mean ± σ):     274.078 s ±  4.530 s    [User: 609.225 s, System: 64.914 s]
+  Range (min … max):   270.874 s … 277.281 s    2 runs
+ 

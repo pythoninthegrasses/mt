@@ -170,6 +170,7 @@ jobs:
             | tee "results/hyperfine-$label.txt"
 
       - name: Bundle NSIS installer and record artifact sizes
+        shell: bash
         env:
           RUSTC_WRAPPER: ''
           CARGO_PROFILE_RELEASE_LTO: ${{ matrix.combo.lto }}
