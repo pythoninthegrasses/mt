@@ -1,0 +1,21 @@
+[package]
+name = "mt-core"
+version = "1.6.0"
+description = "Tauri-independent core logic for the mt music player"
+authors = ["pythoninthegrass"]
+edition = "2024"
+
+[dependencies]
+lru = "0.12"
+parking_lot = "0.12"
+sha2 = "0.10.9"
+tracing = "0.1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }
+
+[dev-dependencies]
+tempfile = "3"

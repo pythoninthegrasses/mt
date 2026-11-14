@@ -17,6 +17,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+mt-core = { path = "../mt-core" }
+
 # Tauri framework
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
@@ -128,7 +130,6 @@ libc = "0.2"
 # Required to extract the HWND from the Tauri window for souvlaki SMTC registration.
 # souvlaki panics on Windows if PlatformConfig.hwnd is None.
 raw-window-handle = "0.6"
-windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

@@ -56,6 +56,15 @@ jobs:
       - name: Cargo fmt check
         run: cargo fmt --all -- --check
 
+      - name: Check mt-core desktop dependency boundary
+        run: |
+          dependencies=$(cargo tree --locked -p mt-core --all-features --target all \
+            --edges normal,build,dev --prefix none --format '{p}')
+          if echo "$dependencies" | grep -E '^(tauri([ -]|$)|tao |wry |webkit[^ ]* |objc2([ -]|$))'; then
+            echo "::error::mt-core must not depend on the desktop framework (including transitively)"
+            exit 1
+          fi
+
       - name: Cargo clippy
         run: cargo clippy --workspace --all-features -- -D warnings
 
@@ -418,4 +427,3 @@ jobs:
           name: playwright-results
           path: test-results/
           retention-days: 30
-

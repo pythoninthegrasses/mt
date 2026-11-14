@@ -1,3 +1,5 @@
+//! Platform-specific network mount detection without desktop framework dependencies.
+
 /// Detect whether a file path resides on a network mount (SMB/NFS/CIFS).
 ///
 /// Returns `true` when the path is on a remote filesystem.

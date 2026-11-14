@@ -3009,6 +3009,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mt-core"
+version = "1.6.0"
+dependencies = [
+ "libc",
+ "lru",
+ "parking_lot",
+ "sha2",
+ "tempfile",
+ "tracing",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "mt-tauri"
 version = "1.6.0"
 dependencies = [
@@ -3023,6 +3036,7 @@ dependencies = [
  "lofty",
  "lru",
  "md5",
+ "mt-core",
  "notify-debouncer-full",
  "objc2 0.6.3",
  "objc2-app-kit 0.3.2",
@@ -3061,7 +3075,6 @@ dependencies = [
  "unicode-normalization",
  "uuid",
  "walkdir",
- "windows-sys 0.59.0",
  "wiremock",
 ]
 

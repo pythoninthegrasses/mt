@@ -1,5 +1,5 @@
 pub mod audio;
-pub(crate) mod cache;
+pub(crate) use mt_core::cache;
 pub(crate) mod commands;
 pub(crate) mod db;
 pub(crate) mod dialog;

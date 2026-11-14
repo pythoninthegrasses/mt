@@ -61,6 +61,25 @@ MT uses a modern pure-Rust architecture:
 
 ## Component Responsibilities
 
+### Rust Workspace
+
+The backend is being split into two crates as part of TASK-353:
+
+| Crate | Current responsibility |
+|-------|------------------------|
+| `crates/mt-core/` | Tauri-independent network file cache and platform mount detection |
+| `crates/mt-tauri/` | Desktop application, command/event adapters, audio, and the remaining data/scanner/integration modules |
+
+`mt-tauri` depends on `mt-core` and re-exports its cache module internally so
+existing desktop callers retain the same paths. The cache implementation and
+its tests live only in `mt-core`; run them without linking the desktop framework
+using `cargo nextest run -p mt-core`.
+
+CI checks the core's transitive normal, build, and test dependencies across all
+targets and features, rejecting Tauri, Tao, Wry, WebKit, and Objective-C 2 crates.
+The database, pure scanner, Last.fm, Plex, and metadata extraction remain pending;
+this initial split does not yet isolate all backend tests from Tauri.
+
 ### Tauri Core (Rust)
 
 The Rust backend handles all functionality:

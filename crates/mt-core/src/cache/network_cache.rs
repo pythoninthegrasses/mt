@@ -1,3 +1,5 @@
+//! Disk-based caching for audio files on network mounts.
+
 use lru::LruCache;
 use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
