@@ -23,8 +23,8 @@ pub use mutations::{
     set_loop, set_shuffle, shuffle,
 };
 pub use navigation::{
-    PlayContextQuery, PlaybackSink, build_navigation_result, play_context, play_context_from_query,
-    play_next, play_previous, skip_next, skip_previous,
+    PlayContextQuery, PlaybackSink, play_context, play_context_from_query, play_next,
+    play_previous, skip_next, skip_previous,
 };
 pub use types::{
     PlayContextResponse, QueueAddFilesResponse, QueueAddResponse, QueueNavigationResult,
@@ -38,9 +38,10 @@ use crate::db::{Database, QueueState, queue};
 /// The desktop implements this over its `emit_queue_updated` and
 /// `emit_queue_state_changed` helpers; the methods are the payloads the
 /// frontend reconciler consumes. Keeping them as a trait rather than inline
-/// `app.emit_*` calls is what lets a test pin the *sequence* — a reorder is a
-/// `shuffled` followed by a state change, a play context is `cleared` followed
-/// by a state change — which the frontend relies on to update without refetching.
+/// `app.emit_*` calls is what lets a test pin the *sequence* — enabling shuffle
+/// is a `shuffled` followed by a state change, a play context is `cleared`
+/// followed by a state change — which the frontend relies on to update without
+/// refetching.
 pub trait QueueReporter {
     /// Rows appeared at these positions.
     fn added(&self, positions: Vec<i64>, queue_length: i64);
