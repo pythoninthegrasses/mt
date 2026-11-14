@@ -12,7 +12,7 @@ use crate::db::{DbResult, LastfmLovedStats, LastfmLovedTrack};
 /// Uses INSERT OR REPLACE to handle duplicates via the UNIQUE(artist, track) constraint.
 /// Returns the row id.
 #[allow(dead_code)]
-pub(crate) fn upsert_loved_track(
+pub fn upsert_loved_track(
     conn: &Connection,
     artist: &str,
     track: &str,
@@ -32,7 +32,7 @@ pub(crate) fn upsert_loved_track(
 /// Bulk insert loved tracks in a single transaction.
 ///
 /// Returns the number of tracks inserted/updated.
-pub(crate) fn bulk_insert_loved_tracks(
+pub fn bulk_insert_loved_tracks(
     conn: &Connection,
     tracks: &[(String, String, Option<i64>)], // (artist, track, loved_at)
 ) -> DbResult<usize> {
@@ -54,7 +54,7 @@ pub(crate) fn bulk_insert_loved_tracks(
 }
 
 /// Get all unmatched loved tracks (tracks not yet in the library)
-pub(crate) fn get_unmatched_loved_tracks(
+pub fn get_unmatched_loved_tracks(
     conn: &Connection,
     limit: Option<i64>,
 ) -> DbResult<Vec<LastfmLovedTrack>> {
@@ -111,7 +111,7 @@ pub(crate) fn get_all_loved_tracks(
 }
 
 /// Update a loved track's matched_track_id when found in the library
-pub(crate) fn set_matched_track(
+pub fn set_matched_track(
     conn: &Connection,
     loved_track_id: i64,
     library_track_id: i64,
@@ -127,7 +127,7 @@ pub(crate) fn set_matched_track(
 }
 
 /// Update last_checked_at timestamp without setting a match
-pub(crate) fn mark_checked(conn: &Connection, loved_track_id: i64) -> DbResult<bool> {
+pub fn mark_checked(conn: &Connection, loved_track_id: i64) -> DbResult<bool> {
     let now = chrono::Utc::now().timestamp();
     let updated = conn.execute(
         "UPDATE lastfm_loved_tracks SET last_checked_at = ? WHERE id = ?",
@@ -147,7 +147,7 @@ pub(crate) fn clear_match(conn: &Connection, library_track_id: i64) -> DbResult<
 }
 
 /// Get loved track cache statistics
-pub(crate) fn get_loved_stats(conn: &Connection) -> DbResult<LastfmLovedStats> {
+pub fn get_loved_stats(conn: &Connection) -> DbResult<LastfmLovedStats> {
     let total_cached: i64 =
         conn.query_row("SELECT COUNT(*) FROM lastfm_loved_tracks", [], |row| {
             row.get(0)
@@ -179,7 +179,7 @@ pub(crate) fn is_loved_cached(conn: &Connection, artist: &str, track: &str) -> D
 
 /// Get a loved track by artist and track name
 #[allow(dead_code)]
-pub(crate) fn get_loved_by_name(
+pub fn get_loved_by_name(
     conn: &Connection,
     artist: &str,
     track: &str,
@@ -210,7 +210,7 @@ pub(crate) fn remove_loved_track(conn: &Connection, loved_track_id: i64) -> DbRe
 }
 
 /// Clear all cached loved tracks
-pub(crate) fn clear_loved_cache(conn: &Connection) -> DbResult<i64> {
+pub fn clear_loved_cache(conn: &Connection) -> DbResult<i64> {
     let deleted = conn.execute("DELETE FROM lastfm_loved_tracks", [])?;
     Ok(deleted as i64)
 }
@@ -218,7 +218,7 @@ pub(crate) fn clear_loved_cache(conn: &Connection) -> DbResult<i64> {
 /// Get the most recent loved_at timestamp in the cache
 ///
 /// Useful for incremental imports (fetch only tracks loved after this timestamp)
-pub(crate) fn get_most_recent_loved_at(conn: &Connection) -> DbResult<Option<i64>> {
+pub fn get_most_recent_loved_at(conn: &Connection) -> DbResult<Option<i64>> {
     let result: Result<i64, _> = conn.query_row(
         "SELECT MAX(loved_at) FROM lastfm_loved_tracks WHERE loved_at IS NOT NULL",
         [],
@@ -245,7 +245,7 @@ pub(crate) fn get_loved_count(conn: &Connection) -> DbResult<i64> {
 /// Get all library track IDs that were matched from the loved cache.
 ///
 /// These are the tracks that were auto-favorited by the Last.fm sync process.
-pub(crate) fn get_matched_track_ids(conn: &Connection) -> DbResult<Vec<i64>> {
+pub fn get_matched_track_ids(conn: &Connection) -> DbResult<Vec<i64>> {
     let mut stmt = conn.prepare(
         "SELECT DISTINCT matched_track_id FROM lastfm_loved_tracks WHERE matched_track_id IS NOT NULL",
     )?;

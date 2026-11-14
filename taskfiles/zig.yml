@@ -84,8 +84,8 @@ tasks:
       - cargo test -p mt-tauri --lib db::fixture_gen::tests::generate_mt_fixture -- --ignored --exact --nocapture
     sources:
       - "{{.ROOT_DIR}}/mt_20260127.sql"
-      - "{{.ROOT_DIR}}/crates/mt-tauri/src/db/fixture_gen.rs"
-      - "{{.ROOT_DIR}}/crates/mt-tauri/src/db/schema.rs"
+      - "{{.ROOT_DIR}}/crates/mt-tauri/src/db_fixture_gen.rs"
+      - "{{.ROOT_DIR}}/crates/mt-core/src/db/schema.rs"
     generates:
       - "{{.ROOT_DIR}}/tests/fixtures/mt_fixture.db"
 

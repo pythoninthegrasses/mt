@@ -67,17 +67,22 @@ The backend is being split into two crates as part of TASK-353:
 
 | Crate | Current responsibility |
 |-------|------------------------|
-| `crates/mt-core/` | Tauri-independent network file cache and platform mount detection |
-| `crates/mt-tauri/` | Desktop application, command/event adapters, audio, and the remaining data/scanner/integration modules |
+| `crates/mt-core/` | Tauri-independent SQLite database, network file cache, and platform mount detection |
+| `crates/mt-tauri/` | Desktop application, command/event adapters, audio, and the remaining scanner/integration modules |
 
-`mt-tauri` depends on `mt-core` and re-exports its cache module internally so
-existing desktop callers retain the same paths. The cache implementation and
-its tests live only in `mt-core`; run them without linking the desktop framework
+`mt-tauri` depends on `mt-core` and re-exports its cache and database APIs internally
+so existing desktop callers retain the same paths. Their implementations and
+unit/property tests live only in `mt-core`; run them without linking the desktop framework
 using `cargo nextest run -p mt-core`.
+
+The desktop `db` adapter retains only the test-only Zig database fixture generator,
+preserving its existing `db::fixture_gen` test filter and sidecar parity harness.
+Database pooling, schema migrations, SQL queries, and queue persistence/navigation
+belong to the core; desktop commands still own event emission.
 
 CI checks the core's transitive normal, build, and test dependencies across all
 targets and features, rejecting Tauri, Tao, Wry, WebKit, and Objective-C 2 crates.
-The database, pure scanner, Last.fm, Plex, and metadata extraction remain pending;
+The pure scanner, Last.fm, Plex, and metadata extraction remain pending;
 this initial split does not yet isolate all backend tests from Tauri.
 
 ### Tauri Core (Rust)
@@ -249,18 +254,24 @@ User clicks "Add Music" button
 
 ## Directory Structure
 
-The project uses a Cargo workspace with a single crate:
+The project uses a Cargo workspace with two crates:
 
 ```text
 mt/
-├── Cargo.toml              # Workspace root (members: mt-tauri)
+├── Cargo.toml              # Workspace root (members: mt-core, mt-tauri)
 ├── crates/
-│   └── mt-tauri/           # Tauri app (all backend logic)
+│   ├── mt-core/            # Tauri-independent library
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── cache/      # Network file cache and mount detection
+│   │       ├── db/         # Database operations and tests
+│   │       └── lib.rs
+│   └── mt-tauri/           # Desktop app and remaining backend modules
 │       ├── src/
 │       │   ├── main.rs     # Entry point
 │       │   ├── audio/      # Audio engine module
 │       │   ├── commands/   # Tauri command handlers
-│       │   ├── db/         # Database operations
+│       │   ├── db.rs       # Core database re-export; desktop test fixture hook
 │       │   ├── lastfm/     # Last.fm integration
 │       │   ├── scanner/    # Library scanning
 │       │   └── watcher/    # File system monitoring

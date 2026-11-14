@@ -7,7 +7,7 @@ use rusqlite::{Connection, params};
 use crate::db::{DbResult, ScrobbleEntry};
 
 /// Add a scrobble to the offline queue
-pub(crate) fn queue_scrobble(
+pub fn queue_scrobble(
     conn: &Connection,
     artist: &str,
     track: &str,
@@ -23,7 +23,7 @@ pub(crate) fn queue_scrobble(
 }
 
 /// Get queued scrobbles for retry
-pub(crate) fn get_queued_scrobbles(conn: &Connection, limit: i64) -> DbResult<Vec<ScrobbleEntry>> {
+pub fn get_queued_scrobbles(conn: &Connection, limit: i64) -> DbResult<Vec<ScrobbleEntry>> {
     let mut stmt = conn.prepare(
         "SELECT id, artist, track, album, timestamp, created_at, retry_count
          FROM scrobble_queue
@@ -50,13 +50,13 @@ pub(crate) fn get_queued_scrobbles(conn: &Connection, limit: i64) -> DbResult<Ve
 }
 
 /// Remove a successfully scrobbled item from the queue
-pub(crate) fn remove_queued_scrobble(conn: &Connection, scrobble_id: i64) -> DbResult<bool> {
+pub fn remove_queued_scrobble(conn: &Connection, scrobble_id: i64) -> DbResult<bool> {
     let deleted = conn.execute("DELETE FROM scrobble_queue WHERE id = ?", [scrobble_id])?;
     Ok(deleted > 0)
 }
 
 /// Increment retry count for a failed scrobble
-pub(crate) fn increment_scrobble_retry(conn: &Connection, scrobble_id: i64) -> DbResult<i64> {
+pub fn increment_scrobble_retry(conn: &Connection, scrobble_id: i64) -> DbResult<i64> {
     conn.execute(
         "UPDATE scrobble_queue SET retry_count = retry_count + 1 WHERE id = ?",
         [scrobble_id],

@@ -62,7 +62,7 @@ pub(crate) fn get_all_settings(conn: &Connection) -> DbResult<HashMap<String, Js
 }
 
 /// Get a single setting value
-pub(crate) fn get_setting(conn: &Connection, key: &str) -> DbResult<Option<String>> {
+pub fn get_setting(conn: &Connection, key: &str) -> DbResult<Option<String>> {
     match conn.query_row("SELECT value FROM settings WHERE key = ?", [key], |row| {
         row.get(0)
     }) {
@@ -73,7 +73,7 @@ pub(crate) fn get_setting(conn: &Connection, key: &str) -> DbResult<Option<Strin
 }
 
 /// Set a single setting
-pub(crate) fn set_setting(conn: &Connection, key: &str, value: &JsonValue) -> DbResult<()> {
+pub fn set_setting(conn: &Connection, key: &str, value: &JsonValue) -> DbResult<()> {
     let str_value = match value {
         JsonValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
         JsonValue::Number(n) => n.to_string(),

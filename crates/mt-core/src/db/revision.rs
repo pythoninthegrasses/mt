@@ -8,7 +8,7 @@ use rusqlite::Connection;
 use crate::db::DbResult;
 
 /// Get the current library revision number.
-pub(crate) fn get_revision(conn: &Connection) -> DbResult<i64> {
+pub fn get_revision(conn: &Connection) -> DbResult<i64> {
     let revision: i64 = conn.query_row(
         "SELECT revision FROM library_revision WHERE id = 1",
         [],
@@ -18,7 +18,7 @@ pub(crate) fn get_revision(conn: &Connection) -> DbResult<i64> {
 }
 
 /// Increment and return the new library revision number.
-pub(crate) fn bump_revision(conn: &Connection) -> DbResult<i64> {
+pub fn bump_revision(conn: &Connection) -> DbResult<i64> {
     conn.execute(
         "UPDATE library_revision SET revision = revision + 1 WHERE id = 1",
         [],

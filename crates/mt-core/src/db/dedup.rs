@@ -23,13 +23,13 @@ pub(crate) struct MissingKeptTrack {
 /// Info returned when clearing all suppressions (for re-scanning)
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // Fields read in clear_all_suppressions callers
-pub(crate) struct SuppressedTrackInfo {
+pub struct SuppressedTrackInfo {
     pub suppressed_filepath: String,
     pub suppressed_content_hash: Option<String>,
 }
 
 /// Record a suppressed duplicate filepath
-pub(crate) fn suppress_track(
+pub fn suppress_track(
     conn: &Connection,
     kept_track_id: i64,
     filepath: &str,
@@ -93,7 +93,7 @@ pub(crate) fn clear_suppressions_for_kept_track(
 ///
 /// Used when the cross-directory dedup setting is disabled — all previously
 /// suppressed tracks should be re-added to the library.
-pub(crate) fn clear_all_suppressions(conn: &Connection) -> DbResult<Vec<SuppressedTrackInfo>> {
+pub fn clear_all_suppressions(conn: &Connection) -> DbResult<Vec<SuppressedTrackInfo>> {
     let mut stmt = conn
         .prepare("SELECT suppressed_filepath, suppressed_content_hash FROM deduplicated_tracks")?;
 
@@ -136,7 +136,7 @@ pub(crate) fn remove_suppression_by_filepath(conn: &Connection, filepath: &str) 
 }
 
 /// Count total suppressed tracks
-pub(crate) fn count_suppressed(conn: &Connection) -> DbResult<i64> {
+pub fn count_suppressed(conn: &Connection) -> DbResult<i64> {
     let count: i64 = conn.query_row("SELECT COUNT(*) FROM deduplicated_tracks", [], |row| {
         row.get(0)
     })?;
@@ -163,7 +163,7 @@ pub(crate) fn get_suppressed_filepaths(
 ///
 /// On DB errors, the original `tracks` vec is returned alongside the error so
 /// the caller can fall back to unfiltered insertion.
-pub(crate) fn filter_suppressed_tracks(
+pub fn filter_suppressed_tracks(
     conn: &Connection,
     tracks: TrackVec,
 ) -> Result<(TrackVec, usize), (crate::db::DbError, TrackVec)> {
@@ -187,7 +187,7 @@ pub(crate) fn filter_suppressed_tracks(
 
 /// Result of running reinstatement
 #[derive(Debug, Default)]
-pub(crate) struct ReinstatementResult {
+pub struct ReinstatementResult {
     pub reinstated: u32,
     pub errors: u32,
 }
@@ -201,7 +201,7 @@ pub(crate) struct ReinstatementResult {
 ///
 /// The `extract_and_add` callback handles the filesystem-dependent work
 /// (metadata extraction + DB insert), returning the new track ID on success.
-pub(crate) fn reinstate_missing_kept_tracks<F>(
+pub fn reinstate_missing_kept_tracks<F>(
     conn: &Connection,
     mut extract_and_add: F,
 ) -> DbResult<ReinstatementResult>

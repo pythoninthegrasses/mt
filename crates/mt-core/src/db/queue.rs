@@ -7,7 +7,7 @@ use rusqlite::{Connection, params};
 use crate::db::{DbError, DbResult, QueueItem, QueueState, Track, library::get_track_by_filepath};
 
 /// Get all items in the queue with track metadata
-pub(crate) fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
+pub fn get_queue(conn: &Connection) -> DbResult<Vec<QueueItem>> {
     let mut stmt = conn.prepare(
         "SELECT q.id as queue_id, q.filepath,
                 l.id, l.title, l.artist, l.album, l.album_artist,
@@ -97,11 +97,7 @@ fn fetch_filepaths_by_id(
 }
 
 /// Add tracks to the queue by track IDs
-pub(crate) fn add_to_queue(
-    conn: &Connection,
-    track_ids: &[i64],
-    position: Option<i64>,
-) -> DbResult<i64> {
+pub fn add_to_queue(conn: &Connection, track_ids: &[i64], position: Option<i64>) -> DbResult<i64> {
     let track_map = fetch_filepaths_by_id(conn, track_ids)?;
 
     let tx = conn.unchecked_transaction()?;
@@ -154,7 +150,7 @@ pub(crate) fn add_to_queue(
 }
 
 /// Add files directly to the queue
-pub(crate) fn add_files_to_queue(
+pub fn add_files_to_queue(
     conn: &Connection,
     filepaths: &[String],
     position: Option<i64>,
@@ -220,7 +216,7 @@ pub(crate) fn add_files_to_queue(
 }
 
 /// Remove a track from the queue by position
-pub(crate) fn remove_from_queue(conn: &Connection, position: i64) -> DbResult<bool> {
+pub fn remove_from_queue(conn: &Connection, position: i64) -> DbResult<bool> {
     let mut stmt = conn.prepare("SELECT id FROM queue ORDER BY id")?;
     let items: Vec<i64> = stmt
         .query_map([], |row| row.get(0))?
@@ -237,17 +233,13 @@ pub(crate) fn remove_from_queue(conn: &Connection, position: i64) -> DbResult<bo
 }
 
 /// Clear the entire queue
-pub(crate) fn clear_queue(conn: &Connection) -> DbResult<()> {
+pub fn clear_queue(conn: &Connection) -> DbResult<()> {
     conn.execute("DELETE FROM queue", [])?;
     Ok(())
 }
 
 /// Reorder tracks in the queue
-pub(crate) fn reorder_queue(
-    conn: &Connection,
-    from_position: i64,
-    to_position: i64,
-) -> DbResult<bool> {
+pub fn reorder_queue(conn: &Connection, from_position: i64, to_position: i64) -> DbResult<bool> {
     let mut stmt = conn.prepare("SELECT id, filepath FROM queue ORDER BY id")?;
     let items: Vec<(i64, String)> = stmt
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
@@ -276,13 +268,13 @@ pub(crate) fn reorder_queue(
 }
 
 /// Get the number of items in the queue
-pub(crate) fn get_queue_length(conn: &Connection) -> DbResult<i64> {
+pub fn get_queue_length(conn: &Connection) -> DbResult<i64> {
     let count: i64 = conn.query_row("SELECT COUNT(*) FROM queue", [], |row| row.get(0))?;
     Ok(count)
 }
 
 /// Get queue playback state
-pub(crate) fn get_queue_state(conn: &Connection) -> DbResult<QueueState> {
+pub fn get_queue_state(conn: &Connection) -> DbResult<QueueState> {
     let result = conn.query_row(
         "SELECT current_index, shuffle_enabled, loop_mode, original_order_json,
                 play_next_offset, play_history_json, play_next_track_ids_json, repeat_one_pending
@@ -345,7 +337,7 @@ pub(crate) fn set_queue_state(conn: &Connection, state: &QueueState) -> DbResult
 }
 
 /// Update current index in queue state
-pub(crate) fn set_current_index(conn: &Connection, index: i64) -> DbResult<()> {
+pub fn set_current_index(conn: &Connection, index: i64) -> DbResult<()> {
     // Ensure state exists
     let _ = get_queue_state(conn)?;
 
@@ -369,7 +361,7 @@ pub(crate) fn set_shuffle_enabled(conn: &Connection, enabled: bool) -> DbResult<
 }
 
 /// Update loop mode in queue state
-pub(crate) fn set_loop_mode(conn: &Connection, mode: &str) -> DbResult<()> {
+pub fn set_loop_mode(conn: &Connection, mode: &str) -> DbResult<()> {
     // Ensure state exists
     let _ = get_queue_state(conn)?;
 
@@ -440,7 +432,7 @@ pub(crate) fn set_repeat_one_pending(conn: &Connection, pending: bool) -> DbResu
 ///
 /// Move semantics: if a track already exists in the queue (and is not the current track),
 /// it is removed first. Tracks are inserted at `current_index + 1 + play_next_offset`.
-pub(crate) fn add_play_next(conn: &Connection, track_ids: &[i64]) -> DbResult<Vec<QueueItem>> {
+pub fn add_play_next(conn: &Connection, track_ids: &[i64]) -> DbResult<Vec<QueueItem>> {
     if track_ids.is_empty() {
         return get_queue(conn);
     }
@@ -535,7 +527,7 @@ pub(crate) fn add_play_next(conn: &Connection, track_ids: &[i64]) -> DbResult<Ve
 /// Enable: saves original order, separates current + play-next + regular tracks,
 /// Fisher-Yates shuffles regular tracks, rebuilds queue as [current, play-next..., shuffled...].
 /// Disable: restores original order from saved JSON, finds current track in restored order.
-pub(crate) fn toggle_shuffle(conn: &Connection, enabled: bool) -> DbResult<Vec<QueueItem>> {
+pub fn toggle_shuffle(conn: &Connection, enabled: bool) -> DbResult<Vec<QueueItem>> {
     use rand::rng;
     use rand::seq::SliceRandom;
 
@@ -706,7 +698,7 @@ fn current_idx_valid(state: &QueueState, items: &[QueueItem]) -> bool {
 
 /// Result of a navigation operation (advance_to_next/previous)
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum NavigationAction {
+pub enum NavigationAction {
     /// Play the track at the given index
     Play(usize),
     /// Stop playback (end of queue, no loop)
@@ -719,7 +711,7 @@ pub(crate) enum NavigationAction {
 ///
 /// Handles repeat-one two-phase logic, loop modes, history, and reshuffle on loop restart.
 /// Returns the action to take and the updated queue items (may change if reshuffled).
-pub(crate) fn advance_to_next(conn: &Connection) -> DbResult<(NavigationAction, Vec<QueueItem>)> {
+pub fn advance_to_next(conn: &Connection) -> DbResult<(NavigationAction, Vec<QueueItem>)> {
     let state = get_queue_state(conn)?;
     let items = get_queue(conn)?;
 
@@ -783,7 +775,7 @@ pub(crate) fn advance_to_next(conn: &Connection) -> DbResult<(NavigationAction, 
 ///
 /// If current_time_ms > 3000, returns SeekZero to restart current track.
 /// Otherwise tries history, then falls back to decrementing index.
-pub(crate) fn advance_to_previous(
+pub fn advance_to_previous(
     conn: &Connection,
     current_time_ms: u64,
 ) -> DbResult<(NavigationAction, Vec<QueueItem>)> {
@@ -847,7 +839,7 @@ pub(crate) fn advance_to_previous(
 }
 
 /// Skip next: override repeat-one by changing to loop=all, then advance.
-pub(crate) fn skip_to_next(conn: &Connection) -> DbResult<(NavigationAction, Vec<QueueItem>)> {
+pub fn skip_to_next(conn: &Connection) -> DbResult<(NavigationAction, Vec<QueueItem>)> {
     let state = get_queue_state(conn)?;
     if state.loop_mode == "one" || state.repeat_one_pending {
         set_loop_mode(conn, "all")?;
@@ -857,7 +849,7 @@ pub(crate) fn skip_to_next(conn: &Connection) -> DbResult<(NavigationAction, Vec
 }
 
 /// Skip previous: override repeat-one by changing to loop=all, then go previous.
-pub(crate) fn skip_to_previous(
+pub fn skip_to_previous(
     conn: &Connection,
     current_time_ms: u64,
 ) -> DbResult<(NavigationAction, Vec<QueueItem>)> {
@@ -912,7 +904,7 @@ fn remove_from_play_next_ids(conn: &Connection, track_id: i64) -> DbResult<()> {
 
 /// Report from queue integrity check
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub(crate) struct IntegrityReport {
+pub struct IntegrityReport {
     pub duplicate_track_ids: Vec<i64>,
     pub index_was_out_of_bounds: bool,
     pub orphaned_play_next_ids: Vec<i64>,
@@ -923,7 +915,7 @@ pub(crate) struct IntegrityReport {
 ///
 /// Detects: duplicate track IDs, out-of-bounds current_index, orphaned play_next_track_ids.
 /// Auto-repairs by deduplicating and clamping index.
-pub(crate) fn check_integrity(conn: &Connection) -> DbResult<IntegrityReport> {
+pub fn check_integrity(conn: &Connection) -> DbResult<IntegrityReport> {
     let items = get_queue(conn)?;
     let state = get_queue_state(conn)?;
 
@@ -1018,7 +1010,7 @@ pub(crate) fn check_integrity(conn: &Connection) -> DbResult<IntegrityReport> {
 
 /// Result of a play-context operation: the installed queue and the track to play.
 #[cfg_attr(not(test), allow(dead_code))]
-pub(crate) struct PlayContextResult {
+pub struct PlayContextResult {
     pub items: Vec<QueueItem>,
     pub current_track: Track,
     pub shuffle_enabled: bool,
@@ -1032,7 +1024,7 @@ pub(crate) struct PlayContextResult {
 /// all tracks, and updates queue state — all in a single transaction.
 ///
 /// Returns the installed queue items and the track at index 0 (to play).
-pub(crate) fn play_context(
+pub fn play_context(
     conn: &Connection,
     track_ids: &[i64],
     start_index: i64,

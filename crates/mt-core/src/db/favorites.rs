@@ -8,7 +8,7 @@ use crate::db::library::row_to_track;
 use crate::db::{DbResult, FavoriteTrack, PaginatedResult, Track};
 
 /// Get favorited tracks with pagination
-pub(crate) fn get_favorites(
+pub fn get_favorites(
     conn: &Connection,
     limit: i64,
     offset: i64,
@@ -44,7 +44,7 @@ pub(crate) fn get_favorites(
 }
 
 /// Get top 25 most played tracks
-pub(crate) fn get_top_25(conn: &Connection) -> DbResult<Vec<Track>> {
+pub fn get_top_25(conn: &Connection) -> DbResult<Vec<Track>> {
     let mut stmt = conn.prepare(
         "SELECT id, filepath, title, artist, album, album_artist,
                 track_number, track_total, disc_number, disc_total, date, genre,
@@ -66,11 +66,7 @@ pub(crate) fn get_top_25(conn: &Connection) -> DbResult<Vec<Track>> {
 }
 
 /// Get tracks played within the last N days
-pub(crate) fn get_recently_played(
-    conn: &Connection,
-    days: i64,
-    limit: i64,
-) -> DbResult<Vec<Track>> {
+pub fn get_recently_played(conn: &Connection, days: i64, limit: i64) -> DbResult<Vec<Track>> {
     let modifier = format!("-{} days", days);
 
     let mut stmt = conn.prepare(
@@ -95,7 +91,7 @@ pub(crate) fn get_recently_played(
 }
 
 /// Get tracks added within the last N days
-pub(crate) fn get_recently_added(conn: &Connection, days: i64, limit: i64) -> DbResult<Vec<Track>> {
+pub fn get_recently_added(conn: &Connection, days: i64, limit: i64) -> DbResult<Vec<Track>> {
     let modifier = format!("-{} days", days);
 
     let mut stmt = conn.prepare(
@@ -120,7 +116,7 @@ pub(crate) fn get_recently_added(conn: &Connection, days: i64, limit: i64) -> Db
 }
 
 /// Count, total duration, and total file size of favorited tracks.
-pub(crate) fn get_favorites_stats(conn: &Connection) -> DbResult<(i64, f64, i64)> {
+pub fn get_favorites_stats(conn: &Connection) -> DbResult<(i64, f64, i64)> {
     let (count, duration, size) = conn.query_row(
         "SELECT COUNT(*), COALESCE(SUM(l.duration), 0), COALESCE(SUM(l.file_size), 0)
          FROM favorites f JOIN library l ON f.track_id = l.id",
@@ -137,7 +133,7 @@ pub(crate) fn get_favorites_stats(conn: &Connection) -> DbResult<(i64, f64, i64)
 }
 
 /// Count, total duration, and total file size of top 25 most played tracks.
-pub(crate) fn get_top_25_stats(conn: &Connection) -> DbResult<(i64, f64, i64)> {
+pub fn get_top_25_stats(conn: &Connection) -> DbResult<(i64, f64, i64)> {
     let (count, duration, size) = conn.query_row(
         "SELECT COUNT(*), COALESCE(SUM(duration), 0), COALESCE(SUM(file_size), 0)
          FROM (SELECT duration, file_size FROM library WHERE play_count > 0
@@ -155,7 +151,7 @@ pub(crate) fn get_top_25_stats(conn: &Connection) -> DbResult<(i64, f64, i64)> {
 }
 
 /// Count, total duration, and total file size of recently played tracks.
-pub(crate) fn get_recently_played_stats(
+pub fn get_recently_played_stats(
     conn: &Connection,
     days: i64,
     limit: i64,
@@ -179,7 +175,7 @@ pub(crate) fn get_recently_played_stats(
 }
 
 /// Count, total duration, and total file size of recently added tracks.
-pub(crate) fn get_recently_added_stats(
+pub fn get_recently_added_stats(
     conn: &Connection,
     days: i64,
     limit: i64,
@@ -203,7 +199,7 @@ pub(crate) fn get_recently_added_stats(
 }
 
 /// Check if a track is favorited
-pub(crate) fn is_favorite(conn: &Connection, track_id: i64) -> DbResult<(bool, Option<String>)> {
+pub fn is_favorite(conn: &Connection, track_id: i64) -> DbResult<(bool, Option<String>)> {
     match conn.query_row(
         "SELECT timestamp FROM favorites WHERE track_id = ?",
         [track_id],
@@ -216,7 +212,7 @@ pub(crate) fn is_favorite(conn: &Connection, track_id: i64) -> DbResult<(bool, O
 }
 
 /// Add a track to favorites
-pub(crate) fn add_favorite(conn: &Connection, track_id: i64) -> DbResult<Option<String>> {
+pub fn add_favorite(conn: &Connection, track_id: i64) -> DbResult<Option<String>> {
     match conn.execute("INSERT INTO favorites (track_id) VALUES (?)", [track_id]) {
         Ok(_) => {
             let timestamp: String = conn.query_row(
@@ -237,7 +233,7 @@ pub(crate) fn add_favorite(conn: &Connection, track_id: i64) -> DbResult<Option<
 }
 
 /// Remove a track from favorites
-pub(crate) fn remove_favorite(conn: &Connection, track_id: i64) -> DbResult<bool> {
+pub fn remove_favorite(conn: &Connection, track_id: i64) -> DbResult<bool> {
     let deleted = conn.execute("DELETE FROM favorites WHERE track_id = ?", [track_id])?;
     if deleted > 0 {
         crate::db::revision::bump_revision(conn)?;

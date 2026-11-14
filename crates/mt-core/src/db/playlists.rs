@@ -8,7 +8,7 @@ use crate::db::library::row_to_track;
 use crate::db::{DbResult, Playlist, PlaylistTrack, PlaylistWithTracks};
 
 /// Get all playlists with track counts
-pub(crate) fn get_playlists(conn: &Connection) -> DbResult<Vec<Playlist>> {
+pub fn get_playlists(conn: &Connection) -> DbResult<Vec<Playlist>> {
     let mut stmt = conn.prepare(
         "SELECT p.id, p.name, p.position, p.created_at,
                 COUNT(pi.id) as track_count
@@ -35,7 +35,7 @@ pub(crate) fn get_playlists(conn: &Connection) -> DbResult<Vec<Playlist>> {
 }
 
 /// Create a new playlist
-pub(crate) fn create_playlist(conn: &Connection, name: &str) -> DbResult<Option<Playlist>> {
+pub fn create_playlist(conn: &Connection, name: &str) -> DbResult<Option<Playlist>> {
     match conn.execute("INSERT INTO playlists (name) VALUES (?)", [name]) {
         Ok(_) => {
             let id = conn.last_insert_rowid();
@@ -65,10 +65,7 @@ pub(crate) fn create_playlist(conn: &Connection, name: &str) -> DbResult<Option<
 }
 
 /// Get a playlist with its tracks
-pub(crate) fn get_playlist(
-    conn: &Connection,
-    playlist_id: i64,
-) -> DbResult<Option<PlaylistWithTracks>> {
+pub fn get_playlist(conn: &Connection, playlist_id: i64) -> DbResult<Option<PlaylistWithTracks>> {
     // Get playlist metadata
     let playlist = match conn.query_row(
         "SELECT * FROM playlists WHERE id = ?",
@@ -124,7 +121,7 @@ pub(crate) fn get_playlist(
 }
 
 /// Update playlist metadata
-pub(crate) fn update_playlist(
+pub fn update_playlist(
     conn: &Connection,
     playlist_id: i64,
     name: Option<&str>,
@@ -170,13 +167,13 @@ pub(crate) fn update_playlist(
 }
 
 /// Delete a playlist
-pub(crate) fn delete_playlist(conn: &Connection, playlist_id: i64) -> DbResult<bool> {
+pub fn delete_playlist(conn: &Connection, playlist_id: i64) -> DbResult<bool> {
     let deleted = conn.execute("DELETE FROM playlists WHERE id = ?", [playlist_id])?;
     Ok(deleted > 0)
 }
 
 /// Add tracks to a playlist
-pub(crate) fn add_tracks_to_playlist(
+pub fn add_tracks_to_playlist(
     conn: &Connection,
     playlist_id: i64,
     track_ids: &[i64],
@@ -217,7 +214,7 @@ pub(crate) fn add_tracks_to_playlist(
 }
 
 /// Remove a track from a playlist by position
-pub(crate) fn remove_track_from_playlist(
+pub fn remove_track_from_playlist(
     conn: &Connection,
     playlist_id: i64,
     position: i64,
@@ -257,7 +254,7 @@ pub(crate) fn remove_track_from_playlist(
 }
 
 /// Reorder tracks within a playlist
-pub(crate) fn reorder_playlist(
+pub fn reorder_playlist(
     conn: &Connection,
     playlist_id: i64,
     from_position: i64,
@@ -295,7 +292,7 @@ pub(crate) fn reorder_playlist(
 }
 
 /// Count, total duration, and total file size of tracks in a playlist.
-pub(crate) fn get_playlist_stats(conn: &Connection, playlist_id: i64) -> DbResult<(i64, f64, i64)> {
+pub fn get_playlist_stats(conn: &Connection, playlist_id: i64) -> DbResult<(i64, f64, i64)> {
     let (count, duration, size) = conn.query_row(
         "SELECT COUNT(*), COALESCE(SUM(l.duration), 0), COALESCE(SUM(l.file_size), 0)
          FROM playlist_items pi
@@ -314,7 +311,7 @@ pub(crate) fn get_playlist_stats(conn: &Connection, playlist_id: i64) -> DbResul
 }
 
 /// Get the number of tracks in a playlist
-pub(crate) fn get_playlist_track_count(conn: &Connection, playlist_id: i64) -> DbResult<i64> {
+pub fn get_playlist_track_count(conn: &Connection, playlist_id: i64) -> DbResult<i64> {
     let count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM playlist_items WHERE playlist_id = ?",
         [playlist_id],
@@ -324,7 +321,7 @@ pub(crate) fn get_playlist_track_count(conn: &Connection, playlist_id: i64) -> D
 }
 
 /// Reorder playlists in the sidebar
-pub(crate) fn reorder_playlists(
+pub fn reorder_playlists(
     conn: &Connection,
     from_position: i64,
     to_position: i64,
@@ -358,7 +355,7 @@ pub(crate) fn reorder_playlists(
 }
 
 /// Generate a unique playlist name
-pub(crate) fn generate_unique_playlist_name(conn: &Connection, base: &str) -> DbResult<String> {
+pub fn generate_unique_playlist_name(conn: &Connection, base: &str) -> DbResult<String> {
     let exists: bool = conn
         .query_row(
             "SELECT COUNT(*) > 0 FROM playlists WHERE name = ?",

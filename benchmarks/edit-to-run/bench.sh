@@ -20,12 +20,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=env.sh
 source "$HERE/env.sh"
 
-# Change classes: <id>:<file under the repo>. Every Rust class recompiles the
-# whole mt_lib crate because engine code, #[tauri::command] wrappers and the
-# crate roots all live in the single mt-tauri crate (that is the point of the
-# measurement -- see TASK-353 for the split under consideration).
+# Change classes: <id>:<file under the repo>. The engine class now edits mt-core
+# following TASK-353's database extraction; command/main/lib still edit mt-tauri.
+# Historical pre-split results used mt-tauri/src/db/library.rs.
 CLASSES=(
-  "engine:crates/mt-tauri/src/db/library.rs"
+  "engine:crates/mt-core/src/db/library.rs"
   "command:crates/mt-tauri/src/commands/queue.rs"
   "main:crates/mt-tauri/src/main.rs"
   "lib:crates/mt-tauri/src/lib.rs"

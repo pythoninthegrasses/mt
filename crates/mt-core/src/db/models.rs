@@ -392,7 +392,7 @@ pub fn artist_sort_key(
 /// Same rule as the `strip_sort_prefix` SQL function (`db::register_custom_functions`),
 /// which delegates to this: the word must be followed by whitespace, so
 /// "Therapy?" is not stripped by "the".
-pub(crate) fn strip_sort_prefix<'a>(value: &'a str, ignore_words: &str) -> &'a str {
+pub fn strip_sort_prefix<'a>(value: &'a str, ignore_words: &str) -> &'a str {
     let lower = value.to_lowercase();
     for word in ignore_words.split(',') {
         let word = word.trim().to_lowercase();

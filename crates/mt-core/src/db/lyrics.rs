@@ -10,7 +10,7 @@ use crate::db::DbResult;
 
 /// Cached lyrics data returned from the database
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub(crate) struct CachedLyrics {
+pub struct CachedLyrics {
     pub plain_lyrics: Option<String>,
     pub synced_lyrics: Option<String>,
 }
@@ -18,7 +18,7 @@ pub(crate) struct CachedLyrics {
 /// Get cached lyrics for a track by artist and title.
 /// Returns `Ok(Some(CachedLyrics))` on cache hit (including negative cache where both fields are None),
 /// or `Ok(None)` on cache miss.
-pub(crate) fn get_cached_lyrics(
+pub fn get_cached_lyrics(
     conn: &Connection,
     artist: &str,
     title: &str,
@@ -51,7 +51,7 @@ pub(crate) fn get_cached_lyrics(
 
 /// Save lyrics to the cache. Pass `None` for `lyrics` to cache a negative result.
 /// Uses INSERT OR REPLACE to upsert on the UNIQUE(artist, title) constraint.
-pub(crate) fn save_lyrics(
+pub fn save_lyrics(
     conn: &Connection,
     artist: &str,
     title: &str,
@@ -71,7 +71,7 @@ pub(crate) fn save_lyrics(
 }
 
 /// Delete all cached lyrics.
-pub(crate) fn clear_cache(conn: &Connection) -> DbResult<()> {
+pub fn clear_cache(conn: &Connection) -> DbResult<()> {
     conn.execute("DELETE FROM lyrics_cache", [])?;
     Ok(())
 }

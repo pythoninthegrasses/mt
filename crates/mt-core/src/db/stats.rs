@@ -10,7 +10,7 @@ use super::models::{
 /// Album entry for chart grid generation
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // Fields used in chart grid command and tests
-pub(crate) struct AlbumGridEntry {
+pub struct AlbumGridEntry {
     pub track_id: i64,
     pub filepath: String,
     pub album: String,
@@ -46,10 +46,7 @@ fn range_clause(range: &StatsDateRange) -> (&'static str, Option<i64>) {
 }
 
 /// Get overall listening statistics for a date range
-pub(crate) fn get_listening_stats(
-    conn: &Connection,
-    range: &StatsDateRange,
-) -> DbResult<ListeningStats> {
+pub fn get_listening_stats(conn: &Connection, range: &StatsDateRange) -> DbResult<ListeningStats> {
     let (range_where, range_param) = range_clause(range);
 
     let sql = format!(
@@ -87,7 +84,7 @@ pub(crate) fn get_listening_stats(
 }
 
 /// Get top artists by play count
-pub(crate) fn get_top_artists(
+pub fn get_top_artists(
     conn: &Connection,
     range: &StatsDateRange,
     limit: i64,
@@ -135,7 +132,7 @@ pub(crate) fn get_top_artists(
 }
 
 /// Get genre breakdown by play count
-pub(crate) fn get_genre_breakdown(
+pub fn get_genre_breakdown(
     conn: &Connection,
     range: &StatsDateRange,
     limit: i64,
@@ -183,7 +180,7 @@ pub(crate) fn get_genre_breakdown(
 }
 
 /// Get plays over time grouped by year (AllTime) or day (ranged)
-pub(crate) fn get_plays_over_time(
+pub fn get_plays_over_time(
     conn: &Connection,
     range: &StatsDateRange,
 ) -> DbResult<Vec<PlaysOverTime>> {
@@ -233,7 +230,7 @@ pub(crate) fn get_plays_over_time(
 }
 
 /// Get top albums for chart grid generation
-pub(crate) fn get_top_albums_for_grid(
+pub fn get_top_albums_for_grid(
     conn: &Connection,
     range: &StatsDateRange,
     sort_by: &str,

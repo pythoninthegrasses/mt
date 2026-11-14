@@ -15,7 +15,7 @@ type TrackRemovalInfo = (String, Option<String>, Option<String>);
 
 /// Record a track removal by filepath, optional content hash, and optional remote_id.
 /// Uses INSERT OR REPLACE so re-removing the same filepath just updates the timestamp.
-pub(crate) fn record_removal(
+pub fn record_removal(
     conn: &Connection,
     filepath: &str,
     content_hash: Option<&str>,
@@ -31,7 +31,7 @@ pub(crate) fn record_removal(
 
 /// Record multiple track removals in bulk.
 /// Caller must ensure this runs inside a transaction for atomicity.
-pub(crate) fn record_removals_bulk(
+pub fn record_removals_bulk(
     conn: &Connection,
     tracks: &[(String, Option<String>, Option<String>)],
 ) -> DbResult<usize> {
@@ -83,7 +83,7 @@ pub(crate) fn get_removed_content_hashes(conn: &Connection) -> DbResult<HashSet<
 }
 
 /// Get all removed remote_ids as a set for Plex tombstone lookups during sync.
-pub(crate) fn get_removed_remote_ids(conn: &Connection) -> DbResult<HashSet<String>> {
+pub fn get_removed_remote_ids(conn: &Connection) -> DbResult<HashSet<String>> {
     let mut stmt =
         conn.prepare("SELECT remote_id FROM removed_tracks WHERE remote_id IS NOT NULL")?;
     let ids: HashSet<String> = stmt
@@ -101,7 +101,7 @@ pub(crate) fn clear_removal(conn: &Connection, filepath: &str) -> DbResult<bool>
 }
 
 /// Clear all removal records. Used when user resets/clears the entire library.
-pub(crate) fn clear_all_removals(conn: &Connection) -> DbResult<usize> {
+pub fn clear_all_removals(conn: &Connection) -> DbResult<usize> {
     let deleted = conn.execute("DELETE FROM removed_tracks", [])?;
     Ok(deleted)
 }
@@ -112,7 +112,7 @@ pub(crate) fn clear_all_removals(conn: &Connection) -> DbResult<usize> {
 ///
 /// On DB errors, the original `tracks` vec is returned alongside the error so
 /// the caller can fall back to unfiltered insertion.
-pub(crate) fn filter_removed_tracks(
+pub fn filter_removed_tracks(
     conn: &Connection,
     tracks: TrackVec,
 ) -> Result<(TrackVec, usize), (DbError, TrackVec)> {
@@ -149,7 +149,7 @@ pub(crate) fn filter_removed_tracks(
 }
 
 /// Fetch filepath, content_hash, and remote_id for multiple track IDs in a single query.
-pub(crate) fn get_track_removal_info_bulk(
+pub fn get_track_removal_info_bulk(
     conn: &Connection,
     track_ids: &[i64],
 ) -> DbResult<Vec<TrackRemovalInfo>> {

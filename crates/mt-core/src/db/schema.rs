@@ -180,7 +180,7 @@ pub const CREATE_TABLES: &[(&str, &str)] = &[
 ];
 
 /// Create all database tables
-pub(crate) fn create_tables(conn: &Connection) -> DbResult<()> {
+pub fn create_tables(conn: &Connection) -> DbResult<()> {
     for (_, sql) in CREATE_TABLES {
         conn.execute(sql, [])?;
     }
@@ -196,7 +196,7 @@ pub(crate) fn create_tables(conn: &Connection) -> DbResult<()> {
 ///
 /// These migrations match the Python backend's migration logic exactly
 /// to ensure backward compatibility with existing databases.
-pub(crate) fn run_migrations(conn: &Connection) -> DbResult<()> {
+pub fn run_migrations(conn: &Connection) -> DbResult<()> {
     // The artist_sort_key backfill below calls the `strip_sort_prefix` SQL
     // UDF, which callers may not have registered yet (e.g. a bare
     // `Connection::open_in_memory()` in a test) — make sure it exists on
