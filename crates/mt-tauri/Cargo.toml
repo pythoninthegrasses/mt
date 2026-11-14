@@ -32,7 +32,19 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Async HTTP
-reqwest = { version = "0.12", features = ["json"] }
+# TASK-369.3: default-features = false drops `http2`/`h2` — every endpoint we
+# call (Last.fm, Plex, lrclib, the Zig sidecar) speaks HTTP/1.1 and ALPN falls
+# back gracefully; h2 survives dev builds only via wiremock's hyper/full.
+# `default-tls` (native-tls) is required for HTTPS and must stay; `charset`
+# gates Response::text() used by shadow_diff and agent/setup; `system-proxy`
+# honours OS proxy configuration. Caveat: the `agent` feature re-enables
+# reqwest defaults through rig-core's `reqwest-tls`, so h2 returns there.
+reqwest = { version = "0.12", default-features = false, features = [
+    "default-tls",
+    "charset",
+    "json",
+    "system-proxy",
+] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "io-util"] }
 
 # Audio playback
