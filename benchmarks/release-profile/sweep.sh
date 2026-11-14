@@ -169,6 +169,12 @@ case "$cmd" in
     [ $# -ge 2 ] || { echo "usage: launch <lto> <cgus> [runs]" >&2; exit 2; }
     lto="$1"; cgus="$2"; runs="${3:-10}"
     label="launch-$(combo_label "$lto" "$cgus")"
+    # Build the named candidate first. The target dir holds whatever the matrix left
+    # in it, so timing the binary that happens to be there would label, say, an
+    # lto=false cgus=16 launch as `launch-lto-fat-cgus1`. cargo no-ops when the
+    # profile is already what was built.
+    say "build [$label] for the launch proxy"
+    eval "$(build_cmd "$lto" "$cgus")" || { echo "!! $label: build failed" >&2; exit 1; }
     bin="$(bin_path)"
     [ -x "$bin" ] || { echo "no binary at $bin; build it first" >&2; exit 2; }
     say "launch proxy [$label] ($runs runs)"
@@ -203,7 +209,12 @@ def platform(path):
     return name
 
 def label_of(path, prefix):
-    return re.sub(r"^%s-|\.json$|\.tsv$" % prefix, "", os.path.basename(path))
+    label = re.sub(r"^%s-|\.json$|\.tsv$" % prefix, "", os.path.basename(path))
+    # The Windows workflow names the knob's literal value (`lto-true`), the host and
+    # Linux columns name the profile keyword's effect (`lto-fat`), and hyperfine labels
+    # are not a good place to harmonise because they are written at run time. Collapse
+    # them here so the three columns agree on one spelling per candidate.
+    return re.sub(r"\blto-true-cgus", "lto-fat-cgus", label)
 
 rows, sizes = {}, {}
 for f in sorted(glob.glob(os.path.join(d, "**", "hyperfine-*.json"), recursive=True)):

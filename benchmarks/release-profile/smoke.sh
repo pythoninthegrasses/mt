@@ -104,6 +104,37 @@ wait_for_file() {
 }
 db() { /usr/bin/sqlite3 -cmd ".timeout 8000" "$DB" "$1"; }
 
+# audio_test samples once a second and returns when the sink reports done. If the
+# output device never delivers a callback (no running audio daemon, a device that
+# refuses the stream) it samples forever, and an unbounded call here once wedged a
+# smoke run for eight hours, so every invocation is bounded. 124 is the timeout exit.
+run_timed() {
+  local secs="$1"; shift
+  if command -v gtimeout >/dev/null 2>&1; then gtimeout "$secs" "$@"
+  elif command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"
+  else "$@"; fi
+}
+
+# A sine WAV, generated rather than committed: the repo fixtures are all exactly one
+# second, which is too short to show a clock advancing.
+make_tone() {
+  local path="$1" secs="${2:-6}"
+  MT_TONE_SECS="$secs" python3 - "$path" <<'PY'
+import math, os, struct, sys, wave
+path, rate, secs = sys.argv[1], 44100, int(os.environ["MT_TONE_SECS"])
+with wave.open(path, "wb") as w:
+    w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate)
+    w.writeframes(b"".join(
+        struct.pack("<h", int(0.25 * 32767 * math.sin(2 * math.pi * 220 * i / rate)))
+        for i in range(rate * secs)))
+PY
+}
+
+# Skipped checks are recorded but never counted as failures, so a host that cannot
+# exercise a path does not fail a candidate for it. They still land in the summary
+# file: AC#3 compares the two files, and "skipped here too" has to be visible.
+skip() { note "SKIP  $1: $2"; }
+
 say "build and bundle [$label] (lto=$lto codegen-units=$cgus)"
 # Tauri resolves externalBin eagerly, so bundling fails outright without the sidecar.
 # It is not built here because it is identical for every candidate.
@@ -140,15 +171,38 @@ fi
 note "candidate: lto=$lto codegen-units=$cgus, host $(uname -m), macOS $(sw_vers -productVersion)"
 detail "app: $APP_BIN ($(stat -f%z "$APP_BIN") bytes)"
 
+say "0. audio path pre-flight"
+# Every audio check below depends on the machine actually being able to render. When
+# coreaudiod is wedged, rodio opens a device, reports Playing, and the position never
+# advances; afplay hangs the same way. Distinguishing that from a candidate regression
+# matters: an unplayable host would otherwise fail both candidates identically and the
+# diff would prove nothing. `afplay` is Apple's own player, so it is the control.
+PROBE="$WORK/probe.wav"
+make_tone "$PROBE" 2
+AUDIO_OK=0
+if run_timed 25 afplay "$PROBE" >/dev/null 2>&1; then
+  AUDIO_OK=1
+  check "audio-path" 0 "afplay rendered a 2 s tone"
+else
+  check "audio-path" 1 "afplay did not finish in 25 s (coreaudiod wedged?)"
+fi
+
 say "1. device enumeration subprocess"
-if HOME="$SMOKE_HOME" MT_ENUMERATE_DEVICES=1 "$APP_BIN" >"$WORK/devices.json" 2>"$WORK/devices.err"; then
+if run_timed 20 env HOME="$SMOKE_HOME" MT_ENUMERATE_DEVICES=1 "$APP_BIN" >"$WORK/devices.json" 2>"$WORK/devices.err"; then
   # The subprocess prints the JSON form of Vec<String> -- a bare array of names.
   devices="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' \
     "$WORK/devices.json" 2>/dev/null || echo 0)"
   check "enumerate-devices" "$([ "${devices:-0}" -ge 1 ] && echo 0 || echo 1)" "${devices:-0} device(s), exit 0"
 else
   status=$?
-  check "enumerate-devices" 1 "exit $status: $(head -2 "$WORK/devices.err" | tr '\n' ' ')"
+  # SIGSEGV here means CoreAudio itself crashed inside the enumeration subprocess,
+  # which is the exact failure that subprocess was isolated to absorb. On a host whose
+  # audio daemon is wedged every candidate hits it, so it is reported as a skip.
+  if [ "$AUDIO_OK" -eq 0 ] && { [ "$status" = "139" ] || [ "$status" = "124" ]; }; then
+    skip "enumerate-devices" "host audio is broken (exit $status in CoreAudio)"
+  else
+    check "enumerate-devices" 1 "exit $status: $(head -2 "$WORK/devices.err" | tr '\n' ' ')"
+  fi
 fi
 
 say "2. first launch creates the database"
@@ -185,20 +239,17 @@ say "4. playback through the real output device"
 # the clock advancing three times. Generate a six-second tone for the advance check;
 # the mp3 fixture is still played, for what it proves about decoding.
 TONE="$WORK/tone.wav"
-python3 - "$TONE" <<'PY' || { note "FAIL  tone: could not generate a test file"; exit 1; }
-import math, struct, sys, wave
-path = sys.argv[1]
-rate, secs = 44100, 6
-with wave.open(path, "wb") as w:
-    w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate)
-    w.writeframes(b"".join(
-        struct.pack("<h", int(0.25 * 32767 * math.sin(2 * math.pi * 220 * i / rate)))
-        for i in range(rate * secs)))
-PY
+make_tone "$TONE" 6 || { note "FAIL  tone: could not generate a test file"; exit 1; }
 VOL="$(osascript -e 'output volume of (get volume settings)' 2>/dev/null || echo '')"
 osascript -e 'set volume output volume 0' >/dev/null 2>&1 || true
-"$AUDIO_TEST" "$TONE" >"$WORK/playback.log" 2>&1 || true
-"$AUDIO_TEST" "$LIB_DIR/test_sample.mp3" >"$WORK/playback-fixture.log" 2>&1 || true
+# With a wedged audio path the sink never reports done and audio_test samples forever
+# (it did once for eight hours), so on such a host the tone is not played at all and
+# the mp3 gets only the short budget a decode proof needs.
+tone_runs=60; fix_runs=60
+if [ "$AUDIO_OK" -eq 0 ]; then tone_runs=0; fix_runs=20; fi
+[ "$tone_runs" -gt 0 ] && run_timed "$tone_runs" "$AUDIO_TEST" "$TONE" >"$WORK/playback.log" 2>&1 || true
+[ -f "$WORK/playback.log" ] || : >"$WORK/playback.log"
+run_timed "$fix_runs" "$AUDIO_TEST" "$LIB_DIR/test_sample.mp3" >"$WORK/playback-fixture.log" 2>&1 || true
 [ -n "$VOL" ] && osascript -e "set volume output volume $VOL" >/dev/null 2>&1 || true
 VOL=""
 # audio_test prints "[Ns] Position: <ms>ms / <ms>ms | State: Playing" once a second.
@@ -207,12 +258,20 @@ n_positions="$(printf '%s\n' "$positions" | grep -c . || true)"
 advanced="$(printf '%s\n' "$positions" | awk 'NR > 1 && $1 > prev { c++ } { prev = $1 } END { print c + 0 }')"
 detail "tone positions: $(printf '%s' "$positions" | tr '\n' ' ')"
 detail "$(grep -m1 'Duration:' "$WORK/playback.log" || echo 'no Duration line')"
-check "playback-advances" "$([ "${advanced:-0}" -ge 3 ] && echo 0 || echo 1)" \
-  "${advanced:-0} of ${n_positions:-0} one-second sample(s) advanced, state Playing"
+if [ "$AUDIO_OK" -eq 0 ]; then
+  # Skipping, not failing: the same host fails Apple's own player, so this measures
+  # the machine, not the codegen. It is still recorded, so both summary files say the
+  # same thing and the diff stays meaningful.
+  skip "playback-advances" "host cannot render audio (see audio-path), clock not measured"
+else
+  check "playback-advances" "$([ "${advanced:-0}" -ge 3 ] && echo 0 || echo 1)" \
+    "${advanced:-0} of ${n_positions:-0} one-second sample(s) advanced, state Playing"
+fi
 played="$(grep -c "Failed to" "$WORK/playback-fixture.log" || true)"
 fixdur="$(awk '/Duration:/ {gsub(/[^0-9]/,"",$2); print $2; exit}' "$WORK/playback-fixture.log")"
 # A one-second track is usually Stopped by the first sample, so the fixture proves
-# the decoder path (it loaded, and reported its real length), not the clock.
+# the decoder path (it loaded, and reported its real length), not the clock. That
+# proof does not need a working device, so it runs either way.
 check "playback-fixture" "$( [ "${played:-1}" -eq 0 ] && [ "${fixdur:-0}" -gt 0 ] && echo 0 || echo 1)" \
   "test_sample.mp3 decoded as ${fixdur:-?}ms, ${played:-0} load failure(s)"
 
