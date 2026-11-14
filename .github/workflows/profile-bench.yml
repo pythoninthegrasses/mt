@@ -124,12 +124,16 @@ jobs:
 
       # Constant across candidates, so prepare them outside the timing loop: the
       # bundler packs app/frontend/dist and the build resolves the sidecar named by
-      # tauri.conf.json's externalBin entry.
+      # tauri.conf.json's externalBin entry. The setup action already ran `npm ci`,
+      # and these are the two prerequisites `task ci:build` declares as deps.
       - name: Prepare frontend bundle and Zig sidecar
         shell: bash
         run: |
-          task frontend-build
+          task ci:frontend-build
           task zig:stage TARGET=x86_64-pc-windows-msvc
+          test -d app/frontend/dist || { echo "app/frontend/dist missing" >&2; exit 1; }
+          test -f crates/mt-tauri/binaries/mt-zig-core-x86_64-pc-windows-msvc.exe \
+            || { echo "zig sidecar missing" >&2; exit 1; }
 
       # The profile under test travels as env vars so the manifest never changes
       # between candidates. RUSTC_WRAPPER is cleared exactly as taskfiles/ci.yml
