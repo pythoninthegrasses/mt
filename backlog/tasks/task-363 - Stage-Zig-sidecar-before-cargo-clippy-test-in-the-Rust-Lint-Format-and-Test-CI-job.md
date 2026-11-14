@@ -3,10 +3,10 @@ id: TASK-363
 title: >-
   Stage Zig sidecar before cargo clippy/test in the Rust Lint, Format, and Test
   CI job
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-13T19:06:00Z'
-updated_date: '2026-11-13T19:21:00Z'
+updated_date: '2026-11-14T02:56:00Z'
 labels:
   - ci
   - zig
@@ -29,10 +29,10 @@ The Rust Lint, Format, and Test job fails in the mt-tauri build script with `res
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Rust Lint, Format, and Test job gets past the mt-tauri build script on macOS, Linux and Windows
-- [ ] #2 Chosen approach (real staged sidecar vs placeholder) is documented in docs/builds.md or taskfiles/ci.yml with its rationale
-- [ ] #3 The rust job does not gain a hard dependency on Zig-side failures (Zig work must still not extend the critical path unless intended)
-- [ ] #4 A failed or skipped sidecar step cannot leave modified crates/mt-tauri/gen/schemas/*.json in the working tree
+- [x] #1 Rust Lint, Format, and Test job gets past the mt-tauri build script on macOS, Linux and Windows
+- [x] #2 Chosen approach (real staged sidecar vs placeholder) is documented in docs/builds.md or taskfiles/ci.yml with its rationale
+- [x] #3 The rust job does not gain a hard dependency on Zig-side failures (Zig work must still not extend the critical path unless intended)
+- [x] #4 A failed or skipped sidecar step cannot leave modified crates/mt-tauri/gen/schemas/*.json in the working tree
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -62,4 +62,12 @@ Implemented (uncommitted): taskfiles/zig.yml zig:stage-placeholder; taskfiles/ci
 Local verification (macOS arm64): with the staged binary removed, cargo check failed with the reported error; after the placeholder step the build script passes, nextest (excluding parity tests) 890 passed, gen/schemas unchanged, actionlint clean.
 Blocker for a green rust job, out of scope: `cargo clippy --workspace --all-features -- -D warnings` now fails with 7 pre-existing lints in commands/plex.rs:208, db/removed.rs:152, plex/downloader.rs:138,239, lib.rs:691.
 Not verified locally: Windows ci:check leg and Linux; needs a CI run.
+
+CI verification: Test workflow_dispatch run 43547837354 on f40a2c5. Rust Lint, Format, and Test passed; Build macos, windows and linux passed; Vitest, Zig and shadow-diff passed. Playwright failed on 5 webkit tests (lastfm auth errors, type-to-jump debounce, 3 plex cloud-badge tests), unrelated to sidecar staging.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added zig:stage-placeholder, which writes an empty sidecar stub only when absent, and wired it into the rust job and ci:check so the mt-tauri build script passes without a Zig toolchain. The rust job excludes shadow_diff_parity_test:: from nextest (covered by the shadow-diff job). Rationale is documented in docs/builds.md. Verified in CI run 43547837354: the rust job and the macOS, Windows and Linux build legs all pass.
+<!-- SECTION:FINAL_SUMMARY:END -->
