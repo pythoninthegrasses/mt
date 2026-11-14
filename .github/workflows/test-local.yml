@@ -82,6 +82,19 @@ jobs:
         with:
           components: clippy
 
+      - name: Read pinned Task version from .tool-versions
+        run: |
+          echo "TASK_VERSION=$(grep '^task ' .tool-versions | awk '{print $2}')" >> "$GITHUB_ENV"
+
+      - name: Install Task
+        run: |
+          sh -c "$(curl -fsSL https://taskfile.dev/install.sh)" -- -d -b "$HOME/.local/bin" "v${TASK_VERSION}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Stage placeholder sidecar
+        run: |
+          task zig:stage-placeholder TARGET="$(rustc -vV | sed -n 's/^host: //p')"
+
       - name: Run Clippy
         run: cargo clippy --workspace
 
