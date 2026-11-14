@@ -14,7 +14,8 @@ opt-level = 3  # Faster builds when proc-macros are dependencies (serde_derive, 
 
 [profile.release]
 panic = "abort"
-codegen-units = 1
-lto = true
+# TASK-369.4: prioritize macOS/Linux build time; accept ~15% more decode CPU.
+codegen-units = 4
+lto = "thin"
 opt-level = "s"
 strip = true

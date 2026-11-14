@@ -103,11 +103,11 @@ Linux dev relink after touching `crates/mt-tauri/src/lib.rs`, measured in the Li
 | mold | 2.74 s |
 | wild | 2.42 s |
 
-Release builds use fat LTO with `codegen-units = 1`, so the link/LTO pass dominates: a cold release build measures 103.6 s ± 1.0 on the M4 Max (TASK-369.4), and the linker choice does not matter at that profile. wild supports Linux only and saves about 0.5 s per dev relink, so it was not adopted.
+Release builds now use thin LTO with `codegen-units = 4` (TASK-369.4). The former fat/1 baseline measured 103.6 s for a cold release build on the benchmark host; thin/4 measured 57.7 s. These are full build measurements, not relink times. wild supports Linux only and saves about 0.5 s per dev relink, so it was not adopted.
 
 ### Release Profile: LTO × codegen-units (TASK-369.4, 2026-11-14)
 
-The committed profile (`lto = true` (fat), `codegen-units = 1`) was benchmarked
+The former profile (`lto = true` (fat), `codegen-units = 1`) was benchmarked
 against all eight `lto × codegen-units` alternatives on three platforms, plus a
 decode-CPU pass for the runtime half. Full data:
 `benchmarks/release-profile/results-2026-11-14/SUMMARY.md`.
@@ -118,8 +118,13 @@ decode-CPU pass for the runtime half. Full data:
 | fastest candidate | thin/16 at 0.47x | false/16 at 0.50x | false/4 at 0.60x |
 | best size-flat option | fat/4: 0.88x, −0.3% DMG | fat/4: 1.01x, +0.1% deb | fat/4: 0.90x, +1.0% NSIS |
 
-**Decision: keep fat LTO with `codegen-units = 1`.** Two independent gates fail
-for every candidate that is meaningfully faster to build:
+**Final decision: adopt thin LTO with `codegen-units = 4`.** The maintainer
+revised the priorities after reviewing the matrix: macOS/Linux build time takes
+precedence over installer size and Windows build time. Thin/4 reduces cold builds
+from 103.6 to 57.7 s on macOS (~44%) and 188.1 to 117.6 s on Linux (~37%).
+The original keep-fat decision under the 5% size cap is superseded.
+
+Accepted trade-offs:
 
 1. **Artifact size (agreed bound: binary and installer grow ≤ 5%).** Every
    candidate ≥ 15% faster grows the macOS binary 31–44% and the DMG 6.7–13.6%.
@@ -127,24 +132,25 @@ for every candidate that is meaningfully faster to build:
    2.98 MB), while `__text` grows only 9–19%; compressed installers grow far
    less (relaxing LTO costs macOS far more than Windows, where `lto=false
    cgus=1` is +5.2% binary and −2.7% NSIS).
-2. **Decode CPU (measured, not assumed).** Fat LTO's payoff for a player is
+2. **Decode CPU (measured, not assumed).** Fat LTO's payoff in this benchmark is
    decode throughput, so the profile knob was measured against decode cost:
    5 timed decodes each of a sha256-pinned 60 s corpus (mp3/flac/m4a/ogg/wav)
    through the same `rodio::Decoder` path the engine uses, median of 5
-   process runs. Thin/4 is **15% slower** at decode (0.97x → 1.15x CPU),
-   false/1 is **21% slower** (1.21x). A 44% faster cold build is a bad trade
-   for a 15–21% decode regression on the library-scan and playback hot path.
+   process runs. Thin/4 uses **~15% more CPU** (0.970 → 1.113 CPU s),
+   or ~13% less decode throughput; false/1 uses ~21% more CPU.
+   This is decoder-only synthetic workload evidence, not a measured whole-app,
+   battery-life, responsiveness or audible-quality regression.
 
-`lto = thin cgus = 4` — the intuitive "middle" setting — is dominated by
-`lto = false cgus = 1`: smaller binaries and installers on all three platforms,
-and much faster on Windows (157 s vs 244 s); thin/4 wins only 12%/6% of
-build time on macOS/Linux.
+Off/1 produces smaller binaries and installers than thin/4 and builds faster
+on Windows, but thin/4 builds faster on macOS/Linux and uses less decode CPU.
+Neither dominates the other across the revised priorities. Thin/16 is faster
+still on macOS/Linux, but its runtime cost is unmeasured: TASK-369.11 tracks
+the comparison against thin/4 and fat/1.
 
 Caveats: Windows timings are n=2 on a shared 4-vCPU runner and moved by a third
 between passes (only the groupings are stable); the decode corpus is
-synthesised (seeded noise + tones), so codecs that favour tonal content could
-shift the ratios but not the sign; runtime seek/waveform paths were not
-measured separately.
+synthesised (seeded noise + tones), so representative music could change the
+ratios or ranking; runtime seek/waveform paths were not measured separately.
 
 #### Windows
 

@@ -1,11 +1,11 @@
 ---
 id: TASK-369.4
 title: Benchmark release profile LTO and codegen-units settings
-status: In Progress
+status: Done
 assignee:
   - lance
 created_date: '2026-11-14T04:24:00Z'
-updated_date: '2026-11-14T07:59:00Z'
+updated_date: '2026-11-14T18:24:00Z'
 labels: []
 dependencies: []
 documentation:
@@ -23,11 +23,11 @@ The release profile is the most aggressive setting in the repo: opt-level=s, pan
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Hyperfine table of release build wall-clock for the lto x codegen-units matrix recorded in task notes, per platform where runners allow
-- [ ] #2 Binary size and DMG/NSIS artifact size recorded for each profile candidate
-- [ ] #3 A playback/perf smoke check (launch, load library, play a track) run on the candidate that wins
-- [ ] #4 Chosen profile committed to Cargo.toml with a comment stating why, or an explicit decision to keep the current profile recorded in task notes
-- [ ] #5 docs/builds.md performance section updated with the matrix results and the accepted trade-off
+- [x] #1 Hyperfine table of release build wall-clock for the lto x codegen-units matrix recorded in task notes, per platform where runners allow
+- [x] #2 Binary size and DMG/NSIS artifact size recorded for each profile candidate
+- [x] #3 A playback/perf smoke check (launch, load library, play a track) run on the candidate that wins
+- [x] #4 Chosen profile committed to Cargo.toml with a comment stating why, or an explicit decision to keep the current profile recorded in task notes
+- [x] #5 docs/builds.md performance section updated with the matrix results and the accepted trade-off
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -160,3 +160,11 @@ A smoke-script bug compounded it: when first-launch-db failed, step 3's `INSERT`
 
 What the completed runs show is the part AC#3 exists for: `playback-advances` (real positions through the real device), `playback-fixture` (decoder proof) and `app-log` (no ERROR lines) **pass on every candidate that got that far** — thin:4 and false:1 both played cleanly with audio healthy. The candidates do not break anything the baseline can do.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+**Superseding maintainer decision (2026-11-14): adopt `lto = "thin"`, `codegen-units = 4`.** macOS/Linux build time is now prioritized over installer size and Windows build time, replacing the original 5% size gate. Accept ~44%/37% shorter cold builds with ~15% more CPU in the synthetic decoder benchmark (~13% less throughput). This is not evidence of audible degradation or a whole-app performance regression. Cargo.toml and docs/builds.md reflect the adopted profile. TASK-369.11 will measure thin/16 runtime cost before considering a further change. The paragraph below records the earlier verdict under the superseded bounds; its claim of off/1 dominance does not apply across build time and decode CPU.
+
+Full lto x codegen-units matrix measured on macOS (M4 Max host), Linux x64 (mf, docker deps image) and Windows x64 (blacksmith-4vcpu runner, tag-triggered workflow); runtime decode cost measured for the shortlist (TASK-369.9). VERDICT: keep fat LTO with codegen-units=1. Both agreed gates fail for every faster candidate: (1) size -- every candidate >=15% faster grows the macOS binary 31-44% and the DMG 6.7-13.6% (over the 5% cap), while the size-flat candidates (fat cgus=4/16) buy at most 12% build time; (2) runtime -- the decode gate added after the user's measure-decode-CPU-first decision shows thin/4 at +14.8% CPU and false/1 at +20.8% vs baseline for decoding a sha256-pinned corpus through the engine's rodio path, so the link-time saving costs real playback/library-scan throughput. lto=false cgus=1 dominates lto=thin cgus=4 (smaller on all three platforms, much faster on Windows) if the bounds are ever relaxed. Smoke (AC#3): with audio healthy, fat:1, thin:4 and false:1 all pass playback-advances, playback-fixture and app-log identically -- the two failing checks (enumerate-devices segfault, flaky startup stall) are host faults filed as TASK-392 and are profile-independent. Trade-off documented in docs/builds.md 'Release Profile: LTO x codegen-units'; full data in benchmarks/release-profile/results-2026-11-14/SUMMARY.md.
+<!-- SECTION:FINAL_SUMMARY:END -->
