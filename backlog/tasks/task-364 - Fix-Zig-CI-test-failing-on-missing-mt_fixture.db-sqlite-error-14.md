@@ -1,9 +1,11 @@
 ---
 id: TASK-364
 title: Fix Zig CI test failing on missing mt_fixture.db (sqlite error 14)
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-11-13T19:06:00Z'
+updated_date: '2026-11-14T03:16:00Z'
 labels:
   - ci
   - zig
@@ -25,7 +27,27 @@ Zig Lint, Test, and Build fails in `task zig:test`: 35 pass, 1 skip, 1 error log
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 zig:test passes on a clean CI checkout, either by providing the fixture to the Zig job or by making the test skip with a clear message when the fixture is absent
-- [ ] #2 The shadow-diff job keeps exercising the fixture-backed test so coverage is not silently lost
-- [ ] #3 Chosen approach is noted in taskfiles/zig.yml or the zig-core README
+- [x] #1 zig:test passes on a clean CI checkout, either by providing the fixture to the Zig job or by making the test skip with a clear message when the fixture is absent
+- [x] #2 The shadow-diff job keeps exercising the fixture-backed test so coverage is not silently lost
+- [x] #3 Chosen approach is noted in taskfiles/zig.yml or the zig-core README
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Skip approach (86b5a09): library.zig probes for the fixture before opening so no sqlite error is logged. 2. Add zig:test to ci:shadow-diff after zig:fixture so the fixture-backed test still runs in CI. 3. Document the split in zig:fixture's summary. 4. Push to main and confirm the Zig job passes and shadow-diff runs zig:test.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Local verification: fixture absent -> zig build test exits 0, 35 pass / 1 skip; fixture present -> 36 pass. task ci:shadow-diff --dry orders zig:fixture before zig:test. AC1 and AC2 need a CI run (changes unpushed). AC3 note added to taskfiles/zig.yml fixture summary.
+
+CI verification: run 43547837354 on f40a2c5. Zig Lint, Test, and Build passed (fixture absent, test skips without logging a sqlite error). Rust/Zig Shadow-Diff Parity passed and ran task zig:test with the fixture present (996149c), so the fixture-backed test still executes in CI.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+library.zig probes for tests/fixtures/mt_fixture.db before opening it, so a clean checkout skips the fixture-backed test without logging a sqlite error (86b5a09). The shadow-diff job runs zig:test after zig:fixture so the test still runs for real in CI (996149c). Verified in CI run 43547837354: the Zig job and shadow-diff both pass.
+<!-- SECTION:FINAL_SUMMARY:END -->
