@@ -1,5 +1,5 @@
 ---
-id: task-214
+id: TASK-214
 title: Detect iPhone mount and create temporary music library on macOS
 status: To Do
 assignee: []

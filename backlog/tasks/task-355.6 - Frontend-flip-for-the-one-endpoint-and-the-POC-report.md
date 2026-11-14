@@ -4,6 +4,7 @@ title: 'Frontend flip for the one endpoint, and the POC report'
 status: In Progress
 assignee: []
 created_date: '2026-09-11 00:39'
+updated_date: '2026-09-11 00:39'
 labels: []
 dependencies:
   - TASK-355.4
