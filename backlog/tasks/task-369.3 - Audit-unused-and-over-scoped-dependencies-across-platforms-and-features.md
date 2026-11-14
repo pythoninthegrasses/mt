@@ -1,11 +1,11 @@
 ---
 id: TASK-369.3
 title: Audit unused and over-scoped dependencies across platforms and features
-status: In Progress
+status: Done
 assignee:
   - '@lance'
 created_date: '2026-11-14T04:24:00Z'
-updated_date: '2026-11-14T06:45:00Z'
+updated_date: '2026-11-14T07:10:00Z'
 labels: []
 dependencies:
   - TASK-361
@@ -26,11 +26,11 @@ mt-tauri declares ~50 direct dependencies plus dev-dependencies (tempfile, propt
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Fallback lint run per platform and per feature; findings recorded in task notes including dev-dependency results from the CARGO_LOG debug path
-- [ ] #2 Every flagged dependency either removed in a commit or annotated with the platform/feature that requires it
-- [ ] #3 False-positive classes documented (feature-activation deps, cfg-gated deps) so a future rerun does not re-litigate them
-- [ ] #4 cargo tree -e normal | wc -l recorded before and after; docs/builds.md notes the final count
-- [ ] #5 task lint, task test, and CI green after removals
+- [x] #1 Fallback lint run per platform and per feature; findings recorded in task notes including dev-dependency results from the CARGO_LOG debug path
+- [x] #2 Every flagged dependency either removed in a commit or annotated with the platform/feature that requires it
+- [x] #3 False-positive classes documented (feature-activation deps, cfg-gated deps) so a future rerun does not re-litigate them
+- [x] #4 cargo tree -e normal | wc -l recorded before and after; docs/builds.md notes the final count
+- [x] #5 task lint, task test, and CI green after removals
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -62,6 +62,8 @@ Audit mt-tauri's declared dependencies with the documented fallback lints (cargo
 - cfg-gated deps (objc2*, dispatch2, libc, windows-sys) can be invisible to --lib lint on the wrong host: never remove one on the evidence of a single platform.
 - reqwest trimming TLS breaks HTTPS silently — mock/HTTP tests won't catch it; needs a live HTTPS check (Plex ping or Last.fm handshake) after the change.
 - Lofty feature names/format gating unverified until checked against 0.22 docs; don't guess feature names.
+
+Adjustment made during execution: the Linux leg of the matrix runs natively on CI (blacksmith runner via setup-tauri-build mode=check + task ci:unused-deps) rather than local Docker, giving all 12 platform x feature cells identical clean-checkout conditions in one workflow_dispatch run. Verified windows/devtools cell compiled cold (~6.5 min per command, exit 0, zero warnings). Final solution = task ci:unused-deps + Test workflow dep-audit job + docs/builds.md#dependency-audit.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -87,3 +89,21 @@ AC#2 annotations — every candidate resolved: reqwest default-features=false wi
 
 AC#4 counts: cargo tree --locked -e normal | wc -l = 1180 before, 1162 after the reqwest trim (h2 + its h2-only deps left the production tree; wiremock keeps h2 in dev). Cargo.lock package count 771 unchanged (dev users keep h2). docs/builds.md#dependency-audit records the final count, the rerun commands, and the false-positive classes (AC#3).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+The audit found one real trim and closed every other lead with evidence. Landed on branch task-369-3-dep-audit in four commits: build(deps) drop reqwest http2 feature (7842778), ci(audit) add ci:unused-deps task and dispatch-gated dep-audit matrix (9de769f), docs(builds) dependency-audit runbook and matrix fix (64aab09), docs(backlog) record audit, annotations and counts (4caae68).
+
+Change: reqwest is now default-features = false with an explicit list of default-tls, charset, json and system-proxy. http2 was the only default we do not use: Last.fm, Plex, lrclib and the Zig sidecar all speak HTTP/1.1 and ALPN falls back when h2 is absent. That removes h2 and its h2-only dependencies from every production build; cargo tree --locked -e normal goes from 1180 to 1162 lines. Cargo.lock stays at 771 packages because wiremock's hyper/full still pulls h2 for dev builds. Each retained feature is justified in the Cargo.toml comment: default-tls for HTTPS, charset because it gates Response::text() (shadow_diff, agent/setup), json for the API clients, system-proxy to honour OS proxy configuration.
+
+Audit result: zero unused-dependency findings anywhere. On macOS arm64 the lib-level lint (cargo rustc -p mt-tauri --lib -- -W unused-crate-dependencies) and the cargo-level debug path (CARGO_LOG=cargo::diagnostics::rules::unused_dependencies=debug cargo check --workspace --all-targets) were clean for all four feature sets, and the CI dep-audit matrix compiled all 12 cells (macOS/Linux/Windows x default/agent/mcp/devtools) green on clean checkouts in run 43567824407, with zero warnings; the windows/devtools log shows genuine cold compiles of about 6.5 minutes per command rather than freshness replays. The debug path is the only one that inspects dev-dependencies: tempfile, proptest and wiremock all have real test consumers.
+
+Keeps, each with a named consumer (AC#2): sha2 fingerprints tracks in scanner/fingerprint.rs and md5 signs Last.fm requests in lastfm/signature.rs, so the two hashing crates are not redundant. windows-sys (one feature, Win32_Storage_FileSystem) feeds GetDriveTypeW in cache/mount_detect.rs and raw-window-handle feeds the souvlaki HWND path; both already sit in a cfg(target_os = "windows") table, so the task description's premise that they were misplaced is stale. libc does statfs under cfg(unix). Every declared tokio feature has a source consumer. lru stays because removal saves a single crate (hashbrown and parking_lot are shared with r2d2). lofty stays because its only optional feature is id3v2_compression_support and its flate2 is shared with png, so trimming saves nothing. reqwest 0.13.2 in the lock is tauri's mobile-target dependency and is never built on desktop.
+
+New entry point, because a rerun needs the whole matrix on native runners: task ci:unused-deps TARGET=triple FEATURE=default|agent|mcp|devtools, driven by the Test workflow's dispatch-only dep-audit job (gh workflow run test.yml --ref <branch> -f dep-audit=true). Native clean checkouts are mandatory, not a preference: a warm local target/ can replay mt-tauri freshness without recompiling, and cfg-gated deps are invisible to a lint run on the wrong platform. docs/builds.md#dependency-audit carries the commands, the verdict table and the three false-positive classes so a future rerun does not re-litigate them.
+
+Verification: cargo nextest run --workspace 892 passed, 5 skipped; cargo clippy --workspace --all-features -D warnings clean; task lint and task test exit 0; CI run 43567824407 fully green across all 22 jobs including the three platform builds. Because trimming TLS-adjacent reqwest features fails silently for mock-based tests, a live HTTPS smoke test ran through the exact trimmed feature set against Last.fm ping (TLS handshake plus json) and example.com (the charset-gated text() path), both HTTP/1.1 as expected.
+
+Stated gaps: the HTTPS check is a standalone harness, not the app's own code path, so an app-level Last.fm or Plex round trip after this merge is worth a manual glance. Agent builds still get http2 back because rig-core's reqwest-tls feature enables reqwest/default; the comment in Cargo.toml records that caveat rather than fighting it. No crate versions changed and no renderer, cache, profile or sccache work was touched — those belong to sibling tasks.
+<!-- SECTION:FINAL_SUMMARY:END -->
