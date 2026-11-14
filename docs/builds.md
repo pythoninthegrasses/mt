@@ -125,14 +125,20 @@ The gap was too small to justify nightly's incremental-cache ICE risk and the ex
 
 ### Benchmark Protocol
 
-Use [hyperfine](https://github.com/sharkdp/hyperfine) for accurate measurements:
+Use [hyperfine](https://github.com/sharkdp/hyperfine) for accurate measurements.
+The scripted version of this protocol lives in `benchmarks/edit-to-run/`
+(`bench.sh` for latency/check/disk, `worktree-matrix.sh` for fresh-worktree cost);
+re-run it and diff against the newest `results-<date>/` rather than typing the
+commands by hand.
 
 ```bash
-# Cold build (3 runs with cargo clean before each)
+# Cold build (3 runs). Never cargo clean a working target dir: use a throwaway
+# worktree, or point CARGO_TARGET_DIR at a scratch directory for the run.
 hyperfine --runs 3 --prepare 'cargo clean' \
   'cargo build -p mt-tauri'
 
-# Incremental build (5 runs, 1 warmup)
+# Incremental build (5 runs, 1 warmup). touch only bumps mtime, so it is the
+# floor of the range; a real content edit is the number to quote.
 hyperfine --warmup 1 --runs 5 --prepare 'touch crates/mt-tauri/src/main.rs' \
   'cargo build -p mt-tauri'
 
@@ -167,6 +173,34 @@ env | grep RUSTC_WRAPPER         # Should show sccache (disable with `unset RUST
 ```
 
 Ensure consistent power state (AC power, low power mode off).
+
+#### Measured Baseline (TASK-369.1, 2026-11-13)
+
+M4 Max (12P + 4E), 64 GB, macOS 15.8.1, rustc/cargo 1.100.0, sccache warm,
+`CARGO_BUILD_JOBS=14`. Means from `benchmarks/edit-to-run/results-2026-11-13/`;
+full tables in the TASK-369.1 notes.
+
+| Scenario | `cargo build` | `cargo check` |
+| -------- | ------------- | ------------- |
+| Real code edit in `mt-tauri` (engine / command wrapper / `lib.rs`) | 2.2s | 1.0s |
+| Edit in `main.rs` (bin target, link only) | 0.6s | 0.3s |
+| Same edit, `target/debug/incremental` removed | 6.9s | — |
+| Frontend-only change (cargo is a no-op) | 0.17s | — |
+| Cold full build, `--features agent` | 35.2s | — |
+
+`touch` gives a lower bound (2.2s build / 1.0s check), which is what the
+Stable-vs-Nightly table above measured; a real content edit costs the same
+because `mt_lib` recompiles as one unit either way. The dev loop also pays
+`task zig:stage` (122ms warm, 17–23s cold) — Tauri's `externalBin` resolves
+eagerly, so an unstaged sidecar fails the build outright.
+
+Disk: `target/` hits 3.45 GiB on the first `--features agent` debug build and
+12.3 GiB after four feature/profile fingerprints accumulate in one long-lived
+worktree, 10 GiB of that in `target/debug/build` — the unused
+`staticlib`/`cdylib` crate types drop a ~0.5 GiB `libmt_lib.a` plus up to 1 GiB
+of stray `mt_lib.*.rcgu.o` per fingerprint. Building with
+`crate-type = ["rlib"]` only cut 17s off the debug build, 81s off the release
+build, and 1.75 GiB off a worktree. See TASK-369.1 AC#3/AC#4b.
 
 ### Cranelift Backend (Not Supported)
 
