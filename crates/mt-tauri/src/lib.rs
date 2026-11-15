@@ -4,6 +4,7 @@ pub(crate) mod commands;
 pub(crate) mod db;
 pub(crate) mod dialog;
 pub(crate) mod events;
+pub(crate) mod instance;
 pub(crate) mod lastfm;
 pub(crate) mod library;
 pub(crate) mod logging;
@@ -599,15 +600,12 @@ pub fn run() {
             agent_set_onboarding_complete,
         ])
         .setup(|app| {
-            // Initialize database
-            let db_path = app.path().app_data_dir()
-                .expect("Failed to get app data directory")
-                .join("mt.db");
-
-            // Ensure parent directory exists
-            if let Some(parent) = db_path.parent() {
-                std::fs::create_dir_all(parent).ok();
-            }
+            // Claim this canonical app-data location before either the sole
+            // migrator or sidecar::spawn can modify it. Keep the OS lock in
+            // managed state through RunEvent::Exit and sidecar shutdown.
+            let instance = instance::InstanceGuard::acquire(&app.path().app_data_dir()?)?;
+            let db_path = instance.runtime_dir().join("mt.db");
+            app.manage(instance);
 
             let database = db::Database::new(&db_path)
                 .expect("Failed to initialize database");

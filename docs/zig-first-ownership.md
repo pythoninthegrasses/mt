@@ -102,6 +102,7 @@ after callers and replacement tests transfer, never before.
 | `agent/tools.rs` | Zig / provider tool requests | 393.25 | Delete SQL and tool authorization/dispatch/selection policy |
 | `agent/types.rs` | Zig domain + Rust wire DTOs / agent | 393.25 | Remove Rust domain response builders |
 | `sidecar.rs` | Rust shell transport/supervisor / engine and WebView bootstrap | 393.1, 393.2, 393.3 | Retain private bridge/lifetime, replace optional POC readiness/stdout logging |
+| `instance.rs` (added by 393.2) | Rust shell lifetime / startup and exit | 393.2 | Retain OS-released exclusive app-data lock acquired before the transitional migrator and runtime cleanup; no domain/storage policy |
 | `events.rs` | Zig domain events + Rust serialization/forwarding / WebView | 393.1, 393.3, per-domain task | Delete Rust event-policy builders as domains move; one frontend stream |
 | `media_keys.rs` | Rust souvlaki/OS capability / Zig media intents and metadata | 393.13, 329 | Retain OS mapping, send intents to Zig not browser navigation |
 | `dialog.rs` | Rust native shell / user pickers and approved file grants | 393.3, 393.27 | Retain Tauri/NSOpenPanel primitives; selection is not scan policy |
@@ -162,6 +163,7 @@ is obsolete; keep temporary parity only as long as useful.
 | `concurrency_test.rs` | Zig storage/domain concurrency + Rust primitive concurrency | 369.12, 393.6, per-domain task: replace rather than retain production DB dependency |
 | `db_fixture_gen.rs` | Isolated deterministic engine fixtures | 369.12 then 393.26: retire Rust schema generator |
 | `shadow_diff_parity_test.rs` | Zig fixture/contract tests and actual boundary integration | 393.4, 393.5, 393.27: retire duplicate engine comparison |
+| `instance_tests.rs` (added by 393.2) | Rust OS lock / shell lifetime | 393.2: retain contention, canonical-directory alias, normal release and subprocess exit/kill/relaunch coverage; not WebView/readiness evidence |
 
 Examples outside `src/`, Cargo/build scripts, shell capabilities and inline HTML
 must also be checked at final deletion. In particular the audio example remains

@@ -77,6 +77,25 @@ issues one authenticated health-check request, and kills the child on
 `RunEvent::Exit`. A missing or unspawnable binary is logged and does not
 prevent the rest of the app from starting.
 
+TASK-393.2's first lifecycle milestone adds `engine.lock` in the canonical
+app-data directory. The Rust shell acquires a nonblocking exclusive OS file lock
+**before** opening/migrating `mt.db` or deleting `sidecar.json`, and holds its
+handle in Tauri managed state through exit cleanup. A second shell using the same
+directory fails setup with an existing-instance error without touching the DB or
+endpoint. Normal exit or process death releases the OS lock; the empty anchor
+file remains. **Do not delete `engine.lock` to recover a running instance**:
+unlinking a locked file can allow a second owner on a new inode. Close the
+owning mt process, then relaunch. No PID-file expiry heuristic is used.
+
+This lock uses Rust's standard `File::try_lock` (`flock` on Unix, `LockFileEx` on
+Windows). It coordinates matching shells, not arbitrary database tools or old
+builds without the guard, and is not a credential/security boundary. Runtime
+credential ACLs, private handshake verification, bounded startup/shutdown and
+visible frontend readiness failures remain outstanding in TASK-393.2. Tests in
+`crates/mt-tauri/src/instance_tests.rs` cover contention, directory aliases,
+independent locations, normal release and real subprocess exit/kill/relaunch;
+they do not constitute actual Tauri-webview evidence.
+
 On macOS, `task ci:verify-signing TARGET=<target>` (`taskfiles/ci.yml`) runs
 after bundling and before notarizing: it asserts the sidecar's code
 signature is valid, that it carries the hardened runtime flag, and that the
