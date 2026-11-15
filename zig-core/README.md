@@ -172,18 +172,39 @@ different result if a user sets a custom ignore word containing a non-ASCII uppe
 
 ### Connection setup
 
-`sqlite.Db.openReadOnly` applies the same PRAGMA sequence, in the same order, as the Rust
-connection pool's `with_init` (`crates/mt-tauri/src/db/mod.rs`):
+`sqlite.Db.openReadOnly` checks schema compatibility and applies the same connection
+settings as the Rust pool (`crates/mt-core/src/db/mod.rs`):
 
 1. Open with `SQLITE_OPEN_READONLY`.
 2. `sqlite3_busy_timeout(db, 5000)`
-3. `PRAGMA synchronous = NORMAL`
-4. `PRAGMA foreign_keys = ON`
-5. `PRAGMA cache_size = -64000`
-6. Register `strip_sort_prefix`.
+3. Require `PRAGMA user_version = 1` (no schema writes).
+4. `PRAGMA synchronous = NORMAL`
+5. `PRAGMA foreign_keys = ON`
+6. `PRAGMA cache_size = -64000`
+7. Register `strip_sort_prefix`.
 
 `PRAGMA journal_mode = WAL`, table creation, and migrations are write-path / once-per-database
 concerns in the Rust crate and are deliberately not ported — this sidecar is read-only.
+
+### Versioned fixtures
+
+The temporary Rust `Database::new` migrator produces version-1 databases.
+Use it to create/adopt an on-disk fixture, then load deterministic rows; do not
+stamp `user_version` on a hand-built partial schema to make it look current.
+An existing version-0 fixture must go through that migrator or be regenerated.
+The optional on-disk Zig test skips an **absent** fixture, but fails on an
+incompatible one. `openForTestFixture` is compile-time test-only; it deliberately
+allows small unversioned in-memory SQL fixtures for unit tests and must never
+be a production opener/migrator.
+
+`task zig:fixture` still has the separately tracked invocation/populated-output
+limitations in TASK-369.12. Verify that a generator actually ran and check both
+`PRAGMA user_version` and nonzero row counts before claiming parity coverage.
+Rust's `db::version::tests` generate disposable populated legacy databases
+independently of that runner, including rollback, interrupted process and
+concurrent-startup cases. See the [schema contract and recovery limits](../docs/tauri-architecture.md#transitional-database-schema-contract-task-354).
+Rust remains the only migrator until TASK-393.26; future writable Zig fixtures
+must not introduce another migration implementation.
 
 ## HTTP server (TASK-355.3)
 

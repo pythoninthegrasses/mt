@@ -7,12 +7,15 @@
 //! `CREATE TABLE` (`favorites`), and its `library` INSERT's column list is
 //! missing several current-schema columns and carries a `lastfm_loved`
 //! column no longer in `Track`. So the schema comes from the real
-//! `Database::new` (which runs `schema::create_tables` +
-//! `schema::run_migrations`), and only the dump's row data is loaded,
+//! `Database::new` (the sole Rust migrator, which atomically creates/upgrades
+//! the schema and sets `PRAGMA user_version = 1`), and only dump row data is loaded,
 //! dropping `lastfm_loved`.
 //!
 //! Ignored by default so a plain `cargo test` doesn't write to disk; run
-//! explicitly via `task zig:fixture`.
+//! explicitly via `task zig:fixture` (invocation repair is TASK-369.12).
+//! Verify the generator ran, the version is 1 and rows are nonempty.
+//! Never manually stamp a partial fixture's version. Migration ownership
+//! transfers exclusively to Zig in TASK-393.26, not in individual domain ports.
 
 use crate::db::Database;
 use std::path::PathBuf;

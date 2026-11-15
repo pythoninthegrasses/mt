@@ -191,6 +191,68 @@ fn staged_sidecar_name_matches_tauri_external_bin_convention() {
 /// on `library.id` when the second reads a half-populated table.
 static FIXTURE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// TASK-354: incompatibility must fail before a ready/runtime file is published,
+/// and Zig must not try to migrate (including a populated version-0 DB).
+#[test]
+fn sidecar_rejects_incompatible_schema_before_readiness() {
+    use std::io::Read;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy.db");
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    conn.execute_batch("CREATE TABLE keep(value TEXT); INSERT INTO keep VALUES ('preserve')")
+        .unwrap();
+    for (version, error) in [
+        (-1, "SchemaTooOld"),
+        (0, "SchemaTooOld"),
+        (2, "SchemaTooNew"),
+    ] {
+        conn.pragma_update(None, "user_version", version).unwrap();
+        let mut child = Command::new(sidecar_binary())
+            .arg("--db")
+            .arg(&path)
+            .arg("--runtime-dir")
+            .arg(dir.path())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let status = loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                break status;
+            }
+            if std::time::Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("incompatible-schema sidecar did not exit; rebuild the sidecar");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
+        let mut stderr = String::new();
+        child
+            .stderr
+            .take()
+            .unwrap()
+            .read_to_string(&mut stderr)
+            .unwrap();
+        assert!(!status.success());
+        assert!(stderr.contains(error), "{stderr}");
+        assert!(stderr.contains("do not reset mt.db"), "{stderr}");
+        assert!(!dir.path().join(crate::sidecar::RUNTIME_FILE_NAME).exists());
+        assert_eq!(
+            conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i32>(0))
+                .unwrap(),
+            version
+        );
+        assert_eq!(
+            conn.query_row("SELECT value FROM keep", [], |r| r.get::<_, String>(0))
+                .unwrap(),
+            "preserve"
+        );
+    }
+}
+
 /// The fixture, generated from `mt_20260127.sql` if `task zig:fixture` hasn't
 /// run on this checkout yet.
 fn fixture() -> PathBuf {

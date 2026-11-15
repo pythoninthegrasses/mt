@@ -57,6 +57,11 @@ pub fn main(init: std.process.Init) !void {
 
     var db = sqlite.Db.openReadOnly(args.db_path) catch |err| {
         std.log.err("failed to open --db {s}: {s}", .{ args.db_path, @errorName(err) });
+        switch (err) {
+            error.SchemaTooOld => std.log.err("database requires the Rust mt startup migrator (expected schema {d}); start a matching mt build first; do not reset mt.db", .{sqlite.schema_version}),
+            error.SchemaTooNew => std.log.err("database is newer than this engine (expected schema {d}); use a matching mt build; do not reset mt.db", .{sqlite.schema_version}),
+            else => {},
+        }
         std.process.exit(1);
     };
     defer db.close();

@@ -890,7 +890,8 @@ test "respond: total against the real mt_fixture.db matches a direct COUNT(*)" {
     // Probe first: a failed sqlite open logs an error, which fails the build even when the test skips.
     _ = std.Io.Dir.cwd().statFile(testing.io, fixture_path, .{}) catch return error.SkipZigTest;
 
-    var db = sqlite.Db.openReadOnly(fixture_path) catch return error.SkipZigTest;
+    // An existing but incompatible fixture is a failure, not a missing fixture.
+    var db = try sqlite.Db.openReadOnly(fixture_path);
     defer db.close();
 
     var out = std.Io.Writer.Allocating.init(allocator);

@@ -17,6 +17,7 @@ pub mod schema;
 pub mod scrobble;
 pub mod settings;
 pub mod stats;
+pub mod version;
 pub mod watched;
 
 #[cfg(test)]
@@ -85,6 +86,16 @@ pub enum DbError {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error(
+        "incompatible database schema version {found}; expected {expected}. Version 0 requires the Rust mt startup migrator; for newer versions use a matching mt build. Do not delete or reset mt.db"
+    )]
+    SchemaVersion { found: i32, expected: i32 },
+
+    #[error(
+        "unrecognized unversioned database: {0}. Restore a known mt database or use a matching mt build; do not reset mt.db"
+    )]
+    LegacySchema(String),
 }
 
 pub type DbResult<T> = Result<T, DbError>;
@@ -133,20 +144,20 @@ impl Database {
     /// A new Database instance with initialized schema
     pub fn new<P: AsRef<Path>>(db_path: P) -> DbResult<Self> {
         info!(path = %db_path.as_ref().display(), "Opening database");
+        // Complete the sole migration before any pool connection is exposed.
+        // Incompatible versions fail here with a direct, actionable error
+        // instead of being retried by r2d2 until its connection timeout.
+        let initializer = Connection::open(db_path.as_ref())?;
+        configure_connection(&initializer)?;
+        version::initialize(&initializer)?;
+        initializer.execute_batch("PRAGMA journal_mode = WAL;")?;
         let manager = SqliteConnectionManager::file(db_path).with_init(|conn| {
-            // Per-connection PRAGMAs: applied to every new connection from the pool.
-            // busy_timeout MUST be set so concurrent writers wait instead of
-            // getting an immediate SQLITE_BUSY, which can corrupt SQLite
-            // internal state when multiple tokio tasks write simultaneously.
-            conn.execute_batch(
-                "
-                PRAGMA busy_timeout = 5000;
-                PRAGMA synchronous = NORMAL;
-                PRAGMA foreign_keys = ON;
-                PRAGMA cache_size = -64000;
-                ",
-            )?;
-            register_custom_functions(conn)
+            // New pool connections validate compatibility, never migrate.
+            // busy_timeout lets concurrent writers wait instead of immediately
+            // returning SQLITE_BUSY.
+            configure_connection(conn)?;
+            version::check_schema_version(conn)
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
         });
         let pool = Pool::builder()
             .max_size(4)
@@ -157,9 +168,6 @@ impl Database {
             pool: Arc::new(pool),
         };
 
-        // Initialize schema and run migrations
-        db.init()?;
-
         Ok(db)
     }
 
@@ -167,15 +175,9 @@ impl Database {
     #[allow(dead_code)]
     pub fn new_in_memory() -> DbResult<Self> {
         let manager = SqliteConnectionManager::memory().with_init(|conn| {
-            conn.execute_batch(
-                "
-                PRAGMA busy_timeout = 5000;
-                PRAGMA synchronous = NORMAL;
-                PRAGMA foreign_keys = ON;
-                PRAGMA cache_size = -64000;
-                ",
-            )?;
-            register_custom_functions(conn)
+            configure_connection(conn)?;
+            version::initialize(conn)
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
         });
         let pool = Pool::builder().max_size(1).build(manager)?;
 
@@ -183,31 +185,14 @@ impl Database {
             pool: Arc::new(pool),
         };
 
-        db.init()?;
-
         Ok(db)
-    }
-
-    /// Initialize the database schema and run migrations
-    fn init(&self) -> DbResult<()> {
-        info!("Running schema init and migrations");
-        let conn = self.pool.get()?;
-
-        // Database-level PRAGMA (persists across connections once set)
-        conn.execute_batch("PRAGMA journal_mode = WAL;")?;
-
-        // Create tables
-        schema::create_tables(&conn)?;
-
-        // Run migrations
-        schema::run_migrations(&conn)?;
-
-        Ok(())
     }
 
     /// Get a connection from the pool
     pub fn conn(&self) -> DbResult<DbConnection> {
-        Ok(self.pool.get()?)
+        let conn = self.pool.get()?;
+        version::check_schema_version(&conn)?;
+        Ok(conn)
     }
 
     /// Execute a function with a connection, enabling foreign keys
@@ -240,6 +225,16 @@ impl Database {
 
         Ok(result)
     }
+}
+
+fn configure_connection(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "PRAGMA busy_timeout = 5000;
+         PRAGMA synchronous = NORMAL;
+         PRAGMA foreign_keys = ON;
+         PRAGMA cache_size = -64000;",
+    )?;
+    register_custom_functions(conn)
 }
 
 #[cfg(test)]

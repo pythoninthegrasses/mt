@@ -77,7 +77,10 @@ extern fn sqlite3_result_text(ctx: ?*sqlite3_context, text: [*]const u8, n: c_in
 extern fn sqlite3_result_null(ctx: ?*sqlite3_context) void;
 extern fn sqlite3_result_error(ctx: ?*sqlite3_context, msg: [*]const u8, n: c_int) void;
 
-pub const Error = error{Sqlite};
+/// Must match mt-core db/version.rs; TASK-393.26 transfers migration ownership.
+pub const schema_version: i64 = 1;
+
+pub const Error = error{ Sqlite, SchemaTooOld, SchemaTooNew };
 
 fn check(db: ?*sqlite3, rc: c_int) Error!void {
     if (rc != SQLITE_OK) {
@@ -106,12 +109,23 @@ pub const Db = struct {
         errdefer db.close();
 
         try check(db.handle, sqlite3_busy_timeout(db.handle, 5000));
+        try db.checkSchemaVersion();
         try db.exec("PRAGMA synchronous = NORMAL");
         try db.exec("PRAGMA foreign_keys = ON");
         try db.exec("PRAGMA cache_size = -64000");
         try db.registerScalarFunction("strip_sort_prefix", 2, stripSortPrefixUdf);
 
         return db;
+    }
+
+    /// Compatibility check only: Zig must never initialize or migrate mt.db.
+    pub fn checkSchemaVersion(self: *Db) Error!void {
+        var stmt = try self.prepare("PRAGMA user_version");
+        defer stmt.finalize();
+        if (!try stmt.step()) return error.Sqlite;
+        const found = stmt.columnInt64(0);
+        if (found < schema_version) return error.SchemaTooOld;
+        if (found > schema_version) return error.SchemaTooNew;
     }
 
     /// A plain read-write in-memory connection with strip_sort_prefix
@@ -129,6 +143,7 @@ pub const Db = struct {
     /// `library` table, own rows) before exercising it through
     /// `openReadOnly`. Not used by the sidecar itself, which only reads.
     pub fn openForTestFixture(path: [:0]const u8) Error!Db {
+        if (!@import("builtin").is_test) @compileError("fixture opener is test-only");
         var db = try openRaw(path, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE);
         errdefer db.close();
         try db.registerScalarFunction("strip_sort_prefix", 2, stripSortPrefixUdf);
@@ -179,6 +194,18 @@ pub const Db = struct {
         return Stmt{ .handle = stmt };
     }
 };
+
+test "schema compatibility refuses old and newer versions without migrating" {
+    var db = try Db.openMemoryForTest();
+    defer db.close();
+    try std.testing.expectError(error.SchemaTooOld, db.checkSchemaVersion());
+    try db.exec("PRAGMA user_version = -1");
+    try std.testing.expectError(error.SchemaTooOld, db.checkSchemaVersion());
+    try db.exec("PRAGMA user_version = 2");
+    try std.testing.expectError(error.SchemaTooNew, db.checkSchemaVersion());
+    try db.exec("PRAGMA user_version = 1");
+    try db.checkSchemaVersion();
+}
 
 pub const Stmt = struct {
     handle: ?*sqlite3_stmt,

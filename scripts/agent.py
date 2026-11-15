@@ -1021,6 +1021,16 @@ def _connect(db_path: Path | None, host: str, model: str) -> tuple[sqlite3.Conne
         sys.exit(1)
 
     conn = sqlite3.connect(str(db_file))
+    schema_version = conn.execute("PRAGMA user_version").fetchone()[0]
+    if schema_version != 1:  # mt-core/src/db/version.rs; never migrate here
+        conn.close()
+        print(
+            f"ERROR: Incompatible database schema {schema_version}; expected 1. "
+            "Start a matching mt build to run the Rust startup migrator. "
+            "Do not delete or reset mt.db.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     conn.row_factory = sqlite3.Row
 
     track_count = conn.execute(

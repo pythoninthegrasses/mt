@@ -46,6 +46,49 @@ inventory govern capability transfer/deletion.
 | Database | SQLite via rusqlite; Zig POC opens read-only |
 | Media Keys | souvlaki (Now Playing/MPRIS/SMTC) + tauri-plugin-global-shortcut (keyboard F7/F8/F9) |
 
+### Transitional database schema contract (TASK-354)
+
+`PRAGMA user_version = 1` represents the existing complete schema, including
+Plex/source columns, queue state, deduplication, revision and artist-sort-key
+columns/indexes/triggers. The constant lives in `mt-core/src/db/version.rs`
+(under `crates/`) and is mirrored in `zig-core/src/sqlite.zig` and
+`scripts/agent.py`. Update consumers together for any future version change.
+
+- **Version 0 is unversioned, not necessarily empty.** Rust accepts an empty
+  SQLite database or a recognizable legacy mt schema, preserving populated
+  tracks, relationships and settings while applying existing incremental
+  upgrades. An unrelated/invalid legacy schema fails instead of being reset.
+- **One migrator:** `mt_core::db::Database::new` runs Rust initialization before
+  building the pool; the Tauri setup completes it before spawning Zig. The
+  in-memory test constructor uses the same initializer. Low-level schema
+  helpers remain for isolated legacy-schema tests, not additional production
+  startup paths.
+- Rust acquires `BEGIN IMMEDIATE`, **rechecks the version under the writer
+  lock**, and commits base creation, incremental DDL/backfills and version 1
+  together. A competing startup waits (5-second busy timeout), then skips the
+  upgrade if the first startup committed. Current-version startup does not
+  rerun backfills or repair schema silently.
+- Pool connections/checkouts, Zig's read-only opener and the standalone Python
+  agent check compatibility. Non-migrators refuse version 0, unsupported older
+  values and newer versions. Run a matching mt build to migrate an old DB;
+  use a matching/newer build for a newer DB. **Never delete/reset `mt.db` or
+  manually change its version to bypass a refusal.**
+- Errors roll back the whole upgrade; process interruption relies on SQLite
+  journal/WAL recovery. Readers see the old committed version until commit
+  and must reject it, not publish readiness against partial work. Lock timeout
+  is recoverable by closing competing writers and retrying startup. WAL mode
+  is configured after the schema commit; a later WAL/pool failure may leave a
+  fully upgraded database, never a half-upgraded version 1.
+- This is not corruption repair, a backup, or a cross-process application
+  lifetime lock. Version 1 is a compatibility assertion, not a full integrity
+  scan. Older binaries that do not implement the contract cannot be made safe
+  by this guard; do not run them concurrently. The existing `synchronous=NORMAL`
+  policy does not promise power-loss durability of the latest committed writes.
+
+TASK-393.6 may add version-checked Zig write transactions, **not migrations**.
+TASK-393.26 transfers exclusive migration ownership to Zig and removes the
+Rust migrator only after all callers/fixtures have transferred.
+
 ## Architecture Diagram
 
 ```text
