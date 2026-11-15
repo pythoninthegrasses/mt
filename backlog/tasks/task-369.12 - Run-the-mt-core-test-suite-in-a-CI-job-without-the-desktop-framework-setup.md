@@ -1,14 +1,16 @@
 ---
 id: TASK-369.12
-title: Run the mt-core test suite in a CI job without the desktop framework setup
+title: 'Separate engine, retained Rust and shell tests without benchmark matrices'
 status: To Do
 assignee: []
 created_date: '2026-11-14T21:14:00Z'
+updated_date: '2026-11-15T05:37:00Z'
 labels:
-  - build-perf
+  - zig-first
+  - migration
   - ci
 dependencies:
-  - TASK-353
+  - TASK-393.1
 references:
   - >-
     backlog/tasks/task-353 -
@@ -26,7 +28,7 @@ modified_files:
   - docs/builds.md
   - docs/testing.md
 parent_task_id: TASK-369
-priority: medium
+priority: high
 type: task
 ordinal: 80500
 ---
@@ -34,16 +36,21 @@ ordinal: 80500
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-TASK-353 landed the tauri-free crates/mt-core crate and recorded this as the CI half of its payoff, explicitly out of that task's scope. The core is real and verified: 686 of the workspace's 1,071 #[test] functions live in crates/mt-core, its dependency graph is 326 crates (cargo tree -p mt-core -e normal) against mt-tauri's 1,177, and the guard step in .github/workflows/test.yml proves that no tauri, tao, wry, webkit, or objc2 crate appears in it transitively. All of those tests nevertheless still run inside the rust job (name: Rust Lint, Format, and Test, .github/workflows/test.yml:35), which runs on the self-hosted [macOS, ARM64] runner, calls ./.github/actions/setup-tauri-build with mode: test, stages a placeholder sidecar with task zig:stage-placeholder, and then runs cargo nextest run --workspace -E 'not test(/shadow_diff_parity_test::/)'. So 686 tests that need none of the desktop framework pay for its toolchain setup, share the scarcest runner with the desktop build, and gate playwright-tests, which lists rust in its needs:. The work is to give the core suite its own job that needs neither the desktop toolchain nor the sidecar, and to measure whether that moves CI wall clock rather than assuming it will. Cheapest existing paths to reuse rather than reinvent: taskfiles/ci.yml already has ci:setup-check (rustup and the pinned toolchain only) and ci:setup-test (that plus cargo-nextest), and the setup-tauri-build action's mode: check already skips Node.js, frontend deps, and cargo tools. Whether the job should also move off the macOS self-hosted runner onto the blacksmith ubuntu runners the other jobs use is worth evaluating: mt-core's only platform-specific dependencies are libc on unix and windows-sys on windows. Measure before claiming anything. TASK-353's controlled same-machine timings found no whole-workspace speedup from the split itself (cold build 44.53s versus the pre-split 48.81s, cold --tests 48.76s versus 47.00s, both inside single-run noise), so any improvement has to be shown as per-job wall clock from a real PR run. If it cannot be shown, revert the job split and record the negative result rather than keeping graph complexity that buys nothing.
+TASK-353 made existing Rust domain tests independent of Tauri; TASK-393 now moves those domains to Zig. Establish a simple test boundary that keeps current mt-core coverage runnable without desktop setup during transition, runs Zig domain/contract tests without a Tauri shell, and leaves actual shell integration in the desktop layer. This task is migration infrastructure, not a CI-wall-clock experiment. Do not duplicate domain assertions across Playwright, Rust and Zig forever; replacement mappings belong in each capability task. Repair the known fixture invocation/filter issue before relying on parity tests; a successful command that generated zero rows is not a valid fixture.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A dedicated job in .github/workflows/test.yml runs cargo nextest run -p mt-core for both the default and the all-features (agent) feature sets, without installing the desktop framework toolchain (no Tauri CLI or cargo tools, no Tauri platform deps) and without a task zig:stage-placeholder step
-- [ ] #2 Coverage is unchanged and not duplicated: the desktop job runs cargo nextest run -p mt-tauri with the same not test(/shadow_diff_parity_test::/) filter, the shadow-diff job is untouched, and the two jobs together report the same tests the single --workspace run reported (1,023 passed and 5 skipped excluding the parity filter, as recorded when TASK-353 closed)
-- [ ] #3 The mt-core desktop dependency-boundary guard moves to the core job, next to the crate it protects, with its cargo tree command and grep patterns unchanged
-- [ ] #4 Per-job wall clock for the new core job and the reduced desktop job is captured from a real PR run and recorded in this task's notes, compared against TASK-352's baseline and the current rust job, including runner queue time and the effect on when playwright-tests can start (it lists rust in needs:)
-- [ ] #5 Local validation passes: actionlint on the changed workflow, an act run of the new job per docs/act-guide.md, and cargo nextest run -p mt-core locally
-- [ ] #6 docs/builds.md documents the resulting job graph, and docs/testing.md is corrected where it describes the CI Rust job
-- [ ] #7 If the recorded measurement shows no CI wall-clock or runner-occupancy benefit, the job split is reverted and this task's notes carry the negative result instead
+- [ ] #1 Task commands and the existing CI workflow run isolated Zig domain/contract tests, current temporary mt-core tests and desktop integration at the appropriate layer; engine tests require no Tauri staging or desktop framework setup.
+- [ ] #2 Domain coverage is not silently dropped or repeatedly run in multiple jobs; the ownership/test map records how each subsequent Rust suite transfers to Zig and how retained adapter tests remain runnable.
+- [ ] #3 Fixture generation uses the exact actual test/generator name, asserts a nonempty expected schema/data fixture and is deterministic under concurrent runs; isolated tests never modify the user's mt.db.
+- [ ] #4 Contract tests fail for malformed messages and demonstrate actual engine behavior rather than only mocked browser/store calls; actual Tauri tests stay clearly identified.
+- [ ] #5 Local focused tests and workflow lint pass; one normal existing CI validation may verify wiring, but no new timing/configuration matrix, benchmark workflow or paid run is required.
+- [ ] #6 docs/testing.md and docs/builds.md describe commands, test boundaries, temporary mt-core coverage and the final retained-Rust/shell arrangement; lack of measured speedup does not require reverting useful isolation.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-14 supersession: original per-job wall-clock gates and revert-if-no-speedup criterion are removed. Work remains To Do. Current fixture filter may match zero tests; prove generated content before trusting tests. Final cleanup TASK-393.27 updates the test wiring after Rust domain deletion.
+<!-- SECTION:NOTES:END -->

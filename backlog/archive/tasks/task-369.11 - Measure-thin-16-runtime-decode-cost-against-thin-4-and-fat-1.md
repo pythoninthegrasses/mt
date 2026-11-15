@@ -4,7 +4,10 @@ title: Measure thin/16 runtime decode cost against thin/4 and fat/1
 status: To Do
 assignee: []
 created_date: '2026-11-14T18:31:00Z'
-labels: []
+updated_date: '2026-11-15T05:38:00Z'
+labels:
+  - canceled
+  - superseded-by-zig-first
 dependencies: []
 references:
   - benchmarks/release-profile/sweep.sh
@@ -30,3 +33,9 @@ Follow-up to TASK-369.4 and TASK-369.9. The maintainer now prioritizes macOS/Lin
 - [ ] #3 Validate matching decoded sample counts and investigate differences before treating profiles as comparable.
 - [ ] #4 Document whether thin/16 offers a preferable build/runtime compromise to thin/4; change the release profile only with maintainer approval.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Canceled/deferred by maintainer-approved Zig-first replan, 2026-11-14: retain the current release profile and completed TASK-369.4/.9 findings. Additional thin/16 comparison is optional retained-audio optimization, not a migration prerequisite. No measurements/criteria are claimed complete. See TASK-393.
+<!-- SECTION:NOTES:END -->

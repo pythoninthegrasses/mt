@@ -6,14 +6,16 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-04-15 03:21'
-updated_date: '2026-11-14T21:42:00Z'
+updated_date: '2026-11-15T05:39:00Z'
 labels:
   - frontend
   - library
   - scroll
   - ux
   - virtualization
-dependencies: []
+  - feature-freeze
+dependencies:
+  - TASK-393.28
 references:
   - app/frontend/js/components/library-browser.js
   - app/frontend/js/stores/library.js
@@ -28,7 +30,7 @@ ordinal: 281.25
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add look-ahead to library paging so fast scrolling reaches real rows instead of the stale snapshot. The blank-state half of this task is already shipped: the SWR snapshot (library-browser.js) keeps the last good rows on screen while a page loads, and LibraryPageCache bounds per-query page buckets. What remains is prefetch quality and efficiency: the current loop requests only the visible page range plus one page after it, so upward scrolling has zero look-ahead, prefetch depth never grows for fast flicks, PageUp/PageDown/Home/End are not handled at all, and a single flick can start dozens of concurrent page IPC round-trips. Re-scoped 2026-11-14 against the current architecture. The drag destination-preview widget and backend keyset pagination are explicitly out of scope.
+Improve library page prefetch quality and efficiency without replacing the browsing API. The SWR snapshot already preserves last-good visible rows and LibraryPageCache bounds per-query buckets; keep that shipped behavior. Remaining scope is bidirectional velocity-scaled look-ahead, PageUp/PageDown/Home/End destination loading, deduplicated bounded in-flight requests and eviction of distant live pages into the bounded cache. UI paging/scheduling belongs in the frontend and calls the Zig-owned read API after migration. Drag destination preview and backend keyset pagination are out of scope; TASK-350.3 owns the latter. Scheduling: feature work is frozen until TASK-393.28 verifies Zig-first completion; TASK-393 is the initiative. Do not start this task during the freeze or implement it as a side effect of a migration task. Bugfixes require their own explicit scope. When released, read TASK-369.5's ownership ADR and then-current APIs, research the current system and record a bounded plan. Zig owns domain policy and persistence; Rust is only the Tauri/native or named-library adapter. Existing behavior remains the migration baseline until this feature is scheduled.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -98,4 +100,6 @@ Dropped: the literal drag destination-preview widget of original AC#1. No such w
 Added: a bound on concurrent page fetches. _ensurePage calls _fetchPage with no in-flight limit, so one fast flick across a 40k+ track library can enqueue dozens of simultaneous page IPC calls.
 
 Dropped the backend label: backend keyset pagination is TASK-350.3 and is not a dependency of this work.
+
+2026-11-14 maintainer approved a feature freeze until the Zig refactor is complete. TASK-393.28 is now an explicit scheduling dependency. Any earlier Rust-domain implementation guidance is superseded by Zig-first ownership; preserved native/Tauri/library integration remains Rust where justified.
 <!-- SECTION:NOTES:END -->

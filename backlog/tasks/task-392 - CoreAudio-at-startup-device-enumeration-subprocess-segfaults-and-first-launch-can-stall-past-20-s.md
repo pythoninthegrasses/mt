@@ -7,7 +7,11 @@ status: To Do
 assignee:
   - lance
 created_date: '2026-11-14T17:58:00Z'
-labels: []
+updated_date: '2026-11-15T05:40:00Z'
+labels:
+  - bugfix
+  - audio
+  - native-adapter
 dependencies: []
 references:
   - crates/mt-tauri/src/audio/device_isolation.rs
@@ -35,3 +39,9 @@ The machine this was observed on had a wedged coreaudiod (11 days uptime, ~10% C
 - [ ] #3 The output-device picker either lists devices or the UI degrades explicitly when enumeration fails, instead of silently showing an empty list
 - [ ] #4 First launch reaches db-created within the smoke's 20 s window reliably, or the blocking stage is made async/timeout-bounded so it cannot stall startup
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-14 Zig-first scheduling: remains eligible during the feature freeze. Diagnose/fix the current Rust CPAL/CoreAudio/native startup capability; do not wait for or bundle a Zig audio rewrite. TASK-393.13 must preserve this fix and its failure behavior. No release-profile/cache benchmark matrix is required.
+<!-- SECTION:NOTES:END -->

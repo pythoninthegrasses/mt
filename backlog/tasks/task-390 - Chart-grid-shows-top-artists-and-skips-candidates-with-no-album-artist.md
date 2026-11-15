@@ -4,12 +4,15 @@ title: Chart grid shows top artists and skips candidates with no album artist
 status: To Do
 assignee: []
 created_date: '2026-11-14T06:31:00Z'
+updated_date: '2026-11-15T05:40:00Z'
 labels:
   - statistics
   - chart-grid
   - backend
   - frontend
-dependencies: []
+  - feature-freeze
+dependencies:
+  - TASK-393.28
 references:
   - docs/builds.md
   - >-
@@ -29,7 +32,7 @@ ordinal: 74500
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-The chart grid reads as an artist chart but is built on an album query: it groups by album plus artist, so two unrelated compilations that share the album_artist "Various Artists" produced two visually identical cells, and the placeholder line prints only the artist name which made the duplicate labels the entire visible content. This feature is an artist chart; album charts are explicitly out of scope, so the album name is not wanted as a label either. Cells should be ranked per album artist, artwork should come from that artist's most-played album, and a candidate with no album artist should be dropped in favour of the next-ranked artist so a 3x3 grid shows nine distinct artists rather than blanks or repeats. Diagnosed on a 39,895-row library where every source was momentarily unreachable (9,812 local tracks on an unmounted volume and 30,083 Plex tracks on an offline host), which forced all nine cells onto the placeholder; the artwork itself was not the defect.
+Change chart semantics from album grouping to one distinct album artist per cell, ranked by that artist's plays in the selected range. Choose artwork from the artist's most-played album, skip missing/blank album artists and fill from next-ranked candidates when available. Zig owns ranking, grouping and selection using its statistics/artwork services; retained Rust image rendering receives explicit compositions, not SQL access. Frontend ordering controls and documentation must match artist semantics. Keep local/Plex eligibility. TASK-391 is the separate availability/cache bug and remains allowed during the freeze. Scheduling: feature work is frozen until TASK-393.28 verifies Zig-first completion; TASK-393 is the initiative. Do not start this task during the freeze or implement it as a side effect of a migration task. Bugfixes require their own explicit scope. When released, read TASK-369.5's ownership ADR and then-current APIs, research the current system and record a bounded plan. Zig owns domain policy and persistence; Rust is only the Tauri/native or named-library adapter. Existing behavior remains the migration baseline until this feature is scheduled.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -41,7 +44,13 @@ The chart grid reads as an artist chart but is built on an album query: it group
 - [ ] #5 Candidates whose album artist is missing, empty or whitespace-only are skipped and the next-ranked artist fills the cell so the grid reaches rows x columns whenever enough artists qualify
 - [ ] #6 Local and remote (Plex) tracks remain eligible for cells
 - [ ] #7 The UI's grid ordering options match artist-based ranking and no longer offer album-name ordering
-- [ ] #8 Rust tests cover artist grouping; the skip-and-advance rule; and a full grid when some candidates lack an album artist
+- [ ] #8 Zig tests cover artist grouping, skip-and-advance and filling a grid despite missing album artists; retained Rust tests cover rendering primitives only
 - [ ] #9 Existing chart-grid tests (per-MIME decode coverage and the golden image) are updated and pass; frontend tests for the grid's ordering control are updated
 - [ ] #10 Documentation that describes the grid as album-based is updated
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-14 maintainer approved a feature freeze until the Zig refactor is complete. TASK-393.28 is now an explicit scheduling dependency. Any earlier Rust-domain implementation guidance is superseded by Zig-first ownership; preserved native/Tauri/library integration remains Rust where justified.
+<!-- SECTION:NOTES:END -->

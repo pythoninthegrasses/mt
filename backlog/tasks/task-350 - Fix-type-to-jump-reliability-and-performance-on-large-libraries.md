@@ -4,12 +4,13 @@ title: Fix type-to-jump reliability and performance on large libraries
 status: To Do
 assignee: []
 created_date: '2026-05-25 19:59'
-updated_date: '2026-05-25 20:00'
+updated_date: '2026-11-15T05:40:00Z'
 labels:
   - performance
   - library
   - type-to-jump
   - reliability
+  - bugfix
 dependencies:
   - TASK-350.1
   - TASK-350.2
@@ -49,3 +50,9 @@ Each phase ships behind a feature flag and is independently rollbackable. Succes
 - [ ] #4 Library memory + CPU profile stays within bounds under sustained jump/scroll input
 - [ ] #5 Feature flags (jump_reliability_guard, indexed_prefix_lookup, keyset_pagination_bidirectional) can each be disabled independently at runtime
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-14 Zig-first scheduling: focused reliability bugfixes remain allowed during TASK-393 feature freeze, but new keyset-pagination architecture in TASK-350.3 is frozen until TASK-393.28. TASK-393.5 ports the existing offset/jump contract; do not make that migration depend on shipping keyset pagination. Preserve already-shipped Phase 1/2 behavior. This umbrella still cannot be marked Done before its existing Phase 3 and outcome criteria are verified.
+<!-- SECTION:NOTES:END -->

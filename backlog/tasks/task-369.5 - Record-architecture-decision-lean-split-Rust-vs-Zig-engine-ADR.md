@@ -1,76 +1,53 @@
 ---
 id: TASK-369.5
-title: 'Record architecture decision: lean-split Rust vs Zig engine (ADR)'
-status: In Progress
-assignee:
-  - assistant
+title: 'Record Zig-first architecture, ownership inventory and migration boundaries'
+status: To Do
+assignee: []
 created_date: '2026-11-14T04:24:00Z'
-updated_date: '2026-11-14T23:25:00Z'
-labels: []
+updated_date: '2026-11-15T05:42:00Z'
+labels:
+  - zig-first
+  - migration
+  - architecture
 dependencies:
-  - TASK-369.1
   - TASK-353
-  - TASK-355
   - TASK-355.6
 references:
-  - 'https://doc.rust-lang.org/cargo/reference/profiles.html'
+  - TASK-393
+  - TASK-353
+  - TASK-355.6
+  - TASK-369.1
 documentation:
   - zig-core/README.md
   - docs/tauri-architecture.md
 parent_task_id: TASK-369
-type: spike
-ordinal: 6000
+priority: high
+type: docs
+ordinal: 1000
 ---
 
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-TASK-355 proves the mechanics of a Zig sidecar but deliberately answers only the narrow POC question; TASK-352 ruled out CI wall-clock as justification and redirected any migration case to dev-loop and code-ownership grounds; TASK-353 will move db/scanner/lastfm/plex/cache/metadata into a tauri-free mt-core crate. What no task yet does is compare, on equal functionality and safety, the two end-states this initiative makes concrete: (A) lean split Rust -- mt-core extracted, unused/over-scoped deps removed, tuned profile, working CI caches -- versus (B) a Zig engine owning a complete subsystem (database/library read path first, per the existing zig-core spike), which must also delete its Rust counterpart to count as a win. Today the migration pays twice: rusqlite's bundled SQLite and zig-core's vendored sqlite3.c both compile. Benchmarks should cover edit-to-run latency for engine-only and shell-only changes, engine-test turnaround, cold/warm builds, and total disk including worktree fan-out; release wall-clock is one column, not the verdict. Produce an ADR-style recommendation (adopt-lean-Rust, adopt-Zig-engine, or hybrid with a named subsystem list) with the measured numbers, and record it on this task and in docs/. Cross-check against the TASK-355.6 POC report when it lands.
+The maintainer has decided that Zig, not Rust, is the primary language for mt domain logic. Rust is retained for Tauri, OS integration and explicitly justified mature-library adapters; do not handroll codecs, metadata parsers, TLS or similar mature capabilities merely to eliminate Rust. TASK-393 is the migration and feature-freeze umbrella. This task records that decision and produces the exhaustive ownership/caller map that prevents hidden Rust domain logic from surviving the port. It no longer decides whether the maintainer's language preference is justified by benchmarks. Existing evidence in this record remains historical input: mt-core extraction is useful, the one-endpoint Zig POC works, arm B was never implemented, and performance superiority is unproven. No destructive throwaway implementation, CI timing matrix or new benchmark campaign is required. Fresh installs and existing mt.db data must continue to work; no public API compatibility platform or new product feature is required.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Both end-states A and B benchmarked on identical measurements: engine-edit-to-run, shell-edit-to-run, engine-test turnaround, cold/warm build, total disk across worktrees
-- [ ] #2 The double-SQLite cost during migration is quantified (Rust bundle + vendored amalgamation) and the delta from actually deleting the Rust side is shown
-- [ ] #3 ADR document added under docs/ with decision, measured evidence, rejected alternatives, and consequences
-- [ ] #4 Recommendation names concrete next actions (e.g. which subsystem ports, which crates still split) and creates follow-up tasks for them via Backlog
-- [ ] #5 TASK-355.6 POC report and TASK-353 results cited as inputs, with divergences explained
-- [ ] #6 Complete the measurement gaps handed off by TASK-355.6: completed-sidecar cold/warm build timings and controlled CI wall-clock and Rust dependency-count deltas against TASK-352, distinguishing host/revision/cache differences and unrelated Rust optimizations from migration effects.
+- [ ] #1 An ADR under docs/ records Zig-first as the approved decision, Rust exception policy, feature freeze with bugfix allowance, consequences and explicitly unproven performance claims; cite TASK-353 and TASK-355.6.
+- [ ] #2 An ownership table covers every module in mt-core and non-shell mt-tauri code, frontend business logic, all Tauri commands and background jobs; each row names final owner, consumers, migration task and deletion target or justified retention.
+- [ ] #3 Each retained Rust capability names the mature library or OS integration it wraps, its narrow input/output boundary and the policy/storage it must not own; no blanket exemption for all networking, agent or scanner code.
+- [ ] #4 The ADR fixes frontend-to-engine and Zig-to-Rust capability transport, request/event/error semantics, process ownership and startup/migration order so implementation tasks do not independently choose incompatible boundaries.
+- [ ] #5 The inventory assigns every database domain and direct Connection/with_conn caller to a migration task and records the temporary single-migrator arrangement and final Zig migrator handoff.
+- [ ] #6 Existing measurements are summarized accurately without treating different hosts/revisions or the additive POC as a speedup; skipped benchmark/CI cells are explicitly no longer acceptance gates.
+- [ ] #7 TASK-393 and its children are cross-checked against the inventory; missing or oversized capability work is explicitly split or raised before implementation, and architecture/contributor guidance states the decision and freeze.
+- [ ] #8 The ADR or linked migration guide records TASK-393's approved task sequence, command/test conventions, bugfix-only freeze policy and which adapter/platform contracts can change together in this greenfield project; avoid an unnecessary permanent compatibility layer.
 <!-- AC:END -->
 
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-## Working environment
-
-Worktree `~/git/mt.zig-engine-adr`, branch `zig-engine-adr` off `main` at d5cd25b, managed with worktrunk (`wt switch --create zig-engine-adr`). The arm-B port is deliberately destructive and lives only on this branch; it is never intended to merge. Merge target is the ADR document plus this task's evidence.
-
-## Coordination boundary
-
-TASK-369.6 (CI compilation caching) is being worked in the main checkout, `~/git/mt`, by another agent. Its files are therefore read-only here: `taskfiles/ci.yml`, `.github/actions/setup-tauri-build/action.yml`, `.github/workflows/test.yml`. This task reads their state for the CI column of the comparison but does not edit them, and the CI wall-clock numbers must be re-checked against whatever 369.6 lands.
-
-The Backlog MCP resolves `backlog/tasks/` against the current working directory, so task edits here land on this branch, not on `main`. Two consequences: the kanban in `main` lags until merge, and any `task_create` for AC#4 must check the high-water id in BOTH checkouts first, because Backlog does not enforce id uniqueness (the TASK-341 double-owner incident).
-
-## Existing evidence (do not re-measure)
-
-- TASK-369.1 baseline (read it from that task's record; the `benchmarks/edit-to-run/results-2026-11-13/` dir was removed from the repo 2026-11-14): 2.2s build / 1.0s check warm, 0.6s main.rs touch, 6.9s with incremental wiped, 35.2s cold; target/ 12.3 GiB with 10.03 GiB in target/debug/build; crate-type rlib what-if: -17s debug, -81s release, -1.75 GiB per worktree; 1270 cargo-tree lines / 421 unique crates.
-- TASK-353 AC#4 controlled pair, HEAD b685a9e vs pre-split 2aca72f on this machine: cold build 44.53s (437 crates) vs 48.81s (436); warm no-op 1.83 vs 2.12; warm rebuild on main.rs 0.56 vs 0.56; warm rebuild on moved db/queue.rs 2.37 (2 crates) vs 2.12; first --tests 24.19 (361) vs 25.21 (360); clean -p mt-tauri --tests 7.59 (2) vs 7.72 (1); cold --tests 48.76 (459) vs 47.00 (458); mt-core-only --tests 14.34 (84 crates). Conclusion recorded: no wall-clock claim; the lever is footprint (core 326 crates vs 1,162 pre-split, 686 of 1,071 tests).
-- TASK-355.x Zig POC: read-only `GET /api/library` with bearer auth, vendored sqlite3.c, shadow-diff parity harness. TASK-355.6 holds the factual POC report.
-- TASK-369.4 / .9: release-profile LTO and codegen-units measurements in those two records and `docs/builds.md#release-profile` (the `benchmarks/release-profile/results-2026-11-14/` dir was removed 2026-11-14; per-candidate numbers regenerate with `cd benchmarks/release-profile && ./sweep.sh summary`).
-
-## Approach
-
-1. Inventory the recorded numbers above into a single comparison table and name the holes precisely, so no measurement is repeated and no claim rests on a number from a different host, revision or cache state.
-2. AC#2 first, because it needs no port: quantify the duplicate SQLite cost. Compile time and artifact bytes for rusqlite's bundled SQLite inside the workspace build, and for zig-core's vendored `sqlite3.c`; cargo-tree and `target/` deltas; then the arithmetic of actually deleting the Rust side (which crates leave the graph, what the read path must then shell or IPC through).
-3. AC#1 arm A: run the existing harness (`benchmarks/edit-to-run/bench.sh`, `worktree-matrix.sh`) on this tree for engine-edit-to-run, shell-edit-to-run, engine-test turnaround, cold/warm build and disk across worktrees. Same procedure and cache discipline as the TASK-353 AC#4 pair (separate fresh `CARGO_TARGET_DIR` per arm, sccache noted as a confound) so the columns are comparable.
-4. AC#1 arm B: port one complete subsystem to Zig on this branch only — the library read path, which zig-core already serves read-only — and delete its Rust counterpart so the win is real rather than additive. Measure the identical matrix on the same machine. If the port proves too large to be a fair throwaway, shrink the subsystem rather than shrinking the measurement set.
-5. AC#6: controlled CI wall-clock and dependency-count deltas against TASK-352, with host/revision/cache differences and unrelated Rust optimizations separated from migration effects. Reuse 369.6's outcome rather than competing with it.
-6. AC#3/#5: write the ADR under `docs/` following the existing ADR convention in that directory; cite TASK-355.6 and TASK-353 as inputs and explain divergences. Recommendation is one of adopt-lean-Rust, adopt-Zig-engine, or hybrid with a named subsystem list.
-7. AC#4: name concrete next actions and create the follow-up tasks, after cross-checking the high-water task id in both checkouts.
-
-## Explicitly out of scope
-
-Any change to CI caching (369.6), the frontend flip beyond what arm B requires, and merging the arm-B port.
+Backlog re-scope approved by maintainer: Zig-first is the decision, not a benchmark hypothesis. Work has stopped. When starting this task, research the current tree, follow the architecture-decision-records skill, and record a fresh bounded implementation plan before writing the ADR. The former comparative/throwaway-port plan is preserved as historical notes and is not executable scope.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -115,4 +92,40 @@ Correction to the arm A footprint note above: it says target/ 6.39 GB and worktr
 sccache captures preserved from both harness runs, because after the evidence dirs are dropped they exist nowhere else, and they change how the arm A numbers should be read. arm A (this spike, results-2026-11-14): dev-code 616 requests / 0 hits, dev-edit 680/0, dev-touch 677/2, dev-agent-code 648/0, dev-agent-edit 712/0, dev-agent-touch 749/2, dev-noincr 116/0, dev-agent-noincr 148/0, check-code 517/0, check-agent-code 580/0. TASK-369.1 baseline (results-2026-11-13, recorded here because that task is archived and the MCP will not write to it): dev-code 3628/4, dev-agent-code 3656/4, dev-edit 541/0, dev-agent-edit 569/0, dev-noincr 597/0, dev-agent-noincr 625/0, dev-touch 34/0, dev-agent-touch 62/0, check-touch 458/0, check-edit 653/0, check-agent 513/0, check-agent-edit 681/0. Conclusion, unchanged across 22 captures on two dates: RUSTC_WRAPPER=sccache returns 0-4 hits on 34-3656 requests, so the host dev loop gets no sccache benefit and the edit-to-run figures above are true incremental-compile costs with no cache assistance. Direct evidence for TASK-369.6 (sccache bypass) -- surfaced to the maintainer rather than written into 369.6, which another agent is actively editing.
 
 Evidence dirs removed 2026-11-14 by maintainer decision (harness output stays out of the source tree; the task record carries the summary). Deleted: benchmarks/edit-to-run/results-2026-11-14/ (125 files, this spike) and benchmarks/edit-to-run/results-2026-11-13/ (161 files, TASK-369.1) and benchmarks/release-profile/results-2026-11-14/ (150 files, TASK-369.4/.9) and docs/evidence/startup-flash/ (4 PNGs, TASK-250, whose captions already describe each frame in words). Regenerate arm A with: cd benchmarks/edit-to-run && ./bench.sh "latency code" then "check code" then frontend then sidecar then disk, and ./worktree-matrix.sh <label> 1 for the per-worktree column. TASK-369.1 and TASK-369.4 keep every table they cited; the release-profile matrix also survives in docs/builds.md#release-profile. Everything deleted is still in git history before the removal commit.
+
+2026-11-14 maintainer-approved supersession: all previous arm-A/arm-B matrices, controlled CI deltas, destructive port experiment and worktree-resume instructions are historical only. TASK-393 now owns the permanent migration. Preserve the existing measured numbers; do not rerun them to select the primary language.
+
+Historical superseded comparison plan, part 1: --------------------------------------------------
+## Working environment
+
+Worktree `~/git/mt.zig-engine-adr`, branch `zig-engine-adr` off `main` at d5cd25b, managed with worktrunk (`wt switch --create zig-engine-adr`). The arm-B port is deliberately destructive and lives only on this branch; it is never intended to merge. Merge target is the ADR document plus this task's evidence.
+
+## Coordination boundary
+
+TASK-369.6 (CI compilation caching) is being worked in the main checkout, `~/git/mt`, by another agent. Its files are therefore read-only here: `taskfiles/ci.yml`, `.github/actions/setup-tauri-build/action.yml`, `.github/workflows/test.yml`. This task reads their state for the CI column of the comparison but does not edit them, and the CI wall-clock numbers must be re-checked against whatever 369.6 lands.
+
+The Backlog MCP resolves `backlog/tasks/` against the current working directory, so task edits here land on this branch, not on `main`. Two consequences: the kanban in `main` lags until merge, and any `task_create` for AC#4 must check the high-water id in BOTH checkouts first, because Backlog does not enforce id uniqueness (the TASK-341 double-owner incident).
+
+## Existing evidence (do not re-measure)
+
+- TASK-369.1 baseline (read it from that task's record; the `benchmarks/edit-to-run/results-2026-11-13/` dir was removed from the repo 2026-11-14): 2.2s build / 1.0s check warm, 0.6s main.rs touch, 6.9s with incremental wiped, 35.2s cold; target/ 12.3 GiB with 10.03 GiB in target/debug/build; crate-type rlib what-if: -17s debug, -81s release, -1.75 GiB per worktree; 1270 cargo-tree lines / 421 unique crates.
+- TASK-353 AC#4 controlled pair, HEAD b685a9e vs pre-split 2aca72f on this machine: cold build 44.53s (437 crates) vs 48.81s (436); warm no-op 1.83 vs 2.12; warm rebuild on main.rs 0.56 vs 0.56; warm rebuild on moved db/queue.rs 2.37 (2 crates) vs 2.12; first --tests 24.19 (361) vs 25.21 (360); clean -p mt-tauri --tests 7.59 (2) vs 7.72 (1); cold --tests 48.76 (459) vs 47.00 (458); mt-core-only --tests 14.34 (84 crates). Conclusion recorded: no wall-clock claim; the lever is footprint (core 326 crates vs 1,162 pre-split, 686 of 1,071 tests).
+- TASK-355.x Zig POC: read-only `GET /api/library` with bearer auth, vendored sqlite3.c, shadow-diff parity harness. TASK-355.6 holds the factual POC report.
+- TASK-369.4 / .9: release-profile LTO and codegen-units measurements in those two records and `docs/builds.md#release-profile` (the `benchmarks/release-profile/results-2026-11-14/` dir was removed 2026-11-14; per-candidate numbers regenerate with `cd benchmarks/release-profile && ./sweep.sh summary`).
+
+## Approach
+
+1. Inventory the recorded numbers above into a single comparison table and name the holes precisely, so no measurement is repeated and no claim rests on a number from a different host, revision or cache state.
+2. AC#2 first, because it needs no port: quantify the duplicate SQLite cost. Compile time and artifact bytes for rusqlite's bundled SQLite inside the workspace build, and for zig-core's vendored `sqlite3.c`; cargo-tree and `target/` deltas; then the arithmetic of actually deleting the Rust side (which crates leave the graph, what the read path must then shell or IPC through).
+3. AC#1 arm A: run the existing harness (`benchmarks/edit-to-run/bench.sh`, `worktree-matrix.sh`) on this tree for engine-edit-to-run, shell-edit-to-run, engine-test turnaround, cold/warm build and disk across worktrees. Same procedure and cache discipline as the TASK-353 AC#4 pair (separate fresh `CARGO_TARGET_DIR` per arm, sccache noted as a confound) so the columns are comparable.
+4. AC#1 arm B: port one complete subsystem to Zig on this branch only — the library read path, which zig-core already serves read-only — and delete its Rust counterpart so the win is real rather than additive. Measure the identical matrix on the same machine. If the port proves too large to be a fair throwaway, shrink the subsystem rather than shrinking the measurement set.
+5. AC#6: controlled CI wall-clock and dependency-count deltas against TASK-352, with host/revision/cache differences and unrelated Rust optimizations separated from migration effects. Reuse 369.6's outcome rather than competing with it.
+6. AC#3/#5: write the ADR under `docs/` following the existing ADR convention in that directory; cite TASK-355.6 and TASK-353 as inputs and explain divergences. Recommendation is one of adopt-lean-Rust, adopt-Zig-engine, or hybrid with a named su
+
+Historical superseded comparison plan, part 2: bsystem list.
+7. AC#4: name concrete next actions and create the follow-up tasks, after cross-checking the high-water task id in both checkouts.
+
+## Explicitly out of scope
+
+Any change to CI caching (369.6), the frontend flip beyond what arm B requires, and merging the arm-B port.
 <!-- SECTION:NOTES:END -->

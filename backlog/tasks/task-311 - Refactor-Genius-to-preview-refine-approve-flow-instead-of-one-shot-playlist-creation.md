@@ -6,12 +6,14 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-04-04 08:59'
-updated_date: '2026-04-13 04:00'
+updated_date: '2026-11-15T05:39:00Z'
 labels:
   - genius
   - ux
   - refactor
-dependencies: []
+  - feature-freeze
+dependencies:
+  - TASK-393.28
 references:
   - docs/agent.md
   - docs/genius.md
@@ -24,39 +26,7 @@ ordinal: 50500
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Currently, Genius one-shots playlist creation: the user enters a prompt, the agent generates tracks, and a playlist is immediately persisted to the database. There is no opportunity to preview, refine, or reject the result before it's saved.
-
-Refactor the flow into a multi-step dialogue:
-
-1. **Generate** — User submits a prompt, agent generates a candidate track list (as today)
-2. **Preview** — Display the candidate tracks in the UI *without* persisting to the database. User can see track names, artists, and any other relevant metadata
-3. **Refine** — User can provide feedback (e.g., "remove the jazz tracks", "add more Radiohead", "make it longer") which triggers another agent turn to revise the candidate list. This can repeat multiple times
-4. **Approve** — User explicitly approves the final track list, at which point the playlist is created in the database
-
-### Backend changes (Rust)
-
-- Split `agent_generate_playlist` into two phases:
-  - **Generate/refine phase**: Returns a candidate `AgentResponse` with track list but does NOT persist to database
-  - **Approve phase**: New Tauri command (e.g., `agent_approve_playlist`) that accepts the finalized track IDs and creates the playlist
-- Support multi-turn refinement: the agent needs conversational context (prior turns) to refine intelligently. Consider whether to maintain session state in the backend or pass conversation history from the frontend
-- `shuffle_spread_artists()` should run at approve time, not generate time
-
-### Frontend changes (Alpine.js)
-
-- After generation, show a preview panel with the candidate tracks (not a toast)
-- Provide UI for:
-  - Approving the playlist (triggers persist)
-  - Entering refinement feedback (triggers another agent turn with context)
-  - Canceling/discarding the candidate
-- Track list in preview should show enough metadata for the user to evaluate quality (title, artist, album, duration)
-- Consider drag-to-reorder or remove-individual-tracks in the preview
-
-### Key files
-
-- `crates/mt-tauri/src/agent/mod.rs` — agent orchestration, `agent_generate_playlist`, `parse_agent_response`, `shuffle_spread_artists`
-- `app/frontend/js/components/genius-browser.js` — Alpine.js component, generation flow
-- `app/frontend/js/api/agent.js` — Tauri IPC bridge
-- `app/frontend/views/genius.html` — Genius view template
+Replace current one-shot Genius playlist persistence with generate, preview, iterative refinement, explicit approval and discard. Zig owns candidate/session policy, tool validation, shuffle-spread-at-approval and playlist persistence; the retained rig-core/provider capability only performs approved SDK work. Generation/refinement must not write a playlist, approval is the sole persistence point, and cancel/discard has no DB side effects. Frontend provides candidate preview/refinement/approve/discard UI. Reuse the final engine/agent boundary; do not create a Rust application orchestrator. Scheduling: feature work is frozen until TASK-393.28 verifies Zig-first completion; TASK-393 is the initiative. Do not start this task during the freeze or implement it as a side effect of a migration task. Bugfixes require their own explicit scope. When released, read TASK-369.5's ownership ADR and then-current APIs, research the current system and record a bounded plan. Zig owns domain policy and persistence; Rust is only the Tauri/native or named-library adapter. Existing behavior remains the migration baseline until this feature is scheduled.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -70,3 +40,9 @@ Refactor the flow into a multi-step dialogue:
 - [ ] #7 shuffle_spread_artists runs at approve time, not generate time
 - [ ] #8 Existing one-shot behavior is fully replaced (no legacy path)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-14 maintainer approved a feature freeze until the Zig refactor is complete. TASK-393.28 is now an explicit scheduling dependency. Any earlier Rust-domain implementation guidance is superseded by Zig-first ownership; preserved native/Tauri/library integration remains Rust where justified.
+<!-- SECTION:NOTES:END -->

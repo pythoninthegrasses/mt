@@ -4,9 +4,10 @@ title: Evaluate Kache as a replacement for sccache on local builds
 status: To Do
 assignee: []
 created_date: '2026-11-14T05:43:00Z'
-updated_date: '2026-11-14T05:43:00Z'
+updated_date: '2026-11-15T05:38:00Z'
 labels:
-  - build-perf
+  - canceled
+  - superseded-by-zig-first
 dependencies:
   - TASK-369.1
 references:
@@ -46,3 +47,9 @@ mt pins `RUSTC_WRAPPER=sccache` (taskfile.yml, taskfiles/cargo.yml install-sccac
 - [ ] #10 CI left unchanged; no remote cache configured and no CI workflow modified
 - [ ] #11 Findings landed in this task's notes and docs/builds.md reflects the outcome only if a change is accepted
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Canceled by maintainer-approved Zig-first replan, 2026-11-14: further Rust cache-replacement evaluation is not a migration prerequisite. No Kache trial or acceptance criteria were completed; prior task context is retained for possible future reconsideration. See TASK-393 and narrowed TASK-369.6.
+<!-- SECTION:NOTES:END -->

@@ -4,13 +4,15 @@ title: Detect iPhone mount and create temporary music library on macOS
 status: To Do
 assignee: []
 created_date: '2026-01-27 17:57'
-updated_date: '2026-01-27 22:48'
+updated_date: '2026-11-15T05:40:00Z'
 labels:
   - feature
   - macos
   - library
   - usb
-dependencies: []
+  - feature-freeze
+dependencies:
+  - TASK-393.28
 priority: medium
 ordinal: 3812.5
 ---
@@ -18,55 +20,7 @@ ordinal: 3812.5
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Implement iPhone mount detection on macOS to enable playing music from mounted iOS devices (e.g., via Doppler app sync).
-
-## Overview
-
-When an iPhone is connected and mounted, detect it via USB enumeration and create a temporary music library from the mounted path (e.g., `~/Music/Doppler`). The temporary library should seamlessly fall back to the permanent library when the device is unplugged.
-
-## Technical Details
-
-### iPhone Detection (macOS)
-
-Use `system_profiler SPUSBDataType` to detect connected iPhones:
-- Product ID: `0x12a8`
-- Vendor ID: `0x05ac` (Apple Inc.)
-- Manufacturer: "Apple Inc."
-
-Example output:
-```
-iPhone:
-    Product ID: 0x12a8
-    Vendor ID: 0x05ac (Apple Inc.)
-    Version: 14.04
-    Serial Number: 0000811000182C1E0AE1801E
-    Speed: Up to 480 Mb/s
-    Manufacturer: Apple Inc.
-    Location ID: 0x08330000 / 22
-```
-
-### Key Requirements
-
-1. **USB Detection**: Parse `system_profiler` output to detect iPhone connection/disconnection events
-2. **Mount Path Discovery**: Locate the music directory (configurable, default `~/Music/Doppler` - expands `$HOME` at runtime)
-3. **Temporary Library**: Create an in-memory or temporary library that:
-   - Scans the mounted path for music files
-   - Merges with or overlays the permanent library
-   - Tracks which files came from the temporary source
-4. **Graceful Fallback**: When iPhone is unplugged:
-   - Detect missing tracks during playback
-   - Suppress orphaned track errors for temporary library files
-   - Automatically fall back to permanent library
-   - Skip/advance if current track becomes unavailable
-5. **Platform-Specific**: macOS only (use `#[cfg(target_os = "macos")]`)
-
-### Implementation Considerations
-
-- Use `IOKit` or periodic `system_profiler` polling for device detection
-- Consider using `diskutil` or file system events for mount detection
-- May need to handle AFC (Apple File Conduit) protocol for direct device access
-- Distinguish between "track missing because unplugged" vs "track genuinely orphaned"
-- Use `std::env::var("HOME")` or `dirs::home_dir()` to expand `~` paths at runtime
+Add macOS attached-iPhone/mount detection and a temporary music-library source with configurable path, connection/disconnection handling and graceful fallback. A physically connected iPhone must not be assumed to expose an arbitrary readable mount; distinguish detection from usable source availability and document the supported workflow. Rust may wrap justified macOS/USB/filesystem capabilities; Zig owns temporary-source lifecycle, track identity, library overlay and playback fallback. TASK-341 consumes this task's usable-source/detach contract; it must not duplicate detection. Scheduling: feature work is frozen until TASK-393.28 verifies Zig-first completion; TASK-393 is the initiative. Do not start this task during the freeze or implement it as a side effect of a migration task. Bugfixes require their own explicit scope. When released, read TASK-369.5's ownership ADR and then-current APIs, research the current system and record a bounded plan. Zig owns domain policy and persistence; Rust is only the Tauri/native or named-library adapter. Existing behavior remains the migration baseline until this feature is scheduled.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -78,6 +32,12 @@ iPhone:
 - [ ] #5 iPhone disconnection is detected automatically
 - [ ] #6 Missing track errors are suppressed for temporary library files when device is unplugged
 - [ ] #7 Playback falls back gracefully to permanent library on disconnect
-- [ ] #8 Feature is gated to macOS only (#[cfg(target_os = "macos")])
+- [ ] #8 Feature is available only on macOS; native detection is isolated behind the justified platform adapter
 - [ ] #9 Unit tests cover detection, mount, and fallback scenarios
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-14 maintainer approved a feature freeze until the Zig refactor is complete. TASK-393.28 is now an explicit scheduling dependency. Any earlier Rust-domain implementation guidance is superseded by Zig-first ownership; preserved native/Tauri/library integration remains Rust where justified.
+<!-- SECTION:NOTES:END -->
