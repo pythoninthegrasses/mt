@@ -1,17 +1,49 @@
 # Tauri Architecture
 
-This document describes the architecture of MT, a desktop music player built with Tauri and native Rust.
+MT is a desktop music player migrating to a Zig application engine with a Rust
+Tauri shell and narrow mature-library/OS adapters.
 
-## Overview
+## Approved target: Zig-first
 
-MT uses a modern pure-Rust architecture:
+[ADR-0001](adr/0001-zig-first-engine.md) records the maintainer-approved decision.
+Zig owns domain logic, SQL/migrations, queue/session rules, scan/reconcile,
+artwork/cache policy and service/agent orchestration. Rust retains Tauri and
+named audio, metadata, image, HTTPS, provider-SDK and OS primitives—not their
+surrounding policy or storage.
+
+Frontend domain requests use authenticated loopback HTTP to Zig. Private
+NDJSON stdin/stdout carries Rust capability calls/native observations and
+engine events; one Tauri bridge forwards domain events to the frontend.
+Rust supervises the child. During transition Rust is the only schema migrator;
+TASK-354 establishes version safety and TASK-393.26 hands exclusive DB/migration
+ownership to Zig. Engine readiness gates domain requests/jobs; no silent Rust
+fallback or hardcoded-port success path is part of the target.
+
+TASK-393 freezes new product features until .28 verifies completion; bugfixes
+and migration-required refactors remain allowed. Existing data and behavior
+must survive. No benchmark campaign is required and no performance superiority
+is established.
+
+- [Task sequence, startup/jobs, test conventions and scope risks](zig-first-migration.md)
+- [Every Rust module and retained capability](zig-first-ownership.md)
+- [All 142 current registered commands](zig-first-commands.md)
+- [Frontend business-logic inventory](zig-first-frontend.md)
+- [DB domains, non-SQL stores and direct callers](zig-first-storage.md)
+- [Historical measurements and unknowns](zig-first-evidence.md)
+
+## Current implementation (transitional, not the target)
+
+The remaining sections are transitional/historical Rust reference alongside the
+additive TASK-355 POC, not approval to retain Rust domain logic. Legacy schematic
+examples are not executable API contracts; the current source and ownership
+inventory govern capability transfer/deletion.
 
 | Component | Technology |
 |-----------|------------|
 | Frontend | Tauri WebView (Alpine.js + Basecoat) |
-| Backend | Native Rust (91 Tauri commands) |
+| Backend | Rust core/desktop (142 registered Tauri commands at `205a968`), plus one Zig HTTP library read |
 | Audio | Rust audio engine (symphonia + rodio) |
-| Database | SQLite via rusqlite |
+| Database | SQLite via rusqlite; Zig POC opens read-only |
 | Media Keys | souvlaki (Now Playing/MPRIS/SMTC) + tauri-plugin-global-shortcut (keyboard F7/F8/F9) |
 
 ## Architecture Diagram
@@ -140,16 +172,19 @@ re-exported through the adapter.
 
 CI checks the core's transitive normal, build, and test dependencies across all
 targets and features, rejecting Tauri, Tao, Wry, WebKit, and Objective-C 2 crates.
-The Plex downloader is the one orchestration module that stays in the desktop crate by
-design: it streams to disk with `tokio`'s `fs` and `io-util` features, resolves the music
+At the TASK-353 extraction boundary, the Plex downloader stayed in the desktop
+crate: it streams to disk with `tokio`'s `fs` and `io-util` features, resolves the music
 directory through `dirs`, reads the size cap from `settings.json`, and emits its own
 progress events — desktop concerns the core has no reason to carry, and pulling them in
-would mean adding dependencies the core does not otherwise need. The audio engine,
+would mean adding dependencies the core does not otherwise need. That extraction
+choice is not a final Rust exception: TASK-393.19/.22 transfer its policy to Zig.
+The audio engine,
 artwork, watcher, and download tests therefore still link the desktop framework.
 
 ### Tauri Core (Rust)
 
-The Rust backend handles all functionality:
+The transitional Rust backend still handles the following functionality; the
+Zig-first inventory assigns its final owners:
 
 | Component | Responsibility |
 |-----------|----------------|
@@ -363,6 +398,11 @@ mt/
 ```
 
 ## Performance
+
+These legacy observational figures have no controlled Zig-first comparison and
+are not target guarantees or migration acceptance gates. For provenance-backed
+build evidence and explicitly missing measurements, use
+[the historical evidence summary](zig-first-evidence.md).
 
 | Metric | macOS | Linux | Notes |
 |--------|-------|-------|-------|

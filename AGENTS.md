@@ -1,10 +1,34 @@
 # AGENTS.md
 
-You are a full-stack engineer leveraging `Alpine.js`, Basecoat/Tailwind on the frontend and Tauri (Rust) on the backend.
+You are a full-stack engineer using Alpine.js/Basecoat/Tailwind, a Zig application engine, and a Rust Tauri shell with narrow native-library adapters.
 
 ## Project Overview
 
-mt is a desktop music player designed for large music collections, built with Tauri (Rust backend), basecoat (with Tailwind CSS), and `Alpine.js`. The backend uses Rust for audio playback and system integration, while the frontend is a modern web-based UI with reactive components.
+mt is a desktop music player designed for large music collections. The approved
+architecture is [Zig-first](docs/adr/0001-zig-first-engine.md): Zig owns domain
+logic and storage; Rust retains Tauri, OS integration and named mature-library
+capabilities such as audio and metadata parsing. The current Rust core is
+transitional, not the final domain owner.
+
+## Zig-first migration and feature freeze
+
+- TASK-393 owns the migration. Freeze new product features until TASK-393.28
+  verifies completion; bugfixes and migration-required refactors remain allowed.
+- Read the [migration sequence](docs/zig-first-migration.md) and
+  [ownership inventory](docs/zig-first-ownership.md) before a capability port.
+  Follow task dependencies, not numeric suffixes; record a fresh bounded plan.
+- Domain requests use authenticated loopback HTTP to Zig. Rust capabilities use
+  private framed stdin/stdout; engine events reach the UI through one Tauri
+  bridge. TASK-393.1–.3 implement the approved contract and lifecycle.
+- Rust remains the sole schema migrator during transition (TASK-354). Zig
+  receives exclusive DB/migration ownership in TASK-393.26. Never run two
+  migrators or keep a parallel implementation of a transferred operation.
+- Preserve current behavior and existing databases/music. Do not handroll
+  codecs, tag parsers or TLS to eliminate Rust; retained adapters must not own
+  SQL, queue/scrobble rules, cache policy or application schedulers.
+- No benchmark matrix or throwaway port is required to justify Zig. Performance
+  superiority remains unproven. Internal contracts may change together; do not
+  build a permanent compatibility layer.
 
 ## General Guidelines
 
@@ -48,6 +72,7 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 | Local GitHub Actions testing | [act Guide](docs/act-guide.md) |
 | Atomic commits, worktrees | [Git Workflow](docs/git-workflow.md) |
 | System architecture, components | [Tauri Architecture](docs/tauri-architecture.md) |
+| Zig-first decision, ownership and sequence | [ADR-0001](docs/adr/0001-zig-first-engine.md), [Migration Guide](docs/zig-first-migration.md) |
 | MCP bridge tools | [MCP Tool Reference](docs/mcp-reference.md) |
 | Remote debugging, crash analysis | [Debugging Guide](docs/debugging.md) |
 | Last.fm scrobbling | [Last.fm Integration](docs/lastfm.md) |
@@ -59,16 +84,19 @@ Always use Context7 MCP when I need library/API documentation, code generation, 
 
 ## Architecture Overview
 
-MT uses a pure Rust + Tauri architecture. See [Tauri Architecture](docs/tauri-architecture.md) for full details and [Observability](docs/observability.md) for database and log paths per platform.
+MT is migrating from the extracted Rust core plus one Zig POC endpoint to the
+approved Zig-first engine. See [Tauri Architecture](docs/tauri-architecture.md)
+for current versus target details and [Observability](docs/observability.md)
+for database/log paths.
 
 ### Tech Stack
 
 - **Frontend**: Tauri WebView (`Alpine.js` + Basecoat/Tailwind CSS), linted and formatted with Deno
-- **Backend**: Native Rust in `crates/mt-tauri/` (91 Tauri commands)
+- **Backend**: Target Zig engine in `zig-core/`; transitional Rust in `crates/mt-core/` and `crates/mt-tauri/` (142 registered commands at the ADR baseline)
 - **Audio**: Rodio/Symphonia
-- **Database**: SQLite via rusqlite (`mt.db` in the Tauri `app_data_dir()` for bundle identifier `com.mt.desktop`)
+- **Database**: SQLite; currently rusqlite plus read-only Zig POC, finally Zig-only (`mt.db` in Tauri `app_data_dir()` for `com.mt.desktop`)
 - **Build Cache**: sccache (shared across worktrees/workspaces)
-- **Tests**: Vitest and Playwright (frontend), `cargo nextest` and proptest (backend)
+- **Tests**: Zig for transferred domains, Rust nextest/proptest for temporary domains and retained primitives, Vitest/Playwright for frontend state and wiring
 
 ### Rust Toolchain (mise + rustup)
 
@@ -96,9 +124,14 @@ When modifying `taskfiles/ci.yml` or `.github/actions/setup-tauri-build/action.y
 | Scrobble | A play submitted to Last.fm; see [Last.fm Integration](docs/lastfm.md) |
 | Backlog task | A `TASK-<n>` entry managed through `Backlog.md` MCP under `backlog/tasks/` |
 
-## Queue and Shuffle Behavior
+## Current Queue and Shuffle Behavior (transitional implementation)
 
 The queue store (`app/frontend/js/stores/queue.js`) maintains tracks in **play order** — the `items` array always reflects the order tracks will be played.
+
+TASK-393.14 transfers authoritative queue/context/shuffle rules to Zig;
+TASK-329 transfers session assembly and scrobble timing. Frontend stores then
+apply snapshots and retain only interaction/render state. The behavior below
+must be preserved, not maintained as a second frontend state machine.
 
 - **Without shuffle**: Tracks play sequentially in the order they were added
 - **With shuffle enabled**: The `items` array is physically reordered using Fisher-Yates shuffle
@@ -174,7 +207,13 @@ Each test layer has a clear responsibility. Do NOT write a Playwright E2E test f
 | CSS details (padding, user-select, computed styles) | Nowhere (design review) | Brittle, low value |
 | User interaction flows (click, drag, context menu) | Playwright `tests/` | Needs real browser |
 | Cross-component integration (play track -> queue updates -> Now Playing renders) | Playwright `tests/` | Tests wiring between components |
-| Backend logic (audio, DB, concurrency) | Rust `#[test]` / proptest | Must run in Rust |
+| Transferred domain logic (DB, queue, services) | Zig tests | Test the authoritative engine |
+| Native adapters and temporary unported Rust logic | Rust `#[test]` / proptest | Test the retained capability/current authority |
+
+During TASK-393 migration, transferred DB/domain rules belong in Zig tests.
+Rust retains native adapter assertions; Vitest tests snapshot application and UI
+state rather than a duplicate domain algorithm. Map replacement coverage before
+deleting Rust/frontend tests; real shell checks are separate from browser mocks.
 
 **Rules:**
 
@@ -185,8 +224,8 @@ Each test layer has a clear responsibility. Do NOT write a Playwright E2E test f
 ## Implementation Notes
 
 1. **Components**: Write each component with a single responsibility, using `Alpine.js` for interactivity and Basecoat/Tailwind classes for styling.
-2. **IPC**: Route every backend operation through a Tauri command called with async/await. Emit real-time updates from Rust with `app.emit()` and subscribe in the frontend with `window.__TAURI__.event.listen()`.
-3. **File Organization**: Keep frontend code in `app/frontend/` and backend code in `crates/mt-tauri/src/`. Keep each file under 500 lines.
+2. **IPC**: Follow ADR-0001: domain requests go to Zig HTTP; Rust native capabilities use the private stdin/stdout bridge; Zig domain events are forwarded once through Tauri. Existing commands remain only until their assigned capability transfers. Shell-only operations still use Tauri invoke.
+3. **File Organization**: Frontend is in `app/frontend/`, engine in `zig-core/`, Rust shell/adapters in `crates/mt-tauri/src/` and transitional `crates/mt-core/`. Keep each file under 500 lines.
 4. **Testing**: Place each test in the layer defined by [Test Boundaries](#test-boundaries) above. The [Testing Guide](docs/testing.md) holds the full decision framework.
 5. **Code Style**: Run `deno lint` and `deno fmt` on frontend code before committing. Run `cargo clippy` and `cargo fmt --all` on backend code before committing.
 

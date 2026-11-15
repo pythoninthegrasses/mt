@@ -1,10 +1,11 @@
 ---
 id: TASK-369.5
 title: 'Record Zig-first architecture, ownership inventory and migration boundaries'
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - OpenCode
 created_date: '2026-11-14T04:24:00Z'
-updated_date: '2026-11-15T05:42:00Z'
+updated_date: '2026-11-15T06:27:00Z'
 labels:
   - zig-first
   - migration
@@ -20,6 +21,13 @@ references:
 documentation:
   - zig-core/README.md
   - docs/tauri-architecture.md
+  - docs/adr/0001-zig-first-engine.md
+  - docs/zig-first-migration.md
+  - docs/zig-first-ownership.md
+  - docs/zig-first-commands.md
+  - docs/zig-first-frontend.md
+  - docs/zig-first-storage.md
+  - docs/zig-first-evidence.md
 parent_task_id: TASK-369
 priority: high
 type: docs
@@ -34,20 +42,22 @@ The maintainer has decided that Zig, not Rust, is the primary language for mt do
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 An ADR under docs/ records Zig-first as the approved decision, Rust exception policy, feature freeze with bugfix allowance, consequences and explicitly unproven performance claims; cite TASK-353 and TASK-355.6.
-- [ ] #2 An ownership table covers every module in mt-core and non-shell mt-tauri code, frontend business logic, all Tauri commands and background jobs; each row names final owner, consumers, migration task and deletion target or justified retention.
-- [ ] #3 Each retained Rust capability names the mature library or OS integration it wraps, its narrow input/output boundary and the policy/storage it must not own; no blanket exemption for all networking, agent or scanner code.
-- [ ] #4 The ADR fixes frontend-to-engine and Zig-to-Rust capability transport, request/event/error semantics, process ownership and startup/migration order so implementation tasks do not independently choose incompatible boundaries.
-- [ ] #5 The inventory assigns every database domain and direct Connection/with_conn caller to a migration task and records the temporary single-migrator arrangement and final Zig migrator handoff.
-- [ ] #6 Existing measurements are summarized accurately without treating different hosts/revisions or the additive POC as a speedup; skipped benchmark/CI cells are explicitly no longer acceptance gates.
-- [ ] #7 TASK-393 and its children are cross-checked against the inventory; missing or oversized capability work is explicitly split or raised before implementation, and architecture/contributor guidance states the decision and freeze.
-- [ ] #8 The ADR or linked migration guide records TASK-393's approved task sequence, command/test conventions, bugfix-only freeze policy and which adapter/platform contracts can change together in this greenfield project; avoid an unnecessary permanent compatibility layer.
+- [x] #1 An ADR under docs/ records Zig-first as the approved decision, Rust exception policy, feature freeze with bugfix allowance, consequences and explicitly unproven performance claims; cite TASK-353 and TASK-355.6.
+- [x] #2 An ownership table covers every module in mt-core and non-shell mt-tauri code, frontend business logic, all Tauri commands and background jobs; each row names final owner, consumers, migration task and deletion target or justified retention.
+- [x] #3 Each retained Rust capability names the mature library or OS integration it wraps, its narrow input/output boundary and the policy/storage it must not own; no blanket exemption for all networking, agent or scanner code.
+- [x] #4 The ADR fixes frontend-to-engine and Zig-to-Rust capability transport, request/event/error semantics, process ownership and startup/migration order so implementation tasks do not independently choose incompatible boundaries.
+- [x] #5 The inventory assigns every database domain and direct Connection/with_conn caller to a migration task and records the temporary single-migrator arrangement and final Zig migrator handoff.
+- [x] #6 Existing measurements are summarized accurately without treating different hosts/revisions or the additive POC as a speedup; skipped benchmark/CI cells are explicitly no longer acceptance gates.
+- [x] #7 TASK-393 and its children are cross-checked against the inventory; missing or oversized capability work is explicitly split or raised before implementation, and architecture/contributor guidance states the decision and freeze.
+- [x] #8 The ADR or linked migration guide records TASK-393's approved task sequence, command/test conventions, bugfix-only freeze policy and which adapter/platform contracts can change together in this greenfield project; avoid an unnecessary permanent compatibility layer.
 <!-- AC:END -->
 
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-Backlog re-scope approved by maintainer: Zig-first is the decision, not a benchmark hypothesis. Work has stopped. When starting this task, research the current tree, follow the architecture-decision-records skill, and record a fresh bounded implementation plan before writing the ADR. The former comparative/throwaway-port plan is preserved as historical notes and is not executable scope.
+Fresh bounded plan (2026-11-15; supersedes historical comparison plans): 1. Audit the current tree at HEAD: enumerate every mt-core module, non-shell mt-tauri module, registered command, background job, frontend business-rule owner, DB domain and direct Connection/with_conn caller; distinguish production from tests and record consumers, target authority, migration task and deletion/retention outcome. 2. Cross-check the inventory against TASK-393's 30 children and linked TASK-354/TASK-329/TASK-369.12; raise gaps or oversized work for approval rather than silently changing the breakdown. 3. Present the concrete transport/startup proposal for maintainer approval before writing the accepted ADR: keep authenticated loopback HTTP for frontend-to-Zig domain requests; use private framed JSON over child stdin/stdout for correlated Zig-to-Rust capabilities and engine events, stderr for logs; forward engine events through one Tauri event bridge, with revision/generation-based snapshot recovery and no second domain subscription path. Rust owns child lifetime and OS capabilities, not domain decisions. Define structured errors, bounded concurrency, cancellation/timeout ownership and no automatic mutation retries. Rust remains sole schema migrator until TASK-393.26; readiness gates migration completion and adapter/engine handshake; final Zig owns fresh/existing DB initialization. 4. After approval, write a concise accepted ADR under docs/adr/ plus linked ownership/migration tables split into files below 500 lines; record named mature-library/OS exceptions and their narrow inputs/outputs and forbidden policy/storage. Preserve historical measurements accurately and label unmeasured comparisons and arm B as absent, no longer gates. 5. Update AGENTS.md, docs/tauri-architecture.md and zig-core/README.md to distinguish today's transitional implementation from the approved target, document the feature freeze/bugfix allowance, approved dependency sequence, commands/test conventions and coordinated greenfield contract changes. 6. Validate inventory completeness against source enumeration, registered commands and caller searches; check links/task references and Markdown formatting, review all eight ACs with evidence, and make atomic documentation commits. No domain port, new feature, benchmark campaign, CI matrix, destructive experiment or permanent compatibility platform. Checkpoint: transport/startup is a material architecture decision; await explicit approval before ADR implementation.
+
+Execution completed after maintainer approval ('Proceed'): documented the accepted authenticated HTTP + private NDJSON capability/event boundary, current-to-target ownership, migration sequencing and historical evidence. No runtime implementation or benchmark run was added. Coverage audit includes every Rust src file, frontend JS/bootstrap and view template, registered command and direct desktop DB-access site; risks in existing child scopes are raised in the migration guide rather than silently changing the graph.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -128,4 +138,24 @@ Historical superseded comparison plan, part 2: bsystem list.
 ## Explicitly out of scope
 
 Any change to CI caching (369.6), the frontend flip beyond what arm B requires, and merging the arm-B port.
+
+Started fresh on main with an initially clean working tree; TASK-353 and TASK-355.6 are completed prerequisites. Read architecture-decision-records skill and current TASK-393 umbrella/.1/.3. Current docs still claim pure Rust/91 commands; zig-core README correctly describes the additive read-only POC but is not the approved target architecture. api/shared.js already supports bearer-authenticated loopback requests and separate Tauri invoke; sidecar.rs currently logs stdout, probes health asynchronously and treats engine startup failure as optional. A private stdio protocol would therefore require explicit stdout framing/log separation and readiness changes in .1-.3, not pretend they exist today. Direct DB callers include agent/mod.rs, tools.rs, evals.rs, lib.rs, Plex downloader, library reconciliation and command modules, so module-only or read-only ownership tables would be incomplete. TASK-393.29 artwork authority and .30 metadata-edit workflows are already split; preserve that work. Context7 confirms Tauri shell supports child stdin writes/stdout events and native event forwarding. Awaiting approval of the proposed boundary before drafting the accepted ADR; no application code or benchmark runs changed.
+
+Maintainer approved the proposed HTTP + private framed stdio capability/event boundary and startup/migrator direction with 'Proceed'. Proceeding with documentation and exhaustive inventory; TASK-393.1 supplies executable codec contracts and .2/.3 implement lifecycle and bridge plumbing.
+
+AC1/AC3/AC4: docs/adr/0001-zig-first-engine.md is Accepted, cites TASK-353/TASK-355.6 and fixes authenticated loopback frontend HTTP, private NDJSON child pipes, one Tauri event bridge, version/correlation/error/cancellation/revision semantics, scoped capability security, instance/process ownership, readiness/shutdown and temporary/final migrator ordering. docs/zig-first-ownership.md names retained libraries/OS APIs, explicit inputs/outputs and forbidden policy/SQL.
+
+AC2/AC5: baseline 205a968 source audit accounted for all 69 mt-core and 47 mt-tauri src .rs files (production and test modules separately), all 63 frontend JS files including main.js, index.html plus all 17 view templates, and all 142 generate_handler registrations. Set comparisons reported zero missing/extra Rust modules and zero missing commands/frontend source files. The direct desktop DB-access audit matched all 135 with_conn/rusqlite::Connection/.conn()/.transaction() sites to exact baseline anchors; every documented anchor was checked against its source line. Core Connection helpers/callers and all 15 schema tables are assigned by domain/function/module, including queue policy, Plex merge, agent/evals, test fixtures and non-SQL settings.json/agent.json/cache state.
+
+AC6: docs/zig-first-evidence.md preserves the controlled TASK-353 pair, TASK-369.1/369.5 measurements and corrected KiB footprint; distinguishes different hosts/revisions/cache states, additive POC, placeholder whole-job timings and unknown CI delta. Arm B never happened; stopped comparison cells are explicitly not acceptance gates. Removed result artifacts remain historical, not restored.
+
+AC7/AC8: cross-checked all 30 TASK-393 children and linked TASK-354/TASK-329/TASK-369.12. docs/zig-first-migration.md records dependency order, every background job/native callback, focused test ownership, Task commands, failure/fixture requirements and greenfield coordinated contract changes. Raised .5 artist/album read-model size risk, .9 unverified M3U premise, .7 non-SQL settings import, audio/session staging and narrow .25 SDK scope before their implementation; no task split/new feature/graph change was silently made. AGENTS.md, architecture guide and Zig README now distinguish current transitional implementation from the approved target and state the freeze/bugfix allowance.
+
+Validation: task lint and task format both passed (Clippy, Deno and Zig checks); existing block v0.1.6 future-incompatibility warning only. Static Python audits verified source/registration/caller coverage, document links/fragment anchors, table delimiters and <500-line files. git diff --check passed before staging. Documentation-only change: no new domain behavior, actual Tauri/audio exercise or benchmark claimed; downstream tasks remain responsible for runtime and packaging verification.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Recorded accepted ADR-0001 for the maintainer-approved Zig-first engine: authenticated loopback HTTP requests, private NDJSON Rust capability/native-event pipes, one Tauri frontend event bridge, bounded lifecycle/error semantics and the Rust-to-Zig single-migrator handoff. Added linked inventories covering all 116 Rust src/test modules, 63 frontend JS/bootstrap files, 18 HTML entry/view files, 142 registered commands, all database/non-SQL domains and 135 exact desktop DB-access sites, plus background jobs, named adapter exceptions and replacement-test ownership. Cross-checked all 30 migration children; raised existing artist/album read-model sizing and unverified M3U scope questions without creating features or silently altering the graph. Updated contributor/architecture/Zig guidance and preserved historical measurements with explicit unknowns/no speedup claim. Validation: source/command/caller set audits, local links/anchors, Markdown table/file-length checks, task lint, task format and staged git diff --check passed. Documentation only; executable contracts, runtime ports and platform/package evidence remain in TASK-393 and linked prerequisites. New features remain frozen.
+<!-- SECTION:FINAL_SUMMARY:END -->

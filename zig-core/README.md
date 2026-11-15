@@ -1,23 +1,42 @@
 # zig-core
 
-A Zig sidecar spike (TASK-355) evaluating whether `mt`'s core engine could move out of the
-Rust `mt-tauri` crate. This directory currently contains a standalone binary that opens `mt.db`
+The approved application engine location for the
+[Zig-first decision](../docs/adr/0001-zig-first-engine.md) (TASK-369.5/TASK-393).
+Zig is the chosen domain/storage owner, not a pending benchmark hypothesis.
+Rust retains Tauri, OS integration and explicitly named mature-library
+capabilities. New product features are frozen until TASK-393.28 verifies
+completion; bugfixes and migration-required refactors remain allowed.
+
+**Current implementation is still the TASK-355 POC**, not the target engine.
+This directory contains a standalone binary that opens `mt.db`
 read-only, serves one library-read HTTP endpoint on loopback, and reproduces the
 `strip_sort_prefix` SQL function used to compute `library.artist_sort_key`, proven byte-identical
 to the Rust implementation via a shared golden-fixture test.
+
+The target keeps authenticated loopback HTTP for frontend domain requests and
+adds private framed NDJSON stdin/stdout for Rust capabilities/native observations
+and engine events. Stdout becomes protocol-only; stderr carries logs; one Tauri
+event bridge reaches the UI. TASK-393.1–.3 supply codecs, readiness/supervision
+and bridge implementation. Rust remains the sole migrator until TASK-393.26;
+TASK-354 versions existing schemas before Zig writes (.6).
+
+See the [migration sequence and conventions](../docs/zig-first-migration.md),
+[ownership map](../docs/zig-first-ownership.md) and
+[DB/caller inventory](../docs/zig-first-storage.md). No performance win or
+full-engine parity is claimed by this additive POC.
 
 ## Building
 
 ```bash
 task zig:build         # debug build
-task zig:fixture        # generate tests/fixtures/mt_fixture.db from the real Rust schema
+task zig:fixture        # current fixture generator; verify populated output (TASK-369.12)
 task zig:test           # unit tests, incl. std.testing.allocator leak checks
 task zig:lint           # zig fmt --check
 task zig:format         # zig fmt
-task zig:cross-compile TARGET=aarch64-macos
-task zig:cross-compile TARGET=x86_64-macos
-task zig:cross-compile TARGET=x86_64-linux
-task zig:cross-compile TARGET=x86_64-windows
+task zig:cross-compile ZIG_TARGET=aarch64-macos
+task zig:cross-compile ZIG_TARGET=x86_64-macos
+task zig:cross-compile ZIG_TARGET=x86_64-linux
+task zig:cross-compile ZIG_TARGET=x86_64-windows
 ```
 
 ## Packaging, spawning, and signing (TASK-355.4)
