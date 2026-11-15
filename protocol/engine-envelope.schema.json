@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mt:engine-envelope:1",
+  "title": "mt internal engine protocol v1",
+  "$comment": "Structural schema only. Apply a direction-specific operation allowlist and strict operation DTO before dispatch. Codecs additionally enforce byte/depth limits.",
+  "type": "object",
+  "required": ["version", "kind", "generation", "operation"],
+  "properties": {
+    "version": { "const": 1 },
+    "kind": { "enum": ["request", "response", "event", "observation"] },
+    "generation": { "$ref": "#/$defs/identity" },
+    "operation": { "$ref": "#/$defs/identity" },
+    "id": {},
+    "deadline_ms": {},
+    "payload": {},
+    "result": {},
+    "error": {},
+    "sequence": {},
+    "revision": {}
+  },
+  "allOf": [
+    { "$ref": "#/$defs/data" },
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": { "const": "request" },
+            "result": false,
+            "error": false,
+            "sequence": false,
+            "revision": false,
+            "id": { "$ref": "#/$defs/identity" },
+            "deadline_ms": { "type": "integer", "minimum": 1, "maximum": 300000 },
+            "payload": { "type": "object" }
+          },
+          "required": ["id", "deadline_ms", "payload"]
+        },
+        {
+          "properties": {
+            "kind": { "const": "response" },
+            "deadline_ms": false,
+            "payload": false,
+            "sequence": false,
+            "revision": false,
+            "id": { "$ref": "#/$defs/identity" },
+            "result": {},
+            "error": { "$ref": "#/$defs/error" }
+          },
+          "required": ["id"],
+          "oneOf": [{ "required": ["result"] }, { "required": ["error"] }]
+        },
+        {
+          "properties": {
+            "kind": { "const": "event" },
+            "id": false,
+            "deadline_ms": false,
+            "result": false,
+            "error": false,
+            "sequence": { "$ref": "#/$defs/sequence" },
+            "revision": { "$ref": "#/$defs/u64" },
+            "payload": { "type": "object" }
+          },
+          "required": ["sequence", "revision", "payload"]
+        },
+        {
+          "properties": {
+            "kind": { "const": "observation" },
+            "id": false,
+            "deadline_ms": false,
+            "result": false,
+            "error": false,
+            "revision": false,
+            "sequence": { "$ref": "#/$defs/sequence" },
+            "payload": { "type": "object" }
+          },
+          "required": ["sequence", "payload"]
+        }
+      ]
+    },
+    {
+      "if": { "properties": { "operation": { "const": "control.cancel" } } },
+      "then": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": { "const": "request" },
+              "payload": {
+                "type": "object",
+                "required": ["target_id"],
+                "properties": { "target_id": { "$ref": "#/$defs/identity" } },
+                "additionalProperties": false
+              }
+            }
+          },
+          {
+            "properties": {
+              "kind": { "const": "response" },
+              "result": {
+                "type": "object",
+                "required": ["state"],
+                "properties": {
+                  "state": { "enum": ["accepted", "already_finished", "not_found"] }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "identity": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,64}(?![\\s\\S])" },
+    "text": {
+      "type": "string",
+      "pattern": "^[\\u0000-\\uD7FF\\uE000-\\u{10FFFF}]*$"
+    },
+    "u64": {
+      "type": "string",
+      "allOf": [
+        { "pattern": "^(0|[1-9][0-9]*)(?![\\s\\S])" },
+        {
+          "pattern": "^(?:[0-9]{1,19}|0[0-9]{19}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4]|18446744073709551615)$"
+        }
+      ]
+    },
+    "trackId": {
+      "type": "string",
+      "allOf": [
+        { "pattern": "^[1-9][0-9]*(?![\\s\\S])" },
+        {
+          "pattern": "^(?:[0-9]{1,18}|[0-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$"
+        }
+      ]
+    },
+    "sequence": { "allOf": [{ "$ref": "#/$defs/u64" }, { "not": { "const": "0" } }] },
+    "data": {
+      "anyOf": [
+        { "type": "null" },
+        { "type": "boolean" },
+        { "type": "number", "minimum": -9007199254740991, "maximum": 9007199254740991 },
+        { "$ref": "#/$defs/text" },
+        { "type": "array", "items": { "$ref": "#/$defs/data" } },
+        {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/text" },
+          "properties": {
+            "track_id": { "$ref": "#/$defs/trackId" },
+            "revision": { "$ref": "#/$defs/u64" },
+            "sequence": { "$ref": "#/$defs/u64" },
+            "count": { "$ref": "#/$defs/u64" },
+            "timestamp_ms": { "$ref": "#/$defs/u64" },
+            "position_ms": { "$ref": "#/$defs/u64" },
+            "size_bytes": { "$ref": "#/$defs/u64" },
+            "path": {
+              "allOf": [
+                { "$ref": "#/$defs/text" },
+                { "pattern": "^[^\\u0000]*$" }
+              ]
+            }
+          },
+          "additionalProperties": { "$ref": "#/$defs/data" }
+        }
+      ]
+    },
+    "error": {
+      "type": "object",
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {
+          "enum": [
+            "invalid_request",
+            "unsupported_version",
+            "unknown_operation",
+            "unauthenticated",
+            "forbidden",
+            "not_found",
+            "conflict",
+            "busy",
+            "too_large",
+            "cancelled",
+            "deadline_exceeded",
+            "outcome_uncertain",
+            "unavailable",
+            "internal"
+          ]
+        },
+        "message": { "$ref": "#/$defs/text", "maxLength": 1024 },
+        "retryable": { "type": "boolean" },
+        "details": { "type": "object" }
+      },
+      "additionalProperties": false,
+      "if": { "properties": { "code": { "const": "outcome_uncertain" } } },
+      "then": { "properties": { "retryable": { "const": false } } }
+    }
+  }
+}

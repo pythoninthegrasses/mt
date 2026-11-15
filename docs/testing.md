@@ -4,6 +4,13 @@ This document covers the testing strategy and workflows for the MT music player.
 
 ## Testing Layers
 
+Protocol v1 structural codecs use one shared fixture corpus in
+`tests/fixtures/engine-protocol/messages.jsonl`, exercised by Zig, Rust and Vitest.
+See [wire contract tests and their runtime limits](engine-protocol.md#executable-evidence-and-handoff).
+`task zig:test` includes a separate storage-free protocol test root. These tests
+do not prove live handshake, native dispatch or event hydration; TASK-393.2/.3
+activate those paths, with real shell evidence gathered separately.
+
 MT uses a three-tier testing strategy:
 
 | Layer | Framework | Tests | Purpose |

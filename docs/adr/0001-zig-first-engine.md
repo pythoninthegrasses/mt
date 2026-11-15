@@ -183,5 +183,8 @@ data-preserving even when internal callers change atomically.
 - [Storage and direct database callers](../zig-first-storage.md)
 - [Historical measurements and limits](../zig-first-evidence.md)
 
-TASK-393.1 implements schemas; .2 supervises; .3 bridges capabilities/events.
+TASK-393.1 supplies the [v1 contract, schemas and shared codec fixtures](../engine-protocol.md);
+the current library POC remains unchanged until its caller port.
+TASK-393.2 activates secure handshakes/readiness and supervises; .3 implements
+private dispatch, cancellation and the single event bridge; .4 ports library reads.
 The inventory is a migration baseline, not a claim that the listed ports exist.

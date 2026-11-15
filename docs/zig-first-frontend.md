@@ -17,6 +17,7 @@ fallback switch.
 | `api.js` | Frontend facade / existing imports | .27 | Keep import facade only if used; remove obsolete exports |
 | `api/index.js` | Frontend transport / aggregate API callers | .1–.25, .27 | Replace legacy state/updatePosition/health and watched-folder routes with actual transferred contracts; no simulated engine state |
 | `api/shared.js` | Frontend HTTP/error/bootstrap codec / all domains | .1, .2, .3 | Remove hardcoded endpoint and silent null success; validate structured errors/generation; retain native shell invoke/confirm helpers |
+| `api/engine-protocol.js` (added by .1) | Wire-only v1 codec / future HTTP and single event bridge | .1, .2, .3, .4 | Structural validation, precision-safe scalars and correlation; not yet wired to legacy getTracks; no domain rules |
 | `api/library.js` | Frontend requests → Zig / browsers and queue contexts | .4, .5, .10, .11, .16, .17, .29 | Delete domain Tauri calls after transfer |
 | `api/queue.js` | Frontend requests → Zig / player/queue | .14 | Remove legacy save/ordering policy and duplicate persistence; use snapshots |
 | `api/playlists.js` | Frontend requests → Zig / sidebar/context menus | .9 | Transfer naming, CRUD and ordering; retain request encoding |

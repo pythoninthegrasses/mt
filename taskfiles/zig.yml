@@ -57,18 +57,26 @@ tasks:
     deps: [_check-zig-version]
     cmds:
       - '{{.ZIG}} fmt {{.ZIG_CORE_DIR}}/'
+      - '{{.ZIG}} fmt {{.ROOT_DIR}}/tests/fixtures/engine-protocol/zig_test.zig'
 
   lint:
     desc: "Check Zig formatting without making changes"
     deps: [_check-zig-version]
     cmds:
       - '{{.ZIG}} fmt --check {{.ZIG_CORE_DIR}}/'
+      - '{{.ZIG}} fmt --check {{.ROOT_DIR}}/tests/fixtures/engine-protocol/zig_test.zig'
 
   test:
     desc: "Run Zig unit tests"
     deps: [_check-zig-version]
     cmds:
       - cd {{.ZIG_CORE_DIR}} && {{.ZIG}} build test
+
+  test-protocol:
+    desc: "Run storage-free shared wire contract tests"
+    deps: [_check-zig-version]
+    cmds:
+      - cd {{.ZIG_CORE_DIR}} && {{.ZIG}} build test-protocol
 
   fixture:
     desc: "Generate tests/fixtures/mt_fixture.db from mt_20260127.sql (real schema, real rows)"

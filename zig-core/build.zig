@@ -86,4 +86,26 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_exe_tests.step);
+
+    // Shared protocol fixtures are a separate, storage-free test root.
+    const protocol_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("../tests/fixtures/engine-protocol/zig_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{
+                .name = "protocol",
+                .module = b.createModule(.{
+                    .root_source_file = b.path("src/protocol.zig"),
+                    .target = target,
+                    .optimize = optimize,
+                }),
+            }},
+        }),
+    });
+    const run_protocol_tests = b.addRunArtifact(protocol_tests);
+    run_protocol_tests.skip_foreign_checks = true;
+    test_step.dependOn(&run_protocol_tests.step);
+    const protocol_step = b.step("test-protocol", "Run storage-free shared wire contract tests");
+    protocol_step.dependOn(&run_protocol_tests.step);
 }

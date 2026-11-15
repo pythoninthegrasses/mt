@@ -15,6 +15,7 @@ after callers and replacement tests transfer, never before.
 | Module(s) | Final owner / consumers | Migration task | Deletion target or retained boundary |
 |-----------|-------------------------|----------------|--------------------------------------|
 | `lib.rs` | Adapter crate only / desktop | 393.27 | Remove domain exports; remove or deliberately repurpose/rename crate |
+| `protocol.rs`, `protocol_tests.rs` (added by 393.1) | Wire-only codec and shared-fixture tests / private bridge and transitional HTTP clients | 393.1, 393.3, 393.27 | Retain/relocate structural validation and bounded framing only; no dispatch, SQL or domain-policy authority |
 | `cache/mod.rs` | Zig cache / playback | 393.19 | Delete Rust policy re-exports |
 | `cache/network_cache.rs` | Zig / audio and remote source resolver | 393.19 | Delete cache identity/index, eligibility, eviction and persistence; only scoped byte I/O may remain |
 | `cache/mount_detect.rs` | Rust OS primitive / Zig source availability | 393.19, 393.17 | Retain platform query only; no missing-track/cache decisions |

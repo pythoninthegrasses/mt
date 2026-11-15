@@ -25,6 +25,12 @@ See the [migration sequence and conventions](../docs/zig-first-migration.md),
 [DB/caller inventory](../docs/zig-first-storage.md). No performance win or
 full-engine parity is claimed by this additive POC.
 
+[Protocol v1](../docs/engine-protocol.md) now has executable structural codecs
+and shared fixtures. `task zig:test` runs their storage-free test root alongside
+existing tests; `task zig:test-protocol` runs only those fixtures. This does not
+activate a handshake, new HTTP route, capability or event bridge. TASK-393.2/.3
+wire the contract; .4 migrates the existing library read and its consumers.
+
 ## Building
 
 ```bash

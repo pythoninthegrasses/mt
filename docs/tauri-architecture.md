@@ -25,6 +25,7 @@ must survive. No benchmark campaign is required and no performance superiority
 is established.
 
 - [Task sequence, startup/jobs, test conventions and scope risks](zig-first-migration.md)
+- [Executable v1 wire contract and activation boundaries](engine-protocol.md)
 - [Every Rust module and retained capability](zig-first-ownership.md)
 - [All 142 current registered commands](zig-first-commands.md)
 - [Frontend business-logic inventory](zig-first-frontend.md)
